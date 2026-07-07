@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#include "zcash/address/orchard.hpp"
+#include "zcash/address/ironwood.hpp"
 
 #include "hash.h"
 #include "streams.h"
@@ -14,25 +14,25 @@
 namespace libzcash
 {
 
-const unsigned char ZCASH_ORCHARD_FVFP_PERSONALIZATION[crypto_generichash_blake2b_PERSONALBYTES] =
+const unsigned char ZCASH_IRONWOOD_FVFP_PERSONALIZATION[crypto_generichash_blake2b_PERSONALBYTES] =
     {'Z', 'c', 'a', 's', 'h', 'O', 'r', 'c', 'h', 'a', 'r', 'd', 'F', 'V', 'F', 'P'};
 
 
-//! Orchard
-uint256 OrchardPaymentAddress::GetHash() const
+//! Ironwood
+uint256 IronwoodPaymentAddress::GetHash() const
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;
     return Hash(ss.begin(), ss.end());
 }
 
-OrchardPaymentAddress_FFI_t OrchardPaymentAddress::ToBytes() const
+IronwoodPaymentAddress_FFI_t IronwoodPaymentAddress::ToBytes() const
 {
     // Data Stream for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
 
     // Return Data
-    OrchardPaymentAddress_FFI_t address_t;
+    IronwoodPaymentAddress_FFI_t address_t;
 
     // Serialize data
     ss << *this;
@@ -41,15 +41,15 @@ OrchardPaymentAddress_FFI_t OrchardPaymentAddress::ToBytes() const
     return address_t;
 }
 
-bool OrchardIncomingViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diversifier_t d) const
+bool IronwoodIncomingViewingKey::DeriveAddress(IronwoodPaymentAddress* addr, diversifier_t d) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardIncomingViewingKey_FFI_t ivk_t;
-    OrchardPaymentAddress_FFI_t address_t;
+    IronwoodIncomingViewingKey_FFI_t ivk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
 
     // Serialize sending data
     ss << *this;
@@ -73,7 +73,7 @@ bool OrchardIncomingViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diver
     return rustCompleted;
 }
 
-bool OrchardIncomingViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, blob88 diversifier_index) const
+bool IronwoodIncomingViewingKey::DeriveAddressFromIndex(IronwoodPaymentAddress* addr, blob88 diversifier_index) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -81,8 +81,8 @@ bool OrchardIncomingViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* ad
     CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardIncomingViewingKey_FFI_t ivk_t;
-    OrchardPaymentAddress_FFI_t address_t;
+    IronwoodIncomingViewingKey_FFI_t ivk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
     uint88_t di_t;
 
     // Serialize sending data
@@ -111,22 +111,22 @@ bool OrchardIncomingViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* ad
     return rustCompleted;
 }
 
-uint256 OrchardFullViewingKey::GetFingerprint() const
+uint256 IronwoodFullViewingKey::GetFingerprint() const
 {
-    CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_ORCHARD_FVFP_PERSONALIZATION);
+    CBLAKE2bWriter ss(SER_GETHASH, 0, ZCASH_IRONWOOD_FVFP_PERSONALIZATION);
     ss << *this;
     return ss.GetHash();
 }
 
-bool OrchardFullViewingKey::DeriveOVK(OrchardOutgoingViewingKey* ovk) const
+bool IronwoodFullViewingKey::DeriveOVK(IronwoodOutgoingViewingKey* ovk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardFullViewingKey_FFI_t fvk_t;
-    OrchardOutgoingViewingKey_FFI_t ovk_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
+    IronwoodOutgoingViewingKey_FFI_t ovk_t;
 
     // Serialize sending data
     ss << *this;
@@ -150,15 +150,15 @@ bool OrchardFullViewingKey::DeriveOVK(OrchardOutgoingViewingKey* ovk) const
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveOVKinternal(OrchardOutgoingViewingKey* ovk) const
+bool IronwoodFullViewingKey::DeriveOVKinternal(IronwoodOutgoingViewingKey* ovk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardFullViewingKey_FFI_t fvk_t;
-    OrchardOutgoingViewingKey_FFI_t ovk_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
+    IronwoodOutgoingViewingKey_FFI_t ovk_t;
 
     // Serialize sending data
     ss << *this;
@@ -182,15 +182,15 @@ bool OrchardFullViewingKey::DeriveOVKinternal(OrchardOutgoingViewingKey* ovk) co
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveIVK(OrchardIncomingViewingKey* ivk) const
+bool IronwoodFullViewingKey::DeriveIVK(IronwoodIncomingViewingKey* ivk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardFullViewingKey_FFI_t fvk_t;
-    OrchardIncomingViewingKey_FFI_t ivk_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
+    IronwoodIncomingViewingKey_FFI_t ivk_t;
 
     // Serialize sending data
     ss << *this;
@@ -214,15 +214,15 @@ bool OrchardFullViewingKey::DeriveIVK(OrchardIncomingViewingKey* ivk) const
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveIVKinternal(OrchardIncomingViewingKey* ivk) const
+bool IronwoodFullViewingKey::DeriveIVKinternal(IronwoodIncomingViewingKey* ivk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardFullViewingKey_FFI_t fvk_t;
-    OrchardIncomingViewingKey_FFI_t ivk_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
+    IronwoodIncomingViewingKey_FFI_t ivk_t;
 
     // Serialize sending data
     ss << *this;
@@ -246,15 +246,15 @@ bool OrchardFullViewingKey::DeriveIVKinternal(OrchardIncomingViewingKey* ivk) co
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) const
+bool IronwoodFullViewingKey::DeriveDefaultAddress(IronwoodPaymentAddress* addr) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardFullViewingKey_FFI_t fvk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
 
     // Serialize sending data
     ss << *this;
@@ -278,15 +278,15 @@ bool OrchardFullViewingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) co
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* addr) const
+bool IronwoodFullViewingKey::DeriveDefaultAddressInternal(IronwoodPaymentAddress* addr) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardFullViewingKey_FFI_t fvk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
 
     // Serialize sending data
     ss << *this;
@@ -310,15 +310,15 @@ bool OrchardFullViewingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* 
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diversifier_t diversifier) const
+bool IronwoodFullViewingKey::DeriveAddress(IronwoodPaymentAddress* addr, diversifier_t diversifier) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
     // Tranfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardFullViewingKey_FFI_t fvk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
 
     // rust result
     bool rustCompleted;
@@ -345,15 +345,15 @@ bool OrchardFullViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diversifi
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveAddressInternal(OrchardPaymentAddress* addr, diversifier_t diversifier) const
+bool IronwoodFullViewingKey::DeriveAddressInternal(IronwoodPaymentAddress* addr, diversifier_t diversifier) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
     // Tranfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardFullViewingKey_FFI_t fvk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
 
     // rust result
     bool rustCompleted;
@@ -380,7 +380,7 @@ bool OrchardFullViewingKey::DeriveAddressInternal(OrchardPaymentAddress* addr, d
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, blob88 diversifier_index) const
+bool IronwoodFullViewingKey::DeriveAddressFromIndex(IronwoodPaymentAddress* addr, blob88 diversifier_index) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
@@ -388,8 +388,8 @@ bool OrchardFullViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, 
     CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION); // diversifier stream
 
     // Tranfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardFullViewingKey_FFI_t fvk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
     uint88_t di_t;
 
     // rust result
@@ -421,7 +421,7 @@ bool OrchardFullViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, 
     return rustCompleted;
 }
 
-bool OrchardFullViewingKey::DeriveAddressFromIndexInternal(OrchardPaymentAddress* addr, blob88 diversifier_index) const
+bool IronwoodFullViewingKey::DeriveAddressFromIndexInternal(IronwoodPaymentAddress* addr, blob88 diversifier_index) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
@@ -429,8 +429,8 @@ bool OrchardFullViewingKey::DeriveAddressFromIndexInternal(OrchardPaymentAddress
     CDataStream di_ss(SER_NETWORK, PROTOCOL_VERSION); // diversifier stream
 
     // Tranfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardFullViewingKey_FFI_t fvk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
     uint88_t di_t;
 
     // rust result
@@ -462,25 +462,25 @@ bool OrchardFullViewingKey::DeriveAddressFromIndexInternal(OrchardPaymentAddress
     return rustCompleted;
 }
 
-std::optional<OrchardSpendingKey> OrchardSpendingKey::random()
+std::optional<IronwoodSpendingKey> IronwoodSpendingKey::random()
 {
     while (true) {
         auto bytes = random_uint256();
         uint256_t sk_bytes;
         std::copy(bytes.begin(), bytes.end(), sk_bytes.begin());
         if (ironwood_keys::sk_is_valid(sk_bytes)) {
-            return OrchardSpendingKey(bytes);
+            return IronwoodSpendingKey(bytes);
         }
     }
 }
 
-bool OrchardSpendingKey::IsValid()
+bool IronwoodSpendingKey::IsValid()
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
 
     // Tranfer Data
-    OrchardSpendingKey_FFI_t sk_t;
+    IronwoodSpendingKey_FFI_t sk_t;
 
     // Serialize sending data
     ss << *this;
@@ -499,16 +499,16 @@ bool OrchardSpendingKey::IsValid()
     return rustCompleted;
 }
 
-bool OrchardSpendingKey::DeriveFVK(OrchardFullViewingKey* fvk) const
+bool IronwoodSpendingKey::DeriveFVK(IronwoodFullViewingKey* fvk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
     // Transfer Data
-    OrchardFullViewingKey_FFI_t fvk_t;
-    OrchardSpendingKey_FFI_t sk_t;
-    OrchardIncomingViewingKey_FFI_t ivk_t;
+    IronwoodFullViewingKey_FFI_t fvk_t;
+    IronwoodSpendingKey_FFI_t sk_t;
+    IronwoodIncomingViewingKey_FFI_t ivk_t;
 
     // rust result
     bool rustCompleted;
@@ -547,15 +547,15 @@ bool OrchardSpendingKey::DeriveFVK(OrchardFullViewingKey* fvk) const
     return rustCompleted;
 }
 
-bool OrchardSpendingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) const
+bool IronwoodSpendingKey::DeriveDefaultAddress(IronwoodPaymentAddress* addr) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardSpendingKey_FFI_t sk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodSpendingKey_FFI_t sk_t;
 
     // Serialize sending data
     ss << *this;
@@ -579,15 +579,15 @@ bool OrchardSpendingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) const
     return rustCompleted;
 }
 
-bool OrchardSpendingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* addr) const
+bool IronwoodSpendingKey::DeriveDefaultAddressInternal(IronwoodPaymentAddress* addr) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    OrchardPaymentAddress_FFI_t address_t;
-    OrchardSpendingKey_FFI_t sk_t;
+    IronwoodPaymentAddress_FFI_t address_t;
+    IronwoodSpendingKey_FFI_t sk_t;
 
     // Serialize sending data
     ss << *this;

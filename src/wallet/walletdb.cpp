@@ -274,7 +274,7 @@ bool CWalletDB::EraseCryptedArcSaplingOp(uint256 chash)
     return Erase(std::make_pair(std::string("carczsop"), chash));
 }
 
-bool CWalletDB::WriteArcOrchardOp(uint256 nullifier, OrchardOutPoint op, bool txnProtected)
+bool CWalletDB::WriteArcIronwoodOp(uint256 nullifier, IronwoodOutPoint op, bool txnProtected)
 {
     nWalletDBUpdated++;
     if (txnProtected) {
@@ -289,7 +289,7 @@ bool CWalletDB::WriteArcOrchardOp(uint256 nullifier, OrchardOutPoint op, bool tx
     return true;
 }
 
-bool CWalletDB::WriteCryptedArcOrchardOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected)
+bool CWalletDB::WriteCryptedArcIronwoodOp(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected)
 {
     nWalletDBUpdated++;
     if (txnProtected) {
@@ -306,13 +306,13 @@ bool CWalletDB::WriteCryptedArcOrchardOp(uint256 nullifier, uint256 chash, const
     return true;
 }
 
-bool CWalletDB::EraseArcOrchardOp(uint256 nullifier)
+bool CWalletDB::EraseArcIronwoodOp(uint256 nullifier)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("arcorchop"), nullifier));
 }
 
-bool CWalletDB::EraseCryptedArcOrchardOp(uint256 chash)
+bool CWalletDB::EraseCryptedArcIronwoodOp(uint256 chash)
 {
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("carcorchop"), chash));
@@ -673,10 +673,10 @@ bool CWalletDB::WriteCryptedSaplingWitnesses(const uint256 chash, const std::vec
     return true;
 }
 
-//Orchard
+//Ironwood
 
-bool CWalletDB::WriteOrchardZKey(const libzcash::OrchardIncomingViewingKey &ivk,
-                const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
+bool CWalletDB::WriteIronwoodZKey(const libzcash::IronwoodIncomingViewingKey &ivk,
+                const libzcash::IronwoodExtendedSpendingKeyPirate &extsk,
                 const CKeyMetadata &keyMeta)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -694,8 +694,8 @@ bool CWalletDB::WriteOrchardZKey(const libzcash::OrchardIncomingViewingKey &ivk,
     }
 }
 
-bool CWalletDB::WriteCryptedOrchardZKey(
-    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
+bool CWalletDB::WriteCryptedIronwoodZKey(
+    const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk,
     const std::vector<unsigned char>& vchCryptedSecret,
     const std::vector<unsigned char>& vchCryptedMetaDataSecret)
 {
@@ -703,7 +703,7 @@ bool CWalletDB::WriteCryptedOrchardZKey(
     const bool fEraseUnencryptedKey = true;
     nWalletDBUpdated++;
 
-    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
        return false;
     }
@@ -734,24 +734,24 @@ bool CWalletDB::WriteCryptedOrchardZKey(
 
 
 
-bool CWalletDB::WriteOrchardFullViewingKey(
-    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWalletDB::WriteIronwoodFullViewingKey(
+    const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::make_pair(std::string("orchextfvk"), extfvk), '1');
 }
 
-bool CWalletDB::EraseOrchardFullViewingKey(
-    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWalletDB::EraseIronwoodFullViewingKey(
+    const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(std::make_pair(std::string("orchextfvk"), extfvk));
 }
 
-bool CWalletDB::WriteCryptedOrchardFullViewingKey(
-    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk,
+bool CWalletDB::WriteCryptedIronwoodFullViewingKey(
+    const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -769,9 +769,9 @@ bool CWalletDB::WriteCryptedOrchardFullViewingKey(
     return true;
 }
 
-bool CWalletDB::WriteOrchardPaymentAddress(
-    const libzcash::OrchardIncomingViewingKey &ivk,
-    const libzcash::OrchardPaymentAddress &addr,
+bool CWalletDB::WriteIronwoodPaymentAddress(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
+    const libzcash::IronwoodPaymentAddress &addr,
     KeyScope scope)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -781,8 +781,8 @@ bool CWalletDB::WriteOrchardPaymentAddress(
     return Write(std::make_pair(std::string("orchzaddr"), addr), std::make_pair(ivk, static_cast<uint8_t>(scope)));
 }
 
-bool CWalletDB::WriteCryptedOrchardPaymentAddress(
-    const libzcash::OrchardPaymentAddress &addr,
+bool CWalletDB::WriteCryptedIronwoodPaymentAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
     const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
@@ -797,9 +797,9 @@ bool CWalletDB::WriteCryptedOrchardPaymentAddress(
     return true;
 }
 
-bool CWalletDB::WriteOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddress &addr,
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWalletDB::WriteIronwoodDiversifiedAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -808,8 +808,8 @@ bool CWalletDB::WriteOrchardDiversifiedAddress(
     return Write(std::make_pair(std::string("orchzdivaddr"), addr), std::make_pair(ivk, path));
 }
 
-bool CWalletDB::WriteCryptedOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddress &addr,
+bool CWalletDB::WriteCryptedIronwoodDiversifiedAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
     const uint256 chash,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
@@ -825,8 +825,8 @@ bool CWalletDB::WriteCryptedOrchardDiversifiedAddress(
 }
 
 
-bool CWalletDB::WriteLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWalletDB::WriteLastIronwoodDiversifierUsed(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -835,9 +835,9 @@ bool CWalletDB::WriteLastOrchardDiversifierUsed(
     return Write(std::make_pair(std::string("orchzlastdiv"), ivk), path);
 }
 
-bool CWalletDB::WriteLastCryptedOrchardDiversifierUsed(
+bool CWalletDB::WriteLastCryptedIronwoodDiversifierUsed(
     const uint256 chash,
-    const libzcash::OrchardIncomingViewingKey &ivk,
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const std::vector<unsigned char> &vchCryptedSecret)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -851,16 +851,16 @@ bool CWalletDB::WriteLastCryptedOrchardDiversifierUsed(
     return true;
 }
 
-bool CWalletDB::WritePrimaryOrchardSpendingKey(
-    const libzcash::OrchardExtendedSpendingKeyPirate &key)
+bool CWalletDB::WritePrimaryIronwoodSpendingKey(
+    const libzcash::IronwoodExtendedSpendingKeyPirate &key)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(std::string("porchspendkey"), key);
 }
 
-bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
-    const libzcash::OrchardExtendedSpendingKeyPirate &extsk,
+bool CWalletDB::WriteCryptedPrimaryIronwoodSpendingKey(
+    const libzcash::IronwoodExtendedSpendingKeyPirate &extsk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -882,16 +882,16 @@ bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
     return true;
 }
 
-bool CWalletDB::WriteOrchardWitnesses(const IronwoodWallet& wallet)
+bool CWalletDB::WriteIronwoodWitnesses(const IronwoodWallet& wallet)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(
-            std::string("orchard_note_commitment_tree"),
+            std::string("ironwood_note_commitment_tree"),
             IronwoodWalletNoteCommitmentTreeWriter(wallet));
 }
 
-bool CWalletDB::WriteCryptedOrchardWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,
+bool CWalletDB::WriteCryptedIronwoodWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,
                                               const uint256 legacyChash)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -899,13 +899,13 @@ bool CWalletDB::WriteCryptedOrchardWitnesses(const uint256 chash, const std::vec
 
     // Stable singleton key; the value carries the content-bound hash (AES IV + integrity
     // tag) so the record can be verified on load and rewrites overwrite in place.
-    if (!Write(std::string("corchardwitnessenc"), std::make_pair(chash, vchCryptedSecret), true))
+    if (!Write(std::string("cironwoodwitnessenc"), std::make_pair(chash, vchCryptedSecret), true))
         return false;
 
     // Drop the plaintext form and any pre-upgrade encrypted record (keyed by the old
     // fixed-string IV) so only the verified record remains.
-    Erase(std::string("orchard_note_commitment_tree"));
-    Erase(std::make_pair(std::string("corchardwitness"), legacyChash));
+    Erase(std::string("ironwood_note_commitment_tree"));
+    Erase(std::make_pair(std::string("cironwoodwitness"), legacyChash));
     return true;
 }
 
@@ -1137,17 +1137,17 @@ public:
     unsigned int nCSaplingKeyMeta;
     unsigned int nSaplingAddrs;
     unsigned int nCSaplingAddrs;
-    unsigned int nOrchardKeys;
-    unsigned int nCOrchardKeys;
-    unsigned int nOrchardKeyMeta;
-    unsigned int nCOrchardKeyMeta;
-    unsigned int nOrchardAddrs;
-    unsigned int nCOrchardAddrs;
+    unsigned int nIronwoodKeys;
+    unsigned int nCIronwoodKeys;
+    unsigned int nIronwoodKeyMeta;
+    unsigned int nCIronwoodKeyMeta;
+    unsigned int nIronwoodAddrs;
+    unsigned int nCIronwoodAddrs;
     unsigned int nArcTx;
     unsigned int nWalletTx;
     bool fIsEncrypted;
     bool fAnyUnordered;
-    bool fNeedOrchardScopeRederivation;
+    bool fNeedIronwoodScopeRederivation;
     bool fNeedZapAndRescan;
     int nFileVersion;
     vector<uint256> vWalletUpgrade;
@@ -1155,11 +1155,11 @@ public:
     CWalletScanState() {
         nKeys = nCKeys = nKeyMeta = 0;
         nSaplingKeys = nCSaplingKeys = nSaplingKeyMeta = nCSaplingKeyMeta = nSaplingAddrs = nCSaplingAddrs = 0;
-        nOrchardKeys = nCOrchardKeys = nOrchardKeyMeta = nCOrchardKeyMeta = nOrchardAddrs = nCOrchardAddrs = 0;
+        nIronwoodKeys = nCIronwoodKeys = nIronwoodKeyMeta = nCIronwoodKeyMeta = nIronwoodAddrs = nCIronwoodAddrs = 0;
         nArcTx = nWalletTx = 0;
         fIsEncrypted = false;
         fAnyUnordered = false;
-        fNeedOrchardScopeRederivation = false;
+        fNeedIronwoodScopeRederivation = false;
         fNeedZapAndRescan = false;
         nFileVersion = 0;
     }
@@ -1417,7 +1417,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 try
                 {
                     uint256 nullifier;
-                    OrchardOutPoint op;
+                    IronwoodOutPoint op;
                     if (strType == "arcorchop") {
                         ssKey >> nullifier;
                         ssValue >> op;
@@ -1427,15 +1427,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                         vector<unsigned char> vchCryptedSecret;
                         ssValue >> vchCryptedSecret;
 
-                        if (!pwallet->DecryptArchivedOrchardOutpoint(chash, vchCryptedSecret, nullifier, op))
+                        if (!pwallet->DecryptArchivedIronwoodOutpoint(chash, vchCryptedSecret, nullifier, op))
                         {
-                            strErr = "Error reading wallet database: DecryptArchivedOrchardOutpoint failed";
+                            strErr = "Error reading wallet database: DecryptArchivedIronwoodOutpoint failed";
                             LogPrintf("Loading Error %s - %s\n", strType, strErr);
                             return false;
                         }
                     }
 
-                    pwallet->AddToArcOrchardOutPoints(nullifier, op);
+                    pwallet->AddToArcIronwoodOutPoints(nullifier, op);
                 }
                 catch (...) {
                     LogPrintf("Error deserializing %s record - will zap all transactions and rescan\n", strType);
@@ -2089,14 +2089,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
         else if (strType == "orchzkey")
         {
-            libzcash::OrchardIncomingViewingKey ivk;
+            libzcash::IronwoodIncomingViewingKey ivk;
             ssKey >> ivk;
-            libzcash::OrchardExtendedSpendingKeyPirate key;
+            libzcash::IronwoodExtendedSpendingKeyPirate key;
             ssValue >> key;
 
-            if (!pwallet->LoadOrchardZKey(key))
+            if (!pwallet->LoadIronwoodZKey(key))
             {
-                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2104,15 +2104,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             auto extfvkOpt = key.GetXFVK();
             if (extfvkOpt == std::nullopt) {
-                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
             auto extfvk = extfvkOpt.value();
 
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
             if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
-                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2121,23 +2121,23 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].name = "ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
             // Also register the internal (change) address in the address book so
             // the Qt model can display it with scope "Change" on startup.
-            libzcash::OrchardPaymentAddress internalAddr;
+            libzcash::IronwoodPaymentAddress internalAddr;
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
 
             //add checks for integrity
-            wss.nOrchardKeys++;
+            wss.nIronwoodKeys++;
         }
         else if (strType == "corchzkey")
         {
@@ -2145,19 +2145,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> extfvkFinger;
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-            wss.nCOrchardKeys++;
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+            wss.nCIronwoodKeys++;
 
-            if (!pwallet->LoadCryptedOrchardZKey(extfvkFinger, vchCryptedSecret, extfvk))
+            if (!pwallet->LoadCryptedIronwoodZKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
-                strErr = "Error reading wallet database: LoadCryptedOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadCryptedIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
             if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
-                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2165,16 +2165,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].name = "ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
             // Also register the internal (change) address.
-            libzcash::OrchardPaymentAddress internalAddr;
+            libzcash::IronwoodPaymentAddress internalAddr;
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2183,28 +2183,28 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "orchextfvk")
         {
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
             ssKey >> extfvk;
             char fYes;
             ssValue >> fYes;
             if (fYes == '1') {
-                if(!pwallet->LoadOrchardFullViewingKey(extfvk))
+                if(!pwallet->LoadIronwoodFullViewingKey(extfvk))
                 {
-                    strErr = "Error reading wallet database: LoadOrchardFullViewingKey failed";
+                    strErr = "Error reading wallet database: LoadIronwoodFullViewingKey failed";
                     LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
-                if(!pwallet->LoadOrchardWatchOnly(extfvk))
+                if(!pwallet->LoadIronwoodWatchOnly(extfvk))
                 {
-                    strErr = "Error reading wallet database: LoadOrchardWatchOnly failed";
+                    strErr = "Error reading wallet database: LoadIronwoodWatchOnly failed";
                     LogPrintf("Loading Error %s - %s\n", strType, strErr);
                     return false;
                 }
             }
 
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
             if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
-                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2212,16 +2212,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].name = "ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
             // Also register the internal (change) address.
-            libzcash::OrchardPaymentAddress internalAddr;
+            libzcash::IronwoodPaymentAddress internalAddr;
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2236,36 +2236,36 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> extfvkFinger;
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-            if (!pwallet->LoadCryptedOrchardExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+            if (!pwallet->LoadCryptedIronwoodExtendedFullViewingKey(extfvkFinger, vchCryptedSecret, extfvk))
             {
-                strErr = "Error reading wallet database: LoadCryptedOrchardExtendedFullViewingKey failed";
+                strErr = "Error reading wallet database: LoadCryptedIronwoodExtendedFullViewingKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
             if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
-                strErr = "Error reading wallet database: LoadOrchardZKey failed";
+                strErr = "Error reading wallet database: LoadIronwoodZKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
 
-            pwallet->LoadOrchardWatchOnly(extfvk);
+            pwallet->LoadIronwoodWatchOnly(extfvk);
 
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].name = "ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
             // Also register the internal (change) address.
-            libzcash::OrchardPaymentAddress internalAddr;
+            libzcash::IronwoodPaymentAddress internalAddr;
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "orchard";
+                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2276,14 +2276,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         }
         else if (strType == "orchzkeymeta")
         {
-            libzcash::OrchardIncomingViewingKey ivk;
+            libzcash::IronwoodIncomingViewingKey ivk;
             ssKey >> ivk;
             CKeyMetadata keyMeta;
             ssValue >> keyMeta;
 
-            wss.nOrchardKeyMeta++;
+            wss.nIronwoodKeyMeta++;
 
-            pwallet->LoadOrchardZKeyMetadata(ivk, keyMeta);
+            pwallet->LoadIronwoodZKeyMetadata(ivk, keyMeta);
         }
         else if (strType == "corchzkeymeta")
         {
@@ -2292,15 +2292,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            wss.nCOrchardKeyMeta++;
+            wss.nCIronwoodKeyMeta++;
 
-            pwallet->mapTempHoldCryptedOrchardMetadata[extfvkFinger] = vchCryptedSecret;
+            pwallet->mapTempHoldCryptedIronwoodMetadata[extfvkFinger] = vchCryptedSecret;
         }
         else if (strType == "orchzaddr")
         {
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
             ssKey >> addr;
-            libzcash::OrchardIncomingViewingKey ivk;
+            libzcash::IronwoodIncomingViewingKey ivk;
             KeyScope scope = KeyScope::External;
             
             // Save original value data before attempting to read
@@ -2309,7 +2309,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // Try to read new format (pair<ivk, scope>)
             bool readSuccess = false;
             try {
-                std::pair<libzcash::OrchardIncomingViewingKey, uint8_t> ivkWithScope;
+                std::pair<libzcash::IronwoodIncomingViewingKey, uint8_t> ivkWithScope;
                 ssValue >> ivkWithScope;
                 ivk = ivkWithScope.first;
                 scope = static_cast<KeyScope>(ivkWithScope.second);
@@ -2323,15 +2323,15 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 ssValueCopy >> ivk;
                 scope = KeyScope::External;
                 // Mark that we need to rederive scopes for all addresses
-                wss.fNeedOrchardScopeRederivation = true;
-                LogPrintf("Orchard address loaded with old format (no scope) - will rederive scopes after load\n");
+                wss.fNeedIronwoodScopeRederivation = true;
+                LogPrintf("Ironwood address loaded with old format (no scope) - will rederive scopes after load\n");
             }
 
-            wss.nOrchardAddrs++;
+            wss.nIronwoodAddrs++;
 
-            if (!pwallet->LoadOrchardPaymentAddress(addr, ivk, scope))
+            if (!pwallet->LoadIronwoodPaymentAddress(addr, ivk, scope))
             {
-                strErr = "Error reading wallet database: LoadOrchardPaymentAddress failed";
+                strErr = "Error reading wallet database: LoadIronwoodPaymentAddress failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2339,7 +2339,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].name = "ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
@@ -2349,13 +2349,13 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssKey >> chash;
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
 
-            wss.nCOrchardAddrs++;
+            wss.nCIronwoodAddrs++;
 
-            if (!pwallet->LoadCryptedOrchardPaymentAddress(chash, vchCryptedSecret, addr))
+            if (!pwallet->LoadCryptedIronwoodPaymentAddress(chash, vchCryptedSecret, addr))
             {
-                strErr = "Error reading wallet database: LoadCryptedOrchardPaymentAddress failed";
+                strErr = "Error reading wallet database: LoadCryptedIronwoodPaymentAddress failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2363,20 +2363,20 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "orchard";
+                pwallet->mapZAddressBook[addr].name = "ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
         else if (strType == "orchzdivaddr")
         {
-            libzcash::OrchardPaymentAddress addr;
+            libzcash::IronwoodPaymentAddress addr;
             ssKey >> addr;
-            OrchardDiversifierPath dPath;
+            IronwoodDiversifierPath dPath;
             ssValue >> dPath;
 
-            if (!pwallet->LoadOrchardDiversifiedAddress(addr, dPath.first, dPath.second))
+            if (!pwallet->LoadIronwoodDiversifiedAddress(addr, dPath.first, dPath.second))
             {
-                strErr = "Error reading wallet database: LoadOrchardDiversifiedAddress failed";
+                strErr = "Error reading wallet database: LoadIronwoodDiversifiedAddress failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2388,19 +2388,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            if (!pwallet->LoadCryptedOrchardDiversifiedAddress(chash, vchCryptedSecret))
+            if (!pwallet->LoadCryptedIronwoodDiversifiedAddress(chash, vchCryptedSecret))
             {
-                strErr = "Error reading wallet database: LoadCryptedOrchardDiversifiedAddress failed";
+                strErr = "Error reading wallet database: LoadCryptedIronwoodDiversifiedAddress failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
         else if (strType == "porchspendkey")
         {
-            libzcash::OrchardExtendedSpendingKeyPirate key;
+            libzcash::IronwoodExtendedSpendingKeyPirate key;
             ssValue >> key;
 
-            pwallet->primaryOrchardSpendingKey = key;
+            pwallet->primaryIronwoodSpendingKey = key;
         }
         else if (strType == "cporchspendkey")
         {
@@ -2409,9 +2409,9 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            if (!pwallet->LoadCryptedPrimaryOrchardSpendingKey(extfvkFinger, vchCryptedSecret))
+            if (!pwallet->LoadCryptedPrimaryIronwoodSpendingKey(extfvkFinger, vchCryptedSecret))
             {
-                strErr = "Error reading wallet database: LoadCryptedPrimaryOrchardSpendingKey failed";
+                strErr = "Error reading wallet database: LoadCryptedPrimaryIronwoodSpendingKey failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2419,14 +2419,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
         else if (strType == "orchzlastdiv")
         {
-            libzcash::OrchardIncomingViewingKey ivk;
+            libzcash::IronwoodIncomingViewingKey ivk;
             ssKey >> ivk;
             blob88 path;
             ssValue >> path;
 
-            if (!pwallet->LoadLastOrchardDiversifierUsed(ivk, path))
+            if (!pwallet->LoadLastIronwoodDiversifierUsed(ivk, path))
             {
-                strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
+                strErr = "Error reading wallet database: LoadLastIronwoodDiversifierUsed failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2438,19 +2438,19 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             vector<unsigned char> vchCryptedSecret;
             ssValue >> vchCryptedSecret;
 
-            if (!pwallet->LoadLastCryptedOrchardDiversifierUsed(chash, vchCryptedSecret))
+            if (!pwallet->LoadLastCryptedIronwoodDiversifierUsed(chash, vchCryptedSecret))
             {
-                strErr = "Error reading wallet database: LoadLastOrchardDiversifierUsed failed";
+                strErr = "Error reading wallet database: LoadLastIronwoodDiversifierUsed failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
-        else if (strType == "orchard_note_commitment_tree")
+        else if (strType == "ironwood_note_commitment_tree")
         {
-            auto loader = pwallet->GetOrchardNoteCommitmentTreeLoader();
+            auto loader = pwallet->GetIronwoodNoteCommitmentTreeLoader();
             ssValue >> loader;
         }
-        else if (strType == "corchardwitness") //legacy pre-integrity-check format (migrates to corchardwitnessenc on next SetBestChain)
+        else if (strType == "cironwoodwitness") //legacy pre-integrity-check format (migrates to cironwoodwitnessenc on next SetBestChain)
         {
             uint256 chash;
             ssKey >> chash;
@@ -2459,18 +2459,18 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             
             CKeyingMaterial vchSecret;
             if (!pwallet->DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
-                strErr = "Error reading wallet database: Failed to decrypt Orchard witness tree";
+                strErr = "Error reading wallet database: Failed to decrypt Ironwood witness tree";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
             
-            if (!pwallet->LoadCryptedOrchardWallet(vchSecret)) {
-                strErr = "Error reading wallet database: LoadCryptedOrchardWalletWitness failed";
+            if (!pwallet->LoadCryptedIronwoodWallet(vchSecret)) {
+                strErr = "Error reading wallet database: LoadCryptedIronwoodWalletWitness failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
         }
-        else if (strType == "corchardwitnessenc") //content-verified format: value = (chash, ciphertext)
+        else if (strType == "cironwoodwitnessenc") //content-verified format: value = (chash, ciphertext)
         {
             std::pair<uint256, std::vector<unsigned char>> value;
             ssValue >> value;
@@ -2478,14 +2478,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             const std::vector<unsigned char>& vchCryptedSecret = value.second;
             
             CKeyingMaterial vchSecret;
-            if (!pwallet->DecryptOrchardWitnessTree(chash, vchCryptedSecret, vchSecret)) {
-                strErr = "Error reading wallet database: Failed to decrypt or verify Orchard witness tree";
+            if (!pwallet->DecryptIronwoodWitnessTree(chash, vchCryptedSecret, vchSecret)) {
+                strErr = "Error reading wallet database: Failed to decrypt or verify Ironwood witness tree";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
             
-            if (!pwallet->LoadCryptedOrchardWallet(vchSecret)) {
-                strErr = "Error reading wallet database: LoadCryptedOrchardWalletWitness failed";
+            if (!pwallet->LoadCryptedIronwoodWallet(vchSecret)) {
+                strErr = "Error reading wallet database: LoadCryptedIronwoodWalletWitness failed";
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
@@ -2767,14 +2767,14 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     LogPrintf("Sapling Addresses: %u \n",wss.nSaplingAddrs);
     LogPrintf("Encrypted Sapling Addresses: %u \n",wss.nCSaplingAddrs);
 
-    LogPrintf("OrchardKeys: %u plaintext, %u w/metadata\n",
-           wss.nOrchardKeys, wss.nOrchardKeyMeta);
+    LogPrintf("IronwoodKeys: %u plaintext, %u w/metadata\n",
+           wss.nIronwoodKeys, wss.nIronwoodKeyMeta);
 
-    LogPrintf("OrchardKeys: %u encrypted, %u w/encrypted metadata\n",
-           wss.nCOrchardKeys, wss.nCOrchardKeyMeta);
+    LogPrintf("IronwoodKeys: %u encrypted, %u w/encrypted metadata\n",
+           wss.nCIronwoodKeys, wss.nCIronwoodKeyMeta);
 
-    LogPrintf("Orchard Addresses: %u \n",wss.nOrchardAddrs);
-    LogPrintf("Encrypted Orchard Addresses: %u \n",wss.nCOrchardAddrs);
+    LogPrintf("Ironwood Addresses: %u \n",wss.nIronwoodAddrs);
+    LogPrintf("Encrypted Ironwood Addresses: %u \n",wss.nCIronwoodAddrs);
 
     LogPrintf("Transactions: %u wallet transactions, %u archived transactions\n", wss.nWalletTx, wss.nArcTx);
 
@@ -2792,13 +2792,13 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
     if (wss.nFileVersion < CLIENT_VERSION) // Update
         WriteVersion(CLIENT_VERSION);
 
-    // Rederive Orchard address scopes if we detected old format addresses
-    if (wss.fNeedOrchardScopeRederivation) {
-        LogPrintf("Rederiving Orchard address scopes for wallet upgrade...\n");
-        if (!pwallet->RederiveOrchardAddressScopes()) {
-            LogPrintf("Warning: Some Orchard address scopes could not be rederived\n");
+    // Rederive Ironwood address scopes if we detected old format addresses
+    if (wss.fNeedIronwoodScopeRederivation) {
+        LogPrintf("Rederiving Ironwood address scopes for wallet upgrade...\n");
+        if (!pwallet->RederiveIronwoodAddressScopes()) {
+            LogPrintf("Warning: Some Ironwood address scopes could not be rederived\n");
         } else {
-            LogPrintf("Successfully rederived all Orchard address scopes\n");
+            LogPrintf("Successfully rederived all Ironwood address scopes\n");
         }
     }
 
@@ -2811,8 +2811,8 @@ DBErrors CWalletDB::FindWalletTxToZap(
   vector<uint256>& vArcHash, vector<uint256>& vCArcHash,
   vector<uint256>& vArcSaplingNullifier,
   vector<uint256>& vCArcSaplingNullifier,
-  vector<uint256>& vArcOrchardNullifier,
-  vector<uint256>& vCArcOrchardNullifier)
+  vector<uint256>& vArcIronwoodNullifier,
+  vector<uint256>& vCArcIronwoodNullifier)
 {
     pwallet->vchDefaultKey = CPubKey();
     bool fNoncriticalErrors = false;
@@ -2879,11 +2879,11 @@ DBErrors CWalletDB::FindWalletTxToZap(
             } if (strType == "arcorchop") {
                 uint256 nullifier;
                 ssKey >> nullifier;
-                vArcOrchardNullifier.push_back(nullifier);
+                vArcIronwoodNullifier.push_back(nullifier);
             } if (strType == "carcorchop") {
                 uint256 hash;
                 ssKey >> hash;
-                vCArcOrchardNullifier.push_back(hash);
+                vCArcIronwoodNullifier.push_back(hash);
             }
         }
         pcursor->close();
@@ -2910,9 +2910,9 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
     vector<uint256> vCArcTxHash;
     vector<uint256> vArcSaplingNullifier;
     vector<uint256> vCArcSaplingNullifier;
-    vector<uint256> vArcOrchardNullifier;
-    vector<uint256> vCArcOrchardNullifier;
-    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier, vCArcSaplingNullifier, vArcOrchardNullifier, vCArcOrchardNullifier);
+    vector<uint256> vArcIronwoodNullifier;
+    vector<uint256> vCArcIronwoodNullifier;
+    DBErrors err = FindWalletTxToZap(pwallet, vTxHash, vWtx, vCTxHash, vArcTxHash, vCArcTxHash, vArcSaplingNullifier, vCArcSaplingNullifier, vArcIronwoodNullifier, vCArcIronwoodNullifier);
     if (err != DB_LOAD_OK)
         return err;
 
@@ -2947,18 +2947,18 @@ DBErrors CWalletDB::ZapWalletTx(CWallet* pwallet, vector<CWalletTx>& vWtx)
 
     // erase each crypted archive Nullier SaplingOutput set
     BOOST_FOREACH (uint256& arcNullifier, vCArcSaplingNullifier) {
-        if (!EraseCryptedArcOrchardOp(arcNullifier))
+        if (!EraseCryptedArcIronwoodOp(arcNullifier))
             return DB_CORRUPT;
     }
-    // erase each archive Nullier OrchardOutput set
-    BOOST_FOREACH (uint256& arcNullifier, vArcOrchardNullifier) {
+    // erase each archive Nullier IronwoodOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vArcIronwoodNullifier) {
         if (!EraseArcSaplingOp(arcNullifier))
             return DB_CORRUPT;
     }
 
-    // erase each crypted archive Nullier OrchardOutput set
-    BOOST_FOREACH (uint256& arcNullifier, vCArcOrchardNullifier) {
-        if (!EraseCryptedArcOrchardOp(arcNullifier))
+    // erase each crypted archive Nullier IronwoodOutput set
+    BOOST_FOREACH (uint256& arcNullifier, vCArcIronwoodNullifier) {
+        if (!EraseCryptedArcIronwoodOp(arcNullifier))
             return DB_CORRUPT;
     }
     return DB_LOAD_OK;

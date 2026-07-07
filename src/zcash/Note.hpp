@@ -5,7 +5,7 @@
 
 /**
  * @file Note.hpp
- * @brief Shielded note definitions for Sprout, Sapling, and Orchard
+ * @brief Shielded note definitions for Sprout, Sapling, and Ironwood
  *
  * Defines Note and NotePlaintext classes for all shielded protocols.
  * Sapling cmu/rcm are cached from Rust decryption for performance.
@@ -91,7 +91,7 @@ public:
  * use the a_pk (paying key), rho (nullifier seed), and r (commitment randomness)
  * to construct commitments and nullifiers.
  *
- * @note Sprout is considered legacy; new applications should use Sapling or Orchard
+ * @note Sprout is considered legacy; new applications should use Sapling or Ironwood
  */
 class SproutNote : public BaseNote {
 public:
@@ -267,7 +267,7 @@ public:
 
     SaplingNotePlaintext(const SaplingNote& note, std::array<unsigned char, ZC_MEMO_SIZE> memo);
 
-    // New Orchard-style decryption methods
+    // New Ironwood-style decryption methods
     // Note: PirateNetwork's librustzcash fork accepts both 0x01 and 0x02 lead bytes
     // at all heights (ZIP 212 validation is disabled).
     static std::optional<SaplingNotePlaintext> AttemptDecryptSaplingOutput(
@@ -338,63 +338,63 @@ public:
 };
 
 //==============================================================================
-// Orchard Note Classes
+// Ironwood Note Classes
 //==============================================================================
 
 /**
- * @class OrchardNote
- * @brief Orchard protocol shielded note
+ * @class IronwoodNote
+ * @brief Ironwood protocol shielded note
  *
- * Represents a note in the Orchard shielded protocol, the latest generation
- * of Zcash privacy technology. Orchard uses the Pallas/Vesta curve cycle
+ * Represents a note in the Ironwood shielded protocol, the latest generation
+ * of Zcash privacy technology. Ironwood uses the Pallas/Vesta curve cycle
  * and Halo 2 proof system.
  *
- * @see OrchardNotePlaintext for the decrypted plaintext representation
+ * @see IronwoodNotePlaintext for the decrypted plaintext representation
  */
-class OrchardNote : public BaseNote {
+class IronwoodNote : public BaseNote {
 private:
     uint256 rho_;
     uint256 rseed_;
     uint256 cmx_;
-    friend class OrchardNotePlaintext;
+    friend class IronwoodNotePlaintext;
 public:
-    OrchardPaymentAddress address;
+    IronwoodPaymentAddress address;
 
-    OrchardNote(OrchardPaymentAddress address, uint64_t value, uint256 rho, uint256 rseed, uint256 cmx)
+    IronwoodNote(IronwoodPaymentAddress address, uint64_t value, uint256 rho, uint256 rseed, uint256 cmx)
             : BaseNote(value), address(address), rho_(rho), rseed_(rseed), cmx_(cmx) {}
 
-    virtual ~OrchardNote() {};
+    virtual ~IronwoodNote() {};
 
     uint256 rho() const { return rho_; }
     uint256 rseed() const { return rseed_; }
     uint256 cmx() const { return cmx_; }
 
-    std::optional<uint256> nullifier(const libzcash::OrchardFullViewingKey& fvk) const;
+    std::optional<uint256> nullifier(const libzcash::IronwoodFullViewingKey& fvk) const;
 };
 
 /**
- * @class OrchardNotePlaintext
- * @brief Decrypted Orchard note plaintext
+ * @class IronwoodNotePlaintext
+ * @brief Decrypted Ironwood note plaintext
  *
- * Represents the decrypted content of an Orchard note. All decryption is
+ * Represents the decrypted content of an Ironwood note. All decryption is
  * performed by Rust implementations for security and performance.
  *
- * @see OrchardNote
+ * @see IronwoodNote
  */
-class OrchardNotePlaintext : public BaseNotePlaintext {
+class IronwoodNotePlaintext : public BaseNotePlaintext {
 private:
-    libzcash::OrchardPaymentAddress address;
+    libzcash::IronwoodPaymentAddress address;
     uint256 rho;
     uint256 rseed;
     std::optional<uint256> nullifier;
     uint256 cmx;
 public:
 
-    OrchardNotePlaintext() {}
+    IronwoodNotePlaintext() {}
 
-    OrchardNotePlaintext(
+    IronwoodNotePlaintext(
       const CAmount value,
-      const libzcash::OrchardPaymentAddress address,
+      const libzcash::IronwoodPaymentAddress address,
       const std::array<unsigned char, ZC_MEMO_SIZE> memo,
       const uint256 rho,
       const uint256 rseed,
@@ -402,31 +402,31 @@ public:
       const uint256 cmx)
     : BaseNotePlaintext(value, memo), address(address), rho(rho), rseed(rseed), nullifier(nullifier), cmx(cmx) {}
 
-    virtual ~OrchardNotePlaintext() {}
+    virtual ~IronwoodNotePlaintext() {}
 
-    libzcash::OrchardPaymentAddress GetAddress() {
+    libzcash::IronwoodPaymentAddress GetAddress() {
         return address;
     };
 
     // Rust-based decryption methods
-    static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
+    static std::optional<IronwoodNotePlaintext> AttemptDecryptIronwoodAction(
         const ironwood_bundle::Action* action,
-        const libzcash::OrchardIncomingViewingKey ivk
+        const libzcash::IronwoodIncomingViewingKey ivk
     );
 
-    static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
+    static std::optional<IronwoodNotePlaintext> AttemptDecryptIronwoodAction(
         const ironwood_bundle::Action* action,
-        const libzcash::OrchardOutgoingViewingKey ovk
+        const libzcash::IronwoodOutgoingViewingKey ovk
     );
 
     // Compute nullifier directly from an encrypted action.
     // IVK is derived internally from the FVK — only fvk is needed.
     static std::optional<uint256> ComputeNullifierFromAction(
         const ironwood_bundle::Action& action,
-        const libzcash::OrchardFullViewingKey& fvk
+        const libzcash::IronwoodFullViewingKey& fvk
     );
 
-    std::optional<OrchardNote> note() const;
+    std::optional<IronwoodNote> note() const;
 
     ADD_SERIALIZE_METHODS;
 

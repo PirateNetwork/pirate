@@ -6,7 +6,7 @@
 #define BITCOIN_WALLET_RPCPIRATEWALLET_H
 
 #include "zcash/address/sapling.hpp"
-#include "zcash/address/orchard.hpp"
+#include "zcash/address/ironwood.hpp"
 
 struct balancestruct {
     CAmount confirmed;
@@ -144,12 +144,12 @@ public:
     uint64_t size;
     CAmount transparentValue = 0;
     CAmount saplingValue = 0;
-    CAmount orchardValue = 0;
+    CAmount ironwoodValue = 0;
     int archiveType;
     std::set<libzcash::SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
-    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
+    std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
+    std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
     std::set<string> spentFrom;
     std::set<string> sendTo;
     std::set<string> receivedIn;
@@ -193,24 +193,24 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
 template <typename RpcTx>
 void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly = false);
 
-// Orchard
+// Ironwood
 template <typename RpcTx>
-void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardOutgoingViewingKey>& ovks, std::set<libzcash::OrchardOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend);
+void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, std::set<libzcash::IronwoodOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend);
 
 template <typename RpcTx>
-void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
+void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
 
 template <typename RpcTx>
-void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
+void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
 
 
 void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly = false);
 void getAllSaplingIVKs(std::set<libzcash::SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
-void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool fIncludeWatchonly = false);
-void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
+void getAllIronwoodOVKs(std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bool fIncludeWatchonly = false);
+void getAllIronwoodIVKs(std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
 
 void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
-void getRpcArcTxOrchardKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
+void getRpcArcTxIronwoodKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
 void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 

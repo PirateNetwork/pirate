@@ -168,11 +168,11 @@ namespace {
         switch (shieldedReq) {
             case UnsatisfiedShieldedReq::SproutDuplicateNullifier:
             case UnsatisfiedShieldedReq::SaplingDuplicateNullifier:
-            case UnsatisfiedShieldedReq::OrchardDuplicateNullifier:
+            case UnsatisfiedShieldedReq::IronwoodDuplicateNullifier:
                 return REJECT_DUPLICATE;
             case UnsatisfiedShieldedReq::SproutUnknownAnchor:
             case UnsatisfiedShieldedReq::SaplingUnknownAnchor:
-            case UnsatisfiedShieldedReq::OrchardUnknownAnchor:
+            case UnsatisfiedShieldedReq::IronwoodUnknownAnchor:
                 return REJECT_INVALID;
         }
         assert(false); // all UnsatisfiedShieldedReq values are handled above
@@ -186,8 +186,8 @@ namespace {
             case UnsatisfiedShieldedReq::SproutUnknownAnchor:       return "bad-txns-sprout-unknown-anchor";
             case UnsatisfiedShieldedReq::SaplingDuplicateNullifier: return "bad-txns-sapling-duplicate-nullifier";
             case UnsatisfiedShieldedReq::SaplingUnknownAnchor:      return "bad-txns-sapling-unknown-anchor";
-            case UnsatisfiedShieldedReq::OrchardDuplicateNullifier: return "bad-txns-orchard-duplicate-nullifier";
-            case UnsatisfiedShieldedReq::OrchardUnknownAnchor:      return "bad-txns-orchard-unknown-anchor";
+            case UnsatisfiedShieldedReq::IronwoodDuplicateNullifier: return "bad-txns-ironwood-duplicate-nullifier";
+            case UnsatisfiedShieldedReq::IronwoodUnknownAnchor:      return "bad-txns-ironwood-unknown-anchor";
         }
         assert(false); // all UnsatisfiedShieldedReq values are handled above
         return "bad-txns-shielded-requirements-not-met";
@@ -930,12 +930,12 @@ bool IsStandardTx(const CTransaction& tx, string& reason, const int nHeight)
 {
     bool overwinterActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     bool saplingActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
-    if (orchardActive) {
+    if (ironwoodActive) {
         // Sapling standard rules apply
         if (tx.nVersion > CTransaction::IRONWOOD_MAX_CURRENT_VERSION || tx.nVersion < CTransaction::IRONWOOD_MIN_CURRENT_VERSION) {
-            reason = "orchard-version";
+            reason = "ironwood-version";
             return false;
         }
     } else if (saplingActive) {
@@ -1277,10 +1277,10 @@ bool ContextualCheckTransaction(
     //Set Chain parameters to check against
     bool overwinterActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_OVERWINTER);
     bool saplingActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_IRONWOOD);
     bool isSprout = !overwinterActive;
 
-    //Get Sapling and Orchard bundles
+    //Get Sapling and Ironwood bundles
     auto& sapling_bundle = tx.GetSaplingBundle();
     auto& ironwood_bundle = tx.GetIronwoodBundle();
 
@@ -1297,10 +1297,10 @@ bool ContextualCheckTransaction(
                                 REJECT_INVALID, "tx-coinbase-sapling-bundle");
         }
 
-        //Check for Orchard in the transaction
+        //Check for Ironwood in the transaction
         if (ironwood_bundle.IsPresent()) {
-            return state.DoS(100, error("ContextualCheckCoinbaseTransaction: orchard bundle not allowed in coinbase transaction"),
-                                REJECT_INVALID, "tx-coinbase-orchard-bundle");
+            return state.DoS(100, error("ContextualCheckCoinbaseTransaction: ironwood bundle not allowed in coinbase transaction"),
+                                REJECT_INVALID, "tx-coinbase-ironwood-bundle");
         }
 
     }
@@ -1371,7 +1371,7 @@ bool ContextualCheckTransaction(
         // Check for presence of a sapling bundle
         if (sapling_bundle.IsPresent()) {
             return state.DoS(100, error("ContextualCheckTransaction: pre-Sapling transaction has Sapling components"),
-                                REJECT_INVALID, "bad-tx-has-orchard-actions");
+                                REJECT_INVALID, "bad-tx-has-ironwood-actions");
         }
     }
 
@@ -1393,8 +1393,8 @@ bool ContextualCheckTransaction(
             }
         }
 
-        // Rules that became inactive after Orchard activation.
-        if (!orchardActive) {
+        // Rules that became inactive after Ironwood activation.
+        if (!ironwoodActive) {
             // Reject transactions with non-Sapling version group ID
             if (tx.nVersionGroupId != SAPLING_VERSION_GROUP_ID) {
                 int ruleDosLevel = isInitialBlockDownload? 0 : dosLevel;
@@ -1404,43 +1404,43 @@ bool ContextualCheckTransaction(
         }
     }
 
-    // Rules that apply before Orchard:
-    if (!orchardActive) {
-        // Check of presence of an orchard bundle
+    // Rules that apply before Ironwood:
+    if (!ironwoodActive) {
+        // Check of presence of an ironwood bundle
         if (ironwood_bundle.IsPresent()) {
-            return state.DoS(100, error("ContextualCheckTransaction: pre-Orchard transaction has Orchard actions"),
-                                REJECT_INVALID, "bad-tx-has-orchard-actions");
+            return state.DoS(100, error("ContextualCheckTransaction: pre-Ironwood transaction has Ironwood actions"),
+                                REJECT_INVALID, "bad-tx-has-ironwood-actions");
         }
-        //This should not be set prior to Orchard being active
+        //This should not be set prior to Ironwood being active
         if (tx.GetConsensusBranchId().has_value()) {
-            return state.DoS(100, error("ContextualCheckTransaction: pre-Orchard transaction has consensus branch id field set"),
-                                REJECT_INVALID, "bad-tx-pre-orchard-consensus-branch-id");
+            return state.DoS(100, error("ContextualCheckTransaction: pre-Ironwood transaction has consensus branch id field set"),
+                                REJECT_INVALID, "bad-tx-pre-ironwood-consensus-branch-id");
         }
     }
 
-    // Rules that apply to Orchard or later:
-    if (orchardActive) {
+    // Rules that apply to Ironwood or later:
+    if (ironwoodActive) {
         // Reject transactions with non-Sapling version group ID
         if (!(tx.nVersionGroupId == SAPLING_VERSION_GROUP_ID || tx.nVersionGroupId == IRONWOOD_VERSION_GROUP_ID)) {
             int ruleDosLevel = isInitialBlockDownload? 0 : dosLevel;
-            return state.DoS(ruleDosLevel, error("ContextualCheckTransaction: invalid Orchard tx version"),
-                                REJECT_INVALID, "bad-orchard-tx-version-group-id");
+            return state.DoS(ruleDosLevel, error("ContextualCheckTransaction: invalid Ironwood tx version"),
+                                REJECT_INVALID, "bad-ironwood-tx-version-group-id");
         }
 
         if (tx.nVersionGroupId == IRONWOOD_VERSION_GROUP_ID) {
             // Reject transactions with invalid version
             if (tx.fOverwintered && tx.nVersion < IRONWOOD_MIN_TX_VERSION ) {
-                return state.DoS(100, error("ContextualCheckTransaction: Orchard version too low"),
-                                REJECT_INVALID, "bad-tx-orchard-version-too-low");
+                return state.DoS(100, error("ContextualCheckTransaction: Ironwood version too low"),
+                                REJECT_INVALID, "bad-tx-ironwood-version-too-low");
             }
 
             // Reject transactions with invalid version
             if (tx.fOverwintered && tx.nVersion > IRONWOOD_MAX_TX_VERSION ) {
-                return state.DoS(100, error("ContextualCheckTransaction: Orchard version too high"),
-                                REJECT_INVALID, "bad-tx-orchard-version-too-high");
+                return state.DoS(100, error("ContextualCheckTransaction: Ironwood version too high"),
+                                REJECT_INVALID, "bad-tx-ironwood-version-too-high");
             }
 
-            // Orchard transactions must have a consensus branch id
+            // Ironwood transactions must have a consensus branch id
             if (!tx.GetConsensusBranchId().has_value()) {
                 return state.DoS(100, error("ContextualCheckTransaction: transaction does not have consensus branch id field set"),
                                 REJECT_INVALID, "bad-tx-consensus-branch-id-missing");
@@ -1454,7 +1454,7 @@ bool ContextualCheckTransaction(
 
             // v5 transactions must have empty joinSplits
             if (!(tx.vjoinsplit.empty())) {
-                return state.DoS(100, error("ContextualCheckTransaction: Sprout JoinSplits not allowed in Orchard transactions."),
+                return state.DoS(100, error("ContextualCheckTransaction: Sprout JoinSplits not allowed in Ironwood transactions."),
                                 REJECT_INVALID, "bad-tx-has-joinsplits");
 
             }
@@ -1536,7 +1536,7 @@ bool ContextualCheckShieldedInputs(
         }
     }
 
-    // Queue Orchard bundle to be batch-validated.
+    // Queue Ironwood bundle to be batch-validated.
     if (ironwoodAuth.has_value()) {
         tx.GetIronwoodBundle().QueueAuthValidation(*ironwoodAuth.value(), dataToBeSigned);
     }
@@ -1727,8 +1727,8 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
     }
 
     if (acpublic != 0 && (ironwood_bundle.SpendsEnabled() || ironwood_bundle.OutputsEnabled())) {
-        return state.DoS(100, error("CheckTransaction(): this is a public chain, no orchard allowed"),
-                         REJECT_INVALID, "bad-txns-acpublic-chain-orchard");
+        return state.DoS(100, error("CheckTransaction(): this is a public chain, no ironwood allowed"),
+                         REJECT_INVALID, "bad-txns-acpublic-chain-ironwood");
     }
 
     if ( ASSETCHAINS_PRIVATE != 0 && invalid_private_taddr != 0 && tx.GetSaplingSpendsCount() > 0 )
@@ -1761,7 +1761,7 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
         }
     }
 
-    // nSpendsSapling, nOutputsSapling, and nActionsOrchard MUST all be less than 2^16
+    // nSpendsSapling, nOutputsSapling, and nActionsIronwood MUST all be less than 2^16
     size_t max_elements = (1 << 16) - 1;
     if (tx.GetSaplingSpendsCount() > max_elements) {
         return state.DoS(
@@ -1778,31 +1778,31 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
     if (ironwood_bundle.GetNumActions() > max_elements) {
         return state.DoS(
             100,
-            error("CheckTransaction(): 2^16 or more Orchard actions"),
-            REJECT_INVALID, "bad-tx-too-many-orchard-actions");
+            error("CheckTransaction(): 2^16 or more Ironwood actions"),
+            REJECT_INVALID, "bad-tx-too-many-ironwood-actions");
     }
 
-    // Check that if neither Orchard spends nor outputs are enabled, the transaction contains
-    // no Orchard actions. This subsumes the check that valueBalanceOrchard must equal zero
+    // Check that if neither Ironwood spends nor outputs are enabled, the transaction contains
+    // no Ironwood actions. This subsumes the check that valueBalanceIronwood must equal zero
     // in the case that both spends and outputs are disabled.
     if (ironwood_bundle.GetNumActions() > 0 && !ironwood_bundle.OutputsEnabled() && !ironwood_bundle.SpendsEnabled()) {
         return state.DoS(
             100,
-            error("CheckTransaction(): Orchard actions are present, but flags do not permit Orchard spends or outputs"),
-            REJECT_INVALID, "bad-tx-orchard-flags-disable-actions");
+            error("CheckTransaction(): Ironwood actions are present, but flags do not permit Ironwood spends or outputs"),
+            REJECT_INVALID, "bad-tx-ironwood-flags-disable-actions");
     }
 
-    auto valueBalanceOrchard = ironwood_bundle.GetValueBalance();
+    auto valueBalanceIronwood = ironwood_bundle.GetValueBalance();
 
-    // Check for overflow valueBalanceOrchard
-    if (valueBalanceOrchard > MAX_MONEY || valueBalanceOrchard < -MAX_MONEY) {
-        return state.DoS(100, error("CheckTransaction(): abs(tx.valueBalanceOrchard) too large"),
+    // Check for overflow valueBalanceIronwood
+    if (valueBalanceIronwood > MAX_MONEY || valueBalanceIronwood < -MAX_MONEY) {
+        return state.DoS(100, error("CheckTransaction(): abs(tx.valueBalanceIronwood) too large"),
                          REJECT_INVALID, "bad-txns-valuebalance-toolarge");
     }
 
-    if (valueBalanceOrchard <= 0) {
-        // NB: negative valueBalanceOrchard "takes" money from the transparent value pool just as outputs do
-        nValueOut += -valueBalanceOrchard;
+    if (valueBalanceIronwood <= 0) {
+        // NB: negative valueBalanceIronwood "takes" money from the transparent value pool just as outputs do
+        nValueOut += -valueBalanceIronwood;
 
         if (!MoneyRange(nValueOut)) {
             return state.DoS(100, error("CheckTransaction(): txout total out of range"),
@@ -1913,10 +1913,10 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
             }
         }
 
-        // Also check for Orchard
-        if (valueBalanceOrchard >= 0) {
-            // NB: positive valueBalanceOrchard "adds" money to the transparent value pool, just as inputs do
-            nValueIn += valueBalanceOrchard;
+        // Also check for Ironwood
+        if (valueBalanceIronwood >= 0) {
+            // NB: positive valueBalanceIronwood "adds" money to the transparent value pool, just as inputs do
+            nValueIn += valueBalanceIronwood;
 
             if (!MoneyRange(nValueIn)) {
                 return state.DoS(100, error("CheckTransaction(): txin total out of range"),
@@ -1964,16 +1964,16 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
         }
     }
 
-    // Check for duplicate orchard nullifiers in this transaction
+    // Check for duplicate ironwood nullifiers in this transaction
     {
-        std::set<uint256> vOrchardNullifiers;
+        std::set<uint256> vIronwoodNullifiers;
         for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers())
         {
-            if (vOrchardNullifiers.count(nf))
+            if (vIronwoodNullifiers.count(nf))
                 return state.DoS(100, error("CheckTransaction(): duplicate nullifiers"),
-                            REJECT_INVALID, "bad-orchard-nullifiers-duplicate");
+                            REJECT_INVALID, "bad-ironwood-nullifiers-duplicate");
 
-            vOrchardNullifiers.insert(nf);
+            vIronwoodNullifiers.insert(nf);
         }
     }
 
@@ -1993,12 +1993,12 @@ bool CheckTransactionWithoutProofVerification(uint32_t tiptime,const CTransactio
                              REJECT_INVALID, "bad-cb-has-output-description");
 
         if (ironwood_bundle.SpendsEnabled())
-            return state.DoS(100, error("CheckTransaction(): coinbase has enableSpendsOrchard set"),
-                             REJECT_INVALID, "bad-cb-has-orchard-spend");
+            return state.DoS(100, error("CheckTransaction(): coinbase has enableSpendsIronwood set"),
+                             REJECT_INVALID, "bad-cb-has-ironwood-spend");
 
         if (ironwood_bundle.OutputsEnabled())
-           return state.DoS(100, error("CheckTransaction(): coinbase has enableOutputsOrchard set"),
-                            REJECT_INVALID, "bad-cb-has-orchard-output");
+           return state.DoS(100, error("CheckTransaction(): coinbase has enableOutputsIronwood set"),
+                            REJECT_INVALID, "bad-cb-has-ironwood-output");
 
         if (tx.vin[0].scriptSig.size() < 2 || tx.vin[0].scriptSig.size() > 100)
             return state.DoS(100, error("CheckTransaction(): coinbase script size"),
@@ -2157,7 +2157,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             }
         }
         for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
-            if (pool.nullifierExists(nf, ORCHARDFRONTIER)) {
+            if (pool.nullifierExists(nf, IRONWOODFRONTIER)) {
                 return state.Invalid(error("AcceptToMemoryPool: duplicate nullifier requirments requirements not met"),REJECT_DUPLICATE_PROOF, "bad-txns-duplicate-nullifier-requirements-not-met");
             }
         }
@@ -2357,7 +2357,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
         std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = sapling::init_batch_validator(true);
 
         // This will be a single-transaction batch, which is still more efficient as every
-        // Orchard bundle contains at least two signatures.
+        // Ironwood bundle contains at least two signatures.
         std::optional<rust::Box<ironwood::BatchValidator>> ironwoodAuth = ironwood::init_batch_validator(true);
 
         // Check shielded input signatures.
@@ -2375,7 +2375,7 @@ bool AcceptToMemoryPool(CTxMemPool& pool, CValidationState &state, const CTransa
             return false;
         }
 
-        // Check Sapling and Orchard bundle authorizations.
+        // Check Sapling and Ironwood bundle authorizations.
         // `saplingAuth` and `ironwoodAuth` are known here to be non-null.
         if (!saplingAuth.value()->validate()) {
             return state.DoS(100, false, REJECT_INVALID, "bad-sapling-bundle-authorization");
@@ -3526,15 +3526,15 @@ bool DisconnectBlock(CBlock& block, CValidationState& state, CBlockIndex* pindex
         view.PopAnchor(SaplingMerkleFrontier::empty_root(), SAPLINGFRONTIER);
     }
 
-    // Set the old best Orchard anchor back. We can get this from the
-    // `hashFinalOrchardRoot` of the last block. However, if the last
-    // block was not on or after the Orchard activation height, this
+    // Set the old best Ironwood anchor back. We can get this from the
+    // `hashFinalIronwoodRoot` of the last block. However, if the last
+    // block was not on or after the Ironwood activation height, this
     // will be set to `null`. For logical consistency, in this case we
     // set the last anchor to the empty root.
-    if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) && !pindex->pprev->hashFinalOrchardRoot.IsNull()) {
-        view.PopAnchor(pindex->pprev->hashFinalOrchardRoot, ORCHARDFRONTIER);
+    if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) && !pindex->pprev->hashFinalIronwoodRoot.IsNull()) {
+        view.PopAnchor(pindex->pprev->hashFinalIronwoodRoot, IRONWOODFRONTIER);
     } else {
-        view.PopAnchor(IronwoodMerkleFrontier::empty_root(), ORCHARDFRONTIER);
+        view.PopAnchor(IronwoodMerkleFrontier::empty_root(), IRONWOODFRONTIER);
     }
 
     // This is guaranteed to be filled by LoadBlockIndex.
@@ -3752,7 +3752,7 @@ bool AlignPersistedShieldedSubtrees(std::string& error)
 {
     AssertLockHeld(cs_main);
     return AlignPersistedShieldedSubtreesForType(SAPLINGFRONTIER, error) &&
-           AlignPersistedShieldedSubtreesForType(ORCHARDFRONTIER, error);
+           AlignPersistedShieldedSubtreesForType(IRONWOODFRONTIER, error);
 }
 
 /*****
@@ -3786,7 +3786,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     auto verifier = ProofVerifier::Strict();
     auto disabledVerifier = ProofVerifier::Disabled();
 
-    // Disable Sapling and Orchard batch validation if possible.
+    // Disable Sapling and Ironwood batch validation if possible.
     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = fExpensiveChecks ?
         std::optional(sapling::init_batch_validator(true)) : std::nullopt;
     std::optional<rust::Box<ironwood::BatchValidator>> ironwoodAuth = fExpensiveChecks ?
@@ -3943,8 +3943,8 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     SaplingMerkleFrontier sapling_frontier_tree;
     assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
 
-    IronwoodMerkleFrontier orchard_frontier_tree;
-    assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
+    IronwoodMerkleFrontier ironwood_frontier_tree;
+    assert(view.GetIronwoodFrontierAnchorAt(view.GetBestAnchor(IRONWOODFRONTIER), ironwood_frontier_tree));
 
     const bool persistShieldedSubtreeMetadata =
         !fJustCheck && pcoinsTip != nullptr && view.GetBestBlock() == pcoinsTip->GetBestBlock();
@@ -3954,9 +3954,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     auto prevConsensusBranchId = CurrentEpochBranchId(pindex->nHeight - 1, chainparams.GetConsensus());
 
     size_t total_sapling_tx = 0;
-    size_t total_orchard_tx = 0;
+    size_t total_ironwood_tx = 0;
     std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedSaplingSubtrees;
-    std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedOrchardSubtrees;
+    std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedIronwoodSubtrees;
 
     CAmount chainSupplyDelta = 0;
     CAmount transparentValueDelta = 0;
@@ -4158,26 +4158,26 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             total_sapling_tx += 1;
         }
 
-        //Append Orchard Outputs to IronwoodMerkleFrontier
+        //Append Ironwood Outputs to IronwoodMerkleFrontier
         if (tx.GetIronwoodBundle().IsPresent()) {
-            auto orchardResult = orchard_frontier_tree.AppendBundle(tx.GetIronwoodBundle());
-            if (orchardResult.has_subtree_boundary) {
-                auto completedIndex = orchard_frontier_tree.current_subtree_index();
+            auto ironwoodResult = ironwood_frontier_tree.AppendBundle(tx.GetIronwoodBundle());
+            if (ironwoodResult.has_subtree_boundary) {
+                auto completedIndex = ironwood_frontier_tree.current_subtree_index();
                 if (completedIndex == 0) {
                     return state.DoS(
                         100,
-                        error("ConnectBlock(): Orchard subtree boundary reached before subtree index advanced"),
+                        error("ConnectBlock(): Ironwood subtree boundary reached before subtree index advanced"),
                         REJECT_INVALID,
-                        "bad-orchard-subtree-index");
+                        "bad-ironwood-subtree-index");
                 }
-                completedOrchardSubtrees.emplace_back(
+                completedIronwoodSubtrees.emplace_back(
                     completedIndex - 1,
                     ShieldedSubtreeData(
-                        orchardResult.completed_subtree_root,
+                        ironwoodResult.completed_subtree_root,
                         pindex->nHeight,
                         pindex->GetBlockHash()));
             }
-            total_orchard_tx += 1;
+            total_ironwood_tx += 1;
         }
 
         for (const auto& out : tx.vout) {
@@ -4210,7 +4210,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     view.PushAnchor(sprout_tree);
     view.PushAnchor(sapling_tree);
     view.PushAnchor(sapling_frontier_tree);
-    view.PushAnchor(orchard_frontier_tree);
+    view.PushAnchor(ironwood_frontier_tree);
     if (!fJustCheck) {
         // Update pindex with the net change in transparent value and the chain's total
         // transparent value.
@@ -4248,7 +4248,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // value pool negative. A cumulative pool balance can only become negative if a
     // transaction withdrew more value than was ever deposited, which is impossible for
     // a valid chain. This is a consensus-level backstop that is independent of the
-    // Sapling/Orchard zk-proof soundness: if a proof-system flaw ever allowed value to
+    // Sapling/Ironwood zk-proof soundness: if a proof-system flaw ever allowed value to
     // be minted out of a shielded pool, this check halts the chain here instead of
     // silently accepting the inflation. The balances are std::optional; when the
     // cumulative value is unknown (history not fully available) the check is skipped,
@@ -4261,7 +4261,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
     if (pindex->nChainIronwoodValue && *pindex->nChainIronwoodValue < 0) {
         return state.DoS(100,
-            error("ConnectBlock(): turnstile violation in Orchard shielded value pool: %s",
+            error("ConnectBlock(): turnstile violation in Ironwood shielded value pool: %s",
                   FormatMoney(*pindex->nChainIronwoodValue)),
             REJECT_INVALID, "turnstile-violation-ironwood-shielded-pool");
     }
@@ -4271,7 +4271,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // If Sapling is active, block.hashBlockCommitments must be the
     // same as the root of the Sapling tree
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-        //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Orchard)
+        //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Ironwood)
         pindex->hashFinalSaplingRoot = sapling_frontier_tree.root();
 
         // Validate that legacy Sapling tree root matches frontier tree root
@@ -4282,17 +4282,17 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     }
 
     // - If this block is before NU5 activation:
-        //   - hashAuthDataRoot and hashFinalOrchardRoot are always null.
+        //   - hashAuthDataRoot and hashFinalIronwoodRoot are always null.
         //   - We don't set hashChainHistoryRoot here to maintain the invariant
         //     documented in CBlockIndex (which was ensured in AddToBlockIndex).
         // - If this block is on or after NU5 activation, this is where we set
-        //   the correct values of hashAuthDataRoot, hashFinalOrchardRoot, and
+        //   the correct values of hashAuthDataRoot, hashFinalIronwoodRoot, and
         //   hashChainHistoryRoot; in particular, blocks that are never passed
         //   to ConnectBlock() (and thus never on the main chain) will stay with
         //   these set to null.
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         pindex->hashAuthDataRoot = hashAuthDataRoot.value();
-        pindex->hashFinalOrchardRoot = orchard_frontier_tree.root();
+        pindex->hashFinalIronwoodRoot = ironwood_frontier_tree.root();
         pindex->hashChainHistoryRoot = hashChainHistoryRoot.value();
     }
 
@@ -4334,11 +4334,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             block.nTime,
             block.nBits,
             pindex->hashFinalSaplingRoot,
-            pindex->hashFinalOrchardRoot,
+            pindex->hashFinalIronwoodRoot,
             ArithToUint256(GetBlockProof(*pindex)),
             pindex->nHeight,
             total_sapling_tx,
-            total_orchard_tx
+            total_ironwood_tx
         );
         view.PushHistoryNode(consensusBranchId, historyNode);
     }
@@ -4350,7 +4350,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             REJECT_INVALID, "bad-sapling-bundle-authorization");
     }
 
-    // Ensure Orchard signatures are valid (if we are checking them)
+    // Ensure Ironwood signatures are valid (if we are checking them)
     if (ironwoodAuth.has_value() && !ironwoodAuth.value()->validate()) {
         return state.DoS(100,
             error("ConnectBlock(): an Ironwood bundle within the block is invalid"),
@@ -4492,9 +4492,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                 return AbortNode(state, "Failed to write Sapling subtree metadata");
             }
         }
-        if (!completedOrchardSubtrees.empty()) {
-            if (!pblocktree->WriteShieldedSubtrees(ORCHARDFRONTIER, completedOrchardSubtrees)) {
-                return AbortNode(state, "Failed to write Orchard subtree metadata");
+        if (!completedIronwoodSubtrees.empty()) {
+            if (!pblocktree->WriteShieldedSubtrees(IRONWOODFRONTIER, completedIronwoodSubtrees)) {
+                return AbortNode(state, "Failed to write Ironwood subtree metadata");
             }
         }
     }
@@ -4750,7 +4750,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     // Apply the block atomically to the chain state.
     uint256 sproutAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
     uint256 saplingFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
-    uint256 orchardFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(ORCHARDFRONTIER);
+    uint256 ironwoodFrontierAnchorBeforeDisconnect = pcoinsTip->GetBestAnchor(IRONWOODFRONTIER);
     int64_t nStart = GetTimeMicros();
     {
         CCoinsViewCache view(pcoinsTip);
@@ -4767,7 +4767,7 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     LogPrint("bench", "- Disconnect block: %.2fms\n", (GetTimeMicros() - nStart) * 0.001);
     uint256 sproutAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SPROUT);
     uint256 saplingFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(SAPLINGFRONTIER);
-    uint256 orchardFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(ORCHARDFRONTIER);
+    uint256 ironwoodFrontierAnchorAfterDisconnect = pcoinsTip->GetBestAnchor(IRONWOODFRONTIER);
     // Write the chain state to disk, if necessary.
     if (!FlushStateToDisk(state, FLUSH_STATE_IF_NEEDED))
         return false;
@@ -4797,10 +4797,10 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
             // in which case we don't want to evict from the mempool yet!
             mempool.removeWithAnchor(saplingFrontierAnchorBeforeDisconnect, SAPLINGFRONTIER);
         }
-        if (orchardFrontierAnchorBeforeDisconnect != orchardFrontierAnchorAfterDisconnect) {
+        if (ironwoodFrontierAnchorBeforeDisconnect != ironwoodFrontierAnchorAfterDisconnect) {
             // The anchor may not change between block disconnects,
             // in which case we don't want to evict from the mempool yet!
-            mempool.removeWithAnchor(orchardFrontierAnchorBeforeDisconnect, ORCHARDFRONTIER);
+            mempool.removeWithAnchor(ironwoodFrontierAnchorBeforeDisconnect, IRONWOODFRONTIER);
         }
     }
 
@@ -4810,19 +4810,19 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     if (!pblocktree->TruncateShieldedSubtrees(SAPLINGFRONTIER, chainActive.Height())) {
         return AbortNode(state, "Failed to truncate Sapling subtree metadata");
     }
-    if (!pblocktree->TruncateShieldedSubtrees(ORCHARDFRONTIER, chainActive.Height())) {
-        return AbortNode(state, "Failed to truncate Orchard subtree metadata");
+    if (!pblocktree->TruncateShieldedSubtrees(IRONWOODFRONTIER, chainActive.Height())) {
+        return AbortNode(state, "Failed to truncate Ironwood subtree metadata");
     }
 
     // Get the current commitment tree
     SproutMerkleTree newSproutTree;
     SaplingMerkleTree newSaplingTree;
     SaplingMerkleFrontier newSaplingFrontierTree;
-    IronwoodMerkleFrontier newOrchardFrontierTree;
+    IronwoodMerkleFrontier newIronwoodFrontierTree;
     assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), newSproutTree));
     assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), newSaplingTree));
     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), newSaplingFrontierTree));
-    assert(pcoinsTip->GetOrchardFrontierAnchorAt(pcoinsTip->GetBestAnchor(ORCHARDFRONTIER), newOrchardFrontierTree));
+    assert(pcoinsTip->GetIronwoodFrontierAnchorAt(pcoinsTip->GetBestAnchor(IRONWOODFRONTIER), newIronwoodFrontierTree));
     // Let wallets know transactions went from 1-confirmed to
     // 0-confirmed or conflicted:
     std::vector<uint256> TxToRemove;
@@ -4919,12 +4919,12 @@ int32_t komodo_activate_ironwood(CBlockIndex *pindex)
     int32_t activation = 0;
     if ( pindex == 0 )
     {
-        LogPrint("orchard","komodo_activate_ironwood null pindex\n");
+        LogPrint("ironwood","komodo_activate_ironwood null pindex\n");
         return(0);
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    LogPrint("orchard","komodo_activate_ironwood.%d starting blocktime %u cmp.%d\n",height,blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
+    LogPrint("ironwood","komodo_activate_ironwood.%d starting blocktime %u cmp.%d\n",height,blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
 
     // avoid trying unless we have at least 30 blocks
     if (height < 30)
@@ -4938,29 +4938,29 @@ int32_t komodo_activate_ironwood(CBlockIndex *pindex)
     }
     if ( i != 30 )
     {
-        LogPrint("orchard","couldnt go backwards 30 blocks\n");
+        LogPrint("ironwood","couldnt go backwards 30 blocks\n");
         return(0);
     }
     height = pindex->nHeight;
     blocktime = (uint32_t)pindex->nTime;
-    LogPrint("orchard","KOMODO_IRONWOOD_ACTIVATION %u\n", KOMODO_IRONWOOD_ACTIVATION);
-    LogPrint("orchard","starting orchard blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
+    LogPrint("ironwood","KOMODO_IRONWOOD_ACTIVATION %u\n", KOMODO_IRONWOOD_ACTIVATION);
+    LogPrint("ironwood","starting ironwood blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
     if ( blocktime > KOMODO_IRONWOOD_ACTIVATION ) // find the earliest transition
     {
         while ( (prev= pindex->pprev) != 0 )
         {
             prevht = prev->nHeight;
             prevtime = (uint32_t)prev->nTime;
-            LogPrint("orchard","(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_IRONWOOD_ACTIVATION,height,blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
+            LogPrint("ironwood","(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_IRONWOOD_ACTIVATION,height,blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
             if ( prevht+1 != height )
             {
-                LogPrint("orchard","komodo_activate_ironwood: unexpected non-contiguous ht %d vs %d\n",prevht,height);
+                LogPrint("ironwood","komodo_activate_ironwood: unexpected non-contiguous ht %d vs %d\n",prevht,height);
                 return(0);
             }
             if ( prevtime <= KOMODO_IRONWOOD_ACTIVATION && blocktime > KOMODO_IRONWOOD_ACTIVATION )
             {
                 activation = height + 60;
-                LogPrint("orchard","%s transition at %d (%d, %u) -> (%d, %u)\n",chainName.symbol().c_str(),height,prevht,prevtime,height,blocktime);
+                LogPrint("ironwood","%s transition at %d (%d, %u) -> (%d, %u)\n",chainName.symbol().c_str(),height,prevht,prevtime,height,blocktime);
             }
             if ( prevtime < KOMODO_IRONWOOD_ACTIVATION-3600*24 )
                 break;
@@ -4972,7 +4972,7 @@ int32_t komodo_activate_ironwood(CBlockIndex *pindex)
     if ( activation != 0 )
     {
         komodo_setironwood(activation);
-        LogPrint("orchard","%s orchard activation at %d\n",chainName.symbol().c_str(),activation);
+        LogPrint("ironwood","%s ironwood activation at %d\n",chainName.symbol().c_str(),activation);
         ASSETCHAINS_IRONWOOD = activation;
     }
     return activation;
@@ -5008,13 +5008,13 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     SproutMerkleTree oldSproutTree;
     SaplingMerkleTree oldSaplingTree;
     SaplingMerkleFrontier oldSaplingFrontierTree;
-    IronwoodMerkleFrontier oldOrchardFrontierTree;
+    IronwoodMerkleFrontier oldIronwoodFrontierTree;
     if ( KOMODO_NSPV_FULLNODE )
     {
         assert(pcoinsTip->GetSproutAnchorAt(pcoinsTip->GetBestAnchor(SPROUT), oldSproutTree));
         assert(pcoinsTip->GetSaplingAnchorAt(pcoinsTip->GetBestAnchor(SAPLING), oldSaplingTree));
         assert(pcoinsTip->GetSaplingFrontierAnchorAt(pcoinsTip->GetBestAnchor(SAPLINGFRONTIER), oldSaplingFrontierTree));
-        assert(pcoinsTip->GetOrchardFrontierAnchorAt(pcoinsTip->GetBestAnchor(ORCHARDFRONTIER), oldOrchardFrontierTree));
+        assert(pcoinsTip->GetIronwoodFrontierAnchorAt(pcoinsTip->GetBestAnchor(IRONWOODFRONTIER), oldIronwoodFrontierTree));
     }
     // Apply the block atomically to the chain state.
     int64_t nTime2 = GetTimeMicros();
@@ -5603,7 +5603,7 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
 
     CAmount sproutValue = 0;
     CAmount saplingValue = 0;
-    CAmount orchardValue = 0;
+    CAmount ironwoodValue = 0;
     for (auto tx : block.vtx) {
         // For the genesis block only, compute the chain supply delta and the transparent
         // output total.
@@ -5623,8 +5623,8 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
         // pool. So we invert the sign here.
         saplingValue += -tx.GetValueBalanceSapling();
 
-        // valueBalanceOrchard behaves the same way as valueBalanceSapling.
-        orchardValue += -tx.GetIronwoodBundle().GetValueBalance();
+        // valueBalanceIronwood behaves the same way as valueBalanceSapling.
+        ironwoodValue += -tx.GetIronwoodBundle().GetValueBalance();
 
         for (auto js : tx.vjoinsplit) {
             sproutValue += js.vpub_old;
@@ -5652,7 +5652,7 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
     pindexNew->nChainSproutValue = std::nullopt;
     pindexNew->nSaplingValue = saplingValue;
     pindexNew->nChainSaplingValue = std::nullopt;
-    pindexNew->nIronwoodValue = orchardValue;
+    pindexNew->nIronwoodValue = ironwoodValue;
     pindexNew->nChainIronwoodValue = std::nullopt;
 
     pindexNew->nFile = pos.nFile;
@@ -5693,7 +5693,7 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
                     pindex->nChainSaplingValue = std::nullopt;
                 }
 
-                // Calculate the block's effect on the Orchard chain value pool balance.
+                // Calculate the block's effect on the Ironwood chain value pool balance.
                 if (pindex->pprev->nChainIronwoodValue) {
                     pindex->nChainIronwoodValue = *pindex->pprev->nChainIronwoodValue + pindex->nIronwoodValue;
                 } else {
@@ -6269,7 +6269,7 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
     const int nHeight = pindexPrev == NULL ? 0 : pindexPrev->nHeight + 1;
     const Consensus::Params& consensusParams = Params().GetConsensus();
     bool sapling = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
 
     uint32_t cmptime = block.nTime;
     const int32_t txheight = nHeight == 0 ? komodo_block2height((CBlock *)&block) : nHeight;
@@ -6290,13 +6290,13 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
 
     // Check that all transactions are finalized, also validate interest in each tx
     //
-    // Block-wide Sapling duplicate-proof rule (active from Orchard onward):
+    // Block-wide Sapling duplicate-proof rule (active from Ironwood onward):
     // every Sapling spend/output zk-proof in the block must be unique. Because
     // each SpendDescription/OutputDescription carries its own Groth16 proof, a
     // repeated proof anywhere in the block — within one transaction or across
     // two — indicates a malformed/replayed bundle and is rejected. The set is
     // accumulated across all transactions so cross-transaction reuse is caught,
-    // not just intra-transaction reuse. Gated on Orchard activation so it does
+    // not just intra-transaction reuse. Gated on Ironwood activation so it does
     // not affect historical blocks mined before the upgrade.
     std::set<uint256> vBlockSaplingProofHashes;
     for (uint32_t i = 0; i < block.vtx.size(); i++) {
@@ -6323,7 +6323,7 @@ bool ContextualCheckBlock(int32_t slowflag,const CBlock& block, CValidationState
 
         // Accumulate this transaction's Sapling proofs into the block-wide set
         // and reject on the first collision (covers both intra- and cross-tx).
-        if (orchardActive) {
+        if (ironwoodActive) {
             for (const auto& spend : tx.GetSaplingSpends()) {
                 auto zkproof = spend.zkproof();
                 auto proofHash = Hash(zkproof.begin(), zkproof.end());
@@ -7273,7 +7273,7 @@ bool static LoadBlockIndexDB()
         }
         if ( ASSETCHAINS_IRONWOOD <= 0 )
         {
-            fprintf(stdout,"set orchard height, if possible from ht.%d %u\n",(int32_t)pindex->nHeight,(uint32_t)pindex->nTime);
+            fprintf(stdout,"set ironwood height, if possible from ht.%d %u\n",(int32_t)pindex->nHeight,(uint32_t)pindex->nTime);
             // Chainparam for regtest activation
             if (Params().NetworkIDString() != "regtest") {
                 komodo_activate_ironwood(pindex);
@@ -7357,13 +7357,13 @@ bool CVerifyDB::VerifyDB(CCoinsView *coinsview, int nCheckLevel, int nCheckDepth
             }
         }
 
-        //Pre-check 1: Read hashFinalOrchardRoot and verify it against the database
-        uint256 dbRootOrchard = coinsview->GetBestAnchor(ORCHARDFRONTIER);
-        if (dbRootOrchard !=  chainActive.Tip()->hashFinalOrchardRoot) {
-            LogPrintf("Chain Tip orchard root %s\n", chainActive.Tip()->hashFinalOrchardRoot.ToString());
-            LogPrintf("dbroot %s\n", dbRootOrchard.ToString());
-            if (!(dbRootOrchard == IronwoodMerkleFrontier::empty_root() && chainActive.Tip()->hashFinalOrchardRoot == uint256())) {
-                return error("VerifyDB(): ***Obsolete block database detected (Orchard Empty Root), reindexing the blockchain data required.\n");
+        //Pre-check 1: Read hashFinalIronwoodRoot and verify it against the database
+        uint256 dbRootIronwood = coinsview->GetBestAnchor(IRONWOODFRONTIER);
+        if (dbRootIronwood !=  chainActive.Tip()->hashFinalIronwoodRoot) {
+            LogPrintf("Chain Tip ironwood root %s\n", chainActive.Tip()->hashFinalIronwoodRoot.ToString());
+            LogPrintf("dbroot %s\n", dbRootIronwood.ToString());
+            if (!(dbRootIronwood == IronwoodMerkleFrontier::empty_root() && chainActive.Tip()->hashFinalIronwoodRoot == uint256())) {
+                return error("VerifyDB(): ***Obsolete block database detected (Ironwood Empty Root), reindexing the blockchain data required.\n");
             }
         }
 

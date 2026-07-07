@@ -24,7 +24,7 @@
  * @brief Core wallet functionality for the Pirate cryptocurrency
  * 
  * This file implements the primary wallet functionality for Pirate, including:
- * - Multi-protocol shielded address support (Sprout, Sapling, Orchard)
+ * - Multi-protocol shielded address support (Sprout, Sapling, Ironwood)
  * - Hierarchical deterministic key derivation (HD wallets)
  * - Transaction creation, signing, and broadcasting
  * - Note detection and management for shielded protocols
@@ -57,7 +57,7 @@
 #include "crypter.h"
 #include "coins.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
-#include "wallet/asyncrpcoperation_orchardconsolidation.h"
+#include "wallet/asyncrpcoperation_ironwoodconsolidation.h"
 #include "wallet/asyncrpcoperation_sweeptoaddress.h"
 #include "zcash/address/zip32.h"
 #include "cc/CCinclude.h"
@@ -237,7 +237,7 @@ const CWalletTx* CWallet::GetWalletTx(const uint256& hash) const
  * @section Shielded Address Generation
  * 
  * Functions for generating new shielded addresses using hierarchical deterministic
- * key derivation. These functions support Sprout, Sapling, and Orchard protocols.
+ * key derivation. These functions support Sprout, Sapling, and Ironwood protocols.
  */
 
 /**
@@ -348,16 +348,16 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
 }
 
 /**
- * @brief Generate a new Orchard shielded payment address
- * @return A new Orchard payment address
+ * @brief Generate a new Ironwood shielded payment address
+ * @return A new Ironwood payment address
  * @throws std::runtime_error if HD seed not found, key derivation fails, or key addition fails
  * 
- * Generates a new Orchard spending key using hierarchical deterministic key derivation.
+ * Generates a new Ironwood spending key using hierarchical deterministic key derivation.
  * The key follows a similar derivation path to Sapling: m/32'/coin_type'/account'
  * The first generated key (account 0) is set as the primary key for diversification.
  * Metadata including keypath and seed fingerprint is stored with the key.
  */
-OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
+IronwoodPaymentAddress CWallet::GenerateNewIronwoodZKey()
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
@@ -368,9 +368,9 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
     // Try to get the seed
     HDSeed seed;
     if (!GetHDSeed(seed))
-        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): HD seed not found");
+        throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): HD seed not found");
 
-    auto master = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
+    auto master = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
     uint32_t bip44CoinType = Params().BIP44CoinType();
 
     // We use a fixed keypath scheme of m/32'/coin_type'/account'
@@ -378,25 +378,25 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
     auto coinType = bip44CoinType;
 
     // Derive account key at next index, skip keys already known to the wallet
-    libzcash::OrchardExtendedSpendingKeyPirate xsk;
-    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+    libzcash::IronwoodExtendedSpendingKeyPirate xsk;
+    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
     do
     {
-        auto account = hdChain.orchardAccountCounter;
+        auto account = hdChain.ironwoodAccountCounter;
         auto xskOpt = master.Derive(coinType, account);
 
         metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
         metadata.seedFp = hdChain.seedFp;
 
         // Set Primary key for diversification
-        if (hdChain.orchardAccountCounter == 0) {
+        if (hdChain.ironwoodAccountCounter == 0) {
             if (xskOpt != std::nullopt) {
-                SetPrimaryOrchardSpendingKey(xskOpt.value());
+                SetPrimaryIronwoodSpendingKey(xskOpt.value());
             }
         }
 
         // Increment childkey index
-        hdChain.orchardAccountCounter++;
+        hdChain.ironwoodAccountCounter++;
 
         if (xskOpt == std::nullopt){
             continue;
@@ -409,36 +409,36 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardZKey()
         }
         extfvk = extfvkOpt.value();
 
-    } while (HaveOrchardSpendingKey(extfvk));
+    } while (HaveIronwoodSpendingKey(extfvk));
 
     // Get external IVK and address
-    OrchardIncomingViewingKey ivk;
-    OrchardPaymentAddress address;
+    IronwoodIncomingViewingKey ivk;
+    IronwoodPaymentAddress address;
 
     if (!extfvk.fvk.DeriveIVK(&ivk) || !extfvk.fvk.DeriveDefaultAddress(&address)) {
-        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): Address Generation failed");
+        throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): Address Generation failed");
     }
 
     // Update the chain model in the database
     if (!WriteHDChainToDisk(hdChain))
-        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): Writing HD chain model failed");
+        throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): Writing HD chain model failed");
 
     // Populate metadata for external IVK
-    mapOrchardSpendingKeyMetadata[ivk] = metadata;
+    mapIronwoodSpendingKeyMetadata[ivk] = metadata;
 
-    if (!AddOrchardZKey(xsk)) {
-        throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): AddOrchardZKey failed");
+    if (!AddIronwoodZKey(xsk)) {
+        throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): AddIronwoodZKey failed");
     }
 
     // Register the internal change address in the address book immediately so
     // the Qt model shows it without needing a rescan or restart.
-    OrchardPaymentAddress changeAddr;
+    IronwoodPaymentAddress changeAddr;
     if (extfvk.fvk.DeriveDefaultAddressInternal(&changeAddr)) {
-        SetZAddressBook(changeAddr, "orchard", "receive");
+        SetZAddressBook(changeAddr, "ironwood", "receive");
     }
 
     nTimeFirstKey = 1;
-    // return default orchard payment address.
+    // return default ironwood payment address.
     return address;
 }
 
@@ -559,29 +559,29 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
 }
 
 /**
- * @brief Generate a new Orchard diversified payment address
- * @return A new diversified Orchard payment address
+ * @brief Generate a new Ironwood diversified payment address
+ * @return A new diversified Ironwood payment address
  * @throws std::runtime_error if HD seed not found, key derivation fails, or address addition fails
  * 
- * Generates a diversified Orchard payment address from the primary spending key.
+ * Generates a diversified Ironwood payment address from the primary spending key.
  * If no primary key exists, derives one from the HD seed using the default path.
  * Diversified addresses allow multiple payment addresses from a single spending key
  * for improved privacy. The function:
- * - Uses the primary Orchard spending key or derives one if needed
+ * - Uses the primary Ironwood spending key or derives one if needed
  * - Iterates through diversifier values to find an unused address
  * - Stores the new address and diversifier path in the wallet
  * - Returns the generated diversified payment address
  */
-OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
+IronwoodPaymentAddress CWallet::GenerateNewIronwoodDiversifiedAddress()
 {
-    AssertLockHeld(cs_wallet); // mapOrchardSpendingKeyMetadata
+    AssertLockHeld(cs_wallet); // mapIronwoodSpendingKeyMetadata
 
-    libzcash::OrchardExtendedSpendingKeyPirate extsk;
-    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-    libzcash::OrchardIncomingViewingKey ivk;
-    libzcash::OrchardPaymentAddress addr;
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+    libzcash::IronwoodIncomingViewingKey ivk;
+    libzcash::IronwoodPaymentAddress addr;
 
-    if (primaryOrchardSpendingKey == std::nullopt) {
+    if (primaryIronwoodSpendingKey == std::nullopt) {
 
         // Create new metadata
         int64_t nCreationTime = GetTime();
@@ -590,9 +590,9 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
         // Try to get the seed
         HDSeed seed;
         if (!GetHDSeed(seed))
-            throw std::runtime_error("CWallet::GenerateNewOrchardZKey(): HD seed not found");
+            throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): HD seed not found");
 
-        auto master = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
+        auto master = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
         uint32_t bip44CoinType = Params().BIP44CoinType();
 
         // We use a fixed keypath scheme of m/32'/coin_type'/account'
@@ -609,7 +609,7 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
             metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
             metadata.seedFp = hdChain.seedFp;
 
-            LogPrintf("Orchard Keypath %s\n", metadata.hdKeypath);
+            LogPrintf("Ironwood Keypath %s\n", metadata.hdKeypath);
 
             // Increment childkey index
             accountCounter++;
@@ -625,7 +625,7 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
             }
             extfvk = extfvkOpt.value();
 
-            OrchardIncomingViewingKey ivkDerived;
+            IronwoodIncomingViewingKey ivkDerived;
             if (!extfvk.fvk.DeriveIVK(&ivkDerived)) {
                 continue;
             }
@@ -639,21 +639,21 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
         } while (true);
 
         //Set first key found
-        SetPrimaryOrchardSpendingKey(extsk);
+        SetPrimaryIronwoodSpendingKey(extsk);
 
         //Return default address if the key does not exist in the wallet
-        if (!HaveOrchardSpendingKey(extfvk)) {
-            mapOrchardSpendingKeyMetadata[ivk] = metadata;
-            if (!AddOrchardZKey(extsk)) {
-                throw std::runtime_error("CWallet::GenerateNewOrchardDiversifiedAddress(): AddOrchardZKey failed");
+        if (!HaveIronwoodSpendingKey(extfvk)) {
+            mapIronwoodSpendingKeyMetadata[ivk] = metadata;
+            if (!AddIronwoodZKey(extsk)) {
+                throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): AddIronwoodZKey failed");
             }
             return addr;
         }
 
     } else {
-        extsk = primaryOrchardSpendingKey.value();
+        extsk = primaryIronwoodSpendingKey.value();
         extfvk = extsk.GetXFVK().value();
-        OrchardIncomingViewingKey ivkDerived;
+        IronwoodIncomingViewingKey ivkDerived;
         if (!extfvk.fvk.DeriveIVK(&ivkDerived)) {
             throw std::runtime_error("Failed to derive IVK from FVK");
         }
@@ -667,7 +667,7 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
     diversifierIndex = ArithToUint88(diversifierIndexCounter);
 
     //Get Last used diversifier if one exists
-    for (auto entry : mapLastOrchardDiversifierPath) {
+    for (auto entry : mapLastIronwoodDiversifierPath) {
         if (entry.first == ivk) {
             diversifierIndex = entry.second;
             diversifierIndexCounter = UintToArith88(diversifierIndex);
@@ -677,11 +677,11 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
     bool found = false;
     do {
       if (extfvk.fvk.DeriveAddressFromIndex(&addr, diversifierIndex)) {
-          if (!GetOrchardExtendedSpendingKey(addr, extsk)) {
+          if (!GetIronwoodExtendedSpendingKey(addr, extsk)) {
               found = true;
               //Save last used diversifier by ivk
-              if (!AddLastOrchardDiversifierUsed(ivk, diversifierIndex)) {
-                  throw std::runtime_error("CWallet::GenerateNewOrchardDiversifiedAddress(): AddLastOrchardDiversifierUsed failed");
+              if (!AddLastIronwoodDiversifierUsed(ivk, diversifierIndex)) {
+                  throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): AddLastIronwoodDiversifierUsed failed");
               }
 
           }
@@ -695,16 +695,16 @@ OrchardPaymentAddress CWallet::GenerateNewOrchardDiversifiedAddress()
     while (!found);
 
     //Add to wallet
-    if (!AddOrchardIncomingViewingKey(ivk, addr, KeyScope::External)) {
-        throw std::runtime_error("CWallet::GenerateNewOrchardDiversifiedAddress(): AddOrchardIncomingViewingKey failed");
+    if (!AddIronwoodIncomingViewingKey(ivk, addr, KeyScope::External)) {
+        throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): AddIronwoodIncomingViewingKey failed");
     }
 
     //Add to wallet
-    if (!AddOrchardDiversifiedAddress(addr, ivk, diversifierIndex)) {
-        throw std::runtime_error("CWallet::GenerateNewOrchardDiversifiedAddress(): AddOrchardDiversifiedAddress failed");
+    if (!AddIronwoodDiversifiedAddress(addr, ivk, diversifierIndex)) {
+        throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): AddIronwoodDiversifiedAddress failed");
     }
 
-    // return diversified orchard payment address
+    // return diversified ironwood payment address
     return addr;
 }
 
@@ -753,17 +753,17 @@ bool CWallet::SetPrimarySaplingSpendingKey(
 }
 
 /**
- * @brief Set the primary Orchard spending key for diversified address generation
- * @param extsk The Orchard extended spending key to set as primary
+ * @brief Set the primary Ironwood spending key for diversified address generation
+ * @param extsk The Ironwood extended spending key to set as primary
  * @return true if successfully set and persisted, false otherwise
  * 
- * Sets the primary Orchard spending key used for generating diversified addresses.
+ * Sets the primary Ironwood spending key used for generating diversified addresses.
  * This key serves as the base for creating multiple payment addresses from a single
  * spending key. If the wallet is encrypted, the key will be encrypted before storage.
  * Returns false if the wallet is encrypted and locked.
  */
-bool CWallet::SetPrimaryOrchardSpendingKey(
-    const libzcash::OrchardExtendedSpendingKeyPirate &extsk)
+bool CWallet::SetPrimaryIronwoodSpendingKey(
+    const libzcash::IronwoodExtendedSpendingKeyPirate &extsk)
 {
       AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
@@ -771,14 +771,14 @@ bool CWallet::SetPrimaryOrchardSpendingKey(
           return false;
       }
 
-      primaryOrchardSpendingKey = extsk;
+      primaryIronwoodSpendingKey = extsk;
 
       if (!fFileBacked) {
           return true;
       }
 
       if (!IsCrypted()) {
-          return CWalletDB(strWalletFile).WritePrimaryOrchardSpendingKey(extsk);
+          return CWalletDB(strWalletFile).WritePrimaryIronwoodSpendingKey(extsk);
       } else {
 
           auto extfvkOpt = extsk.GetXFVK();
@@ -797,7 +797,7 @@ bool CWallet::SetPrimaryOrchardSpendingKey(
               return false;
           }
 
-          return CWalletDB(strWalletFile).WriteCryptedPrimaryOrchardSpendingKey(extsk, vchCryptedSecret);
+          return CWalletDB(strWalletFile).WriteCryptedPrimaryIronwoodSpendingKey(extsk, vchCryptedSecret);
       }
 
       return true;
@@ -834,29 +834,29 @@ bool CWallet::LoadCryptedPrimarySaplingSpendingKey(const uint256 &extfvkFinger, 
 }
 
 /**
- * @brief Load an encrypted primary Orchard spending key from the database
+ * @brief Load an encrypted primary Ironwood spending key from the database
  * @param extfvkFinger Fingerprint of the extended full viewing key for validation
  * @param vchCryptedSecret The encrypted spending key data
  * @return true if successfully decrypted and loaded
  * 
- * Decrypts and loads the primary Orchard spending key from encrypted storage.
+ * Decrypts and loads the primary Ironwood spending key from encrypted storage.
  * The fingerprint is used to validate the integrity of the decrypted key.
  * This function is called during wallet initialization when loading encrypted keys.
  */
-bool CWallet::LoadCryptedPrimaryOrchardSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
+bool CWallet::LoadCryptedPrimaryIronwoodSpendingKey(const uint256 &extfvkFinger, const std::vector<unsigned char> &vchCryptedSecret)
 {
     CKeyingMaterial vchSecret;
     if (!DecryptSerializedWalletObjects(vchCryptedSecret, extfvkFinger, vchSecret)) {
-        LogPrintf("Decrypting Primary Orchard Spending Key failed!!!\n");
+        LogPrintf("Decrypting Primary Ironwood Spending Key failed!!!\n");
         return false;
     }
 
-    libzcash::OrchardExtendedSpendingKeyPirate extsk;
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
     DeserializeFromDecryptionOutput(vchSecret, extsk);
 
     auto extfvkOpt = extsk.GetXFVK();
     if (extfvkOpt == std::nullopt) {
-        LogPrintf("Decrypting primary orchard spending key failed!!!\n");
+        LogPrintf("Decrypting primary ironwood spending key failed!!!\n");
         return false;
     }
     auto extfvk = extfvkOpt.value();
@@ -866,7 +866,7 @@ bool CWallet::LoadCryptedPrimaryOrchardSpendingKey(const uint256 &extfvkFinger, 
         return false;
     }
 
-    primaryOrchardSpendingKey = extsk;
+    primaryIronwoodSpendingKey = extsk;
     return true;
 }
 
@@ -1104,21 +1104,21 @@ bool CWallet::AddSaplingDiversifiedAddress(
 }
 
 /**
- * @brief Add an Orchard diversified address mapping to the wallet
- * @param addr The Orchard payment address (diversified address)
+ * @brief Add an Ironwood diversified address mapping to the wallet
+ * @param addr The Ironwood payment address (diversified address)
  * @param ivk The corresponding incoming viewing key
  * @param path The diversification path used to generate this address
  * @return true if successfully added and persisted, false otherwise
  * 
- * Creates a mapping between a diversified Orchard payment address and its
+ * Creates a mapping between a diversified Ironwood payment address and its
  * corresponding incoming viewing key and diversification path. This allows
  * the wallet to properly handle multiple addresses derived from the same
  * spending key. For encrypted wallets, the address data is encrypted before
  * storage. Returns false if the wallet is encrypted and locked.
  */
-bool CWallet::AddOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddress &addr,
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWallet::AddIronwoodDiversifiedAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
@@ -1127,7 +1127,7 @@ bool CWallet::AddOrchardDiversifiedAddress(
         return false;
     }
 
-    if (!CCryptoKeyStore::AddOrchardDiversifiedAddress(addr, ivk, path)) {
+    if (!CCryptoKeyStore::AddIronwoodDiversifiedAddress(addr, ivk, path)) {
         return false;
     }
 
@@ -1136,7 +1136,7 @@ bool CWallet::AddOrchardDiversifiedAddress(
     }
 
     if (!IsCrypted()) {
-        return CWalletDB(strWalletFile).WriteOrchardDiversifiedAddress(addr, ivk, path);
+        return CWalletDB(strWalletFile).WriteIronwoodDiversifiedAddress(addr, ivk, path);
     }
     else {
 
@@ -1148,7 +1148,7 @@ bool CWallet::AddOrchardDiversifiedAddress(
             return false;
         }
 
-        return CWalletDB(strWalletFile).WriteCryptedOrchardDiversifiedAddress(addr, chash, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteCryptedIronwoodDiversifiedAddress(addr, chash, vchCryptedSecret);
 
     }
 
@@ -1206,8 +1206,8 @@ bool CWallet::AddLastSaplingDiversifierUsed(
 }
 
 /**
- * @brief Store the last used Orchard diversifier for an incoming viewing key
- * @param ivk The Orchard incoming viewing key
+ * @brief Store the last used Ironwood diversifier for an incoming viewing key
+ * @param ivk The Ironwood incoming viewing key
  * @param path The diversifier path that was last used
  * @return true if successfully stored, false otherwise
  * 
@@ -1217,8 +1217,8 @@ bool CWallet::AddLastSaplingDiversifierUsed(
  * ordering. For encrypted wallets, the diversifier data is encrypted before storage.
  * Returns false if the wallet is encrypted and locked.
  */
-bool CWallet::AddLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWallet::AddLastIronwoodDiversifierUsed(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
@@ -1227,7 +1227,7 @@ bool CWallet::AddLastOrchardDiversifierUsed(
         return false;
     }
 
-    if (!CCryptoKeyStore::AddLastOrchardDiversifierUsed(ivk, path)) {
+    if (!CCryptoKeyStore::AddLastIronwoodDiversifierUsed(ivk, path)) {
         return false;
     }
 
@@ -1236,7 +1236,7 @@ bool CWallet::AddLastOrchardDiversifierUsed(
     }
 
     if (!IsCrypted()) {
-        return CWalletDB(strWalletFile).WriteLastOrchardDiversifierUsed(ivk, path);
+        return CWalletDB(strWalletFile).WriteLastIronwoodDiversifierUsed(ivk, path);
     }
     else {
 
@@ -1248,7 +1248,7 @@ bool CWallet::AddLastOrchardDiversifierUsed(
             return false;
         }
 
-        return CWalletDB(strWalletFile).WriteLastCryptedOrchardDiversifierUsed(chash, ivk, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteLastCryptedIronwoodDiversifierUsed(chash, ivk, vchCryptedSecret);
 
     }
 
@@ -1256,19 +1256,19 @@ bool CWallet::AddLastOrchardDiversifierUsed(
 }
 
 /**
- * @brief Add an Orchard extended spending key to the wallet
- * @param extsk The Orchard extended spending key to add
+ * @brief Add an Ironwood extended spending key to the wallet
+ * @param extsk The Ironwood extended spending key to add
  * @return true if successfully added and persisted, false otherwise
  * 
- * Adds an Orchard spending key to both the in-memory keystore and wallet database.
+ * Adds an Ironwood spending key to both the in-memory keystore and wallet database.
  * The function extracts the extended full viewing key and incoming viewing key
  * from the spending key for proper storage organization. For encrypted wallets,
  * the key is encrypted before storage along with its metadata. Returns false if
  * the wallet is encrypted and locked, or if key extraction fails. Sets nTimeFirstKey
  * to 1 since viewing keys don't have birthday information.
  */
-bool CWallet::AddOrchardZKey(
-    const libzcash::OrchardExtendedSpendingKeyPirate &extsk)
+bool CWallet::AddIronwoodZKey(
+    const libzcash::IronwoodExtendedSpendingKeyPirate &extsk)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
@@ -1277,22 +1277,22 @@ bool CWallet::AddOrchardZKey(
         return false;
     }
 
-    //Get OrchardExtendedFullViewingKey
+    //Get IronwoodExtendedFullViewingKey
     auto extfvkOpt = extsk.GetXFVK();
     if (extfvkOpt == std::nullopt) {
         return false;
     }
     auto extfvk = extfvkOpt.value();
 
-    //Get OrchardIncomingViewingKey (external)
-    OrchardIncomingViewingKey ivk;
+    //Get IronwoodIncomingViewingKey (external)
+    IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
         return false;
     }
 
     if (!IsCrypted()) {
-        if (!CCryptoKeyStore::AddOrchardSpendingKey(extsk)) {
-            LogPrintf("Adding unencrypted Orchard Spending Key failed!!!\n");
+        if (!CCryptoKeyStore::AddIronwoodSpendingKey(extsk)) {
+            LogPrintf("Adding unencrypted Ironwood Spending Key failed!!!\n");
             return false;
         }
 
@@ -1301,8 +1301,8 @@ bool CWallet::AddOrchardZKey(
         }
 
         // Write spending key once (using external IVK as primary key)
-        if(!CWalletDB(strWalletFile).WriteOrchardZKey(ivk, extsk, mapOrchardSpendingKeyMetadata[ivk])) {
-            LogPrintf("Writing unencrypted Orchard Spending Key failed!!!\n");
+        if(!CWalletDB(strWalletFile).WriteIronwoodZKey(ivk, extsk, mapIronwoodSpendingKeyMetadata[ivk])) {
+            LogPrintf("Writing unencrypted Ironwood Spending Key failed!!!\n");
             return false;
         }
     } else {
@@ -1311,32 +1311,32 @@ bool CWallet::AddOrchardZKey(
             return true;
         }
 
-        //Encrypt Orchard Extended Spending Key
+        //Encrypt Ironwood Extended Spending Key
         std::vector<unsigned char> vchCryptedSpendingKey;
         uint256 chash = extfvk.fvk.GetFingerprint();
         CKeyingMaterial vchSpendingKey = SerializeForEncryptionInput(extsk);
 
         if (!EncryptSerializedWalletObjects(vchSpendingKey, chash, vchCryptedSpendingKey)) {
-            LogPrintf("Encrypting Orchard Spending Key failed!!!\n");
+            LogPrintf("Encrypting Ironwood Spending Key failed!!!\n");
             return false;
         }
 
         //Encrypt metadata
-        CKeyMetadata metadata = mapOrchardSpendingKeyMetadata[ivk];
+        CKeyMetadata metadata = mapIronwoodSpendingKeyMetadata[ivk];
         std::vector<unsigned char> vchCryptedMetaData;
         CKeyingMaterial vchMetaData = SerializeForEncryptionInput(metadata);
         if (!EncryptSerializedWalletObjects(vchMetaData, chash, vchCryptedMetaData)) {
-            LogPrintf("Encrypting Orchard Spending Key metadata failed!!!\n");
+            LogPrintf("Encrypting Ironwood Spending Key metadata failed!!!\n");
             return false;
         }
 
-        if (!CCryptoKeyStore::AddCryptedOrchardSpendingKey(extfvk, vchCryptedSpendingKey)) {
-            LogPrintf("Adding encrypted Orchard Spending Key failed!!!\n");
+        if (!CCryptoKeyStore::AddCryptedIronwoodSpendingKey(extfvk, vchCryptedSpendingKey)) {
+            LogPrintf("Adding encrypted Ironwood Spending Key failed!!!\n");
             return false;
         }
 
-        if (!CWalletDB(strWalletFile).WriteCryptedOrchardZKey(extfvk, vchCryptedSpendingKey, vchCryptedMetaData)) {
-            LogPrintf("Writing encrypted Orchard Spending Key failed!!!\n");
+        if (!CWalletDB(strWalletFile).WriteCryptedIronwoodZKey(extfvk, vchCryptedSpendingKey, vchCryptedMetaData)) {
+            LogPrintf("Writing encrypted Ironwood Spending Key failed!!!\n");
             return false;
         }
     }
@@ -1346,15 +1346,15 @@ bool CWallet::AddOrchardZKey(
 }
 
 /**
- * @brief Add an Orchard extended full viewing key to the wallet
- * @param extfvk The Orchard extended full viewing key to add
+ * @brief Add an Ironwood extended full viewing key to the wallet
+ * @param extfvk The Ironwood extended full viewing key to add
  * @return true if successfully added, false otherwise
  * 
- * Adds an Orchard extended full viewing key to both the in-memory keystore
+ * Adds an Ironwood extended full viewing key to both the in-memory keystore
  * and persistent wallet database. If the wallet is encrypted, the key will
  * be encrypted before storage. The wallet must be unlocked for encrypted wallets.
  */
-bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWallet::AddIronwoodExtendedFullViewingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     AssertLockHeld(cs_wallet);
 
@@ -1362,7 +1362,7 @@ bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFu
         return false;
     }
 
-    if (!CCryptoKeyStore::AddOrchardExtendedFullViewingKey(extfvk)) {
+    if (!CCryptoKeyStore::AddIronwoodExtendedFullViewingKey(extfvk)) {
         return false;
     }
 
@@ -1371,7 +1371,7 @@ bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFu
     }
 
     if (!IsCrypted()) {
-        return CWalletDB(strWalletFile).WriteOrchardFullViewingKey(extfvk);
+        return CWalletDB(strWalletFile).WriteIronwoodFullViewingKey(extfvk);
     } else {
         std::vector<unsigned char> vchCryptedSecret;
         uint256 chash = extfvk.fvk.GetFingerprint();
@@ -1381,24 +1381,24 @@ bool CWallet::AddOrchardExtendedFullViewingKey(const libzcash::OrchardExtendedFu
             return false;
         }
 
-        return CWalletDB(strWalletFile).WriteCryptedOrchardFullViewingKey(extfvk, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteCryptedIronwoodFullViewingKey(extfvk, vchCryptedSecret);
     }
 }
 
 /**
- * @brief Add an Orchard incoming viewing key and payment address mapping to the wallet
- * @param ivk The Orchard incoming viewing key
- * @param addr The corresponding Orchard payment address
+ * @brief Add an Ironwood incoming viewing key and payment address mapping to the wallet
+ * @param ivk The Ironwood incoming viewing key
+ * @param addr The corresponding Ironwood payment address
  * @return true if successfully added, false otherwise
  * 
- * Creates a mapping between an Orchard payment address and its corresponding
+ * Creates a mapping between an Ironwood payment address and its corresponding
  * incoming viewing key. This allows the wallet to detect incoming transactions
  * to the address. For encrypted wallets, both the address and key are encrypted
  * before storage.
  */
-bool CWallet::AddOrchardIncomingViewingKey(
-    const libzcash::OrchardIncomingViewingKey &ivk,
-    const libzcash::OrchardPaymentAddress &addr,
+bool CWallet::AddIronwoodIncomingViewingKey(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
+    const libzcash::IronwoodPaymentAddress &addr,
     KeyScope scope)
 {
     AssertLockHeld(cs_wallet);
@@ -1407,7 +1407,7 @@ bool CWallet::AddOrchardIncomingViewingKey(
         return false;
     }
 
-    if (!CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, addr, scope)) {
+    if (!CCryptoKeyStore::AddIronwoodIncomingViewingKey(ivk, addr, scope)) {
         return false;
     }
 
@@ -1416,7 +1416,7 @@ bool CWallet::AddOrchardIncomingViewingKey(
     }
 
     if (!IsCrypted()) {
-        return CWalletDB(strWalletFile).WriteOrchardPaymentAddress(ivk, addr, scope);
+        return CWalletDB(strWalletFile).WriteIronwoodPaymentAddress(ivk, addr, scope);
     } else {
 
         std::vector<unsigned char> vchCryptedSecret;
@@ -1429,7 +1429,7 @@ bool CWallet::AddOrchardIncomingViewingKey(
             return false;
         }
 
-        return CWalletDB(strWalletFile).WriteCryptedOrchardPaymentAddress(addr, chash, vchCryptedSecret);
+        return CWalletDB(strWalletFile).WriteCryptedIronwoodPaymentAddress(addr, chash, vchCryptedSecret);
 
     }
 
@@ -1437,11 +1437,11 @@ bool CWallet::AddOrchardIncomingViewingKey(
 }
 
 /**
- * @brief Rederive the correct scope for all Orchard addresses in the wallet
+ * @brief Rederive the correct scope for all Ironwood addresses in the wallet
  * @return true if all scopes were successfully rederived and updated, false otherwise
  * 
  * This function is used to fix wallets that were created before scope tracking was
- * implemented. It iterates through all Orchard full viewing keys and derives both
+ * implemented. It iterates through all Ironwood full viewing keys and derives both
  * external (scope 0) and internal (scope 1) IVKs from each FVK. Each address in the
  * wallet is then checked to determine which IVK it belongs to, and the correct scope
  * is updated in the database.
@@ -1449,39 +1449,39 @@ bool CWallet::AddOrchardIncomingViewingKey(
  * This is critical for proper change address detection and transaction scanning.
  * Should be called during wallet upgrade or when scope inconsistencies are detected.
  */
-bool CWallet::RederiveOrchardAddressScopes()
+bool CWallet::RederiveIronwoodAddressScopes()
 {
     AssertLockHeld(cs_wallet);
     
-    LogPrintf("RederiveOrchardAddressScopes: Starting scope validation for Orchard addresses\n");
+    LogPrintf("RederiveIronwoodAddressScopes: Starting scope validation for Ironwood addresses\n");
     
     // Build a map of IVK -> scope from all full viewing keys
-    std::map<libzcash::OrchardIncomingViewingKey, KeyScope> ivkScopeMap;
+    std::map<libzcash::IronwoodIncomingViewingKey, KeyScope> ivkScopeMap;
     
     // Process full viewing keys (includes spending keys, view-only keys, and watch-only keys)
     // Each FVK has both an external IVK (scope 0) and internal IVK (scope 1)
-    for (const auto& [ivkWithScope, extfvk] : mapOrchardFullViewingKeys) {
+    for (const auto& [ivkWithScope, extfvk] : mapIronwoodFullViewingKeys) {
         // Derive external IVK (scope 0)
-        OrchardIncomingViewingKey ivkExternal;
+        IronwoodIncomingViewingKey ivkExternal;
         if (extfvk.fvk.DeriveIVK(&ivkExternal)) {
             ivkScopeMap[ivkExternal] = KeyScope::External;
-            LogPrintf("RederiveOrchardAddressScopes: Registered external IVK (scope: 0)\n");
+            LogPrintf("RederiveIronwoodAddressScopes: Registered external IVK (scope: 0)\n");
         } else {
-            LogPrintf("RederiveOrchardAddressScopes: Failed to derive external IVK from FVK\n");
+            LogPrintf("RederiveIronwoodAddressScopes: Failed to derive external IVK from FVK\n");
         }
         
         // Derive internal IVK (scope 1)
-        OrchardIncomingViewingKey ivkInternal;
+        IronwoodIncomingViewingKey ivkInternal;
         if (extfvk.fvk.DeriveIVKinternal(&ivkInternal)) {
             ivkScopeMap[ivkInternal] = KeyScope::Internal;
-            LogPrintf("RederiveOrchardAddressScopes: Registered internal IVK (scope: 1)\n");
+            LogPrintf("RederiveIronwoodAddressScopes: Registered internal IVK (scope: 1)\n");
         } else {
-            LogPrintf("RederiveOrchardAddressScopes: Failed to derive internal IVK from FVK\n");
+            LogPrintf("RederiveIronwoodAddressScopes: Failed to derive internal IVK from FVK\n");
         }
     }
     
     if (ivkScopeMap.empty()) {
-        LogPrintf("RederiveOrchardAddressScopes: No Orchard keys found in wallet\n");
+        LogPrintf("RederiveIronwoodAddressScopes: No Ironwood keys found in wallet\n");
         return true; // Nothing to do
     }
     
@@ -1489,14 +1489,14 @@ bool CWallet::RederiveOrchardAddressScopes()
     int updated = 0;
     int failed = 0;
     
-    for (auto& [addr, ivkScopePair] : mapOrchardIncomingViewingKeys) {
+    for (auto& [addr, ivkScopePair] : mapIronwoodIncomingViewingKeys) {
         const auto& currentIvk = ivkScopePair.first;
         KeyScope currentScope = ivkScopePair.second;
         
         // Look up the correct scope for this IVK
         auto it = ivkScopeMap.find(currentIvk);
         if (it == ivkScopeMap.end()) {
-            LogPrintf("RederiveOrchardAddressScopes: Warning - IVK not found in derived map, keeping current scope\n");
+            LogPrintf("RederiveIronwoodAddressScopes: Warning - IVK not found in derived map, keeping current scope\n");
             continue;
         }
         
@@ -1504,7 +1504,7 @@ bool CWallet::RederiveOrchardAddressScopes()
         
         // Update if scope differs
         if (currentScope != correctScope) {
-            LogPrintf("RederiveOrchardAddressScopes: Updating address scope from %d to %d\n", 
+            LogPrintf("RederiveIronwoodAddressScopes: Updating address scope from %d to %d\n", 
                      static_cast<int>(currentScope), static_cast<int>(correctScope));
             
             // Update in-memory map
@@ -1513,8 +1513,8 @@ bool CWallet::RederiveOrchardAddressScopes()
             // Update database
             if (fFileBacked) {
                 if (!IsCrypted()) {
-                    if (!CWalletDB(strWalletFile).WriteOrchardPaymentAddress(currentIvk, addr, correctScope)) {
-                        LogPrintf("RederiveOrchardAddressScopes: Failed to write updated scope to database\n");
+                    if (!CWalletDB(strWalletFile).WriteIronwoodPaymentAddress(currentIvk, addr, correctScope)) {
+                        LogPrintf("RederiveIronwoodAddressScopes: Failed to write updated scope to database\n");
                         failed++;
                         continue;
                     }
@@ -1526,13 +1526,13 @@ bool CWallet::RederiveOrchardAddressScopes()
                     CKeyingMaterial vchSecret = SerializeForEncryptionInput(addr, currentIvk, scopeValue);
                     
                     if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
-                        LogPrintf("RederiveOrchardAddressScopes: Failed to encrypt address with new scope\n");
+                        LogPrintf("RederiveIronwoodAddressScopes: Failed to encrypt address with new scope\n");
                         failed++;
                         continue;
                     }
                     
-                    if (!CWalletDB(strWalletFile).WriteCryptedOrchardPaymentAddress(addr, chash, vchCryptedSecret)) {
-                        LogPrintf("RederiveOrchardAddressScopes: Failed to write encrypted scope to database\n");
+                    if (!CWalletDB(strWalletFile).WriteCryptedIronwoodPaymentAddress(addr, chash, vchCryptedSecret)) {
+                        LogPrintf("RederiveIronwoodAddressScopes: Failed to write encrypted scope to database\n");
                         failed++;
                         continue;
                     }
@@ -1543,7 +1543,7 @@ bool CWallet::RederiveOrchardAddressScopes()
         }
     }
     
-    LogPrintf("RederiveOrchardAddressScopes: Complete - updated %d addresses, %d failed\n", updated, failed);
+    LogPrintf("RederiveIronwoodAddressScopes: Complete - updated %d addresses, %d failed\n", updated, failed);
     
     return (failed == 0);
 }
@@ -1551,7 +1551,7 @@ bool CWallet::RederiveOrchardAddressScopes()
 /**
  * @section Shielded Protocol Support Functions
  * 
- * Functions for managing shielded protocols including Sapling and Orchard
+ * Functions for managing shielded protocols including Sapling and Ironwood
  * note commitment trees, nullifier tracking, and protocol-specific operations.
  */
 
@@ -1568,15 +1568,15 @@ SaplingWalletNoteCommitmentTreeLoader CWallet::GetSaplingNoteCommitmentTreeLoade
 }
 
 /**
- * @brief Get a loader for the Orchard note commitment tree
+ * @brief Get a loader for the Ironwood note commitment tree
  * @return An IronwoodWalletNoteCommitmentTreeLoader instance
  * 
- * Returns a loader that can be used to read an Orchard note commitment
- * tree from a stream into the Orchard wallet. This is used during
+ * Returns a loader that can be used to read an Ironwood note commitment
+ * tree from a stream into the Ironwood wallet. This is used during
  * wallet synchronization and state restoration.
  */
-IronwoodWalletNoteCommitmentTreeLoader CWallet::GetOrchardNoteCommitmentTreeLoader() {
-    return IronwoodWalletNoteCommitmentTreeLoader(orchardWallet);
+IronwoodWalletNoteCommitmentTreeLoader CWallet::GetIronwoodNoteCommitmentTreeLoader() {
+    return IronwoodWalletNoteCommitmentTreeLoader(ironwoodWallet);
 }
 
 /**
@@ -1999,16 +1999,16 @@ bool CWallet::LoadSaplingZKeyMetadata(const libzcash::SaplingIncomingViewingKey 
 }
 
 /**
- * @brief Load metadata for an Orchard shielded key
- * @param ivk The Orchard incoming viewing key
+ * @brief Load metadata for an Ironwood shielded key
+ * @param ivk The Ironwood incoming viewing key
  * @param meta The key metadata containing creation time, keypath, and seed fingerprint
  * @return true if successfully loaded
  * 
- * Loads Orchard key metadata into the wallet's metadata map. Updates the wallet's
+ * Loads Ironwood key metadata into the wallet's metadata map. Updates the wallet's
  * first key timestamp if this key is older than previously recorded keys. If the
  * seed fingerprint is empty (indicating a legacy key), sets nTimeFirstKey to 1.
  */
-bool CWallet::LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKey &ivk, const CKeyMetadata &meta)
+bool CWallet::LoadIronwoodZKeyMetadata(const libzcash::IronwoodIncomingViewingKey &ivk, const CKeyMetadata &meta)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
     if (meta.nCreateTime && (!nTimeFirstKey || meta.nCreateTime < nTimeFirstKey))
@@ -2018,7 +2018,7 @@ bool CWallet::LoadOrchardZKeyMetadata(const libzcash::OrchardIncomingViewingKey 
         nTimeFirstKey = 1;
     }
 
-    mapOrchardSpendingKeyMetadata[ivk] = meta;
+    mapIronwoodSpendingKeyMetadata[ivk] = meta;
     return true;
 }
 
@@ -2036,16 +2036,16 @@ bool CWallet::LoadSaplingZKey(const libzcash::SaplingExtendedSpendingKey &key)
 }
 
 /**
- * @brief Load an Orchard spending key into the wallet
- * @param key The Orchard extended spending key to load
+ * @brief Load an Ironwood spending key into the wallet
+ * @param key The Ironwood extended spending key to load
  * @return true if successfully loaded
  * 
- * Loads an Orchard spending key into the in-memory key store. This is typically
+ * Loads an Ironwood spending key into the in-memory key store. This is typically
  * called during wallet initialization when loading keys from the database.
  */
-bool CWallet::LoadOrchardZKey(const libzcash::OrchardExtendedSpendingKeyPirate &key)
+bool CWallet::LoadIronwoodZKey(const libzcash::IronwoodExtendedSpendingKeyPirate &key)
 {
-    return CCryptoKeyStore::AddOrchardSpendingKey(key);
+    return CCryptoKeyStore::AddIronwoodSpendingKey(key);
 }
 
 /**
@@ -2083,17 +2083,17 @@ bool CWallet::LoadCryptedSaplingZKey(const uint256 &chash, const std::vector<uns
 }
 
 /**
- * @brief Load an encrypted Orchard spending key from the database
+ * @brief Load an encrypted Ironwood spending key from the database
  * @param chash Hash identifier for the encrypted key
  * @param vchCryptedSecret The encrypted spending key data
  * @param extfvk[out] The decrypted extended full viewing key
  * @return true if successfully decrypted and loaded
  * 
- * Decrypts and loads an encrypted Orchard spending key from the database.
+ * Decrypts and loads an encrypted Ironwood spending key from the database.
  * The wallet must be unlocked for this operation. The hash is used to verify
  * the integrity of the decrypted key material by comparing fingerprints.
  */
-bool CWallet::LoadCryptedOrchardZKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWallet::LoadCryptedIronwoodZKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     AssertLockHeld(cs_wallet);
     if (IsLocked()) {
@@ -2105,7 +2105,7 @@ bool CWallet::LoadCryptedOrchardZKey(const uint256 &chash, const std::vector<uns
         return false;
     }
 
-    libzcash::OrchardExtendedSpendingKeyPirate extsk;
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
     DeserializeFromDecryptionOutput(vchSecret, extsk);
 
     //Get ext viewingkey from ext spending key
@@ -2120,7 +2120,7 @@ bool CWallet::LoadCryptedOrchardZKey(const uint256 &chash, const std::vector<uns
         return false;
     }
 
-     return CCryptoKeyStore::AddCryptedOrchardSpendingKey(extfvk, vchCryptedSecret);
+     return CCryptoKeyStore::AddCryptedIronwoodSpendingKey(extfvk, vchCryptedSecret);
 }
 
 /**
@@ -2138,17 +2138,17 @@ bool CWallet::LoadSaplingFullViewingKey(const libzcash::SaplingExtendedFullViewi
 }
 
 /**
- * @brief Load an Orchard extended full viewing key into the wallet
- * @param extfvk The Orchard extended full viewing key to load
+ * @brief Load an Ironwood extended full viewing key into the wallet
+ * @param extfvk The Ironwood extended full viewing key to load
  * @return true if successfully loaded
  * 
- * Loads an Orchard extended full viewing key into the in-memory key store.
+ * Loads an Ironwood extended full viewing key into the in-memory key store.
  * This allows the wallet to detect incoming transactions without having
  * the spending key. Typically called during wallet initialization.
  */
-bool CWallet::LoadOrchardFullViewingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWallet::LoadIronwoodFullViewingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
-    return CCryptoKeyStore::AddOrchardExtendedFullViewingKey(extfvk);
+    return CCryptoKeyStore::AddIronwoodExtendedFullViewingKey(extfvk);
 }
 
 /**
@@ -2182,17 +2182,17 @@ bool CWallet::LoadCryptedSaplingExtendedFullViewingKey(const uint256 &chash, con
 }
 
 /**
- * @brief Load an encrypted Orchard extended full viewing key
+ * @brief Load an encrypted Ironwood extended full viewing key
  * @param chash Hash identifier for the encrypted key
  * @param vchCryptedSecret The encrypted viewing key data
  * @param extfvk[out] The decrypted extended full viewing key
  * @return true if successfully decrypted and loaded
  * 
- * Decrypts and loads an encrypted Orchard extended full viewing key.
+ * Decrypts and loads an encrypted Ironwood extended full viewing key.
  * The wallet must be unlocked for this operation. Used for watch-only
  * functionality where spending keys are not available.
  */
-bool CWallet::LoadCryptedOrchardExtendedFullViewingKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWallet::LoadCryptedIronwoodExtendedFullViewingKey(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
 
     if (IsLocked()) {
@@ -2209,7 +2209,7 @@ bool CWallet::LoadCryptedOrchardExtendedFullViewingKey(const uint256 &chash, con
         return false;
     }
 
-     return CCryptoKeyStore::AddOrchardExtendedFullViewingKey(extfvk);
+     return CCryptoKeyStore::AddIronwoodExtendedFullViewingKey(extfvk);
 }
 
 /**
@@ -2230,22 +2230,22 @@ bool CWallet::LoadSaplingPaymentAddress(
 }
 
 /**
- * @brief Load an Orchard payment address and incoming viewing key into the wallet
- * @param addr The Orchard payment address to load
+ * @brief Load an Ironwood payment address and incoming viewing key into the wallet
+ * @param addr The Ironwood payment address to load
  * @param ivk The corresponding incoming viewing key
  * @return true if successfully loaded
  * 
- * Loads an Orchard payment address and its corresponding incoming viewing key
+ * Loads an Ironwood payment address and its corresponding incoming viewing key
  * into the wallet's in-memory key store. This is typically called during
  * wallet initialization when loading address mappings from the database.
  */
-bool CWallet::LoadOrchardPaymentAddress(
-    const libzcash::OrchardPaymentAddress &addr,
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWallet::LoadIronwoodPaymentAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     KeyScope scope)
 {
     // Use the persisted scope from database
-    return CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, addr, scope);
+    return CCryptoKeyStore::AddIronwoodIncomingViewingKey(ivk, addr, scope);
 }
 
 /**
@@ -2280,17 +2280,17 @@ bool CWallet::LoadCryptedSaplingPaymentAddress(const uint256 &chash, const std::
 }
 
 /**
- * @brief Load an encrypted Orchard payment address from the database
+ * @brief Load an encrypted Ironwood payment address from the database
  * @param chash Hash identifier for the encrypted address data
  * @param vchCryptedSecret The encrypted address and viewing key data
- * @param addr[out] The decrypted Orchard payment address
+ * @param addr[out] The decrypted Ironwood payment address
  * @return true if successfully decrypted and loaded
  * 
- * Decrypts and loads an encrypted Orchard payment address and its corresponding
+ * Decrypts and loads an encrypted Ironwood payment address and its corresponding
  * incoming viewing key from the database. The wallet must be unlocked for this
  * operation. The hash is used to verify the integrity of the decrypted data.
  */
-bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::OrchardPaymentAddress& addr)
+bool CWallet::LoadCryptedIronwoodPaymentAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret, libzcash::IronwoodPaymentAddress& addr)
 {
     if (IsLocked()) {
         return false;
@@ -2303,7 +2303,7 @@ bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::
 
     // Manually deserialize to handle backward compatibility
     CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
-    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::IronwoodIncomingViewingKey ivk;
     ss >> addr >> ivk;
     
     // Try to read scope if available (new format), otherwise default to External (old format)
@@ -2321,7 +2321,7 @@ bool CWallet::LoadCryptedOrchardPaymentAddress(const uint256 &chash, const std::
     }
 
     KeyScope scope = static_cast<KeyScope>(scopeValue);
-    return CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, addr, scope);
+    return CCryptoKeyStore::AddIronwoodIncomingViewingKey(ivk, addr, scope);
 }
 
 /**
@@ -2344,22 +2344,22 @@ bool CWallet::LoadSaplingDiversifiedAddress(
 }
 
 /**
- * @brief Load an Orchard diversified address into the wallet
- * @param addr The Orchard diversified payment address
+ * @brief Load an Ironwood diversified address into the wallet
+ * @param addr The Ironwood diversified payment address
  * @param ivk The corresponding incoming viewing key
  * @param path The diversification path used to generate this address
  * @return true if successfully loaded
  * 
- * Loads an Orchard diversified address mapping into the wallet's in-memory store.
+ * Loads an Ironwood diversified address mapping into the wallet's in-memory store.
  * This is typically called during wallet initialization when loading diversified
  * address data from the database.
  */
-bool CWallet::LoadOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddress &addr,
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWallet::LoadIronwoodDiversifiedAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
-    return CCryptoKeyStore::AddOrchardDiversifiedAddress(addr, ivk, path);
+    return CCryptoKeyStore::AddIronwoodDiversifiedAddress(addr, ivk, path);
 }
 
 /**
@@ -2396,17 +2396,17 @@ bool CWallet::LoadCryptedSaplingDiversifiedAddress(const uint256 &chash, const s
 }
 
 /**
- * @brief Load an encrypted Orchard diversified address from the database
+ * @brief Load an encrypted Ironwood diversified address from the database
  * @param chash Hash identifier for the encrypted address data
  * @param vchCryptedSecret The encrypted diversified address data
  * @return true if successfully decrypted and loaded
  * 
- * Decrypts and loads an encrypted Orchard diversified address mapping from
+ * Decrypts and loads an encrypted Ironwood diversified address mapping from
  * the database. The wallet must be unlocked for this operation. The address,
  * incoming viewing key, and diversification path are all recovered from the
  * encrypted data.
  */
-bool CWallet::LoadCryptedOrchardDiversifiedAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
+bool CWallet::LoadCryptedIronwoodDiversifiedAddress(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
     if (IsLocked()) {
         return false;
@@ -2417,15 +2417,15 @@ bool CWallet::LoadCryptedOrchardDiversifiedAddress(const uint256 &chash, const s
         return false;
     }
 
-    libzcash::OrchardPaymentAddress addr;
-    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::IronwoodPaymentAddress addr;
+    libzcash::IronwoodIncomingViewingKey ivk;
     blob88 path;
     DeserializeFromDecryptionOutput(vchSecret, addr, ivk, path);
     if(HashWithFP(addr) != chash) {
         return false;
     }
 
-    return CCryptoKeyStore::AddOrchardDiversifiedAddress(addr, ivk, path);
+    return CCryptoKeyStore::AddIronwoodDiversifiedAddress(addr, ivk, path);
 }
 
 /**
@@ -2445,19 +2445,19 @@ bool CWallet::LoadLastSaplingDiversifierUsed(
 }
 
 /**
- * @brief Load the last used Orchard diversifier for an incoming viewing key
- * @param ivk The Orchard incoming viewing key
+ * @brief Load the last used Ironwood diversifier for an incoming viewing key
+ * @param ivk The Ironwood incoming viewing key
  * @param path The diversifier path that was last used
  * @return true if successfully loaded
  * 
- * Loads the last used diversifier path for an Orchard incoming viewing key.
+ * Loads the last used diversifier path for an Ironwood incoming viewing key.
  * This is used to continue generating addresses from where the wallet left off.
  */
-bool CWallet::LoadLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CWallet::LoadLastIronwoodDiversifierUsed(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
-    return CCryptoKeyStore::AddLastOrchardDiversifierUsed(ivk, path);
+    return CCryptoKeyStore::AddLastIronwoodDiversifierUsed(ivk, path);
 }
 
 /**
@@ -2487,29 +2487,29 @@ bool CWallet::LoadLastCryptedSaplingDiversifierUsed(const uint256 &chash, const 
 }
 
 /**
- * @brief Load an encrypted last used Orchard diversifier from database
+ * @brief Load an encrypted last used Ironwood diversifier from database
  * @param chash Hash fingerprint of the encrypted data
  * @param vchCryptedSecret The encrypted diversifier data
  * @return true if successfully decrypted and loaded
  * 
- * Decrypts and loads the last used diversifier path for an Orchard incoming
+ * Decrypts and loads the last used diversifier path for an Ironwood incoming
  * viewing key. The encrypted data contains both the IVK and diversifier path.
  */
-bool CWallet::LoadLastCryptedOrchardDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
+bool CWallet::LoadLastCryptedIronwoodDiversifierUsed(const uint256 &chash, const std::vector<unsigned char> &vchCryptedSecret)
 {
     CKeyingMaterial vchSecret;
     if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
         return false;
     }
 
-    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::IronwoodIncomingViewingKey ivk;
     blob88 path;
     DeserializeFromDecryptionOutput(vchSecret, ivk, path);
     if (HashWithFP(ivk) != chash) {
         return false;
     }
 
-    return LoadLastOrchardDiversifierUsed(ivk, path);
+    return LoadLastIronwoodDiversifierUsed(ivk, path);
 }
 
 /**
@@ -2811,17 +2811,17 @@ bool CWallet::LoadSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey
 }
 
 /**
- * @brief Load an Orchard watch-only extended full viewing key
- * @param extfvk The Orchard extended full viewing key to load
+ * @brief Load an Ironwood watch-only extended full viewing key
+ * @param extfvk The Ironwood extended full viewing key to load
  * @return true if successfully loaded
  * 
- * Loads an Orchard extended full viewing key for watch-only functionality.
- * This allows monitoring of Orchard transactions without spending capability.
+ * Loads an Ironwood extended full viewing key for watch-only functionality.
+ * This allows monitoring of Ironwood transactions without spending capability.
  * Notifies UI of the change when successful.
  */
-bool CWallet::LoadOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CWallet::LoadIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
-    if (CCryptoKeyStore::AddOrchardWatchOnly(extfvk)) {
+    if (CCryptoKeyStore::AddIronwoodWatchOnly(extfvk)) {
         NotifyWatchonlyChanged(true);
         return true;
     }
@@ -3008,7 +3008,7 @@ bool CWallet::NeedsKDFUpgrade() const
  * This function handles both block additions and removals (during reorganizations).
  * 
  * For block additions:
- * - Updates Sapling and Orchard wallet commitment trees
+ * - Updates Sapling and Ironwood wallet commitment trees
  * - Schedules automatic consolidation operations for fresh blocks
  * - Manages transaction confirmation status
  * 
@@ -3027,7 +3027,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
 
     if (added) {
         IncrementSaplingWallet(pindex);
-        IncrementOrchardWallet(pindex);
+        IncrementIronwoodWallet(pindex);
         // Prevent consolidation & sweep transactions
         // from being created when node is syncing after launch,
         // and also when node wakes up from suspension/hibernation and incoming blocks are old.
@@ -3036,7 +3036,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
             pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
         {
             RunSaplingConsolidation(pindex->nHeight);
-            RunOrchardConsolidation(pindex->nHeight);
+            RunIronwoodConsolidation(pindex->nHeight);
             RunSaplingSweep(pindex->nHeight);
             while(DeleteWalletTransactions(pindex, false)) {}
         } else {
@@ -3047,7 +3047,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
 
     } else {
         DecrementSaplingWallet(pindex);
-        DecrementOrchardWallet(pindex);
+        DecrementIronwoodWallet(pindex);
         UpdateNullifierNoteMapForBlock(pblock);
     }
 
@@ -3084,7 +3084,7 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
  * Automatically sweeps notes to consolidate and clean up the wallet across all protocols.
  * Only runs if:
  * - Sapling upgrade is active (for Sapling notes)
- * - Orchard upgrade is active (for Orchard notes) 
+ * - Ironwood upgrade is active (for Ironwood notes) 
  * - Sweeping is enabled (fSweepEnabled)
  * - It's time for next sweep (nextSweep <= blockHeight)
  * - No consolidation is running or scheduled soon
@@ -3112,12 +3112,12 @@ void CWallet::RunSaplingSweep(int blockHeight) {
     if (fSaplingConsolidationEnabled && nextSaplingConsolidation - 15 <= blockHeight) {
         return;
     }
-    if (fOrchardConsolidationEnabled && nextOrchardConsolidation - 15 <= blockHeight) {
+    if (fIronwoodConsolidationEnabled && nextIronwoodConsolidation - 15 <= blockHeight) {
         return;
     }
 
     //Don't Run While consolidation is running.
-    if (fSaplingConsolidationRunning || fOrchardConsolidationRunning) {
+    if (fSaplingConsolidationRunning || fIronwoodConsolidationRunning) {
         return;
     }
 
@@ -3190,28 +3190,28 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
 }
 
 /**
- * @brief Run Orchard note consolidation at the specified block height
+ * @brief Run Ironwood note consolidation at the specified block height
  * @param blockHeight The current block height to process consolidation for
  * 
- * Initiates Orchard note consolidation if conditions are met:
- * - Orchard protocol is active (post-NU5 activation)
- * - Consolidation is enabled (fOrchardConsolidationEnabled)
- * - It's time for next consolidation (nextOrchardConsolidation <= blockHeight)
+ * Initiates Ironwood note consolidation if conditions are met:
+ * - Ironwood protocol is active (post-NU5 activation)
+ * - Consolidation is enabled (fIronwoodConsolidationEnabled)
+ * - It's time for next consolidation (nextIronwoodConsolidation <= blockHeight)
  * - No sweep operations are currently running
  * 
- * Creates an AsyncRPCOperation_orchardconsolidation operation to handle the
+ * Creates an AsyncRPCOperation_ironwoodconsolidation operation to handle the
  * consolidation process asynchronously.
  */
-void CWallet::RunOrchardConsolidation(int blockHeight) {
+void CWallet::RunIronwoodConsolidation(int blockHeight) {
     if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         return;
     }
     AssertLockHeld(cs_wallet);
-    if (!fOrchardConsolidationEnabled) {
+    if (!fIronwoodConsolidationEnabled) {
         return;
     }
 
-    if (nextOrchardConsolidation > blockHeight) {
+    if (nextIronwoodConsolidation > blockHeight) {
         return;
     }
 
@@ -3220,16 +3220,16 @@ void CWallet::RunOrchardConsolidation(int blockHeight) {
         return;
     }
 
-    fOrchardConsolidationRunning = true;
+    fIronwoodConsolidationRunning = true;
     
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> lastOperation = q->getOperationForId(orchardConsolidationOperationId);
+    std::shared_ptr<AsyncRPCOperation> lastOperation = q->getOperationForId(ironwoodConsolidationOperationId);
     if (lastOperation != nullptr) {
         lastOperation->cancel();
     }
-    pendingOrchardConsolidationTxs.clear();
-    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_orchardconsolidation(blockHeight + 5));
-    orchardConsolidationOperationId = operation->getId();
+    pendingIronwoodConsolidationTxs.clear();
+    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_ironwoodconsolidation(blockHeight + 5));
+    ironwoodConsolidationOperationId = operation->getId();
     q->addOperation(operation);
 
 }
@@ -3308,7 +3308,7 @@ void CWallet::SetWalletBirthday(int nHeight)
  * @return Set of pairs containing (payment address, nullifier hash)
  * 
  * Retrieves all nullifiers associated with the given payment addresses.
- * This includes nullifiers for both Sapling and Orchard protocols.
+ * This includes nullifiers for both Sapling and Ironwood protocols.
  * Nullifiers are used to prevent double-spending in shielded transactions.
  */
 std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersForAddresses(
@@ -3329,13 +3329,13 @@ std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersFor
     }
 
     // (There may be more than one diversified address for a given ivk.)
-    std::map<libzcash::OrchardIncomingViewingKey, std::vector<libzcash::OrchardPaymentAddress>> ivkMapOrchard;
+    std::map<libzcash::IronwoodIncomingViewingKey, std::vector<libzcash::IronwoodPaymentAddress>> ivkMapIronwood;
     for (const auto & addr : addresses) {
-        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&addr);
-        if (orchardAddr != nullptr) {
-            libzcash::OrchardIncomingViewingKey ivk;
-            this->GetOrchardIncomingViewingKey(*orchardAddr, ivk);
-            ivkMapOrchard[ivk].push_back(*orchardAddr);
+        auto ironwoodAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&addr);
+        if (ironwoodAddr != nullptr) {
+            libzcash::IronwoodIncomingViewingKey ivk;
+            this->GetIronwoodIncomingViewingKey(*ironwoodAddr, ivk);
+            ivkMapIronwood[ivk].push_back(*ironwoodAddr);
         }
     }
 
@@ -3360,13 +3360,13 @@ std::set<std::pair<libzcash::PaymentAddress, uint256>> CWallet::GetNullifiersFor
                 }
             }
         }
-        // Orchard
-        for (const auto & noteDataPair : txPair.second.mapOrchardNoteData) {
+        // Ironwood
+        for (const auto & noteDataPair : txPair.second.mapIronwoodNoteData) {
             auto & noteData = noteDataPair.second;
             auto & nullifier = noteData.nullifier;
             auto & ivk = noteData.ivk;
-            if (nullifier && ivkMapOrchard.count(ivk)) {
-                for (const auto & addr : ivkMapOrchard[ivk]) {
+            if (nullifier && ivkMapIronwood.count(ivk)) {
+                for (const auto & addr : ivkMapIronwood[ivk]) {
                     nullifierSet.insert(std::make_pair(addr, nullifier.value()));
                 }
             }
@@ -3463,10 +3463,10 @@ bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddr
 }
 
 /**
- * @brief Determine if an Orchard note is change
+ * @brief Determine if an Ironwood note is change
  * @param nullifierSet Set of (address, nullifier) pairs for all notes spent in the transaction
  * @param address The payment address that received the note
- * @param op The Orchard output point of the note
+ * @param op The Ironwood output point of the note
  * @return true if the note is considered change, false otherwise
  * 
  * A note is marked as "change" using two complementary checks, applied in order:
@@ -3474,7 +3474,7 @@ bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddr
  * 1. ZIP-32 internal scope (primary): If the receiving address belongs to the
  *    wallet's internal key scope (KeyScope::Internal), it is unconditionally
  *    treated as change. Internal addresses are derived at scope index 1 from
- *    the Orchard extended full viewing key and are the canonical ZIP-32 change
+ *    the Ironwood extended full viewing key and are the canonical ZIP-32 change
  *    addresses — they are never shared with external parties.
  * 
  * 2. Legacy nullifier match (fallback): If the receiving address also appears
@@ -3484,16 +3484,16 @@ bool CWallet::IsNoteSaplingChange(const std::set<std::pair<libzcash::PaymentAddr
  *    - Notes created by consolidation transactions (z_mergetoaddress)
  *    - Notes sent from one address to itself
  */
-bool CWallet::IsNoteOrchardChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet,
+bool CWallet::IsNoteIronwoodChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet,
         const libzcash::PaymentAddress & address,
-        const OrchardOutPoint & op)
+        const IronwoodOutPoint & op)
 {
     // A note is change if its receiving address is the internal (change) address
     // derived from the spending key (ZIP-32 scope 1), regardless of transaction structure.
-    auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&address);
-    if (orchardAddr) {
+    auto ironwoodAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&address);
+    if (ironwoodAddr) {
         KeyScope scope;
-        if (GetOrchardKeyScope(*orchardAddr, scope) && scope == KeyScope::Internal) {
+        if (GetIronwoodKeyScope(*ironwoodAddr, scope) && scope == KeyScope::Internal) {
             return true;
         }
     }
@@ -3605,7 +3605,7 @@ bool CWallet::SetMaxVersion(int nVersion)
  * Identifies all transactions in the wallet that conflict with the specified
  * transaction by examining spent outputs and nullifiers. Conflicts occur when:
  * - Multiple transactions spend the same transparent UTXO
- * - Multiple transactions spend the same Sprout, Sapling, or Orchard note (same nullifier)
+ * - Multiple transactions spend the same Sprout, Sapling, or Ironwood note (same nullifier)
  * 
  * This function is essential for handling double-spend situations and chain
  * reorganizations where conflicting transactions may become valid or invalid.
@@ -3663,10 +3663,10 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
 
     for (const auto& action : wtx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
-        if (mapTxOrchardNullifiers.count(nullifier) <= 1) {
+        if (mapTxIronwoodNullifiers.count(nullifier) <= 1) {
             continue;  // No conflict if zero or one spends
         }
-        range_o = mapTxOrchardNullifiers.equal_range(nullifier);
+        range_o = mapTxIronwoodNullifiers.equal_range(nullifier);
         for (TxNullifiers::const_iterator it = range_o.first; it != range_o.second; ++it) {
             result.insert(it->second);
         }
@@ -3769,7 +3769,7 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
  * - fFromMe: Flag indicating if transaction originated from this wallet
  * - strFromAccount: Source account name for the transaction
  * 
- * Note data (mapSproutNoteData, mapSaplingNoteData, mapOrchardNoteData) is
+ * Note data (mapSproutNoteData, mapSaplingNoteData, mapIronwoodNoteData) is
  * intentionally not copied as it should remain unique per transaction.
  * Similarly, nTimeReceived, fTimeReceivedIsTxTime, and nOrderPos are preserved
  * to maintain transaction-specific timing and ordering information.
@@ -4007,23 +4007,23 @@ int CWallet::GetSaplingSpendDepth(const uint256& nullifier) const {
 }
 
 /**
- * @brief Check if an Orchard note is spent by any non-conflicted transaction
- * @param nullifier The Orchard nullifier to check for spending
+ * @brief Check if an Ironwood note is spent by any non-conflicted transaction
+ * @param nullifier The Ironwood nullifier to check for spending
  * @return true if the note is spent by a confirmed transaction, false otherwise
  * 
- * Determines if a specific Orchard note has been spent by examining all transactions
+ * Determines if a specific Ironwood note has been spent by examining all transactions
  * that use the given nullifier. A note is considered spent if any non-conflicted
- * transaction (depth >= 0) includes this nullifier in its Orchard action descriptions.
+ * transaction (depth >= 0) includes this nullifier in its Ironwood action descriptions.
  * 
  * This function is essential for:
- * - Determining available balance in Orchard addresses
+ * - Determining available balance in Ironwood addresses
  * - Preventing double-spend attempts in new transactions
  * - Validating transaction inputs during creation
  * - Maintaining accurate note state across chain reorganizations
  */
-bool CWallet::IsOrchardSpent(const uint256& nullifier) const {
+bool CWallet::IsIronwoodSpent(const uint256& nullifier) const {
     pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range;
-    range = mapTxOrchardNullifiers.equal_range(nullifier);
+    range = mapTxIronwoodNullifiers.equal_range(nullifier);
 
     for (TxNullifiers::const_iterator it = range.first; it != range.second; ++it) {
         const uint256& wtxid = it->second;
@@ -4036,11 +4036,11 @@ bool CWallet::IsOrchardSpent(const uint256& nullifier) const {
 }
 
 /**
- * @brief Get the confirmation depth of an Orchard note's spending transaction
- * @param nullifier The Orchard nullifier to check for spending depth
+ * @brief Get the confirmation depth of an Ironwood note's spending transaction
+ * @param nullifier The Ironwood nullifier to check for spending depth
  * @return Depth of the spending transaction (0+ for confirmed, 0 if unspent)
  * 
- * Returns the depth (confirmations) of the transaction that spends an Orchard note
+ * Returns the depth (confirmations) of the transaction that spends an Ironwood note
  * with the given nullifier:
  * - Positive value: Number of confirmations of the spending transaction
  * - 0: Note is not spent by any confirmed transaction
@@ -4048,11 +4048,11 @@ bool CWallet::IsOrchardSpent(const uint256& nullifier) const {
  * This function is used for:
  * - Determining note availability with different confirmation requirements
  * - Calculating wallet balance based on confirmation depth
- * - Validating transaction chains and dependencies in Orchard protocol
+ * - Validating transaction chains and dependencies in Ironwood protocol
  */
-int CWallet::GetOrchardSpendDepth(const uint256& nullifier) const {
+int CWallet::GetIronwoodSpendDepth(const uint256& nullifier) const {
     pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range;
-    range = mapTxOrchardNullifiers.equal_range(nullifier);
+    range = mapTxIronwoodNullifiers.equal_range(nullifier);
 
     for (TxNullifiers::const_iterator it = range.first; it != range.second; ++it) {
         const uint256& wtxid = it->second;
@@ -4144,28 +4144,28 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
 }
 
 /**
- * @brief Add an Orchard nullifier to the spend tracking map
- * @param nullifier The Orchard nullifier being spent
+ * @brief Add an Ironwood nullifier to the spend tracking map
+ * @param nullifier The Ironwood nullifier being spent
  * @param wtxid The wallet transaction ID that spends this nullifier
  * 
- * Records that a specific Orchard note is being spent by a transaction.
+ * Records that a specific Ironwood note is being spent by a transaction.
  * This function:
  * - Removes any existing entries for this nullifier (during rescan)
- * - Adds the spending relationship to mapTxOrchardNullifiers
+ * - Adds the spending relationship to mapTxIronwoodNullifiers
  * - Synchronizes metadata across all transactions that spend the same nullifier
  * 
- * This tracking is essential for detecting double-spends in Orchard transactions,
+ * This tracking is essential for detecting double-spends in Ironwood transactions,
  * managing conflicted transactions, and maintaining accurate note state.
  */
-void CWallet::AddToOrchardSpends(const uint256& nullifier, const uint256& wtxid)
+void CWallet::AddToIronwoodSpends(const uint256& nullifier, const uint256& wtxid)
 {
     // Remove any existing entries for this nullifier to avoid duplicates during rescan
-    mapTxOrchardNullifiers.erase(nullifier);
+    mapTxIronwoodNullifiers.erase(nullifier);
     
-    mapTxOrchardNullifiers.insert(make_pair(nullifier, wtxid));
+    mapTxIronwoodNullifiers.insert(make_pair(nullifier, wtxid));
 
     pair<TxNullifiers::iterator, TxNullifiers::iterator> range;
-    range = mapTxOrchardNullifiers.equal_range(nullifier);
+    range = mapTxIronwoodNullifiers.equal_range(nullifier);
     SyncMetaData<uint256>(range);
 }
 
@@ -4173,7 +4173,7 @@ void CWallet::AddToOrchardSpends(const uint256& nullifier, const uint256& wtxid)
  * @brief Remove all spending relationships for a transaction
  * @param wtxid The wallet transaction ID to remove from all spend maps
  * 
- * Removes all spending relationships (transparent, Sprout, Sapling, and Orchard)
+ * Removes all spending relationships (transparent, Sprout, Sapling, and Ironwood)
  * for the specified transaction. This is called when a transaction is removed
  * from the wallet, typically during chain reorganizations or transaction cleanup.
  * 
@@ -4185,7 +4185,7 @@ void CWallet::RemoveFromSpends(const uint256& wtxid)
     RemoveFromTransparentSpends(wtxid);
     RemoveFromSproutSpends(wtxid);
     RemoveFromSaplingSpends(wtxid);
-    RemoveFromOrchardSpends(wtxid);
+    RemoveFromIronwoodSpends(wtxid);
 }
 
 /**
@@ -4270,23 +4270,23 @@ void CWallet::RemoveFromSaplingSpends(const uint256& wtxid)
 }
 
 /**
- * @brief Remove Orchard spending relationships for a transaction
- * @param wtxid The wallet transaction ID to remove from Orchard nullifier map
+ * @brief Remove Ironwood spending relationships for a transaction
+ * @param wtxid The wallet transaction ID to remove from Ironwood nullifier map
  * 
- * Removes all Orchard nullifier spending relationships for the specified transaction
- * from mapTxOrchardNullifiers. This is called during transaction removal or chain
- * reorganizations to maintain accurate Orchard note spend tracking state.
+ * Removes all Ironwood nullifier spending relationships for the specified transaction
+ * from mapTxIronwoodNullifiers. This is called during transaction removal or chain
+ * reorganizations to maintain accurate Ironwood note spend tracking state.
  */
-void CWallet::RemoveFromOrchardSpends(const uint256& wtxid)
+void CWallet::RemoveFromIronwoodSpends(const uint256& wtxid)
 {
-    if (mapTxOrchardNullifiers.size() > 0)
+    if (mapTxIronwoodNullifiers.size() > 0)
     {
-        std::multimap<uint256, uint256>::const_iterator itr = mapTxOrchardNullifiers.cbegin();
-        while (itr != mapTxOrchardNullifiers.cend())
+        std::multimap<uint256, uint256>::const_iterator itr = mapTxIronwoodNullifiers.cbegin();
+        while (itr != mapTxIronwoodNullifiers.cend())
         {
             if (itr->second == wtxid)
             {
-                itr = mapTxOrchardNullifiers.erase(itr);
+                itr = mapTxIronwoodNullifiers.erase(itr);
             }
             else
             {
@@ -4321,7 +4321,7 @@ void CWallet::LoadArcTxs(const uint256& wtxid, const ArchiveTxPoint& arcTxPt)
  * Archives a transaction by extracting and storing its viewing keys and address
  * information. This function:
  * - Retrieves transaction data via RPC interface
- * - Extracts Sapling and Orchard viewing keys (incoming and outgoing)
+ * - Extracts Sapling and Ironwood viewing keys (incoming and outgoing)
  * - Updates the address-to-transaction mapping for efficient lookups
  * - Marks the archive point for disk persistence
  * 
@@ -4339,8 +4339,8 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
 
     arcTxPt.saplingIvks = arcTx.saplingIvks;
     arcTxPt.saplingOvks = arcTx.saplingOvks;
-    arcTxPt.orchardIvks = arcTx.orchardIvks;
-    arcTxPt.orchardOvks = arcTx.orchardOvks;
+    arcTxPt.ironwoodIvks = arcTx.ironwoodIvks;
+    arcTxPt.ironwoodOvks = arcTx.ironwoodOvks;
     arcTxPt.writeToDisk = true;
     mapArcTxs[wtxid] = arcTxPt;
 
@@ -4369,10 +4369,10 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
  * @param txHeight The block height where this transaction was confirmed
  * @param arcTxPt[in,out] Archive transaction point to populate with key data
  * 
- * Archives a wallet transaction by directly extracting its Sapling and Orchard
+ * Archives a wallet transaction by directly extracting its Sapling and Ironwood
  * viewing keys. This function:
  * - Extracts Sapling viewing keys directly from the transaction
- * - Extracts Orchard viewing keys directly from the transaction
+ * - Extracts Ironwood viewing keys directly from the transaction
  * - Updates the address-to-transaction mapping for efficient lookups
  * - Marks the archive point for disk persistence
  * 
@@ -4387,12 +4387,12 @@ void CWallet::AddToArcTxs(const CWalletTx& wtx, int txHeight, ArchiveTxPoint& ar
     RpcArcTransaction arcTx;
 
     getRpcArcTxSaplingKeys(wtx, txHeight, arcTx, true);
-    getRpcArcTxOrchardKeys(wtx, txHeight, arcTx, true);
+    getRpcArcTxIronwoodKeys(wtx, txHeight, arcTx, true);
 
     arcTxPt.saplingIvks = arcTx.saplingIvks;
     arcTxPt.saplingOvks = arcTx.saplingOvks;
-    arcTxPt.orchardIvks = arcTx.orchardIvks;
-    arcTxPt.orchardOvks = arcTx.orchardOvks;
+    arcTxPt.ironwoodIvks = arcTx.ironwoodIvks;
+    arcTxPt.ironwoodOvks = arcTx.ironwoodOvks;
     arcTxPt.writeToDisk = true;
     mapArcTxs[wtx.GetHash()] = arcTxPt;
 
@@ -4443,17 +4443,17 @@ void CWallet::AddToArcSaplingOutPoints(const uint256& nullifier, const SaplingOu
 }
 
 /**
- * @brief Add a nullifier to Orchard output point mapping
- * @param nullifier The Orchard nullifier to map
- * @param op The corresponding OrchardOutPoint
+ * @brief Add a nullifier to Ironwood output point mapping
+ * @param nullifier The Ironwood nullifier to map
+ * @param op The corresponding IronwoodOutPoint
  * 
- * Maintains a mapping between Orchard nullifiers and their corresponding
+ * Maintains a mapping between Ironwood nullifiers and their corresponding
  * output points for archived transactions. This is used for tracking
- * and managing Orchard note usage in transaction archives.
+ * and managing Ironwood note usage in transaction archives.
  */
-void CWallet::AddToArcOrchardOutPoints(const uint256& nullifier, const OrchardOutPoint& op)
+void CWallet::AddToArcIronwoodOutPoints(const uint256& nullifier, const IronwoodOutPoint& op)
 {
-    mapArcOrchardOutPoints[nullifier] = op;
+    mapArcIronwoodOutPoints[nullifier] = op;
 }
 
 /**
@@ -4465,7 +4465,7 @@ void CWallet::AddToArcOrchardOutPoints(const uint256& nullifier, const OrchardOu
  * - Transparent inputs (UTXOs) to mapTxTransparentSpends
  * - Sprout nullifiers to mapTxSproutNullifiers  
  * - Sapling nullifiers to mapTxSaplingNullifiers
- * - Orchard nullifiers to mapTxOrchardNullifiers
+ * - Ironwood nullifiers to mapTxIronwoodNullifiers
  * 
  * This function is essential for maintaining accurate spending state and
  * preventing double-spend attempts across all transaction types.
@@ -4494,7 +4494,7 @@ void CWallet::AddToSpends(const uint256& wtxid)
 
     for (const auto& action : thisTx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
-        AddToOrchardSpends(nullifier, wtxid);
+        AddToIronwoodSpends(nullifier, wtxid);
     }
 }
 
@@ -4574,7 +4574,7 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
 }
 
 /**
- * @brief Process all Orchard transactions in a block
+ * @brief Process all Ironwood transactions in a block
  * @param pblockindex The block index containing the transactions
  * @param pblock Pointer to the block data
  * 
@@ -4582,13 +4582,13 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
  * from non-wallet transactions. Wallet transactions use individual commitment appending
  * to track note positions, while non-wallet transactions use batch appending.
  */
-void CWallet::ProcessOrchardBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock)
+void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock)
 {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
     //Create Checkpoint before incrementing wallet
-    orchardWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight);
+    ironwoodWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight);
 
     for (int i = 0; i < pblock->vtx.size(); i++) {
         uint256 txid = pblock->vtx[i].GetHash();
@@ -4596,46 +4596,46 @@ void CWallet::ProcessOrchardBlockTransactions(const CBlockIndex* pblockindex, co
 
         //Use single output appending for transaction that belong to the wallet so that they can be marked
         if (it != mapWallet.end()) {
-            orchardWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
+            ironwoodWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
             CWalletTx *pwtx = &(*it).second;
             auto vActions = pblock->vtx[i].GetIronwoodActions();
             for (int j = 0; j < vActions.size(); j++) {
-                OrchardOutPoint op = OrchardOutPoint(txid, j);
-                auto opit = pwtx->mapOrchardNoteData.find(op);
+                IronwoodOutPoint op = IronwoodOutPoint(txid, j);
+                auto opit = pwtx->mapIronwoodNoteData.find(op);
 
-                if (opit != pwtx->mapOrchardNoteData.end()) {
-                    orchardWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], true);
+                if (opit != pwtx->mapIronwoodNoteData.end()) {
+                    ironwoodWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], true);
                     //Get note position
                     uint64_t position = UINT64_MAX;
-                    assert(orchardWallet.IsNoteTracked(txid, j, position));
-                    pwtx->mapOrchardNoteData[op].setPosition(position);
+                    assert(ironwoodWallet.IsNoteTracked(txid, j, position));
+                    pwtx->mapIronwoodNoteData[op].setPosition(position);
 
                     // Validate position and tree root
-                    uint256 treeRoot = orchardWallet.GetLatestAnchor();
-                    LogPrint("orchardwallet", "Orchard Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n", 
+                    uint256 treeRoot = ironwoodWallet.GetLatestAnchor();
+                    LogPrint("ironwoodwallet", "Ironwood Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n", 
                         txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
                     
                     // Sanity check: position should be less than tree size
                     if (position == UINT64_MAX) {
-                        LogPrintf("ERROR: Orchard Wallet - Invalid position (UINT64_MAX) for tracked note txid=%s outidx=%d\n",
+                        LogPrintf("ERROR: Ironwood Wallet - Invalid position (UINT64_MAX) for tracked note txid=%s outidx=%d\n",
                             txid.ToString(), j);
                     }
 
 
                 } else {
-                    orchardWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], false);
+                    ironwoodWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], false);
                 }
             }                   
-            // Only update nullifiers if we have Orchard notes for this transaction
-            if (pwtx->mapOrchardNoteData.size() > 0) {
-                UpdateOrchardNullifierNoteMapWithTx(pwtx);
+            // Only update nullifiers if we have Ironwood notes for this transaction
+            if (pwtx->mapIronwoodNoteData.size() > 0) {
+                UpdateIronwoodNullifierNoteMapWithTx(pwtx);
             } else {
-                orchardWallet.ClearPositionsForTxid(txid);
+                ironwoodWallet.ClearPositionsForTxid(txid);
             }
         } else {
             //No transactions in this tx belong to the wallet, use full tx appending
-            orchardWallet.ClearPositionsForTxid(txid);
-            orchardWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i);
+            ironwoodWallet.ClearPositionsForTxid(txid);
+            ironwoodWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i);
         }
     }
 }
@@ -4786,25 +4786,25 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
 }
 
 /**
- * @brief Validate Orchard wallet tracked positions against Rust wallet state
+ * @brief Validate Ironwood wallet tracked positions against Rust wallet state
  * @param pindex The current block index for validation context
  * @return false if the IronwoodWallet needs to be rebuilt, true if valid
  * 
- * Validates the positions of all Orchard notes tracked in the C++ wallet
+ * Validates the positions of all Ironwood notes tracked in the C++ wallet
  * against the corresponding positions in the Rust IronwoodWallet. This ensures
  * consistency between the two wallet implementations and detects any drift
  * or corruption in note position tracking.
  * 
  * The function:
- * - Iterates through all wallet transactions with Orchard notes
+ * - Iterates through all wallet transactions with Ironwood notes
  * - Compares note positions between C++ and Rust wallet states
  * - Shows progress UI for large validation operations
  * - Returns false if inconsistencies require wallet rebuilding
  * 
  * This is a critical validation function that maintains wallet integrity
- * across different wallet backend implementations for the Orchard protocol.
+ * across different wallet backend implementations for the Ironwood protocol.
  */
-bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
+bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex) {
 
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
@@ -4836,7 +4836,7 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
         }
 
         //Exclude transactions with no Sapling Data
-        if (pwtx->mapOrchardNoteData.empty()) {
+        if (pwtx->mapIronwoodNoteData.empty()) {
             continue;
         }
 
@@ -4856,23 +4856,23 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
         }
 
         //Check if all notes are tracked correctly
-        for (mapOrchardNoteData_t::value_type& item : pwtx->mapOrchardNoteData) {
+        for (mapIronwoodNoteData_t::value_type& item : pwtx->mapIronwoodNoteData) {
 
-            const OrchardOutPoint op = item.first;
+            const IronwoodOutPoint op = item.first;
             uint64_t position;
 
-            if(!orchardWallet.IsNoteTracked(op.hash, op.n, position)) {
+            if(!ironwoodWallet.IsNoteTracked(op.hash, op.n, position)) {
                 return false;
             } else {
                 CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
 
                 //Create a new wallet to validate tracked merkle path
-                IronwoodMerkleFrontier orchardCheckFrontierTree;
-                pcoinsTip->GetOrchardFrontierAnchorAt(pCheckIndex->pprev->hashFinalOrchardRoot, orchardCheckFrontierTree);
-                IronwoodWallet orchardWalletCheck;
-                orchardWalletCheck.InitNoteCommitmentTree(orchardCheckFrontierTree);
+                IronwoodMerkleFrontier ironwoodCheckFrontierTree;
+                pcoinsTip->GetIronwoodFrontierAnchorAt(pCheckIndex->pprev->hashFinalIronwoodRoot, ironwoodCheckFrontierTree);
+                IronwoodWallet ironwoodWalletCheck;
+                ironwoodWalletCheck.InitNoteCommitmentTree(ironwoodCheckFrontierTree);
 
-                MerklePath orchardCheckMerklePath;
+                MerklePath ironwoodCheckMerklePath;
                 uint64_t positionCheck;
 
                 //Retrieve the full block to get all of the transaction commitments
@@ -4886,37 +4886,37 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
 
                     //Use single output appending for transaction that belong to the wallet so that they can be marked
                     if (pwtx->GetHash() == txid) {
-                        orchardWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
+                        ironwoodWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
 
                         auto vActions = pCheckBlock->vtx[i].GetIronwoodActions();
                         for (int j = 0; j < vActions.size(); j++) {
-                            auto opit = pwtx->mapOrchardNoteData.find(op);
-                            if (opit != pwtx->mapOrchardNoteData.end() && j == op.n) {
-                                orchardWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], true);
-                                assert(orchardWalletCheck.IsNoteTracked(txid, j, positionCheck));
-                                LogPrint("orchardwallet", "Orchard Wallet - Merkle Path position %i\n", positionCheck);
+                            auto opit = pwtx->mapIronwoodNoteData.find(op);
+                            if (opit != pwtx->mapIronwoodNoteData.end() && j == op.n) {
+                                ironwoodWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], true);
+                                assert(ironwoodWalletCheck.IsNoteTracked(txid, j, positionCheck));
+                                LogPrint("ironwoodwallet", "Ironwood Wallet - Merkle Path position %i\n", positionCheck);
 
 
                             } else {
-                                orchardWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], false);
+                                ironwoodWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], false);
                             }
                         }
 
                     } else {
                         //No transactions in this tx belong to the wallet, use full tx appending
-                        orchardWalletCheck.ClearPositionsForTxid(txid);
-                        orchardWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight,pCheckBlock->vtx[i],i);
+                        ironwoodWalletCheck.ClearPositionsForTxid(txid);
+                        ironwoodWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight,pCheckBlock->vtx[i],i);
                     }
                 }
 
-                LogPrint("orchardwallet", "Orchard Wallet - Merkle Path position %i\n", positionCheck);
+                LogPrint("ironwoodwallet", "Ironwood Wallet - Merkle Path position %i\n", positionCheck);
 
                 if (positionCheck != position) {
-                    LogPrint("orchardwallet", "Orchard Wallet Validation failed, rebuilding witnesses\n");
+                    LogPrint("ironwoodwallet", "Ironwood Wallet Validation failed, rebuilding witnesses\n");
                     return false;
                 } else {
-                    pwtx->mapOrchardNoteData[op].setPosition(position);
-                    UpdateOrchardNullifierNoteMapWithTx(pwtx);
+                    pwtx->mapIronwoodNoteData[op].setPosition(position);
+                    UpdateIronwoodNullifierNoteMapWithTx(pwtx);
                 }
             }
         }
@@ -5113,21 +5113,21 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 }
 
 /**
- * @brief Increment Orchard wallet state for a new block
+ * @brief Increment Ironwood wallet state for a new block
  * @param pindex The block index being added to the chain
  * 
- * Updates the Orchard wallet's internal state when a new block is added
+ * Updates the Ironwood wallet's internal state when a new block is added
  * to the blockchain. This function:
- * - Advances the Orchard note commitment tree
+ * - Advances the Ironwood note commitment tree
  * - Updates witness information for existing notes
- * - Processes new Orchard transactions in the block
+ * - Processes new Ironwood transactions in the block
  * - Maintains proper note position tracking
  * 
- * This function is called during block connection to keep the Orchard
+ * This function is called during block connection to keep the Ironwood
  * wallet synchronized with the blockchain state. It ensures that all
- * Orchard notes can be properly spent and that witnesses remain valid.
+ * Ironwood notes can be properly spent and that witnesses remain valid.
  */
-void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pblock, bool suppressProgress) {
+void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* pblock, bool suppressProgress) {
 
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
@@ -5136,43 +5136,43 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
     int64_t nNow2 = GetTime();
     bool rebuildWallet = false;
     int nMinimumHeight = pindex->nHeight;
-    int lastCheckpoint = orchardWallet.GetLastCheckpointHeight();
-    LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint %i, Block Height %i\n", lastCheckpoint, nMinimumHeight);
+    int lastCheckpoint = ironwoodWallet.GetLastCheckpointHeight();
+    LogPrint("ironwoodwallet","Ironwood Wallet - Last Checkpoint %i, Block Height %i\n", lastCheckpoint, nMinimumHeight);
 
     if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
 
         if (lastCheckpoint > pindex->nHeight - 1 ) {
-            orchardWalletValidated = false;
-            LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint is higher than wallet, skipping block\n");
+            ironwoodWalletValidated = false;
+            LogPrint("ironwoodwallet","Ironwood Wallet - Last Checkpoint is higher than wallet, skipping block\n");
             return;
         }
 
         //Rebuild if wallet does not exisit
         if (lastCheckpoint<0) {
-            LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint doesn't exist, rebuild witnesses\n");
+            LogPrint("ironwoodwallet","Ironwood Wallet - Last Checkpoint doesn't exist, rebuild witnesses\n");
             rebuildWallet = true;
         }
 
         //Rebuild if wallet is out of sync with the blockchain
         if (lastCheckpoint != pindex->nHeight - 1 ) {
-            LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint is out of sync with the blockchain, rebuild witnesses\n");
+            LogPrint("ironwoodwallet","Ironwood Wallet - Last Checkpoint is out of sync with the blockchain, rebuild witnesses\n");
             rebuildWallet = true;
         }
 
         //Rebuild wallet if anchor does not match, only check on wallet opening due to performance issues, or rescan without wallet reset
-        if (lastCheckpoint == pindex->nHeight - 1 && !orchardWalletValidated) {
-            if (pindex->pprev->hashFinalOrchardRoot != orchardWallet.GetLatestAnchor()) {
-                LogPrint("orchardwallet","Orchard Wallet - Orchard Root is out of sync with the blockchain, rebuild witnesses\n");
+        if (lastCheckpoint == pindex->nHeight - 1 && !ironwoodWalletValidated) {
+            if (pindex->pprev->hashFinalIronwoodRoot != ironwoodWallet.GetLatestAnchor()) {
+                LogPrint("ironwoodwallet","Ironwood Wallet - Ironwood Root is out of sync with the blockchain, rebuild witnesses\n");
                 rebuildWallet = true;
             }
 
             //Should never run here, should only run at initialization
-            if (!orchardWalletPositionsValidated) {
-                rebuildWallet = !ValidateOrchardWalletTrackedPositions(pindex);
-                orchardWalletPositionsValidated = true;
+            if (!ironwoodWalletPositionsValidated) {
+                rebuildWallet = !ValidateIronwoodWalletTrackedPositions(pindex);
+                ironwoodWalletPositionsValidated = true;
             }
 
-            orchardWalletValidated = true;
+            ironwoodWalletValidated = true;
         }
 
         //Rebuild
@@ -5181,7 +5181,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
             fBuilingWitnessCache = true;
 
             //Don't recheck after a rebuild
-            orchardWalletValidated = true;
+            ironwoodWalletValidated = true;
 
             //Determine Start Height of Sapling Wallet
             for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
@@ -5197,12 +5197,12 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
 
             }
 
-            LogPrint("\n\norchardwallet", "Orchard Wallet - rebuilding wallet from block %i\n\n", nMinimumHeight);
+            LogPrint("\n\nironwoodwallet", "Ironwood Wallet - rebuilding wallet from block %i\n\n", nMinimumHeight);
 
             //No transactions exists to begin wallet at this hieght
             if (nMinimumHeight > pindex->nHeight) {
-                LogPrint("\n\norchardwallet", "Orchard Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
-                OrchardWalletReset();
+                LogPrint("\n\nironwoodwallet", "Ironwood Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
+                IronwoodWalletReset();
                 return;
             }
 
@@ -5210,10 +5210,10 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
             CBlockIndex* pblockindex = chainActive[nMinimumHeight];
 
             //Create a new wallet
-            IronwoodMerkleFrontier orchardFrontierTree;
-            pcoinsTip->GetOrchardFrontierAnchorAt(pblockindex->pprev->hashFinalOrchardRoot, orchardFrontierTree);
-            OrchardWalletReset();
-            orchardWallet.InitNoteCommitmentTree(orchardFrontierTree);
+            IronwoodMerkleFrontier ironwoodFrontierTree;
+            pcoinsTip->GetIronwoodFrontierAnchorAt(pblockindex->pprev->hashFinalIronwoodRoot, ironwoodFrontierTree);
+            IronwoodWalletReset();
+            ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontierTree);
 
             //Show in UI
             int chainHeight = chainActive.Height();
@@ -5227,7 +5227,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
 
                 if (GetTime() >= nNow2 + 60) {
                     nNow2 = GetTime();
-                    LogPrintf("Rebuilding Orchard Wallet for block %d. Progress=%f\n", pblockindex->nHeight, Checkpoints::GuessVerificationProgress(Params().Checkpoints(), pblockindex));
+                    LogPrintf("Rebuilding Ironwood Wallet for block %d. Progress=%f\n", pblockindex->nHeight, Checkpoints::GuessVerificationProgress(Params().Checkpoints(), pblockindex));
                 }
 
                 //Report Progress to the GUI and log file
@@ -5236,10 +5236,10 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
                     nNow1 = GetTime();
                     if (!uiShown) {
                         uiShown = true;
-                        uiInterface.ShowProgress("Rebuilding Orchard Wallet", 0, false);
+                        uiInterface.ShowProgress("Rebuilding Ironwood Wallet", 0, false);
                     }
                     scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-                    uiInterface.ShowProgress(_(("Rebuilding Orchard Wallet for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                    uiInterface.ShowProgress(_(("Rebuilding Ironwood Wallet for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
                 }
 
                 //exit loop if trying to shutdown
@@ -5252,7 +5252,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
                 ReadBlockFromDisk(block, pblockindex, 1);
                 CBlock *pblock = &block;
 
-                ProcessOrchardBlockTransactions(pblockindex, pblock);
+                ProcessIronwoodBlockTransactions(pblockindex, pblock);
 
                 //Check completeness
                 if (pblockindex == pindex)
@@ -5272,9 +5272,9 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
             if (pblock == nullptr) {
                 CBlock block;
                 ReadBlockFromDisk(block, pindex, 1);
-                ProcessOrchardBlockTransactions(pindex, &block);
+                ProcessIronwoodBlockTransactions(pindex, &block);
             } else {
-                ProcessOrchardBlockTransactions(pindex, pblock);
+                ProcessIronwoodBlockTransactions(pindex, pblock);
             }
         }
     }
@@ -5315,9 +5315,9 @@ void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
       assert(saplingWallet.Rewind(pindex->nHeight - 1, uResultHeight));
       assert(uResultHeight == pindex->nHeight - 1);
       // If we have no checkpoints after the rewind, then the latest anchor of the
-      // wallet's Orchard note commitment tree will be in an indeterminate state and it
+      // wallet's Ironwood note commitment tree will be in an indeterminate state and it
       // will be overwritten in the next `IncrementNoteWitnesses` call, so we can skip
-      // the check against `hashFinalOrchardRoot`.
+      // the check against `hashFinalIronwoodRoot`.
 
       auto walletLastCheckpointHeight = saplingWallet.GetLastCheckpointHeight();
       if (saplingWallet.GetLastCheckpointHeight()>0) {
@@ -5327,33 +5327,33 @@ void CWallet::DecrementSaplingWallet(const CBlockIndex* pindex) {
 }
 
 /**
- * @brief Decrement Orchard wallet state when a block is removed
+ * @brief Decrement Ironwood wallet state when a block is removed
  * @param pindex The block index being removed from the chain
  * 
- * Reverts the Orchard wallet's internal state when a block is removed
+ * Reverts the Ironwood wallet's internal state when a block is removed
  * from the blockchain during chain reorganizations. This function:
- * - Rewinds the Orchard note commitment tree to the previous block
+ * - Rewinds the Ironwood note commitment tree to the previous block
  * - Validates the rewind operation completed successfully
  * - Updates checkpoint heights to maintain consistency
  * 
- * This function is called during block disconnection to keep the Orchard
+ * This function is called during block disconnection to keep the Ironwood
  * wallet synchronized with the blockchain state during reorganizations.
  * It ensures that wallet state accurately reflects the current chain state.
  */
-void CWallet::DecrementOrchardWallet(const CBlockIndex* pindex) {
+void CWallet::DecrementIronwoodWallet(const CBlockIndex* pindex) {
 
       uint32_t uResultHeight{0};
       assert(pindex->nHeight >= 1);
-      assert(orchardWallet.Rewind(pindex->nHeight - 1, uResultHeight));
+      assert(ironwoodWallet.Rewind(pindex->nHeight - 1, uResultHeight));
       assert(uResultHeight == pindex->nHeight - 1);
       // If we have no checkpoints after the rewind, then the latest anchor of the
-      // wallet's Orchard note commitment tree will be in an indeterminate state and it
+      // wallet's Ironwood note commitment tree will be in an indeterminate state and it
       // will be overwritten in the next `IncrementNoteWitnesses` call, so we can skip
-      // the check against `hashFinalOrchardRoot`.
+      // the check against `hashFinalIronwoodRoot`.
 
-      auto walletLastCheckpointHeight = orchardWallet.GetLastCheckpointHeight();
-      if (orchardWallet.GetLastCheckpointHeight()>0) {
-          assert(pindex->pprev->hashFinalOrchardRoot == orchardWallet.GetLatestAnchor());
+      auto walletLastCheckpointHeight = ironwoodWallet.GetLastCheckpointHeight();
+      if (ironwoodWallet.GetLastCheckpointHeight()>0) {
+          assert(pindex->pprev->hashFinalIronwoodRoot == ironwoodWallet.GetLatestAnchor());
       }
 
 }
@@ -5439,18 +5439,18 @@ bool CWallet::DecryptArchivedSaplingOutpoint(const uint256& chash, const std::ve
 }
 
 /**
- * @brief Decrypt an archived Orchard outpoint from encrypted storage
+ * @brief Decrypt an archived Ironwood outpoint from encrypted storage
  * @param chash Hash fingerprint of the encrypted data
  * @param vchCryptedSecret The encrypted outpoint data
  * @param nullifier[out] The decrypted nullifier value
- * @param op[out] The decrypted Orchard outpoint
+ * @param op[out] The decrypted Ironwood outpoint
  * @return true if successfully decrypted
  * 
- * Decrypts archived Orchard outpoint data that was previously encrypted for
+ * Decrypts archived Ironwood outpoint data that was previously encrypted for
  * long-term storage. Used to recover transaction history and state information.
  * Returns false if wallet is locked or decryption fails.
  */
-bool CWallet::DecryptArchivedOrchardOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, OrchardOutPoint& op) {
+bool CWallet::DecryptArchivedIronwoodOutpoint(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, uint256& nullifier, IronwoodOutPoint& op) {
 
     if (IsLocked()) {
         return false;
@@ -5570,9 +5570,9 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
-        if (primaryOrchardSpendingKey != std::nullopt) {
-            if (!SetPrimaryOrchardSpendingKey(primaryOrchardSpendingKey.value())) {
-                LogPrintf("Setting encrypted primary orchard spending key failed!!!\n");
+        if (primaryIronwoodSpendingKey != std::nullopt) {
+            if (!SetPrimaryIronwoodSpendingKey(primaryIronwoodSpendingKey.value())) {
+                LogPrintf("Setting encrypted primary ironwood spending key failed!!!\n");
                 return false;
             }
         }
@@ -5654,10 +5654,10 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
               }
         }
 
-        //Encrypt Orchard Extended Spending Key
-        for (map<libzcash::OrchardExtendedFullViewingKeyPirate, libzcash::OrchardExtendedSpendingKeyPirate>::iterator it = mapOrchardSpendingKeys.begin(); it != mapOrchardSpendingKeys.end(); ++it) {
-              if (!AddOrchardZKey((*it).second)) {
-                  LogPrintf("Setting encrypted orchard spending key failed!!!\n");
+        //Encrypt Ironwood Extended Spending Key
+        for (map<libzcash::IronwoodExtendedFullViewingKeyPirate, libzcash::IronwoodExtendedSpendingKeyPirate>::iterator it = mapIronwoodSpendingKeys.begin(); it != mapIronwoodSpendingKeys.end(); ++it) {
+              if (!AddIronwoodZKey((*it).second)) {
+                  LogPrintf("Setting encrypted ironwood spending key failed!!!\n");
                   return false;
               }
         }
@@ -5672,11 +5672,11 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
               }
         }
 
-        //Encrypt Orchard Extended Full Viewing keys
-        for (OrchardFullViewingKeyMap::iterator it = mapOrchardFullViewingKeys.begin(); it != mapOrchardFullViewingKeys.end(); ++it) {
-              if (!HaveOrchardSpendingKey((*it).second)) {
-                  if (!AddOrchardExtendedFullViewingKey((*it).second)) {
-                      LogPrintf("Setting encrypted orchard viewing key failed!!!\n");
+        //Encrypt Ironwood Extended Full Viewing keys
+        for (IronwoodFullViewingKeyMap::iterator it = mapIronwoodFullViewingKeys.begin(); it != mapIronwoodFullViewingKeys.end(); ++it) {
+              if (!HaveIronwoodSpendingKey((*it).second)) {
+                  if (!AddIronwoodExtendedFullViewingKey((*it).second)) {
+                      LogPrintf("Setting encrypted ironwood viewing key failed!!!\n");
                       return false;
                   }
               }
@@ -5694,14 +5694,14 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
-        //Encrypt OrchardPaymentAddress
-        for (auto it = mapOrchardIncomingViewingKeys.begin(); it != mapOrchardIncomingViewingKeys.end(); it++)
+        //Encrypt IronwoodPaymentAddress
+        for (auto it = mapIronwoodIncomingViewingKeys.begin(); it != mapIronwoodIncomingViewingKeys.end(); it++)
         {
             const auto& addr = it->first;
             const auto& ivk = it->second.first;
             const auto& scope = it->second.second;
-            if (!AddOrchardIncomingViewingKey(ivk, addr, scope)) {
-                LogPrintf("Setting encrypted orchard payment address failed!!!\n");
+            if (!AddIronwoodIncomingViewingKey(ivk, addr, scope)) {
+                LogPrintf("Setting encrypted ironwood payment address failed!!!\n");
                 return false;
             }
         }
@@ -5714,10 +5714,10 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
-        //Encrypt Orchard Diversified Addresses
-        for (map<libzcash::OrchardPaymentAddress, OrchardDiversifierPath>::iterator it = mapOrchardPaymentAddresses.begin(); it != mapOrchardPaymentAddresses.end(); ++it) {
-            if (!AddOrchardDiversifiedAddress((*it).first, (*it).second.first, (*it).second.second)) {
-                LogPrintf("Setting encrypted orchard diversified payment address failed!!!\n");
+        //Encrypt Ironwood Diversified Addresses
+        for (map<libzcash::IronwoodPaymentAddress, IronwoodDiversifierPath>::iterator it = mapIronwoodPaymentAddresses.begin(); it != mapIronwoodPaymentAddresses.end(); ++it) {
+            if (!AddIronwoodDiversifiedAddress((*it).first, (*it).second.first, (*it).second.second)) {
+                LogPrintf("Setting encrypted ironwood diversified payment address failed!!!\n");
                 return false;
             }
         }
@@ -5730,10 +5730,10 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
-        //Encrypt the last orchard diversifier path used for each spendingkey
-        for (map<libzcash::OrchardIncomingViewingKey, blob88>::iterator it = mapLastOrchardDiversifierPath.begin(); it != mapLastOrchardDiversifierPath.end(); ++it) {
-            if (!AddLastOrchardDiversifierUsed((*it).first, (*it).second)) {
-                LogPrintf("Setting encrypted last orchard diversified path failed!!!\n");
+        //Encrypt the last ironwood diversifier path used for each spendingkey
+        for (map<libzcash::IronwoodIncomingViewingKey, blob88>::iterator it = mapLastIronwoodDiversifierPath.begin(); it != mapLastIronwoodDiversifierPath.end(); ++it) {
+            if (!AddLastIronwoodDiversifierUsed((*it).first, (*it).second)) {
+                LogPrintf("Setting encrypted last ironwood diversified path failed!!!\n");
                 return false;
             }
         }
@@ -5762,26 +5762,26 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
-        //Encrypt Orchard wallet frontier tree
+        //Encrypt Ironwood wallet frontier tree
         {
             CDataStream ss(SER_DISK, CLIENT_VERSION);
-            ss << IronwoodWalletNoteCommitmentTreeWriter(orchardWallet);
+            ss << IronwoodWalletNoteCommitmentTreeWriter(ironwoodWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
             // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
             // tag verified on load. Stored in the record value under a stable key.
             uint256 chash = HashWithFP(vchSecret);
-            std::string orchardTreeKey = "orchard_note_commitment_tree";
-            uint256 legacyChash = HashWithFP(orchardTreeKey);
+            std::string ironwoodTreeKey = "ironwood_note_commitment_tree";
+            uint256 legacyChash = HashWithFP(ironwoodTreeKey);
 
             if (!EncryptSerializedWalletObjects(vMasterKey, vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("Encrypting Orchard wallet frontier tree failed!!!\n");
+                LogPrintf("Encrypting Ironwood wallet frontier tree failed!!!\n");
                 return false;
             }
 
-            if (!pwalletdbEncryption->WriteCryptedOrchardWitnesses(chash, vchCryptedSecret, legacyChash)) {
-                LogPrintf("Writing encrypted Orchard wallet frontier tree failed!!!\n");
+            if (!pwalletdbEncryption->WriteCryptedIronwoodWitnesses(chash, vchCryptedSecret, legacyChash)) {
+                LogPrintf("Writing encrypted Ironwood wallet frontier tree failed!!!\n");
                 return false;
             }
         }
@@ -5831,7 +5831,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         //Clear All unencrypted Spending Keys
         mapKeys.clear();
         mapSaplingSpendingKeys.clear();
-        mapOrchardSpendingKeys.clear();
+        mapIronwoodSpendingKeys.clear();
 
         //Write Crypted statuses
         SetWalletCrypted(pwalletdbEncryption);
@@ -6159,7 +6159,7 @@ void CWallet::MarkDirty()
  * 
  * - Processes Sprout notes using JoinSplit witnesses
  * - Processes Sapling notes using Sapling witnesses  
- * - Processes Orchard notes using Orchard witnesses
+ * - Processes Ironwood notes using Ironwood witnesses
  * - Updates nullifier-to-note mapping for efficient lookups
  * 
  * Nullifiers are essential for preventing double-spending of shielded notes.
@@ -6213,7 +6213,7 @@ bool CWallet::UpdateNullifierNoteMap()
  * 
  * - Sprout nullifiers and their corresponding JSOutPoints
  * - Sapling nullifiers and their corresponding SaplingOutPoints
- * - Orchard nullifiers and their corresponding OrchardOutPoints
+ * - Ironwood nullifiers and their corresponding IronwoodOutPoints
  * 
  * These mappings are essential for:
  * - Quickly determining if a note has been spent
@@ -6247,15 +6247,15 @@ void CWallet::UpdateNullifierNoteMapWithTx(const CWalletTx& wtx)
             }
         }
 
-        for (const mapOrchardNoteData_t::value_type& item : wtx.mapOrchardNoteData) {
+        for (const mapIronwoodNoteData_t::value_type& item : wtx.mapIronwoodNoteData) {
             if (item.second.nullifier) {
-                OrchardOutPoint op = item.first;
+                IronwoodOutPoint op = item.first;
 
                 //Write Changes to disk on newt wallet flush
                 op.writeToDisk = true;
 
-                mapOrchardNullifiersToNotes[*item.second.nullifier] = op;
-                mapArcOrchardOutPoints[*item.second.nullifier] = op;
+                mapIronwoodNullifiersToNotes[*item.second.nullifier] = op;
+                mapArcIronwoodOutPoints[*item.second.nullifier] = op;
             }
         }
     }
@@ -6398,11 +6398,11 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
 }
 
 /**
- * @brief Update Orchard nullifier mappings, computing nullifiers if needed  
+ * @brief Update Ironwood nullifier mappings, computing nullifiers if needed  
  * @param wtx The wallet transaction to process
  * 
- * Updates mapOrchardNullifiersToNotes by computing nullifiers from cached
- * witnesses if necessary. For each Orchard note in the transaction:
+ * Updates mapIronwoodNullifiersToNotes by computing nullifiers from cached
+ * witnesses if necessary. For each Ironwood note in the transaction:
  * 
  * - Retrieves the cached witness for the note
  * - Computes the nullifier using the spending key and witness
@@ -6410,20 +6410,20 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
  * - Updates the global nullifier-to-note mapping
  * 
  * This function is essential for maintaining the ability to detect when
- * Orchard notes have been spent and for creating new transactions that
+ * Ironwood notes have been spent and for creating new transactions that
  * spend existing notes.
  */
 /**
 * Update mapSaplingNullifiersToNotes, computing the nullifier from a cached witness if necessary.
 */
-void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
+void CWallet::UpdateIronwoodNullifierNoteMapWithTx(CWalletTx* wtx) {
    LOCK(cs_wallet);
 
    auto vActions = wtx->GetIronwoodActions();
 
-   for (mapOrchardNoteData_t::value_type &item : wtx->mapOrchardNoteData) {
-       OrchardOutPoint op = item.first;
-       OrchardNoteData nd = item.second;
+   for (mapIronwoodNoteData_t::value_type &item : wtx->mapIronwoodNoteData) {
+       IronwoodOutPoint op = item.first;
+       IronwoodNoteData nd = item.second;
 
        //Write Changes to Disk on next wallet flush
        op.writeToDisk = true;
@@ -6431,23 +6431,23 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
        if (nd.getPosition() == std::nullopt) {
            // If there are no witnesses, erase the nullifier and associated mapping.
            if (item.second.nullifier) {
-               mapOrchardNullifiersToNotes.erase(item.second.nullifier.value());
+               mapIronwoodNullifiersToNotes.erase(item.second.nullifier.value());
            }
            item.second.nullifier = std::nullopt;
        }
        else {
            uint64_t position = nd.getPosition().value();
            // Skip if we only have incoming viewing key
-           OrchardIVKWithScope ivkExternal = {nd.ivk, KeyScope::External};
-           OrchardIVKWithScope ivkInternal = {nd.ivk, KeyScope::Internal};
-           if (mapOrchardFullViewingKeys.count(ivkExternal) != 0 || mapOrchardFullViewingKeys.count(ivkInternal) != 0) {
-               OrchardExtendedFullViewingKeyPirate extfvk = mapOrchardFullViewingKeys.count(ivkExternal) != 0 
-                   ? mapOrchardFullViewingKeys.at(ivkExternal)
-                   : mapOrchardFullViewingKeys.at(ivkInternal);
+           IronwoodIVKWithScope ivkExternal = {nd.ivk, KeyScope::External};
+           IronwoodIVKWithScope ivkInternal = {nd.ivk, KeyScope::Internal};
+           if (mapIronwoodFullViewingKeys.count(ivkExternal) != 0 || mapIronwoodFullViewingKeys.count(ivkInternal) != 0) {
+               IronwoodExtendedFullViewingKeyPirate extfvk = mapIronwoodFullViewingKeys.count(ivkExternal) != 0 
+                   ? mapIronwoodFullViewingKeys.at(ivkExternal)
+                   : mapIronwoodFullViewingKeys.at(ivkInternal);
 
                // Compute nullifier directly from Action using bridge
                // Use the IVK stored in note data (could be external or internal)
-               auto optNullifier = libzcash::OrchardNotePlaintext::ComputeNullifierFromAction(
+               auto optNullifier = libzcash::IronwoodNotePlaintext::ComputeNullifierFromAction(
                    vActions[op.n],
                    extfvk.fvk
                );
@@ -6460,8 +6460,8 @@ void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
                }
                
                uint256 nullifier = optNullifier.value();
-               mapOrchardNullifiersToNotes[nullifier] = op;
-               mapArcOrchardOutPoints[nullifier] = op;
+               mapIronwoodNullifiersToNotes[nullifier] = op;
+               mapArcIronwoodOutPoints[nullifier] = op;
                item.second.nullifier = nullifier;
            }
        }
@@ -6497,7 +6497,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
         if (txIsOurs) {
             UpdateSproutNullifierNoteMapWithTx(mapWallet[hash]);
             UpdateSaplingNullifierNoteMapWithTx(&mapWallet[hash]);
-            UpdateOrchardNullifierNoteMapWithTx(&mapWallet[hash]);
+            UpdateIronwoodNullifierNoteMapWithTx(&mapWallet[hash]);
         }
     }
 }
@@ -6516,7 +6516,7 @@ void CWallet::UpdateNullifierNoteMapForBlock(const CBlock *pblock) {
  * transactions and wallet file loading. The function:
  * 
  * - Updates the wallet's transaction map
- * - Processes shielded notes (Sapling/Orchard) and nullifier mappings
+ * - Processes shielded notes (Sapling/Ironwood) and nullifier mappings
  * - Handles transaction conflicts and reorganizations
  * - Updates spent transaction tracking
  * - Persists changes to the wallet database
@@ -6582,8 +6582,8 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
                 wtx.mapSaplingNoteData = wtxIn.mapSaplingNoteData;
                 fUpdated = true;
             }
-            if (wtxIn.mapOrchardNoteData.size() > 0 && wtxIn.mapOrchardNoteData != wtx.mapOrchardNoteData) {
-                wtx.mapOrchardNoteData = wtxIn.mapOrchardNoteData;
+            if (wtxIn.mapIronwoodNoteData.size() > 0 && wtxIn.mapIronwoodNoteData != wtx.mapIronwoodNoteData) {
+                wtx.mapIronwoodNoteData = wtxIn.mapIronwoodNoteData;
                 fUpdated = true;
             }
             if (wtxIn.fFromMe && wtxIn.fFromMe != wtx.fFromMe)
@@ -6638,13 +6638,13 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
  * @param nHeight Block height where transactions were mined
  * @param fUpdate Whether to update existing transactions
  * @param saplingAddressesFound[out] Set of newly discovered Sapling addresses
- * @param orchardAddressesFound[out] Set of newly discovered Orchard addresses
+ * @param ironwoodAddressesFound[out] Set of newly discovered Ironwood addresses
  * @param fRescan True if this is part of a wallet rescan operation
  * 
  * Examines a vector of transactions and adds any that involve this wallet's
  * addresses to the wallet. This function:
  * 
- * - Decrypts Sapling and Orchard notes to find wallet-relevant transactions
+ * - Decrypts Sapling and Ironwood notes to find wallet-relevant transactions
  * - Adds newly discovered addresses to the wallet's viewing key store
  * - Creates CWalletTx objects for relevant transactions with note data
  * - Updates wallet transaction maps and spend tracking
@@ -6659,7 +6659,7 @@ void CWallet::AddToWalletIfInvolvingMe(
     const int nHeight,
     bool fUpdate,
     std::set<SaplingPaymentAddress>& saplingAddressesFound,
-    std::set<OrchardPaymentAddress>& orchardAddressesFound,
+    std::set<IronwoodPaymentAddress>& ironwoodAddressesFound,
     bool fRescan)
 {
     {
@@ -6670,10 +6670,10 @@ void CWallet::AddToWalletIfInvolvingMe(
         auto saplingNoteData = saplingNoteDataAndAddressesToAdd.first;
         auto saplingAddressesToAdd = saplingNoteDataAndAddressesToAdd.second;
 
-        //Step 1B -- decrypt orchard transactions
-        auto orchardNoteDataAndAddressesToAdd = FindMyOrchardNotes(vtx, nHeight);
-        auto orchardNoteData = orchardNoteDataAndAddressesToAdd.first;
-        auto orchardAddressesToAdd = orchardNoteDataAndAddressesToAdd.second;
+        //Step 1B -- decrypt ironwood transactions
+        auto ironwoodNoteDataAndAddressesToAdd = FindMyIronwoodNotes(vtx, nHeight);
+        auto ironwoodNoteData = ironwoodNoteDataAndAddressesToAdd.first;
+        auto ironwoodAddressesToAdd = ironwoodNoteDataAndAddressesToAdd.second;
 
         //Step 2a -- add sapling addresses
         for (const auto &saplingAddressToAdd : saplingAddressesToAdd) {
@@ -6684,19 +6684,19 @@ void CWallet::AddToWalletIfInvolvingMe(
             const auto& saplingScope = saplingAddressToAdd.second.second;
             CCryptoKeyStore::AddSaplingIncomingViewingKey(saplingIvk, saplingAddr, saplingScope);
             // Notify the GUI for all scopes so the address persists in mapZAddressBook
-            // (Internal/change addresses shown as "Change" in the UI, same as Orchard)
+            // (Internal/change addresses shown as "Change" in the UI, same as Ironwood)
             saplingAddressesFound.insert(saplingAddr);
         }
 
-        //Step 2b -- add orchard addresses
-        for (const auto &orchardAddressToAdd : orchardAddressesToAdd) {
+        //Step 2b -- add ironwood addresses
+        for (const auto &ironwoodAddressToAdd : ironwoodAddressesToAdd) {
             //Loaded into memory only
             //This will be saved during the wallet SetBestChainINTERNAL
-            const auto& ivk = orchardAddressToAdd.second.first;
-            const auto& scope = orchardAddressToAdd.second.second;
-            CCryptoKeyStore::AddOrchardIncomingViewingKey(ivk, orchardAddressToAdd.first, scope);
+            const auto& ivk = ironwoodAddressToAdd.second.first;
+            const auto& scope = ironwoodAddressToAdd.second.second;
+            CCryptoKeyStore::AddIronwoodIncomingViewingKey(ivk, ironwoodAddressToAdd.first, scope);
             //Store addresses to notify GUI later
-            orchardAddressesFound.insert(orchardAddressToAdd.first);
+            ironwoodAddressesFound.insert(ironwoodAddressToAdd.first);
         }
 
         //Step 3 -- add transactions
@@ -6714,19 +6714,19 @@ void CWallet::AddToWalletIfInvolvingMe(
                 }
             }
 
-            //Format Decrypted Orchard Note data for insertion into CWalletTx
-            mapOrchardNoteData_t mapOrchardNoteData;
-            for (mapOrchardNoteData_t::iterator it = orchardNoteData.begin(); it != orchardNoteData.end(); it++) {
-                OrchardOutPoint op = (*it).first;
-                OrchardNoteData nd = (*it).second;
+            //Format Decrypted Ironwood Note data for insertion into CWalletTx
+            mapIronwoodNoteData_t mapIronwoodNoteData;
+            for (mapIronwoodNoteData_t::iterator it = ironwoodNoteData.begin(); it != ironwoodNoteData.end(); it++) {
+                IronwoodOutPoint op = (*it).first;
+                IronwoodNoteData nd = (*it).second;
                 if (op.hash == hash) {
-                      mapOrchardNoteData.insert(std::make_pair(op, nd));
+                      mapIronwoodNoteData.insert(std::make_pair(op, nd));
                 }
             }
 
             bool fExisted = mapWallet.count(vtx[i].GetHash()) != 0;
 
-            if (fExisted || IsMine(vtx[i]) || IsFromMe(vtx[i]) || mapSaplingNoteData.size() > 0 || mapOrchardNoteData.size() > 0)
+            if (fExisted || IsMine(vtx[i]) || IsFromMe(vtx[i]) || mapSaplingNoteData.size() > 0 || mapIronwoodNoteData.size() > 0)
             {
                 /**
                  * New implementation of wallet filter code.
@@ -6774,7 +6774,7 @@ void CWallet::AddToWalletIfInvolvingMe(
                 wtx.SetSaplingNoteData(mapSaplingNoteData);
 
                 //Set Decrypted Sapling Note Data in CWalletTx
-                wtx.SetOrchardNoteData(mapOrchardNoteData);
+                wtx.SetIronwoodNoteData(mapIronwoodNoteData);
 
                 // Get merkle branch if transaction was found in a block
                 if (pblock)
@@ -6808,7 +6808,7 @@ void CWallet::AddToWalletIfInvolvingMe(
  * during block processing. This function:
  * 
  * - Identifies transactions that involve this wallet
- * - Discovers new Sapling and Orchard addresses
+ * - Discovers new Sapling and Ironwood addresses
  * - Updates the wallet's address book and viewing keys
  * - Notifies the UI of newly discovered addresses and transactions
  * 
@@ -6819,18 +6819,18 @@ void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBloc
 {
     LOCK(cs_wallet);
     std::set<SaplingPaymentAddress> saplingAddressesFound;
-    std::set<OrchardPaymentAddress> orchardAddressesFound;
+    std::set<IronwoodPaymentAddress> ironwoodAddressesFound;
 
     std::vector<CTransaction> vOurs;
-    AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, saplingAddressesFound, orchardAddressesFound, false);
+    AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, saplingAddressesFound, ironwoodAddressesFound, false);
 
     for (std::set<SaplingPaymentAddress>::iterator it = saplingAddressesFound.begin(); it != saplingAddressesFound.end(); it++) {
         SetZAddressBook(*it, "z-sapling", "", true);
     }
 
-    for (std::set<OrchardPaymentAddress>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
-        // Internal (change) Orchard addresses are added so the UI can label them "Change".
-        SetZAddressBook(*it, "orchard", "", true);
+    for (std::set<IronwoodPaymentAddress>::iterator it = ironwoodAddressesFound.begin(); it != ironwoodAddressesFound.end(); it++) {
+        // Internal (change) Ironwood addresses are added so the UI can label them "Change".
+        SetZAddressBook(*it, "ironwood", "", true);
     }
 
     for (int i = 0; i < vOurs.size(); i++) {
@@ -6851,7 +6851,7 @@ void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBloc
  * - Transparent inputs (UTXOs)
  * - Sprout nullifiers from JoinSplit descriptions  
  * - Sapling nullifiers from spend descriptions
- * - Orchard nullifiers from action descriptions
+ * - Ironwood nullifiers from action descriptions
  */
 void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
 {
@@ -6882,9 +6882,9 @@ void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
 
     for (const auto& action : tx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
-        if (mapOrchardNullifiersToNotes.count(nullifier) &&
-            mapWallet.count(mapOrchardNullifiersToNotes[nullifier].hash)) {
-            mapWallet[mapOrchardNullifiersToNotes[nullifier].hash].MarkDirty();
+        if (mapIronwoodNullifiersToNotes.count(nullifier) &&
+            mapWallet.count(mapIronwoodNullifiersToNotes[nullifier].hash)) {
+            mapWallet[mapIronwoodNullifiersToNotes[nullifier].hash].MarkDirty();
         }
     }
 }
@@ -7052,10 +7052,10 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
 }
 
 /**
- * @brief Worker thread function for decrypting Orchard notes
+ * @brief Worker thread function for decrypting Ironwood notes
  * @param wallet Pointer to the wallet instance
  * @param vIvk Vector of incoming viewing keys to try for decryption
- * @param vOrchardEncryptedAction Vector of encrypted Orchard actions to decrypt
+ * @param vIronwoodEncryptedAction Vector of encrypted Ironwood actions to decrypt
  * @param vPosition Vector of action positions within transactions
  * @param vHash Vector of transaction hashes corresponding to actions
  * @param height Block height for validation context
@@ -7063,33 +7063,33 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  * @param viewingKeysToAdd[out] Map to store newly discovered viewing keys
  * @param threadNumber Thread identifier for logging/debugging
  * 
- * Multi-threaded worker function that attempts to decrypt Orchard actions using
+ * Multi-threaded worker function that attempts to decrypt Ironwood actions using
  * the provided incoming viewing keys. Successfully decrypted notes are added to
  * the noteData map if their value exceeds the minimum transaction value threshold.
  * Thread-safe operations use wallet's cs_wallet_threadedfunction mutex.
  */
-static void DecryptOrchardNoteWorker(
+static void DecryptIronwoodNoteWorker(
     const CWallet *wallet,
-    const std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>> vIvkWithScope,
-    const std::vector<ironwood_bundle::Action*> vOrchardEncryptedAction,
+    const std::vector<std::pair<const IronwoodIncomingViewingKey*, KeyScope>> vIvkWithScope,
+    const std::vector<ironwood_bundle::Action*> vIronwoodEncryptedAction,
     const std::vector<uint32_t> vPosition,
     const std::vector<uint256> vHash,
     const int &height,
-    mapOrchardNoteData_t *noteData,
-    OrchardIncomingViewingKeyMap *viewingKeysToAdd,
+    mapIronwoodNoteData_t *noteData,
+    IronwoodIncomingViewingKeyMap *viewingKeysToAdd,
     int threadNumber)
 {
     for (int i = 0; i < vIvkWithScope.size(); i++) {
 
-        OrchardIncomingViewingKey ivk = *vIvkWithScope[i].first;
+        IronwoodIncomingViewingKey ivk = *vIvkWithScope[i].first;
         KeyScope scope = vIvkWithScope[i].second;
-        auto result = OrchardNotePlaintext::AttemptDecryptOrchardAction(vOrchardEncryptedAction[i], ivk);
+        auto result = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(vIronwoodEncryptedAction[i], ivk);
         if (result != std::nullopt) {
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
             // in the commitment tree, which can only be determined when the transaction has been mined.
-            OrchardOutPoint op {vHash[i], vPosition[i]};
-            OrchardNoteData nd;
+            IronwoodOutPoint op {vHash[i], vPosition[i]};
+            IronwoodNoteData nd;
             nd.ivk = ivk;
 
             //Cache Address and value - in Memory Only
@@ -7098,7 +7098,7 @@ static void DecryptOrchardNoteWorker(
             nd.address = note.GetAddress();
             nd.fNoteDataInitialized = true;
 
-            LogPrintf("\n\nOrchard Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
+            LogPrintf("\n\nIronwood Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
             if (nd.value >= minTxValue) {
                 //Only add notes greater then this value
                 //dust filter
@@ -7113,37 +7113,37 @@ static void DecryptOrchardNoteWorker(
 }
 
 /**
- * @brief Find all Orchard notes in a vector of transactions that belong to this wallet
- * @param vtx Vector of transactions to scan for Orchard notes
+ * @brief Find all Ironwood notes in a vector of transactions that belong to this wallet
+ * @param vtx Vector of transactions to scan for Ironwood notes
  * @param height Block height for validation context
- * @return Pair containing map of OrchardOutPoints to OrchardNoteData and newly discovered viewing keys
+ * @return Pair containing map of IronwoodOutPoints to IronwoodNoteData and newly discovered viewing keys
  * 
- * Multi-threaded function that scans all Orchard actions across multiple transactions
+ * Multi-threaded function that scans all Ironwood actions across multiple transactions
  * to find notes belonging to this wallet. The function:
  * 
  * - Distributes decryption work across multiple threads for performance
- * - Attempts decryption using all known Orchard incoming viewing keys
+ * - Attempts decryption using all known Ironwood incoming viewing keys
  * - Applies dust filtering based on minimum transaction value
  * - Returns both successfully decrypted notes and any newly discovered viewing keys
  * 
- * This is the primary method for batch processing Orchard transactions during
+ * This is the primary method for batch processing Ironwood transactions during
  * block synchronization and wallet scanning operations.
  */
-std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrchardNotes(const std::vector<CTransaction> &vtx, int height) const
+std::pair<mapIronwoodNoteData_t, IronwoodIncomingViewingKeyMap> CWallet::FindMyIronwoodNotes(const std::vector<CTransaction> &vtx, int height) const
 {
     LOCK(cs_wallet);
 
     //Data to be collected
-    mapOrchardNoteData_t noteData;
-    OrchardIncomingViewingKeyMap viewingKeysToAdd;
+    mapIronwoodNoteData_t noteData;
+    IronwoodIncomingViewingKeyMap viewingKeysToAdd;
 
     //Create key+scope thread buckets
-    std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>> vIvkWithScope;
-    std::vector<std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>>> vvIvkWithScope;
+    std::vector<std::pair<const IronwoodIncomingViewingKey*, KeyScope>> vIvkWithScope;
+    std::vector<std::vector<std::pair<const IronwoodIncomingViewingKey*, KeyScope>>> vvIvkWithScope;
 
     //Create Output thread buckets
-    std::vector<ironwood_bundle::Action*> vOrchardEncryptedAction;
-    std::vector<std::vector<ironwood_bundle::Action*>> vvOrchardEncryptedAction;
+    std::vector<ironwood_bundle::Action*> vIronwoodEncryptedAction;
+    std::vector<std::vector<ironwood_bundle::Action*>> vvIronwoodEncryptedAction;
 
     //Create transaction position thread buckets
     std::vector<uint32_t> vPosition;
@@ -7155,7 +7155,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
 
     for (uint32_t i = 0; i < maxProcessingThreads; i++) {
         vvIvkWithScope.emplace_back(vIvkWithScope);
-        vvOrchardEncryptedAction.emplace_back(vOrchardEncryptedAction);
+        vvIronwoodEncryptedAction.emplace_back(vIronwoodEncryptedAction);
         vvPosition.emplace_back(vPosition);
         vvHash.emplace_back(vHash);
     }
@@ -7171,11 +7171,11 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
             auto action = &vActions[i];
 
             //Create a tread entry for every ivk with the current note.
-            for (auto it = setOrchardIncomingViewingKeys.begin(); it != setOrchardIncomingViewingKeys.end(); it++) {
+            for (auto it = setIronwoodIncomingViewingKeys.begin(); it != setIronwoodIncomingViewingKeys.end(); it++) {
                 vvIvkWithScope[t].emplace_back(&(it->first), it->second);
                 vvPosition[t].emplace_back(i);
                 vvHash[t].emplace_back(hash);
-                vvOrchardEncryptedAction[t].emplace_back(action);
+                vvIronwoodEncryptedAction[t].emplace_back(action);
 
                 //Increment ivk vector
                 t++;
@@ -7189,7 +7189,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
         std::vector<boost::thread*> decryptionThreads;
         for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
             if(!vvIvkWithScope[i].empty()) {
-                decryptionThreads.emplace_back(new boost::thread(DecryptOrchardNoteWorker, this, vvIvkWithScope[i], vvOrchardEncryptedAction[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+                decryptionThreads.emplace_back(new boost::thread(DecryptIronwoodNoteWorker, this, vvIvkWithScope[i], vvIronwoodEncryptedAction[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
             }
         }
 
@@ -7202,7 +7202,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
         //Rest Vectors for next transaction
         for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
             vvIvkWithScope[i].resize(0);
-            vvOrchardEncryptedAction[i].resize(0);
+            vvIronwoodEncryptedAction[i].resize(0);
             vvPosition[i].resize(0);
             vvHash[i].resize(0);
         }
@@ -7211,7 +7211,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
 
     //clean up vectors
     vvIvkWithScope.resize(0);
-    vvOrchardEncryptedAction.resize(0);
+    vvIronwoodEncryptedAction.resize(0);
     vvPosition.resize(0);
     vvHash.resize(0);
 
@@ -7433,20 +7433,20 @@ bool CWallet::IsSaplingNullifierFromMe(const uint256& nullifier) const
 }
 
 /**
- * @brief Check if an Orchard nullifier belongs to this wallet
- * @param nullifier The Orchard nullifier to check
+ * @brief Check if an Ironwood nullifier belongs to this wallet
+ * @param nullifier The Ironwood nullifier to check
  * @return true if this wallet owns the note corresponding to the nullifier
  * 
- * Determines if a given Orchard nullifier corresponds to a note that belongs to
+ * Determines if a given Ironwood nullifier corresponds to a note that belongs to
  * this wallet by checking the nullifier-to-note mapping. This is used to detect
- * when this wallet's Orchard notes are being spent in transactions.
+ * when this wallet's Ironwood notes are being spent in transactions.
  */
-bool CWallet::IsOrchardNullifierFromMe(const uint256& nullifier) const
+bool CWallet::IsIronwoodNullifierFromMe(const uint256& nullifier) const
 {
     {
         LOCK(cs_wallet);
-        if (mapOrchardNullifiersToNotes.count(nullifier) &&
-                mapWallet.count(mapOrchardNullifiersToNotes.at(nullifier).hash)) {
+        if (mapIronwoodNullifiersToNotes.count(nullifier) &&
+                mapWallet.count(mapIronwoodNullifiersToNotes.at(nullifier).hash)) {
             return true;
         }
     }
@@ -7571,43 +7571,43 @@ bool CWallet::GetSaplingNoteMerklePaths(std::vector<SaplingOutPoint> notes,
 }
 
 /**
- * @brief Get Orchard note Merkle paths for spending
- * @param notes Vector of OrchardOutPoints identifying the notes to get paths for
- * @param orchardMerklePaths[out] Vector to populate with Merkle paths (same order as notes)
+ * @brief Get Ironwood note Merkle paths for spending
+ * @param notes Vector of IronwoodOutPoints identifying the notes to get paths for
+ * @param ironwoodMerklePaths[out] Vector to populate with Merkle paths (same order as notes)
  * @param final_anchor[out] The common anchor/root hash for all returned paths
  * @return true if all paths were successfully retrieved, false otherwise
  * 
- * Retrieves the Merkle paths for the specified Orchard notes from the Orchard wallet,
+ * Retrieves the Merkle paths for the specified Ironwood notes from the Ironwood wallet,
  * which are required to create valid spend proofs. All returned paths must have the
  * same root hash (anchor) to be used together in a transaction. The function:
  * 
  * - Looks up each note in the wallet's transaction map
- * - Retrieves the Merkle path from the Orchard wallet
+ * - Retrieves the Merkle path from the Ironwood wallet
  * - Computes and verifies the anchor for each path using note commitments
  * - Ensures all anchors match for transaction consistency
  * 
  * Returns false if any note is not found, path retrieval fails, or anchor
- * computation fails. This function is essential for creating Orchard spend
+ * computation fails. This function is essential for creating Ironwood spend
  * transactions that require valid authentication paths.
  */
-bool CWallet::GetOrchardNoteMerklePaths(std::vector<OrchardOutPoint> notes,
-                                      std::vector<MerklePath>& orchardMerklePaths,
+bool CWallet::GetIronwoodNoteMerklePaths(std::vector<IronwoodOutPoint> notes,
+                                      std::vector<MerklePath>& ironwoodMerklePaths,
                                       uint256 &final_anchor)
 {
     LOCK(cs_wallet);
-    orchardMerklePaths.resize(notes.size());
+    ironwoodMerklePaths.resize(notes.size());
     std::optional<uint256> rt;
     int i = 0;
-    for (OrchardOutPoint op : notes) {
+    for (IronwoodOutPoint op : notes) {
 
         const CWalletTx* wtx = GetWalletTx(op.hash);
         if (wtx == NULL) {
             return false;
         }
 
-        if (wtx->mapOrchardNoteData.count(op)) {
+        if (wtx->mapIronwoodNoteData.count(op)) {
 
-            if (!orchardWallet.GetMerklePathOfNote(op.hash, op.n, orchardMerklePaths[i])) {
+            if (!ironwoodWallet.GetMerklePathOfNote(op.hash, op.n, ironwoodMerklePaths[i])) {
                 return false;
             }
 
@@ -7617,12 +7617,12 @@ bool CWallet::GetOrchardNoteMerklePaths(std::vector<OrchardOutPoint> notes,
             uint256 anchor;
             auto vActions = wtx->GetIronwoodActions();
             auto cmu = uint256::FromRawBytes(vActions[op.n].cmx());
-            if (!orchardWallet.GetPathRootWithCMU(orchardMerklePaths[i], cmu, anchor)) {
+            if (!ironwoodWallet.GetPathRootWithCMU(ironwoodMerklePaths[i], cmu, anchor)) {
                 return false;
             }
 
             LogPrintf("Got Anchor %s\n\n", anchor.ToString());
-            LogPrintf("Orchard Wallet Anchor %s\n\n", orchardWallet.GetLatestAnchor().ToString());
+            LogPrintf("Ironwood Wallet Anchor %s\n\n", ironwoodWallet.GetLatestAnchor().ToString());
 
             //Check first anchor found and assert all following achors match
             if (!rt) {
@@ -7967,7 +7967,7 @@ isminetype CWallet::IsMine(const CTransaction& tx, uint32_t voutNum)
  * - Transparent inputs for wallet ownership (via GetDebit)
  * - Sprout nullifiers to detect spent Sprout notes
  * - Sapling nullifiers to detect spent Sapling notes  
- * - Orchard nullifiers to detect spent Orchard notes
+ * - Ironwood nullifiers to detect spent Ironwood notes
  * 
  * Returns true if any input indicates the transaction is spending from this wallet.
  */
@@ -7991,7 +7991,7 @@ bool CWallet::IsFromMe(const CTransaction& tx) const
     }
     for (const auto& action : tx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
-        if (IsOrchardNullifierFromMe(nullifier)) {
+        if (IsIronwoodNullifierFromMe(nullifier)) {
             return true;
         }
     }
@@ -8393,10 +8393,10 @@ bool CWallet::DecryptSaplingWitnessTree(const uint256& chash, const std::vector<
 }
 
 /**
- * @brief Decrypt and integrity-verify an encrypted Orchard note-commitment-tree blob.
+ * @brief Decrypt and integrity-verify an encrypted Ironwood note-commitment-tree blob.
  * @see DecryptSaplingWitnessTree for the verification semantics.
  */
-bool CWallet::DecryptOrchardWitnessTree(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CKeyingMaterial& vchSecret)
+bool CWallet::DecryptIronwoodWitnessTree(const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CKeyingMaterial& vchSecret)
 {
     if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret))
         return false;
@@ -8485,25 +8485,25 @@ void CWalletTx::SetSaplingNoteData(mapSaplingNoteData_t &noteData)
 }
 
 /**
- * @brief Set Orchard note data for this wallet transaction
- * @param noteData Map of OrchardOutPoint to OrchardNoteData to set
+ * @brief Set Ironwood note data for this wallet transaction
+ * @param noteData Map of IronwoodOutPoint to IronwoodNoteData to set
  * @throws std::logic_error if any note reference is invalid
  * 
- * Replaces the Orchard note data for this transaction with the provided data.
- * Validates that all note references (OrchardOutPoint) correspond to valid actions
- * in the transaction's Orchard actions before storing the data.
+ * Replaces the Ironwood note data for this transaction with the provided data.
+ * Validates that all note references (IronwoodOutPoint) correspond to valid actions
+ * in the transaction's Ironwood actions before storing the data.
  * 
  * This function is used when processing transactions to store decrypted note
  * information and associated metadata like addresses, nullifiers, and position data.
  */
-void CWalletTx::SetOrchardNoteData(mapOrchardNoteData_t &noteData)
+void CWalletTx::SetIronwoodNoteData(mapIronwoodNoteData_t &noteData)
 {
-    mapOrchardNoteData.clear();
-    for (const std::pair<OrchardOutPoint, OrchardNoteData> nd : noteData) {
+    mapIronwoodNoteData.clear();
+    for (const std::pair<IronwoodOutPoint, IronwoodNoteData> nd : noteData) {
         if (nd.first.n < GetIronwoodActionsCount()) {
-            mapOrchardNoteData[nd.first] = nd.second;
+            mapIronwoodNoteData[nd.first] = nd.second;
         } else {
-            throw std::logic_error("CWalletTx::SetOrchardNoteData(): Invalid note");
+            throw std::logic_error("CWalletTx::SetIronwoodNoteData(): Invalid note");
         }
     }
 }
@@ -8686,7 +8686,7 @@ std::optional<std::pair<
     auto vOutputs = this->GetSaplingOutputs();
 
     for (auto ovk : ovks) {
-        // Use new Orchard-style OVK decryption
+        // Use new Ironwood-style OVK decryption
         auto maybe_pt = SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], ovk);
         
         if (!maybe_pt) {
@@ -8735,7 +8735,7 @@ std::optional<std::pair<
 
     // Try to decrypt with each ovk
     for (auto ovk : ovks) {
-        // Use new Orchard-style OVK decryption
+        // Use new Ironwood-style OVK decryption
         auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], ovk);
         if (maybe_pt) {
             auto notePt = maybe_pt.value();
@@ -8752,37 +8752,37 @@ std::optional<std::pair<
 }
 
 /**
- * @brief Decrypt an Orchard note from this wallet transaction
- * @param op The OrchardOutPoint identifying the specific note to decrypt
+ * @brief Decrypt an Ironwood note from this wallet transaction
+ * @param op The IronwoodOutPoint identifying the specific note to decrypt
  * @return Optional pair containing the decrypted note plaintext and payment address
  * 
- * Decrypts an Orchard note that belongs to this wallet transaction using the cached
+ * Decrypts an Ironwood note that belongs to this wallet transaction using the cached
  * note data and incoming viewing key. The function:
  * 
- * - Retrieves the cached Orchard note data for the action point
+ * - Retrieves the cached Ironwood note data for the action point
  * - Uses the cached incoming viewing key to decrypt the note from the action
  * - Derives the payment address from the decrypted note plaintext
- * - Validates the decryption using Orchard cryptographic primitives
+ * - Validates the decryption using Ironwood cryptographic primitives
  * 
  * Returns nullopt if the note data is not cached (indicating this wallet
  * doesn't own the note) or if decryption fails for any reason.
  * 
  * This function is used when the wallet needs to access details of received
- * Orchard notes for balance calculations, transaction creation, or display.
+ * Ironwood notes for balance calculations, transaction creation, or display.
  */
 std::optional<std::pair<
-    OrchardNotePlaintext,
-    OrchardPaymentAddress>> CWalletTx::DecryptOrchardNote(OrchardOutPoint op) const
+    IronwoodNotePlaintext,
+    IronwoodPaymentAddress>> CWalletTx::DecryptIronwoodNote(IronwoodOutPoint op) const
 {
-    // Check whether we can decrypt this OrchardOutPoint
-    if (this->mapOrchardNoteData.count(op) == 0) {
+    // Check whether we can decrypt this IronwoodOutPoint
+    if (this->mapIronwoodNoteData.count(op) == 0) {
         return std::nullopt;
     }
 
     auto vActions = this->GetIronwoodActions();
-    auto nd = this->mapOrchardNoteData.at(op);
+    auto nd = this->mapIronwoodNoteData.at(op);
 
-    auto maybe_pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+    auto maybe_pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], nd.ivk);
     assert(maybe_pt != std::nullopt);
     auto notePt = maybe_pt.value();
     auto pa = notePt.GetAddress();
@@ -8822,7 +8822,7 @@ int64_t CWalletTx::GetTxTime() const
  * - Identifies received outputs and their destinations
  * - Identifies sent outputs and their destinations
  * - Handles value pool transfers (vpub_old/new)
- * - Processes Sapling and Orchard value balances
+ * - Processes Sapling and Ironwood value balances
  * - Separates outputs into received vs. sent categories
  * 
  * This is used for transaction display, accounting, and balance calculations
@@ -9193,7 +9193,7 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
 
         //remove transaction tracking from the witness tree
         saplingWallet.UnMarkNoteForTransaction(removeTxs[i]);
-        orchardWallet.UnMarkNoteForTransaction(removeTxs[i]);
+        ironwoodWallet.UnMarkNoteForTransaction(removeTxs[i]);
 
         //remove transaction from the wallet
         if (EraseFromWallet(removeTxs[i])) {
@@ -9224,7 +9224,7 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
 
     //Cleanup the witness tree
     saplingWallet.GarbageCollect();
-    orchardWallet.GarbageCollect();
+    ironwoodWallet.GarbageCollect();
 
     // Miodrag: release memory back to the OS, only works on linux
     #ifdef __linux__
@@ -9361,11 +9361,11 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
 
 
-            //Check for unspent inputs or spend less than N Blocks ago. (Orchard)
-            for (auto & pair : pwtx->mapOrchardNoteData) {
-              OrchardNoteData nd = pair.second;
-              if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetOrchardSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
-                LogPrint("deletetx","DeleteTx - Unspent orchard input tx %s\n", pwtx->GetHash().ToString());
+            //Check for unspent inputs or spend less than N Blocks ago. (Ironwood)
+            for (auto & pair : pwtx->mapIronwoodNoteData) {
+              IronwoodNoteData nd = pair.second;
+              if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetIronwoodSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+                LogPrint("deletetx","DeleteTx - Unspent ironwood input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
                 break;
               }
@@ -9376,14 +9376,14 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
               continue;
             }
 
-            //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Orchard)
+            //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Ironwood)
             for (const auto& action: pwtx->GetIronwoodActions()) {
-              uint256 orchardNullifier = uint256::FromRawBytes(action.nullifier());
-              if (pwalletMain->IsOrchardNullifierFromMe(orchardNullifier)) {
-                const uint256& parentHash = pwalletMain->mapOrchardNullifiersToNotes[orchardNullifier].hash;
+              uint256 ironwoodNullifier = uint256::FromRawBytes(action.nullifier());
+              if (pwalletMain->IsIronwoodNullifierFromMe(ironwoodNullifier)) {
+                const uint256& parentHash = pwalletMain->mapIronwoodNullifiersToNotes[ironwoodNullifier].hash;
                 const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
                 if (parent != NULL && parentHash != wtxid) {
-                  LogPrint("deletetx","DeleteTx - Parent of orchard tx %s found\n", pwtx->GetHash().ToString());
+                  LogPrint("deletetx","DeleteTx - Parent of ironwood tx %s found\n", pwtx->GetHash().ToString());
                   deleteTx = false;
                   continue;
                 }
@@ -9533,7 +9533,7 @@ bool CWallet::initalizeArcTx() {
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
-    int txTotal = 0, saplingInitialized = 0, saplingFailed = 0, orchardInitialized = 0, orchardFailed = 0;
+    int txTotal = 0, saplingInitialized = 0, saplingFailed = 0, ironwoodInitialized = 0, ironwoodFailed = 0;
 
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         const uint256& wtxid = (*it).first;
@@ -9592,27 +9592,27 @@ bool CWallet::initalizeArcTx() {
             }
         }
 
-        //Initalize in memory orchardnotedata
-        LogPrint("deletetx","initalizeArcTx - tx %s: %u orchard actions, %u in mapOrchardNoteData\n",
-            wtxid.ToString(), wtx.GetIronwoodActionsCount(), wtx.mapOrchardNoteData.size());
+        //Initalize in memory ironwoodnotedata
+        LogPrint("deletetx","initalizeArcTx - tx %s: %u ironwood actions, %u in mapIronwoodNoteData\n",
+            wtxid.ToString(), wtx.GetIronwoodActionsCount(), wtx.mapIronwoodNoteData.size());
         for (uint32_t i = 0; i < wtx.GetIronwoodActionsCount(); ++i) {
-            auto op = OrchardOutPoint(wtxid, i);
+            auto op = IronwoodOutPoint(wtxid, i);
 
-            if (wtx.mapOrchardNoteData.count(op) != 0) {
-                auto nd = wtx.mapOrchardNoteData.at(op);
+            if (wtx.mapIronwoodNoteData.count(op) != 0) {
+                auto nd = wtx.mapIronwoodNoteData.at(op);
                 auto vActions = wtx.GetIronwoodActions();
                 bool decryptSuccess = false;
                 // nd.ivk is in-memory only and empty after DB load; try all wallet IVKs
-                for (auto ivkIt = setOrchardIncomingViewingKeys.begin(); ivkIt != setOrchardIncomingViewingKeys.end(); ++ivkIt) {
-                    OrchardIncomingViewingKey ivk = ivkIt->first;
-                    auto maybe_pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[i], ivk);
+                for (auto ivkIt = setIronwoodIncomingViewingKeys.begin(); ivkIt != setIronwoodIncomingViewingKeys.end(); ++ivkIt) {
+                    IronwoodIncomingViewingKey ivk = ivkIt->first;
+                    auto maybe_pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[i], ivk);
                     if (maybe_pt) {
                         nd.ivk = ivk;
                         nd.value = maybe_pt.value().value();
                         nd.address = maybe_pt.value().GetAddress();
                         nd.fNoteDataInitialized = true;
-                        it->second.mapOrchardNoteData[op] = nd;
-                        orchardInitialized++;
+                        it->second.mapIronwoodNoteData[op] = nd;
+                        ironwoodInitialized++;
                         LogPrint("deletetx","initalizeArcTx - tx %s action %u initialized (value=%li)\n",
                             wtxid.ToString(), i, nd.value);
                         decryptSuccess = true;
@@ -9620,9 +9620,9 @@ bool CWallet::initalizeArcTx() {
                     }
                 }
                 if (!decryptSuccess) {
-                    orchardFailed++;
+                    ironwoodFailed++;
                     LogPrintf("initalizeArcTx - tx %s action %u decryption FAILED (tried %u IVKs)\n",
-                        wtxid.ToString(), i, (unsigned)setOrchardIncomingViewingKeys.size());
+                        wtxid.ToString(), i, (unsigned)setIronwoodIncomingViewingKeys.size());
                 }
             }
         }
@@ -9631,8 +9631,8 @@ bool CWallet::initalizeArcTx() {
         AddToArcTxs(wtx, txHeight, arcTx);
     }
 
-    LogPrintf("initalizeArcTx - complete: %d txs, sapling initialized=%d failed=%d, orchard initialized=%d failed=%d\n",
-        txTotal, saplingInitialized, saplingFailed, orchardInitialized, orchardFailed);
+    LogPrintf("initalizeArcTx - complete: %d txs, sapling initialized=%d failed=%d, ironwood initialized=%d failed=%d\n",
+        txTotal, saplingInitialized, saplingFailed, ironwoodInitialized, ironwoodFailed);
 
     for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); it++) {
         //Add to mapAddressTxids the Archived that are no longer in the wallet
@@ -9651,7 +9651,7 @@ bool CWallet::initalizeArcTx() {
  * @param fUpdate If true, update existing wallet transactions that are found
  * @param fIgnoreBirthday If true, scan all blocks regardless of wallet birthday
  * @param LockOnFinish If true, lock the wallet after scanning completes (for encrypted wallets)
- * @param resetWallets If true, reset Sapling and Orchard wallet states before scanning
+ * @param resetWallets If true, reset Sapling and Ironwood wallet states before scanning
  * @return Number of transactions found and added to the wallet
  * 
  * Performs a comprehensive blockchain scan to find transactions involving this wallet.
@@ -9659,7 +9659,7 @@ bool CWallet::initalizeArcTx() {
  * The function:
  * 
  * - Scans from the specified starting block to the chain tip
- * - Discovers new Sapling and Orchard addresses and adds them to the wallet
+ * - Discovers new Sapling and Ironwood addresses and adds them to the wallet
  * - Updates wallet transaction maps with newly found transactions
  * - Maintains witness trees for shielded notes
  * - Respects wallet birthday to optimize scanning performance
@@ -9707,7 +9707,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     //Collect Sapling Addresses to notify GUI after rescan
     std::set<SaplingPaymentAddress> saplingAddressesFound;
-    std::set<OrchardPaymentAddress> orchardAddressesFound;
+    std::set<IronwoodPaymentAddress> ironwoodAddressesFound;
 
     {
         //Lock cs_keystore to prevent wallet from locking during rescan
@@ -9735,7 +9735,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         //Reset the sapling Wallet
         if (resetWallets) {
           SaplingWalletReset();
-          OrchardWalletReset();
+          IronwoodWalletReset();
         }
 
         while (pindex)
@@ -9756,7 +9756,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             ReadBlockFromDisk(block, pindex,1);
 
             std::vector<CTransaction> vOurs;
-            AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, saplingAddressesFound, orchardAddressesFound, true);
+            AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, saplingAddressesFound, ironwoodAddressesFound, true);
 
             for (int i = 0; i < vOurs.size(); i++) {
                 blockInvolvesMe = true;
@@ -9766,7 +9766,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
             SproutMerkleTree sproutTree;
             SaplingMerkleFrontier saplingFrontierTree;
-            IronwoodMerkleFrontier orchardFrontierTree;
+            IronwoodMerkleFrontier ironwoodFrontierTree;
             // This should never fail: we should always be able to get the tree
             // state on the path to the tip of our chain
             assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, sproutTree));
@@ -9775,7 +9775,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
                 }
                 if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
-                    assert(pcoinsTip->GetOrchardFrontierAnchorAt(pindex->pprev->hashFinalOrchardRoot, orchardFrontierTree));
+                    assert(pcoinsTip->GetIronwoodFrontierAnchorAt(pindex->pprev->hashFinalIronwoodRoot, ironwoodFrontierTree));
                 }
             }
 
@@ -9789,16 +9789,16 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 //on last loop
                 saplingWalletValidated = false;
                 saplingWalletPositionsValidated = false;
-                orchardWalletValidated = false;
-                orchardWalletPositionsValidated = false;
+                ironwoodWalletValidated = false;
+                ironwoodWalletPositionsValidated = false;
             }
 
-            //Update the Sapling and Orchard Wallet Merkle tree and set transaction nullifiers
+            //Update the Sapling and Ironwood Wallet Merkle tree and set transaction nullifiers
             //This needs to be done after processing the block to ensure
             //that subsequent spends can be detected
             // Pass true to suppress progress dialogs (rescan already shows its own progress)
             IncrementSaplingWallet(pindex, &block, true);
-            IncrementOrchardWallet(pindex, &block, true);
+            IncrementIronwoodWallet(pindex, &block, true);
 
             pindex = chainActive.Next(pindex);
             
@@ -9827,9 +9827,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         SetZAddressBook(*it, "z-sapling", "", true);
     }
 
-    for (std::set<OrchardPaymentAddress>::iterator it = orchardAddressesFound.begin(); it != orchardAddressesFound.end(); it++) {
-        // Internal (change) Orchard addresses are added so the UI can label them "Change".
-        SetZAddressBook(*it, "orchard", "", true);
+    for (std::set<IronwoodPaymentAddress>::iterator it = ironwoodAddressesFound.begin(); it != ironwoodAddressesFound.end(); it++) {
+        // Internal (change) Ironwood addresses are added so the UI can label them "Change".
+        SetZAddressBook(*it, "ironwood", "", true);
     }
 
     //Notify GUI of changes in balances
@@ -11895,7 +11895,7 @@ bool CWallet::DecryptAddressBookEntry(const uint256 chash, std::vector<unsigned 
 
 /**
  * @brief Set shielded address book entry for a payment address
- * @param address The shielded payment address (Sprout, Sapling, or Orchard)
+ * @param address The shielded payment address (Sprout, Sapling, or Ironwood)
  * @param strName The human-readable name for this address
  * @param strPurpose The purpose/category for this address
  * @param fInTransaction True if this address was found in a transaction
@@ -12702,34 +12702,34 @@ std::vector<SaplingOutPoint> CWallet::ListLockedSaplingNotes()
     return vOutputs;
 }
 
-void CWallet::LockNote(const OrchardOutPoint& output)
+void CWallet::LockNote(const IronwoodOutPoint& output)
 {
     AssertLockHeld(cs_wallet);
-    setLockedOrchardNotes.insert(output);
+    setLockedIronwoodNotes.insert(output);
 }
 
-void CWallet::UnlockNote(const OrchardOutPoint& output)
+void CWallet::UnlockNote(const IronwoodOutPoint& output)
 {
     AssertLockHeld(cs_wallet);
-    setLockedOrchardNotes.erase(output);
+    setLockedIronwoodNotes.erase(output);
 }
 
-void CWallet::UnlockAllOrchardNotes()
+void CWallet::UnlockAllIronwoodNotes()
 {
     AssertLockHeld(cs_wallet);
-    setLockedOrchardNotes.clear();
+    setLockedIronwoodNotes.clear();
 }
 
-bool CWallet::IsLockedNote(const OrchardOutPoint& output) const
+bool CWallet::IsLockedNote(const IronwoodOutPoint& output) const
 {
     AssertLockHeld(cs_wallet);
-    return (setLockedOrchardNotes.count(output) > 0);
+    return (setLockedIronwoodNotes.count(output) > 0);
 }
 
-std::vector<OrchardOutPoint> CWallet::ListLockedOrchardNotes()
+std::vector<IronwoodOutPoint> CWallet::ListLockedIronwoodNotes()
 {
     AssertLockHeld(cs_wallet);
-    std::vector<OrchardOutPoint> vOutputs(setLockedOrchardNotes.begin(), setLockedOrchardNotes.end());
+    std::vector<IronwoodOutPoint> vOutputs(setLockedIronwoodNotes.begin(), setLockedIronwoodNotes.end());
     return vOutputs;
 }
 
@@ -13175,7 +13175,7 @@ bool CMerkleTx::AcceptToMemoryPool(bool fLimitFree, bool fRejectAbsurdFee)
  * Calculates the balance for each shielded address in the wallet by examining
  * all confirmed transactions. This function:
  * - Filters transactions by finality, maturity, and confirmation depth
- * - Processes both Sapling and Orchard notes
+ * - Processes both Sapling and Ironwood notes
  * - Excludes spent notes from balance calculations
  * - Optionally filters by spending key availability
  * 
@@ -13222,19 +13222,19 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
             balances[nd.address] += CAmount(nd.value);
         }
 
-        for (auto & pair : wtx.mapOrchardNoteData) {
-            OrchardOutPoint op = pair.first;
-            OrchardNoteData nd = pair.second;
+        for (auto & pair : wtx.mapIronwoodNoteData) {
+            IronwoodOutPoint op = pair.first;
+            IronwoodNoteData nd = pair.second;
 
-            if (nd.nullifier && IsOrchardSpent(*nd.nullifier)) {
+            if (nd.nullifier && IsIronwoodSpent(*nd.nullifier)) {
                 continue;
             }
 
             // skip notes which cannot be spent
             if (requireSpendingKey) {
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
-                    HaveOrchardSpendingKey(extfvk))) {
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                if (!(GetIronwoodFullViewingKey(nd.ivk, extfvk) &&
+                    HaveIronwoodSpendingKey(extfvk))) {
                     continue;
                 }
             }
@@ -13322,71 +13322,71 @@ bool CWallet::LoadCryptedSaplingWallet(const CKeyingMaterial& vchSecret) {
 }
 
 /**
- * @brief Get Merkle path for an Orchard note
+ * @brief Get Merkle path for an Ironwood note
  * @param txid Transaction ID containing the note
  * @param outidx Output index of the note within the transaction
  * @param merklePath[out] The Merkle path to the note's commitment
  * @return true if Merkle path was successfully retrieved
  * 
- * Retrieves the Merkle path from an Orchard note's commitment to the Orchard
+ * Retrieves the Merkle path from an Ironwood note's commitment to the Ironwood
  * commitment tree root. This path is required to prove the note's inclusion
  * in the blockchain when spending it.
  */
-bool CWallet::OrchardWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
-    return orchardWallet.GetMerklePathOfNote(txid, outidx, merklePath);
+bool CWallet::IronwoodWalletGetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
+    return ironwoodWallet.GetMerklePathOfNote(txid, outidx, merklePath);
 }
 
 /**
- * @brief Calculate anchor from Orchard Merkle path and commitment
+ * @brief Calculate anchor from Ironwood Merkle path and commitment
  * @param merklePath The Merkle path to validate
  * @param cmu The note commitment to verify
  * @param anchor[out] The calculated anchor (tree root)
  * @return true if anchor calculation was successful
  * 
- * Computes the Orchard tree root (anchor) by applying the provided Merkle path
+ * Computes the Ironwood tree root (anchor) by applying the provided Merkle path
  * to the given note commitment. This verifies that the commitment is properly
  * included in the tree and provides the anchor needed for spending proofs.
  */
-bool CWallet::OrchardWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor) {
-   return orchardWallet.GetPathRootWithCMU(merklePath, cmu, anchor);
+bool CWallet::IronwoodWalletGetPathRootWithCMU(libzcash::MerklePath &merklePath, uint256 cmu, uint256 &anchor) {
+   return ironwoodWallet.GetPathRootWithCMU(merklePath, cmu, anchor);
 }
 
 /**
- * @brief Reset the Orchard wallet to initial state
+ * @brief Reset the Ironwood wallet to initial state
  * @return true if reset was successful and written to database
  * 
- * Resets the Orchard wallet's internal state, clearing all note commitments
+ * Resets the Ironwood wallet's internal state, clearing all note commitments
  * and witness information. This is typically used during wallet rebuilding
  * operations. The reset state is persisted to the database.
  */
-bool CWallet::OrchardWalletReset() {
-   orchardWallet.Reset();
-   return CWalletDB(strWalletFile).WriteOrchardWitnesses(orchardWallet);
+bool CWallet::IronwoodWalletReset() {
+   ironwoodWallet.Reset();
+   return CWalletDB(strWalletFile).WriteIronwoodWitnesses(ironwoodWallet);
 }
 
 /**
- * @brief Load encrypted Orchard wallet note commitment tree from decrypted data
+ * @brief Load encrypted Ironwood wallet note commitment tree from decrypted data
  * @param vchSecret The decrypted keying material containing the serialized tree data
  * @return true if tree was successfully deserialized and loaded, false on error
  * 
- * Loads the Orchard note commitment tree from previously decrypted wallet data.
- * This function is called during encrypted wallet loading to restore the Orchard
+ * Loads the Ironwood note commitment tree from previously decrypted wallet data.
+ * This function is called during encrypted wallet loading to restore the Ironwood
  * witness tree state. The function:
  * - Deserializes the decrypted data into the proper format
- * - Loads the tree structure using the Orchard note commitment tree loader
+ * - Loads the tree structure using the Ironwood note commitment tree loader
  * - Handles deserialization errors gracefully by returning false
  * 
  * This is used when reading encrypted wallet databases to restore the full
- * Orchard wallet state including all note witnesses and commitment tree data.
+ * Ironwood wallet state including all note witnesses and commitment tree data.
  */
-bool CWallet::LoadCryptedOrchardWallet(const CKeyingMaterial& vchSecret) {
+bool CWallet::LoadCryptedIronwoodWallet(const CKeyingMaterial& vchSecret) {
 
     try {
         CDataStream ss(SER_DISK, CLIENT_VERSION);
         ss.write((const char*)vchSecret.data(), vchSecret.size());
         ss.Rewind(vchSecret.size());
         
-        auto loader = GetOrchardNoteCommitmentTreeLoader();
+        auto loader = GetIronwoodNoteCommitmentTreeLoader();
         ss >> loader;
 
     } catch (const std::exception&) {
@@ -13398,7 +13398,7 @@ bool CWallet::LoadCryptedOrchardWallet(const CKeyingMaterial& vchSecret) {
 /**
  * @brief Find unspent notes in the wallet filtered by payment address and minimum depth
  * @param saplingEntries[out] Vector to store found Sapling note entries
- * @param orchardEntries[out] Vector to store found Orchard note entries
+ * @param ironwoodEntries[out] Vector to store found Ironwood note entries
  * @param address Payment address to filter by (empty string for all addresses)
  * @param minDepth Minimum confirmation depth required for notes
  * @param ignoreSpent Whether to exclude spent notes from results
@@ -13409,7 +13409,7 @@ bool CWallet::LoadCryptedOrchardWallet(const CKeyingMaterial& vchSecret) {
  */
 void CWallet::GetFilteredNotes(
     std::vector<SaplingNoteEntry>& saplingEntries,
-    std::vector<OrchardNoteEntry>& orchardEntries,
+    std::vector<IronwoodNoteEntry>& ironwoodEntries,
     std::string address,
     int minDepth,
     bool ignoreSpent,
@@ -13421,7 +13421,7 @@ void CWallet::GetFilteredNotes(
         filterAddresses.insert(DecodePaymentAddress(address));
     }
 
-    GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses, minDepth, INT_MAX, ignoreSpent, requireSpendingKey);
+    GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, minDepth, INT_MAX, ignoreSpent, requireSpendingKey);
 }
 
 /**
@@ -13456,7 +13456,7 @@ void CWallet::GetFilteredNotes(
  */
 void CWallet::GetFilteredNotes(
     std::vector<SaplingNoteEntry>& saplingEntries,
-    std::vector<OrchardNoteEntry>& orchardEntries,
+    std::vector<IronwoodNoteEntry>& ironwoodEntries,
     std::set<PaymentAddress>& filterAddresses,
     int minDepth,
     int maxDepth,
@@ -13478,16 +13478,16 @@ void CWallet::GetFilteredNotes(
     // so we can skip entire protocol note loops when no matching address type
     // is present. When filterAddresses is empty all protocols are searched.
     bool searchSapling = true;
-    bool searchOrchard = true;
+    bool searchIronwood = true;
     if (!filterAddresses.empty()) {
         searchSapling = false;
-        searchOrchard = false;
+        searchIronwood = false;
         for (const auto& addr : filterAddresses) {
             if (std::get_if<libzcash::SaplingPaymentAddress>(&addr) != nullptr)
                 searchSapling = true;
-            else if (std::get_if<libzcash::OrchardPaymentAddress>(&addr) != nullptr)
-                searchOrchard = true;
-            if (searchSapling && searchOrchard)
+            else if (std::get_if<libzcash::IronwoodPaymentAddress>(&addr) != nullptr)
+                searchIronwood = true;
+            if (searchSapling && searchIronwood)
                 break; // both already needed, no point checking further
         }
     }
@@ -13508,18 +13508,18 @@ void CWallet::GetFilteredNotes(
                         std::vector<SaplingNoteEntry>,
                         decltype(sapCmpMin)> sapLargestHeap(sapCmpMin);
 
-    // ── Orchard heaps ────────────────────────────────────────────────────────
-    auto orchCmpMax = [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
+    // ── Ironwood heaps ────────────────────────────────────────────────────────
+    auto orchCmpMax = [](const IronwoodNoteEntry& a, const IronwoodNoteEntry& b) {
         return a.note.value() < b.note.value();
     };
-    auto orchCmpMin = [](const OrchardNoteEntry& a, const OrchardNoteEntry& b) {
+    auto orchCmpMin = [](const IronwoodNoteEntry& a, const IronwoodNoteEntry& b) {
         return a.note.value() > b.note.value();
     };
-    std::priority_queue<OrchardNoteEntry,
-                        std::vector<OrchardNoteEntry>,
+    std::priority_queue<IronwoodNoteEntry,
+                        std::vector<IronwoodNoteEntry>,
                         decltype(orchCmpMax)> orchSmallestHeap(orchCmpMax);
-    std::priority_queue<OrchardNoteEntry,
-                        std::vector<OrchardNoteEntry>,
+    std::priority_queue<IronwoodNoteEntry,
+                        std::vector<IronwoodNoteEntry>,
                         decltype(orchCmpMin)> orchLargestHeap(orchCmpMin);
 
     // Single aggregate tracks the combined total across all four heaps.
@@ -13630,17 +13630,17 @@ void CWallet::GetFilteredNotes(
 
         if (earlyExit) break;
 
-        // ── Orchard notes ────────────────────────────────────────────────────
-        if (searchOrchard) {
+        // ── Ironwood notes ────────────────────────────────────────────────────
+        if (searchIronwood) {
             auto vActions = wtx.GetIronwoodActions();
 
-            for (auto & pair : wtx.mapOrchardNoteData) {
+            for (auto & pair : wtx.mapIronwoodNoteData) {
                 if (earlyExit) break;
 
-                OrchardOutPoint op = pair.first;
-                OrchardNoteData nd = pair.second;
+                IronwoodOutPoint op = pair.first;
+                IronwoodNoteData nd = pair.second;
 
-                auto optDeserialized = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
+                auto optDeserialized = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], nd.ivk);
                 assert(optDeserialized != std::nullopt);
 
                 auto notePt = optDeserialized.value();
@@ -13650,21 +13650,21 @@ void CWallet::GetFilteredNotes(
 
                 if (!(filterAddresses.empty() || filterAddresses.count(pa)))
                     continue;
-                if (ignoreSpent && nd.nullifier && IsOrchardSpent(*nd.nullifier))
+                if (ignoreSpent && nd.nullifier && IsIronwoodSpent(*nd.nullifier))
                     continue;
                 if (requireSpendingKey) {
-                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                    if (!(GetOrchardFullViewingKey(nd.ivk, extfvk) &&
-                          HaveOrchardSpendingKey(extfvk)))
+                    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                    if (!(GetIronwoodFullViewingKey(nd.ivk, extfvk) &&
+                          HaveIronwoodSpendingKey(extfvk)))
                         continue;
                 }
                 if (ignoreLocked && IsLockedNote(op))
                     continue;
 
-                OrchardNoteEntry entry { op, pa, note, memo, chainDepth };
+                IronwoodNoteEntry entry { op, pa, note, memo, chainDepth };
 
                 if (!bounded) {
-                    orchardEntries.push_back(entry);
+                    ironwoodEntries.push_back(entry);
                     continue;
                 }
 
@@ -13675,7 +13675,7 @@ void CWallet::GetFilteredNotes(
                     orchSmallestHeap.push(entry);
                     aggregateValue += v;
                 } else if (v < CAmount(orchSmallestHeap.top().note.value())) {
-                    OrchardNoteEntry evicted = orchSmallestHeap.top();
+                    IronwoodNoteEntry evicted = orchSmallestHeap.top();
                     CAmount evictedVal = CAmount(evicted.note.value());
                     aggregateValue -= evictedVal;
                     orchSmallestHeap.pop();
@@ -13702,7 +13702,7 @@ void CWallet::GetFilteredNotes(
                     }
                 }
 
-                // Early exit: Orchard heaps full AND combined aggregate satisfies requirement.
+                // Early exit: Ironwood heaps full AND combined aggregate satisfies requirement.
                 if (minAggregateValue > 0 &&
                     (int)orchSmallestHeap.size() >= halfNotes &&
                     (int)orchLargestHeap.size() >= halfNotes &&
@@ -13710,16 +13710,16 @@ void CWallet::GetFilteredNotes(
                     earlyExit = true;
                     break;
                 }
-            } // end Orchard loop
-        } // end if (searchOrchard)
+            } // end Ironwood loop
+        } // end if (searchIronwood)
     } // end mapWallet loop
 
     // Drain heaps into result vectors (bounded path only).
     if (bounded) {
         while (!sapSmallestHeap.empty()) { saplingEntries.push_back(sapSmallestHeap.top()); sapSmallestHeap.pop(); }
         while (!sapLargestHeap.empty())  { saplingEntries.push_back(sapLargestHeap.top());  sapLargestHeap.pop();  }
-        while (!orchSmallestHeap.empty()) { orchardEntries.push_back(orchSmallestHeap.top()); orchSmallestHeap.pop(); }
-        while (!orchLargestHeap.empty())  { orchardEntries.push_back(orchLargestHeap.top());  orchLargestHeap.pop();  }
+        while (!orchSmallestHeap.empty()) { ironwoodEntries.push_back(orchSmallestHeap.top()); orchSmallestHeap.pop(); }
+        while (!orchLargestHeap.empty())  { ironwoodEntries.push_back(orchLargestHeap.top());  orchLargestHeap.pop();  }
     }
 }
 
@@ -13728,7 +13728,7 @@ void CWallet::GetFilteredNotes(
  * @section Shielded Key and Address Generalizations
  * 
  * The following functions provide a unified interface for working with different
- * types of shielded addresses (Sprout, Sapling, Orchard) through visitor pattern
+ * types of shielded addresses (Sprout, Sapling, Ironwood) through visitor pattern
  * implementations. This allows generic handling of address operations across
  * all shielded protocols supported by the wallet.
  */
@@ -13755,14 +13755,14 @@ bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::SaplingPaymen
 }
 
 /**
- * @brief Check if an incoming viewing key belongs to this wallet (Orchard addresses)
- * @param zaddr The Orchard payment address to check  
+ * @brief Check if an incoming viewing key belongs to this wallet (Ironwood addresses)
+ * @param zaddr The Ironwood payment address to check  
  * @return true if the wallet has the corresponding incoming viewing key
  */
-bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::OrchardPaymentAddress &zaddr) const
+bool IncomingViewingKeyBelongsToWallet::operator()(const libzcash::IronwoodPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKey ivk;
-    return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk);
+    libzcash::IronwoodIncomingViewingKey ivk;
+    return m_wallet->GetIronwoodIncomingViewingKey(zaddr, ivk);
 }
 
 /**
@@ -13801,18 +13801,18 @@ bool PaymentAddressBelongsToWallet::operator()(const libzcash::SaplingPaymentAdd
 }
 
 /**
- * @brief Check if a payment address belongs to this wallet (Orchard addresses)
- * @param zaddr The Orchard payment address to check
+ * @brief Check if a payment address belongs to this wallet (Ironwood addresses)
+ * @param zaddr The Ironwood payment address to check
  * @return true if the wallet has both the incoming viewing key and full viewing key
  */
-bool PaymentAddressBelongsToWallet::operator()(const libzcash::OrchardPaymentAddress &zaddr) const
+bool PaymentAddressBelongsToWallet::operator()(const libzcash::IronwoodPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKey ivk;
+    libzcash::IronwoodIncomingViewingKey ivk;
 
-    // If we have a OrchardExtendedSpendingKey in the wallet, then we will
-    // also have the corresponding OrchardFullViewingKey.
-    return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
-        m_wallet->HaveOrchardFullViewingKey(ivk);
+    // If we have a IronwoodExtendedSpendingKey in the wallet, then we will
+    // also have the corresponding IronwoodFullViewingKey.
+    return m_wallet->GetIronwoodIncomingViewingKey(zaddr, ivk) &&
+        m_wallet->HaveIronwoodFullViewingKey(ivk);
 }
 
 /**
@@ -13872,21 +13872,21 @@ std::optional<libzcash::ViewingKey> GetViewingKeyForPaymentAddress::operator()(
 }
 
 /**
- * @brief Get viewing key for Orchard payment address
- * @param zaddr The Orchard payment address
+ * @brief Get viewing key for Ironwood payment address
+ * @param zaddr The Ironwood payment address
  * @return Optional ViewingKey if found, nullopt otherwise
  * 
- * Retrieves the Orchard extended full viewing key for the given payment address
+ * Retrieves the Ironwood extended full viewing key for the given payment address
  * by looking up the incoming viewing key and corresponding full viewing key.
  */
 std::optional<libzcash::ViewingKey> GetViewingKeyForPaymentAddress::operator()(
-    const libzcash::OrchardPaymentAddress &zaddr) const
+    const libzcash::IronwoodPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKey ivk;
-    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+    libzcash::IronwoodIncomingViewingKey ivk;
+    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
-    if (m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
-        m_wallet->GetOrchardFullViewingKey(ivk, extfvk))
+    if (m_wallet->GetIronwoodIncomingViewingKey(zaddr, ivk) &&
+        m_wallet->GetIronwoodFullViewingKey(ivk, extfvk))
     {
         return libzcash::ViewingKey(extfvk);
     } else {
@@ -13935,21 +13935,21 @@ bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::SaplingPayment
 }
 
 /**
- * @brief Check if wallet has spending key for Orchard address
- * @param zaddr The Orchard payment address to check
+ * @brief Check if wallet has spending key for Ironwood address
+ * @param zaddr The Ironwood payment address to check
  * @return true if wallet has corresponding spending key (via full viewing key)
  * 
  * Verifies that the wallet has both the incoming viewing key and full viewing key
  * for the address, which indicates a spending key exists.
  */
-bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::OrchardPaymentAddress &zaddr) const
+bool HaveSpendingKeyForPaymentAddress::operator()(const libzcash::IronwoodPaymentAddress &zaddr) const
 {
-    libzcash::OrchardIncomingViewingKey ivk;
-    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+    libzcash::IronwoodIncomingViewingKey ivk;
+    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
-    return m_wallet->GetOrchardIncomingViewingKey(zaddr, ivk) &&
-        m_wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
-        m_wallet->HaveOrchardSpendingKey(extfvk);
+    return m_wallet->GetIronwoodIncomingViewingKey(zaddr, ivk) &&
+        m_wallet->GetIronwoodFullViewingKey(ivk, extfvk) &&
+        m_wallet->HaveIronwoodSpendingKey(extfvk);
 }
 
 /**
@@ -13995,15 +13995,15 @@ std::optional<libzcash::SpendingKey> GetSpendingKeyForPaymentAddress::operator()
 }
 
 /**
- * @brief Get spending key for Orchard payment address
- * @param zaddr The Orchard payment address
+ * @brief Get spending key for Ironwood payment address
+ * @param zaddr The Ironwood payment address
  * @return Optional SpendingKey if found, nullopt otherwise
  */
 std::optional<libzcash::SpendingKey> GetSpendingKeyForPaymentAddress::operator()(
-    const libzcash::OrchardPaymentAddress &zaddr) const
+    const libzcash::IronwoodPaymentAddress &zaddr) const
 {
-    libzcash::OrchardExtendedSpendingKeyPirate extsk;
-    if (m_wallet->GetOrchardExtendedSpendingKey(zaddr, extsk)) {
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+    if (m_wallet->GetIronwoodExtendedSpendingKey(zaddr, extsk)) {
         return libzcash::SpendingKey(extsk);
     } else {
         return std::nullopt;
@@ -14065,25 +14065,25 @@ KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::SaplingExtendedFu
 }
 
 /**
- * @brief Add Orchard extended full viewing key to wallet
- * @param extfvk The Orchard extended full viewing key to add
+ * @brief Add Ironwood extended full viewing key to wallet
+ * @param extfvk The Ironwood extended full viewing key to add
  * @return KeyAddResult indicating the result of the operation
  * 
  * Adds the viewing key for watch-only functionality. If a spending key already
  * exists, returns SpendingKeyExists. Also loads watch-only data for the key.
  */
-KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const {
-    OrchardIncomingViewingKey ivk;
+KeyAddResult AddViewingKeyToWallet::operator()(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) const {
+    IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
        return KeyNotAdded;
     }
 
-    if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
+    if (m_wallet->HaveIronwoodSpendingKey(extfvk)) {
         return SpendingKeyExists;
-    } else if (m_wallet->HaveOrchardFullViewingKey(ivk)) {
+    } else if (m_wallet->HaveIronwoodFullViewingKey(ivk)) {
         return KeyAlreadyExists;
-    } else if (m_wallet->AddOrchardExtendedFullViewingKey(extfvk)) {
-        m_wallet->LoadOrchardWatchOnly(extfvk);
+    } else if (m_wallet->AddIronwoodExtendedFullViewingKey(extfvk)) {
+        m_wallet->LoadIronwoodWatchOnly(extfvk);
         return KeyAdded;
     } else {
         return KeyNotAdded;
@@ -14145,12 +14145,12 @@ KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::Saplin
 
 }
 
-KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate &extdfvk) const {
+KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate &extdfvk) const {
     auto extfvk = extdfvk.extfvk;
 
     // Attempt to derive the diversified viewing key's IVK
     // This will throw if the diversified key is invalid or cannot derive an IVK
-    OrchardIncomingViewingKey ivk;
+    IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
         throw std::invalid_argument("Cannot derive default address from invalid diversified viewing key");
     }
@@ -14158,24 +14158,24 @@ KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::Orchar
 
     // Attempt to derive the default address from the diversified viewing key
     // This will throw if the diversified key is invalid or cannot derive an address
-    OrchardPaymentAddress addr;
+    IronwoodPaymentAddress addr;
     if (!extfvk.fvk.DeriveAddress(&addr, extdfvk.d)) {
         throw std::invalid_argument("Cannot derive default address from invalid diversified viewing key");
     }
 
-    if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
+    if (m_wallet->HaveIronwoodSpendingKey(extfvk)) {
         result = SpendingKeyExists;
-    } else if (m_wallet->HaveOrchardFullViewingKey(ivk)) {
+    } else if (m_wallet->HaveIronwoodFullViewingKey(ivk)) {
         result = KeyAlreadyExists;
-    } else if (m_wallet->AddOrchardExtendedFullViewingKey(extfvk)) {
-        m_wallet->LoadOrchardWatchOnly(extfvk);
+    } else if (m_wallet->AddIronwoodExtendedFullViewingKey(extfvk)) {
+        m_wallet->LoadIronwoodWatchOnly(extfvk);
         result = KeyAdded;
     } else {
         return KeyNotAdded;
     }
 
     // Attempt to add the incoming viewing key for the diversified address
-    if (m_wallet->AddOrchardIncomingViewingKey(ivk, addr, KeyScope::External)) {
+    if (m_wallet->AddIronwoodIncomingViewingKey(ivk, addr, KeyScope::External)) {
         if (result == SpendingKeyExists || result == KeyAlreadyExists) {
             return KeyExistsAddressAdded;
         } else {
@@ -14269,28 +14269,28 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::SaplingExtendedS
 }
 
 /**
- * @brief Add Orchard extended spending key to wallet
- * @param extsk The Orchard extended spending key to add
+ * @brief Add Ironwood extended spending key to wallet
+ * @param extsk The Ironwood extended spending key to add
  * @return KeyAddResult indicating the result of the operation
  * 
- * Imports an Orchard spending key into the wallet. Handles creation time metadata
- * based on network upgrade status - if Orchard is always active, uses the provided
- * time, otherwise uses a safe historical time before Orchard activation.
+ * Imports an Ironwood spending key into the wallet. Handles creation time metadata
+ * based on network upgrade status - if Ironwood is always active, uses the provided
+ * time, otherwise uses a safe historical time before Ironwood activation.
  * Also handles HD keypath and seed fingerprint metadata if provided.
  */
-KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::OrchardExtendedSpendingKeyPirate &extsk) const {
+KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::IronwoodExtendedSpendingKeyPirate &extsk) const {
     auto extfvkOpt = extsk.GetXFVK();
     if (extfvkOpt == std::nullopt){
         return KeyNotAdded;
     }
     auto extfvk = extfvkOpt.value();
 
-    OrchardIncomingViewingKey ivk;
+    IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
         return KeyNotAdded;
     }
 
-    OrchardPaymentAddress addr;
+    IronwoodPaymentAddress addr;
     if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
         return KeyNotAdded;
     }
@@ -14300,27 +14300,27 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::OrchardExtendedS
             LogPrint("zrpc", "Importing zaddr %s...\n", EncodePaymentAddress(addr));
         }
         // Don't throw error in case a key is already there
-        if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
+        if (m_wallet->HaveIronwoodSpendingKey(extfvk)) {
             return KeyAlreadyExists;
         } else {
-            if (!m_wallet-> AddOrchardZKey(extsk)) {
+            if (!m_wallet-> AddIronwoodZKey(extsk)) {
                 return KeyNotAdded;
             }
 
-            // Orchard addresses can't have been used in transactions prior to activation.
+            // Ironwood addresses can't have been used in transactions prior to activation.
             if (params.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight == Consensus::NetworkUpgrade::ALWAYS_ACTIVE) {
-                m_wallet->mapOrchardSpendingKeyMetadata[ivk].nCreateTime = nTime;
+                m_wallet->mapIronwoodSpendingKeyMetadata[ivk].nCreateTime = nTime;
             } else {
-                // 154051200 seconds from epoch is Friday, 26 October 2018 00:00:00 GMT - definitely before Orchard activates
-                m_wallet->mapOrchardSpendingKeyMetadata[ivk].nCreateTime = std::max((int64_t) 154051200, nTime);
+                // 154051200 seconds from epoch is Friday, 26 October 2018 00:00:00 GMT - definitely before Ironwood activates
+                m_wallet->mapIronwoodSpendingKeyMetadata[ivk].nCreateTime = std::max((int64_t) 154051200, nTime);
             }
             if (hdKeypath) {
-                m_wallet->mapOrchardSpendingKeyMetadata[ivk].hdKeypath = hdKeypath.value();
+                m_wallet->mapIronwoodSpendingKeyMetadata[ivk].hdKeypath = hdKeypath.value();
             }
             if (seedFpStr) {
                 uint256 seedFp;
                 seedFp.SetHex(seedFpStr.value());
-                m_wallet->mapOrchardSpendingKeyMetadata[ivk].seedFp = seedFp;
+                m_wallet->mapIronwoodSpendingKeyMetadata[ivk].seedFp = seedFp;
             }
             return KeyAdded;
         }
@@ -14383,23 +14383,23 @@ KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::Sapli
 }
 
 /**
- * @brief Add an Orchard diversified extended spending key to the wallet
- * @param extdsk The Orchard diversified extended spending key to add
+ * @brief Add an Ironwood diversified extended spending key to the wallet
+ * @param extdsk The Ironwood diversified extended spending key to add
  * @return KeyAddResult indicating the result of the operation
  */
-KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::OrchardDiversifiedExtendedSpendingKeyPirate &extdsk) const {
+KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate &extdsk) const {
     auto extfvkOpt = extdsk.extsk.GetXFVK();
     if (extfvkOpt == std::nullopt) {
         return KeyNotAdded;
     }
     auto extfvk = extfvkOpt.value();
 
-    OrchardIncomingViewingKey ivk;
+    IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
         return KeyNotAdded;
     }
 
-    OrchardPaymentAddress addr;
+    IronwoodPaymentAddress addr;
     if (!extfvk.fvk.DeriveAddress(&addr, extdsk.d)) {
         return KeyNotAdded;
     }
@@ -14407,16 +14407,16 @@ KeyAddResult AddDiversifiedSpendingKeyToWallet::operator()(const libzcash::Orcha
     KeyAddResult result = KeyNotAdded;
 
     // Don't throw error in case a key is already there
-    if (m_wallet->HaveOrchardSpendingKey(extfvk)) {
+    if (m_wallet->HaveIronwoodSpendingKey(extfvk)) {
         result = KeyAlreadyExists;
     } else {
-        if (!m_wallet->AddOrchardZKey(extdsk.extsk)) {
+        if (!m_wallet->AddIronwoodZKey(extdsk.extsk)) {
             return KeyNotAdded;
         }
         result = KeyAdded;
     }
 
-    if (m_wallet->AddOrchardIncomingViewingKey(ivk, addr, KeyScope::External)) {
+    if (m_wallet->AddIronwoodIncomingViewingKey(ivk, addr, KeyScope::External)) {
         if (result == KeyAlreadyExists) {
             return KeyExistsAddressAdded;
         } else {

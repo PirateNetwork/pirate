@@ -469,18 +469,18 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                             pwalletMain->SetZAddressBook(decodedAddr, addrName, "", false);
                         } else {
                             //Use default address if the provided one is invalid
-                            // Determine type if it's Sapling or Orchard
+                            // Determine type if it's Sapling or Ironwood
                             auto saplingExtsk = std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingKey);
-                            auto orchardExtsk = std::get_if<libzcash::OrchardExtendedSpendingKeyPirate>(&spendingKey);
+                            auto ironwoodExtsk = std::get_if<libzcash::IronwoodExtendedSpendingKeyPirate>(&spendingKey);
                             if (saplingExtsk != nullptr) {
                                 auto defaultAddr = saplingExtsk->ToXFVK().DefaultAddress();
                                 pwalletMain->SetZAddressBook(defaultAddr, addrName, "", false);
-                            } else if (orchardExtsk != nullptr) {
-                                auto orchardfvkOpt = orchardExtsk->GetXFVK();
-                                if (orchardfvkOpt) {
-                                    libzcash::OrchardPaymentAddress orchardAddr;
-                                    if (orchardfvkOpt.value().fvk.DeriveDefaultAddress(&orchardAddr)) {
-                                        pwalletMain->SetZAddressBook(orchardAddr, addrName, "", false);
+                            } else if (ironwoodExtsk != nullptr) {
+                                auto ironwoodfvkOpt = ironwoodExtsk->GetXFVK();
+                                if (ironwoodfvkOpt) {
+                                    libzcash::IronwoodPaymentAddress ironwoodAddr;
+                                    if (ironwoodfvkOpt.value().fvk.DeriveDefaultAddress(&ironwoodAddr)) {
+                                        pwalletMain->SetZAddressBook(ironwoodAddr, addrName, "", false);
                                     }
                                 }
                             }
@@ -521,12 +521,12 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                             if (saplingExtfvk != nullptr) {
                                 pwalletMain->SetZAddressBook(saplingExtfvk->DefaultAddress(), addrName, "", false);
                             } else {
-                                // Check if it's an Orchard viewing key
-                                auto orchardExtfvk = std::get_if<libzcash::OrchardExtendedFullViewingKeyPirate>(&viewingKey);
-                                if (orchardExtfvk != nullptr) {
-                                    libzcash::OrchardPaymentAddress orchardAddr;
-                                    if (orchardExtfvk->fvk.DeriveDefaultAddress(&orchardAddr)) {
-                                        pwalletMain->SetZAddressBook(orchardAddr, addrName, "", false);
+                                // Check if it's an Ironwood viewing key
+                                auto ironwoodExtfvk = std::get_if<libzcash::IronwoodExtendedFullViewingKeyPirate>(&viewingKey);
+                                if (ironwoodExtfvk != nullptr) {
+                                    libzcash::IronwoodPaymentAddress ironwoodAddr;
+                                    if (ironwoodExtfvk->fvk.DeriveDefaultAddress(&ironwoodAddr)) {
+                                        pwalletMain->SetZAddressBook(ironwoodAddr, addrName, "", false);
                                     }
                                 }
                             }
@@ -918,24 +918,24 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
             }
         }
 
-        // Orchard Extended Spending Keys
-        std::set<libzcash::OrchardPaymentAddress> orchardAddresses;
-        pwalletMain->GetOrchardPaymentAddresses(orchardAddresses);
+        // Ironwood Extended Spending Keys
+        std::set<libzcash::IronwoodPaymentAddress> ironwoodAddresses;
+        pwalletMain->GetIronwoodPaymentAddresses(ironwoodAddresses);
 
         file << "\n";
-        file << "# Orchard Extended Spending keys\n";
+        file << "# Ironwood Extended Spending keys\n";
         file << "\n";
-        for (auto addr : orchardAddresses) {
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk)) {
-                libzcash::OrchardIncomingViewingKey ivk;
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetOrchardIncomingViewingKey(addr, ivk);
-                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                libzcash::OrchardPaymentAddress defaultAddress;
+        for (auto addr : ironwoodAddresses) {
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+                libzcash::IronwoodIncomingViewingKey ivk;
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) == EncodePaymentAddress(defaultAddress)) {
-                        CKeyMetadata keyMeta = pwalletMain->mapOrchardSpendingKeyMetadata[ivk];
+                        CKeyMetadata keyMeta = pwalletMain->mapIronwoodSpendingKeyMetadata[ivk];
                         std::string strTime = EncodeDumpTime(keyMeta.nCreateTime);
                         // Keys imported with z_importkey do not have zip32 metadata
                         if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {
@@ -949,19 +949,19 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         }
 
         file << "\n";
-        file << "# Orchard Diversified Extended Spending Keys\n";
+        file << "# Ironwood Diversified Extended Spending Keys\n";
         file << "\n";
-        for (auto addr : orchardAddresses) {
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk)) {
-                libzcash::OrchardIncomingViewingKey ivk;
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetOrchardIncomingViewingKey(addr, ivk);
-                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                libzcash::OrchardPaymentAddress defaultAddress;
+        for (auto addr : ironwoodAddresses) {
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+                libzcash::IronwoodIncomingViewingKey ivk;
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) != EncodePaymentAddress(defaultAddress)) {
-                        libzcash::OrchardDiversifiedExtendedSpendingKeyPirate newKey;
+                        libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate newKey;
                         newKey.extsk = extsk;
                         newKey.d = addr.d;
                         file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedSpendingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
@@ -971,16 +971,16 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         }
 
         file << "\n";
-        file << "# Orchard Extended Full Viewing keys\n";
+        file << "# Ironwood Extended Full Viewing keys\n";
         file << "\n";
-        for (auto addr : orchardAddresses) {
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (!pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk)) {
-                libzcash::OrchardIncomingViewingKey ivk;
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetOrchardIncomingViewingKey(addr, ivk);
-                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                libzcash::OrchardPaymentAddress defaultAddress;
+        for (auto addr : ironwoodAddresses) {
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+                libzcash::IronwoodIncomingViewingKey ivk;
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) == EncodePaymentAddress(defaultAddress)) {
                         file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeViewingKey(extfvk), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
@@ -990,19 +990,19 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         }
 
         file << "\n";
-        file << "# Orchard Diversified Extended Full Viewing Keys\n";
+        file << "# Ironwood Diversified Extended Full Viewing Keys\n";
         file << "\n";
-        for (auto addr : orchardAddresses) {
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (!pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk)) {
-                libzcash::OrchardIncomingViewingKey ivk;
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetOrchardIncomingViewingKey(addr, ivk);
-                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                libzcash::OrchardPaymentAddress defaultAddress;
+        for (auto addr : ironwoodAddresses) {
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+                libzcash::IronwoodIncomingViewingKey ivk;
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) != EncodePaymentAddress(defaultAddress)) {
-                        libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate newKey;
+                        libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate newKey;
                         newKey.extfvk = extfvk;
                         newKey.d = addr.d;
                         file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedViewingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));

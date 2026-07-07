@@ -3,11 +3,11 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 /**
- * @file asyncrpcoperation_orchardconsolidation_address.cpp
- * @brief Implementation of Orchard address consolidation operations
+ * @file asyncrpcoperation_ironwoodconsolidation_address.cpp
+ * @brief Implementation of Ironwood address consolidation operations
  * 
- * This file implements the AsyncRPCOperation_orchardconsolidation_address class that provides
- * asynchronous consolidation of Orchard notes. The consolidation process helps reduce wallet
+ * This file implements the AsyncRPCOperation_ironwoodconsolidation_address class that provides
+ * asynchronous consolidation of Ironwood notes. The consolidation process helps reduce wallet
  * fragmentation by combining multiple small notes into fewer, larger notes.
  * 
  * Algorithm Overview:
@@ -32,7 +32,7 @@
 
 #include "assert.h"
 #include "boost/variant/static_visitor.hpp"
-#include "asyncrpcoperation_orchardconsolidation_address.h"
+#include "asyncrpcoperation_ironwoodconsolidation_address.h"
 #include "init.h"
 #include "key_io.h"
 #include "rpc/protocol.h"
@@ -47,26 +47,26 @@
 /// @brief Expiry delta for consolidation transactions (blocks)
 /// @details Consolidation transactions expire 40 blocks after creation to ensure
 ///          they don't become stale during network upgrade periods
-const int ORCHARD_CONSOLIDATION_EXPIRY_DELTA = 40;
+const int IRONWOOD_CONSOLIDATION_EXPIRY_DELTA = 40;
 
 /**
- * @brief Constructor for Orchard address consolidation operation
+ * @brief Constructor for Ironwood address consolidation operation
  * 
  * Creates a new consolidation operation with the specified parameters. The spending key
  * is captured during construction while the wallet is unlocked, allowing the operation
  * to proceed even if the wallet is locked afterwards.
  * 
  * @param targetHeight Blockchain height for transaction creation timing
- * @param address Orchard payment address to consolidate notes for
+ * @param address Ironwood payment address to consolidate notes for
  * @param spendingKey Extended spending key for the address
  * @param fee Fee amount in zatoshis per consolidation transaction
  * @param maxNotes Maximum number of notes per consolidation transaction
  * @param maxTransactions Maximum number of transactions to create
  */
-AsyncRPCOperation_orchardconsolidation_address::AsyncRPCOperation_orchardconsolidation_address(
+AsyncRPCOperation_ironwoodconsolidation_address::AsyncRPCOperation_ironwoodconsolidation_address(
     int targetHeight, 
-    const libzcash::OrchardPaymentAddress& address,
-    const libzcash::OrchardExtendedSpendingKeyPirate& spendingKey,
+    const libzcash::IronwoodPaymentAddress& address,
+    const libzcash::IronwoodExtendedSpendingKeyPirate& spendingKey,
     CAmount fee, 
     int maxNotes,
     int maxTransactions) 
@@ -75,10 +75,10 @@ AsyncRPCOperation_orchardconsolidation_address::AsyncRPCOperation_orchardconsoli
 /**
  * @brief Destructor - clears sensitive data from memory
  */
-AsyncRPCOperation_orchardconsolidation_address::~AsyncRPCOperation_orchardconsolidation_address() {}
+AsyncRPCOperation_ironwoodconsolidation_address::~AsyncRPCOperation_ironwoodconsolidation_address() {}
 
 /**
- * @brief Main execution wrapper for Orchard address consolidation operation
+ * @brief Main execution wrapper for Ironwood address consolidation operation
  * 
  * This method is the main entry point for executing the consolidation operation.
  * It performs the following steps:
@@ -88,10 +88,10 @@ AsyncRPCOperation_orchardconsolidation_address::~AsyncRPCOperation_orchardconsol
  * 4. Handles exceptions with detailed error reporting
  * 5. Updates final operation status and logs results
  * 
- * The consolidation process combines multiple Orchard notes into fewer notes
+ * The consolidation process combines multiple Ironwood notes into fewer notes
  * to improve wallet performance and reduce transaction complexity.
  */
-void AsyncRPCOperation_orchardconsolidation_address::main()
+void AsyncRPCOperation_ironwoodconsolidation_address::main()
 {
     if (isCancelled()) {
         return;
@@ -131,7 +131,7 @@ void AsyncRPCOperation_orchardconsolidation_address::main()
         set_state(OperationStatus::FAILED);
     }
 
-    std::string logMessage = strprintf("%s: Orchard Address Consolidation complete. (status=%s", getId(), getStateAsString());
+    std::string logMessage = strprintf("%s: Ironwood Address Consolidation complete. (status=%s", getId(), getStateAsString());
     if (success) {
         logMessage += strprintf(", success)\n");
     } else {
@@ -141,14 +141,14 @@ void AsyncRPCOperation_orchardconsolidation_address::main()
     LogPrintf("%s", logMessage);
 }
 
-bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
-    LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_orchardconsolidation_address for address %s.\n",
+bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
+    LogPrint("zrpcunsafe", "%s: Beginning AsyncRPCOperation_ironwoodconsolidation_address for address %s.\n",
              getId(), EncodePaymentAddress(address_));
 
     // Get consensus parameters and check for network upgrade compatibility
     auto consensusParams = Params().GetConsensus();
     auto nextActivationHeight = NextActivationHeight(targetHeight_, consensusParams);
-    if (nextActivationHeight && targetHeight_ + ORCHARD_CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
+    if (nextActivationHeight && targetHeight_ + IRONWOOD_CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
         LogPrint("zrpcunsafe", "%s: Consolidation txs would be created before a NU activation but may expire after. Skipping.\n", getId());
         setConsolidationResult(0, 0, std::vector<std::string>(), 0, 0);
         return true;
@@ -179,69 +179,69 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
         // notes (half smallest + half largest by value) for this address, exiting early
         // as soon as the aggregate value meets the fee_ + 1 threshold.
         std::vector<SaplingNoteEntry> saplingEntries;
-        std::vector<OrchardNoteEntry> orchardEntries;
+        std::vector<IronwoodNoteEntry> ironwoodEntries;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
+            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                           11, INT_MAX, true, true, true,
                                           maxNotes_, fee_ + 1);
             // Lock immediately so no other async operation can select the same notes.
-            for (const auto& e : orchardEntries)
+            for (const auto& e : ironwoodEntries)
                 pwalletMain->LockNote(e.op);
         }
 
-        auto unlockOrchardEntries = [&]() {
+        auto unlockIronwoodEntries = [&]() {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            for (const auto& e : orchardEntries)
+            for (const auto& e : ironwoodEntries)
                 pwalletMain->UnlockNote(e.op);
         };
 
         // Compute total aggregate value of this iteration's working set.
         CAmount amountToSend = 0;
-        for (const auto& e : orchardEntries)
+        for (const auto& e : ironwoodEntries)
             amountToSend += CAmount(e.note.value());
 
         LogPrint("zrpcunsafe", "%s: Working set: %d notes, aggregate=%s for address %s\n",
-                 getId(), (int)orchardEntries.size(), FormatMoney(amountToSend), EncodePaymentAddress(address_));
+                 getId(), (int)ironwoodEntries.size(), FormatMoney(amountToSend), EncodePaymentAddress(address_));
 
         // === STEP 2: Feasibility Check ===
         // Require at least 2 notes AND total value > fee to form a valid transaction.
-        if (orchardEntries.size() < 2) {
+        if (ironwoodEntries.size() < 2) {
             LogPrint("zrpcunsafe", "%s: Not enough notes to consolidate (need at least 2, found %d)\n",
-                     getId(), (int)orchardEntries.size());
-            unlockOrchardEntries();
+                     getId(), (int)ironwoodEntries.size());
+            unlockIronwoodEntries();
             break;
         }
         if (amountToSend <= fee_) {
             LogPrint("zrpcunsafe", "%s: Working set aggregate value %s does not exceed fee %s — "
                      "all selected notes are dust relative to fee, nothing to consolidate\n",
                      getId(), FormatMoney(amountToSend), FormatMoney(fee_));
-            unlockOrchardEntries();
+            unlockIronwoodEntries();
             break;
         }
 
         const CAmount outputAmount = amountToSend - fee_;
 
         LogPrint("zrpcunsafe", "%s: Selected %d notes for batch (total amount=%s, fee=%s, net=%s)\n",
-                 getId(), (int)orchardEntries.size(), FormatMoney(amountToSend),
+                 getId(), (int)ironwoodEntries.size(), FormatMoney(amountToSend),
                  FormatMoney(fee_), FormatMoney(outputAmount));
 
         txAttempted++;
 
         // === STEP 3: Cryptographic Preparation ===
         // Build ops vector from the full working set returned by GetFilteredNotes.
-        std::vector<OrchardOutPoint> ops;
-        for (const auto& entry : orchardEntries)
+        std::vector<IronwoodOutPoint> ops;
+        for (const auto& entry : ironwoodEntries)
             ops.push_back(entry.op);
 
-        // Fetch Orchard anchor and merkle paths for cryptographic validation
+        // Fetch Ironwood anchor and merkle paths for cryptographic validation
         uint256 anchor;
-        std::vector<libzcash::MerklePath> orchardMerklePaths;
+        std::vector<libzcash::MerklePath> ironwoodMerklePaths;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
-                LogPrint("zrpcunsafe", "%s: Merkle Path not found for Orchard notes. Stopping.\n", getId());
-                unlockOrchardEntries();
+            if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
+                LogPrint("zrpcunsafe", "%s: Merkle Path not found for Ironwood notes. Stopping.\n", getId());
+                unlockIronwoodEntries();
                 break;
             }
         }
@@ -250,37 +250,37 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
         auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            builder.SetExpiryHeight(chainActive.Tip()->nHeight + ORCHARD_CONSOLIDATION_EXPIRY_DELTA);
+            builder.SetExpiryHeight(chainActive.Tip()->nHeight + IRONWOOD_CONSOLIDATION_EXPIRY_DELTA);
         }
 
         LogPrint("zrpcunsafe", "%s: Creating consolidation transaction with input amount=%s, fee=%s, output amount=%s\n",
                  getId(), FormatMoney(amountToSend), FormatMoney(fee_), FormatMoney(outputAmount));
 
-        // Add Orchard spends (inputs) using two-step process
+        // Add Ironwood spends (inputs) using two-step process
         // Step 1: Add raw spends with note data and merkle paths
         bool buildFailed = false;
-        for (size_t i = 0; i < orchardEntries.size(); i++) {
-            const auto& entry = orchardEntries[i];
-            auto orchardNote = entry.note;
-            if (!builder.AddOrchardSpendRaw(entry.op, entry.address,
-                                            orchardNote.value(), orchardNote.rho(),
-                                            orchardNote.rseed(), orchardMerklePaths[i], anchor)) {
-                LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Spend failed. Stopping.\n", getId());
+        for (size_t i = 0; i < ironwoodEntries.size(); i++) {
+            const auto& entry = ironwoodEntries[i];
+            auto ironwoodNote = entry.note;
+            if (!builder.AddIronwoodSpendRaw(entry.op, entry.address,
+                                            ironwoodNote.value(), ironwoodNote.rho(),
+                                            ironwoodNote.rseed(), ironwoodMerklePaths[i], anchor)) {
+                LogPrint("zrpcunsafe", "%s: Adding Raw Ironwood Spend failed. Stopping.\n", getId());
                 buildFailed = true;
                 break;
             }
         }
         if (buildFailed) {
-            unlockOrchardEntries();
+            unlockIronwoodEntries();
             break;
         }
 
         builder.InitializeIronwood(true, true, anchor);
 
         // Step 2: Convert raw spends using spending key
-        if (!builder.ConvertRawOrchardSpend(spendingKey_)) {
-            LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Spends failed. Stopping.\n", getId());
-            unlockOrchardEntries();
+        if (!builder.ConvertRawIronwoodSpend(spendingKey_)) {
+            LogPrint("zrpcunsafe", "%s: Converting Raw Ironwood Spends failed. Stopping.\n", getId());
+            unlockIronwoodEntries();
             break;
         }
 
@@ -288,31 +288,31 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
         builder.SetFee(fee_);
 
         // Add consolidated output using raw method then convert
-        if (!builder.AddOrchardOutputRaw(address_, outputAmount, std::nullopt)) {
-            LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
-            unlockOrchardEntries();
+        if (!builder.AddIronwoodOutputRaw(address_, outputAmount, std::nullopt)) {
+            LogPrint("zrpcunsafe", "%s: Adding Raw Ironwood Output failed. Stopping.\n", getId());
+            unlockIronwoodEntries();
             break;
         }
 
-        libzcash::OrchardFullViewingKey fvk;
+        libzcash::IronwoodFullViewingKey fvk;
         if (!spendingKey_.sk.DeriveFVK(&fvk)) {
             LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
-            unlockOrchardEntries();
+            unlockIronwoodEntries();
             break;
         }
-        libzcash::OrchardOutgoingViewingKey ovk;
+        libzcash::IronwoodOutgoingViewingKey ovk;
         if (!fvk.DeriveOVK(&ovk)) {
             LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
-            unlockOrchardEntries();
+            unlockIronwoodEntries();
             break;
         }
-        builder.ConvertRawOrchardOutput(ovk.ovk);
+        builder.ConvertRawIronwoodOutput(ovk.ovk);
 
         // === STEP 5: Commit ===
         auto buildResult = builder.Build();
         if (!buildResult.IsTx()) {
             LogPrint("zrpcunsafe", "%s: Failed to build consolidation transaction: %s. Stopping.\n", getId(), buildResult.GetError());
-            unlockOrchardEntries();
+            unlockIronwoodEntries();
             break;
         }
         auto tx = buildResult.GetTxOrThrow();
@@ -320,7 +320,7 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
         // Check for cancellation before committing
         if (isCancelled() || ShutdownRequested()) {
             LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
-            unlockOrchardEntries();
+            unlockIronwoodEntries();
             break;
         }
 
@@ -329,17 +329,17 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
             LOCK2(cs_main, pwalletMain->cs_wallet);
             if (!pwalletMain->CommitAutomatedTx(tx)) {
                 LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
-                unlockOrchardEntries();
+                unlockIronwoodEntries();
                 break;
             }
         }
 
         LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n",
                  getId(), tx.GetHash().ToString());
-        unlockOrchardEntries();
+        unlockIronwoodEntries();
         amountConsolidated += outputAmount;
         numTxCreated++;
-        processedNotes += (int)orchardEntries.size();
+        processedNotes += (int)ironwoodEntries.size();
         consolidationTxIds.push_back(tx.GetHash().ToString());
     }
 
@@ -352,9 +352,9 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         std::vector<SaplingNoteEntry> remainingSapling;
-        std::vector<OrchardNoteEntry> remainingOrchard;
-        pwalletMain->GetFilteredNotes(remainingSapling, remainingOrchard, filterAddresses, 11, INT_MAX, true, true, false);
-        remainingNotes = (int)remainingOrchard.size();
+        std::vector<IronwoodNoteEntry> remainingIronwood;
+        pwalletMain->GetFilteredNotes(remainingSapling, remainingIronwood, filterAddresses, 11, INT_MAX, true, true, false);
+        remainingNotes = (int)remainingIronwood.size();
     }
 
     setConsolidationResult(numTxCreated, amountConsolidated, consolidationTxIds, processedNotes, remainingNotes);
@@ -379,7 +379,7 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
  * @param notesConsolidated Number of individual notes spent across all transactions
  * @param notesRemaining Number of unspent notes remaining after consolidation
  */
-void AsyncRPCOperation_orchardconsolidation_address::setConsolidationResult(
+void AsyncRPCOperation_ironwoodconsolidation_address::setConsolidationResult(
     int numTxCreated,
     const CAmount& amountConsolidated,
     const std::vector<std::string>& consolidationTxIds,
@@ -410,14 +410,14 @@ void AsyncRPCOperation_orchardconsolidation_address::setConsolidationResult(
  * Sets the operation state to cancelled. The operation will check for
  * cancellation at safe points and stop processing gracefully.
  */
-void AsyncRPCOperation_orchardconsolidation_address::cancel() {
+void AsyncRPCOperation_ironwoodconsolidation_address::cancel() {
     set_state(OperationStatus::CANCELLED);
 }
 
-UniValue AsyncRPCOperation_orchardconsolidation_address::getStatus() const {
+UniValue AsyncRPCOperation_ironwoodconsolidation_address::getStatus() const {
     UniValue v = AsyncRPCOperation::getStatus();
     UniValue obj = v.get_obj();
-    obj.push_back(Pair("method", "orchardconsolidation_address"));
+    obj.push_back(Pair("method", "ironwoodconsolidation_address"));
     obj.push_back(Pair("target_height", targetHeight_));
     obj.push_back(Pair("address", EncodePaymentAddress(address_)));
     obj.push_back(Pair("fee", FormatMoney(fee_)));

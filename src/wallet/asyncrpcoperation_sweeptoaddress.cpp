@@ -7,7 +7,7 @@
  * @brief Implementation of asynchronous sweep-to-address operation
  * 
  * Implements consolidation of funds from multiple addresses into a single
- * destination address. Supports both Sapling and Orchard protocols.
+ * destination address. Supports both Sapling and Ironwood protocols.
  */
 
 #include "asyncrpcoperation_sweeptoaddress.h"
@@ -38,18 +38,18 @@ const int SWEEP_EXPIRY_DELTA = 40;
 /**
  * @brief Sapling destination address for RPC-initiated sweep operations
  * 
- * Target address for Sapling sweeps or cross-protocol sweeps from Orchard.
- * Mutually exclusive with rpcOrchardSweepAddress.
+ * Target address for Sapling sweeps or cross-protocol sweeps from Ironwood.
+ * Mutually exclusive with rpcIronwoodSweepAddress.
  */
 std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
 
 /**
- * @brief Orchard destination address for RPC-initiated sweep operations
+ * @brief Ironwood destination address for RPC-initiated sweep operations
  * 
- * Target address for Orchard sweeps or cross-protocol sweeps from Sapling.
+ * Target address for Ironwood sweeps or cross-protocol sweeps from Sapling.
  * Mutually exclusive with rpcSaplingSweepAddress.
  */
-std::optional<libzcash::OrchardPaymentAddress> rpcOrchardSweepAddress;
+std::optional<libzcash::IronwoodPaymentAddress> rpcIronwoodSweepAddress;
 
 /**
  * @brief Constructor for sweep-to-address operation
@@ -76,7 +76,7 @@ AsyncRPCOperation_sweeptoaddress::~AsyncRPCOperation_sweeptoaddress() {}
  * 5. Updates final operation status and logs results
  * 
  * The sweep process moves funds from multiple addresses into a single
- * destination address across Sapling and Orchard protocols.
+ * destination address across Sapling and Ironwood protocols.
  */
 void AsyncRPCOperation_sweeptoaddress::main()
 {
@@ -141,16 +141,16 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 
     // Resolve sweep destination address — RPC-set address takes priority over config.
     libzcash::SaplingPaymentAddress saplingSweepAddress;
-    libzcash::OrchardPaymentAddress orchardSweepAddress;
+    libzcash::IronwoodPaymentAddress ironwoodSweepAddress;
     bool hasSaplingTarget = false;
-    bool hasOrchardTarget = false;
+    bool hasIronwoodTarget = false;
     {
         if (rpcSaplingSweepAddress.has_value()) {
             saplingSweepAddress = rpcSaplingSweepAddress.value();
             hasSaplingTarget = true;
-        } else if (rpcOrchardSweepAddress.has_value()) {
-            orchardSweepAddress = rpcOrchardSweepAddress.value();
-            hasOrchardTarget = true;
+        } else if (rpcIronwoodSweepAddress.has_value()) {
+            ironwoodSweepAddress = rpcIronwoodSweepAddress.value();
+            hasIronwoodTarget = true;
         } else if (!fromRPC_ && fSweepMapUsed) {
             const vector<string>& v = mapMultiArgs["-sweepaddress"];
             if (v.size() != 1) {
@@ -161,9 +161,9 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
                 saplingSweepAddress = *std::get_if<libzcash::SaplingPaymentAddress>(&zAddress);
                 hasSaplingTarget = true;
-            } else if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
-                orchardSweepAddress = *std::get_if<libzcash::OrchardPaymentAddress>(&zAddress);
-                hasOrchardTarget = true;
+            } else if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
+                ironwoodSweepAddress = *std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress);
+                hasIronwoodTarget = true;
             } else {
                 LogPrint("zrpcunsafe", "%s: Invalid sweep address format.\n", getId());
                 return false;
@@ -177,16 +177,16 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     // Read all wallet addresses from the keystore - no note data loaded.
     // GetXPaymentAddresses is O(num_keys), not O(num_notes).
     std::set<libzcash::SaplingPaymentAddress> saplingCandidates;
-    std::set<libzcash::OrchardPaymentAddress> orchardCandidates;
+    std::set<libzcash::IronwoodPaymentAddress> ironwoodCandidates;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         pwalletMain->GetSaplingPaymentAddresses(saplingCandidates);
         if (hasSaplingTarget)
             saplingCandidates.erase(saplingSweepAddress);
 
-        pwalletMain->GetOrchardPaymentAddresses(orchardCandidates);
-        if (hasOrchardTarget)
-            orchardCandidates.erase(orchardSweepAddress);
+        pwalletMain->GetIronwoodPaymentAddresses(ironwoodCandidates);
+        if (hasIronwoodTarget)
+            ironwoodCandidates.erase(ironwoodSweepAddress);
     }
 
     int numTxCreated = 0;
@@ -200,39 +200,39 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         std::vector<SaplingNoteEntry> saplingEntries;
     };
 
-    struct OrchardSweepWork {
-        libzcash::OrchardPaymentAddress addr;
-        libzcash::OrchardExtendedSpendingKeyPirate extsk;
-        std::vector<OrchardNoteEntry> orchardEntries;
+    struct IronwoodSweepWork {
+        libzcash::IronwoodPaymentAddress addr;
+        libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+        std::vector<IronwoodNoteEntry> ironwoodEntries;
     };
 
     std::set<libzcash::PaymentAddress> allFilterAddresses;
     for (const auto& addr : saplingCandidates) {
         allFilterAddresses.insert(addr);
     }
-    for (const auto& addr : orchardCandidates) {
+    for (const auto& addr : ironwoodCandidates) {
         allFilterAddresses.insert(addr);
     }
 
     std::vector<SaplingNoteEntry> allSaplingEntries;
-    std::vector<OrchardNoteEntry> allOrchardEntries;
+    std::vector<IronwoodNoteEntry> allIronwoodEntries;
     if (!allFilterAddresses.empty()) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetFilteredNotes(allSaplingEntries, allOrchardEntries,
+        pwalletMain->GetFilteredNotes(allSaplingEntries, allIronwoodEntries,
                                       allFilterAddresses,
                                       11, INT_MAX, true, true, true,
                                       0, 0);
     }
 
     auto unlockAllFetchedNotes = [&]() {
-        if (allSaplingEntries.empty() && allOrchardEntries.empty()) {
+        if (allSaplingEntries.empty() && allIronwoodEntries.empty()) {
             return;
         }
 
         LOCK2(cs_main, pwalletMain->cs_wallet);
         for (const auto& entry : allSaplingEntries)
             pwalletMain->UnlockNote(entry.op);
-        for (const auto& entry : allOrchardEntries)
+        for (const auto& entry : allIronwoodEntries)
             pwalletMain->UnlockNote(entry.op);
     };
 
@@ -261,27 +261,27 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         }
     }
 
-    std::vector<OrchardSweepWork> orchardWork;
-    std::map<libzcash::OrchardPaymentAddress, size_t> orchardWorkIndexByAddress;
-    for (const auto& addr : orchardCandidates) {
+    std::vector<IronwoodSweepWork> ironwoodWork;
+    std::map<libzcash::IronwoodPaymentAddress, size_t> ironwoodWorkIndexByAddress;
+    for (const auto& addr : ironwoodCandidates) {
         if (isCancelled() || ShutdownRequested())
             break;
 
-        libzcash::OrchardExtendedSpendingKeyPirate orchardExtendedSpendingKey;
+        libzcash::IronwoodExtendedSpendingKeyPirate ironwoodExtendedSpendingKey;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetOrchardExtendedSpendingKey(addr, orchardExtendedSpendingKey))
+            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, ironwoodExtendedSpendingKey))
                 continue;
         }
 
-        orchardWorkIndexByAddress[addr] = orchardWork.size();
-        orchardWork.push_back({addr, orchardExtendedSpendingKey, {}});
+        ironwoodWorkIndexByAddress[addr] = ironwoodWork.size();
+        ironwoodWork.push_back({addr, ironwoodExtendedSpendingKey, {}});
     }
 
-    for (const auto& entry : allOrchardEntries) {
-        auto it = orchardWorkIndexByAddress.find(entry.address);
-        if (it != orchardWorkIndexByAddress.end()) {
-            orchardWork[it->second].orchardEntries.push_back(entry);
+    for (const auto& entry : allIronwoodEntries) {
+        auto it = ironwoodWorkIndexByAddress.find(entry.address);
+        if (it != ironwoodWorkIndexByAddress.end()) {
+            ironwoodWork[it->second].ironwoodEntries.push_back(entry);
         }
     }
 
@@ -367,14 +367,14 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                     LogPrint("zrpcunsafe", "%s: Converting Raw Sapling Output failed. Stopping.\n", getId());
                     break;
                 }
-            } else if (hasOrchardTarget) {
-                if (!builder.AddOrchardOutputRaw(orchardSweepAddress, outputAmount, std::nullopt)) {
-                    LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
+            } else if (hasIronwoodTarget) {
+                if (!builder.AddIronwoodOutputRaw(ironwoodSweepAddress, outputAmount, std::nullopt)) {
+                    LogPrint("zrpcunsafe", "%s: Adding Raw Ironwood Output failed. Stopping.\n", getId());
                     break;
                 }
                 builder.InitializeIronwood(false, true, uint256());
-                if (!builder.ConvertRawOrchardOutput(work.extsk.expsk.ovk)) {
-                    LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
+                if (!builder.ConvertRawIronwoodOutput(work.extsk.expsk.ovk)) {
+                    LogPrint("zrpcunsafe", "%s: Converting Raw Ironwood Output failed. Stopping.\n", getId());
                     break;
                 }
             } else {
@@ -408,28 +408,28 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         }
     }
 
-    // === Orchard sweep pass ===
-    for (auto& work : orchardWork) {
-        if (work.orchardEntries.empty())
+    // === Ironwood sweep pass ===
+    for (auto& work : ironwoodWork) {
+        if (work.ironwoodEntries.empty())
             continue;
 
         size_t cursor = 0;
 
-        while (cursor < work.orchardEntries.size()) {
+        while (cursor < work.ironwoodEntries.size()) {
             if (isCancelled() || ShutdownRequested()) {
-                LogPrint("zrpcunsafe", "%s: Stopping Orchard sweep inner loop (cancelled or shutdown).\n", getId());
+                LogPrint("zrpcunsafe", "%s: Stopping Ironwood sweep inner loop (cancelled or shutdown).\n", getId());
                 break;
             }
 
             const CAmount fee = fSweepTxFee;
-            std::vector<OrchardNoteEntry> selectedOrchardEntries;
-            std::vector<OrchardOutPoint> ops;
+            std::vector<IronwoodNoteEntry> selectedIronwoodEntries;
+            std::vector<IronwoodOutPoint> ops;
             CAmount amountToSend = 0;
 
             int selected = 0;
-            while (cursor < work.orchardEntries.size() && selected < maxQuantity) {
-                const auto& entry = work.orchardEntries[cursor++];
-                selectedOrchardEntries.push_back(entry);
+            while (cursor < work.ironwoodEntries.size() && selected < maxQuantity) {
+                const auto& entry = work.ironwoodEntries[cursor++];
+                selectedIronwoodEntries.push_back(entry);
                 ops.push_back(entry.op);
                 amountToSend += CAmount(entry.note.value());
                 selected++;
@@ -448,27 +448,27 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
-            LogPrint("zrpcunsafe", "%s: Creating Orchard sweep transaction with %d notes, output amount=%s\n",
-                     getId(), (int)selectedOrchardEntries.size(), FormatMoney(outputAmount));
+            LogPrint("zrpcunsafe", "%s: Creating Ironwood sweep transaction with %d notes, output amount=%s\n",
+                     getId(), (int)selectedIronwoodEntries.size(), FormatMoney(outputAmount));
 
             uint256 anchor;
-            std::vector<libzcash::MerklePath> orchardMerklePaths;
+            std::vector<libzcash::MerklePath> ironwoodMerklePaths;
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
-                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Orchard note. Stopping.\n", getId());
+                if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
+                    LogPrint("zrpcunsafe", "%s: Merkle Path not found for Ironwood note. Stopping.\n", getId());
                     break;
                 }
             }
 
             bool buildFailed = false;
-            for (size_t i = 0; i < selectedOrchardEntries.size(); i++) {
-                const auto& entry = selectedOrchardEntries[i];
-                auto orchardNote = entry.note;
-                if (!builder.AddOrchardSpendRaw(entry.op, work.addr,
-                                                orchardNote.value(), orchardNote.rho(),
-                                                orchardNote.rseed(), orchardMerklePaths[i], anchor)) {
-                    LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Spend failed. Stopping.\n", getId());
+            for (size_t i = 0; i < selectedIronwoodEntries.size(); i++) {
+                const auto& entry = selectedIronwoodEntries[i];
+                auto ironwoodNote = entry.note;
+                if (!builder.AddIronwoodSpendRaw(entry.op, work.addr,
+                                                ironwoodNote.value(), ironwoodNote.rho(),
+                                                ironwoodNote.rseed(), ironwoodMerklePaths[i], anchor)) {
+                    LogPrint("zrpcunsafe", "%s: Adding Raw Ironwood Spend failed. Stopping.\n", getId());
                     buildFailed = true;
                     break;
                 }
@@ -479,31 +479,31 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 
             builder.InitializeIronwood(true, true, anchor);
 
-            if (!builder.ConvertRawOrchardSpend(work.extsk)) {
-                LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Spends failed. Stopping.\n", getId());
+            if (!builder.ConvertRawIronwoodSpend(work.extsk)) {
+                LogPrint("zrpcunsafe", "%s: Converting Raw Ironwood Spends failed. Stopping.\n", getId());
                 break;
             }
 
             builder.SetFee(fee);
 
-            libzcash::OrchardFullViewingKey fvk;
+            libzcash::IronwoodFullViewingKey fvk;
             if (!work.extsk.sk.DeriveFVK(&fvk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
                 break;
             }
-            libzcash::OrchardOutgoingViewingKey ovk;
+            libzcash::IronwoodOutgoingViewingKey ovk;
             if (!fvk.DeriveOVK(&ovk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
                 break;
             }
 
-            if (hasOrchardTarget) {
-                if (!builder.AddOrchardOutputRaw(orchardSweepAddress, outputAmount, std::nullopt)) {
-                    LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
+            if (hasIronwoodTarget) {
+                if (!builder.AddIronwoodOutputRaw(ironwoodSweepAddress, outputAmount, std::nullopt)) {
+                    LogPrint("zrpcunsafe", "%s: Adding Raw Ironwood Output failed. Stopping.\n", getId());
                     break;
                 }
-                if (!builder.ConvertRawOrchardOutput(ovk.ovk)) {
-                    LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
+                if (!builder.ConvertRawIronwoodOutput(ovk.ovk)) {
+                    LogPrint("zrpcunsafe", "%s: Converting Raw Ironwood Output failed. Stopping.\n", getId());
                     break;
                 }
             } else if (hasSaplingTarget) {
@@ -517,13 +517,13 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                     break;
                 }
             } else {
-                LogPrint("zrpcunsafe", "%s: No target address specified for Orchard sweep. Stopping.\n", getId());
+                LogPrint("zrpcunsafe", "%s: No target address specified for Ironwood sweep. Stopping.\n", getId());
                 break;
             }
 
             auto buildResult = builder.Build();
             if (!buildResult.IsTx()) {
-                LogPrint("zrpcunsafe", "%s: Failed to build Orchard sweep transaction. Stopping.\n", getId());
+                LogPrint("zrpcunsafe", "%s: Failed to build Ironwood sweep transaction. Stopping.\n", getId());
                 break;
             }
             auto tx = buildResult.GetTxOrThrow();
@@ -536,11 +536,11 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
-                    LogPrint("zrpcunsafe", "%s: Failed to commit Orchard sweep transaction, stopping.\n", getId());
+                    LogPrint("zrpcunsafe", "%s: Failed to commit Ironwood sweep transaction, stopping.\n", getId());
                     break;
                 }
             }
-            LogPrint("zrpcunsafe", "%s: Committed Orchard sweep transaction with txid=%s\n",
+            LogPrint("zrpcunsafe", "%s: Committed Ironwood sweep transaction with txid=%s\n",
                      getId(), tx.GetHash().ToString());
             numTxCreated++;
             amountSwept += outputAmount;
@@ -604,15 +604,15 @@ UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const {
  */
 void AsyncRPCOperation_sweeptoaddress::setSaplingSweepAddress(const libzcash::SaplingPaymentAddress& address) {
     rpcSaplingSweepAddress = address;
-    rpcOrchardSweepAddress.reset(); // Clear Orchard address to ensure only one destination
+    rpcIronwoodSweepAddress.reset(); // Clear Ironwood address to ensure only one destination
 }
 
 /**
- * @brief Configure Orchard destination address for RPC-initiated sweeps
+ * @brief Configure Ironwood destination address for RPC-initiated sweeps
  * 
- * @param address Valid Orchard payment address for sweep destination
+ * @param address Valid Ironwood payment address for sweep destination
  */
-void AsyncRPCOperation_sweeptoaddress::setOrchardSweepAddress(const libzcash::OrchardPaymentAddress& address) {
-    rpcOrchardSweepAddress = address;
+void AsyncRPCOperation_sweeptoaddress::setIronwoodSweepAddress(const libzcash::IronwoodPaymentAddress& address) {
+    rpcIronwoodSweepAddress = address;
     rpcSaplingSweepAddress.reset(); // Clear Sapling address to ensure only one destination
 }

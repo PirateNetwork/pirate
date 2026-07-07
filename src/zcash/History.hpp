@@ -68,11 +68,11 @@ HistoryNode NewV2Leaf(
     uint32_t time,
     uint32_t target,
     uint256 saplingRoot,
-    uint256 orchardRoot,
+    uint256 ironwoodRoot,
     uint256 totalWork,
     uint64_t height,
     uint64_t saplingTxCount,
-    uint64_t orchardTxCount
+    uint64_t ironwoodTxCount
 );
 
 // Convert history node to tree node (with children references)

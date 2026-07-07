@@ -23,12 +23,12 @@
  * @brief Asynchronous sendmany operation for multi-recipient shielded transactions
  *
  * Implements the z_sendmany RPC operation: sends funds from a single Sapling or
- * Orchard source address to one or more Sapling/Orchard recipients in a single
+ * Ironwood source address to one or more Sapling/Ironwood recipients in a single
  * transaction. Transparent source addresses are not accepted; use z_shieldcoinbase
  * to move transparent funds into the shielded pool first.
  *
- * Inputs:  Sapling or Orchard shielded notes owned by the from-address
- * Outputs: Sapling and/or Orchard outputs with optional encrypted memos
+ * Inputs:  Sapling or Ironwood shielded notes owned by the from-address
+ * Outputs: Sapling and/or Ironwood outputs with optional encrypted memos
  */
 
 #ifndef ASYNCRPCOPERATION_SENDMANY_H
@@ -62,7 +62,7 @@ typedef std::tuple<std::string, CAmount, std::string> SendManyRecipient;
  * @brief Asynchronous z_sendmany operation
  *
  * Builds and broadcasts a shielded multi-recipient transaction. The source
- * address must be a Sapling or Orchard payment address for which the wallet
+ * address must be a Sapling or Ironwood payment address for which the wallet
  * holds the spending key (or a watch-only address for offline signing).
  *
  * Note selection: notes are sorted largest-first. The minimum set that covers
@@ -80,15 +80,15 @@ public:
      * @brief Construct a z_sendmany operation
      *
      * Validates all parameters, decodes and classifies the from-address
-     * (Sapling or Orchard only — transparent addresses are rejected),
+     * (Sapling or Ironwood only — transparent addresses are rejected),
      * and loads the spending key or sets the offline flag if the key is
      * not held locally.
      *
      * @param consensusParams  Network consensus parameters
      * @param nHeight          Block height used to initialise the transaction builder
-     * @param fromAddress      Sapling or Orchard payment address to spend from
+     * @param fromAddress      Sapling or Ironwood payment address to spend from
      * @param saplingOutputs   Sapling recipients: (address, amount, hex-memo)
-     * @param orchardOutputs   Orchard recipients:  (address, amount, hex-memo)
+     * @param ironwoodOutputs   Ironwood recipients:  (address, amount, hex-memo)
      * @param minDepth         Minimum confirmation depth for input notes (must be > 0)
      * @param fee              Miner fee in zatoshis (default ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE)
      * @param contextInfo      Arbitrary context stored in the operation status
@@ -100,7 +100,7 @@ public:
         const int nHeight,
         std::string fromAddress,
         std::vector<SendManyRecipient> saplingOutputs,
-        std::vector<SendManyRecipient> orchardOutputs,
+        std::vector<SendManyRecipient> ironwoodOutputs,
         int minDepth,
         CAmount fee = ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE,
         UniValue contextInfo = NullUniValue);
@@ -137,11 +137,11 @@ private:
     UniValue contextinfo_;                  ///< Context passed at construction; included in getStatus()
     CAmount fee_;                           ///< Miner fee in zatoshis
     int mindepth_;                          ///< Minimum note confirmation depth
-    std::string fromaddress_;              ///< Source payment address string (Sapling or Orchard)
+    std::string fromaddress_;              ///< Source payment address string (Sapling or Ironwood)
 
     // Source address type flags (exactly one is true after construction)
     bool isFromSaplingAddress_ = false;    ///< True when the source is a Sapling payment address
-    bool isFromOrchardAddress_ = false;    ///< True when the source is an Orchard payment address
+    bool isFromIronwoodAddress_ = false;    ///< True when the source is an Ironwood payment address
 
     PaymentAddress frompaymentaddress_;    ///< Decoded source payment address
     SpendingKey spendingkey_;              ///< Spending key (empty when hasOfflineSpendingKey is true)
@@ -149,11 +149,11 @@ private:
 
     // Output recipients
     std::vector<SendManyRecipient> saplingOutputs_;   ///< Sapling recipients supplied at construction
-    std::vector<SendManyRecipient> orchardOutputs_;   ///< Orchard recipients supplied at construction
+    std::vector<SendManyRecipient> ironwoodOutputs_;   ///< Ironwood recipients supplied at construction
 
     // Input notes (populated by find_unspent_notes(), sorted descending by value)
     std::vector<SaplingNoteEntry> saplingInputs_;      ///< Selected Sapling input notes
-    std::vector<OrchardNoteEntry> orchardInputs_;      ///< Selected Orchard input notes
+    std::vector<IronwoodNoteEntry> ironwoodInputs_;      ///< Selected Ironwood input notes
 
     TransactionBuilder builder_;           ///< Builds the transaction incrementally
     CTransaction tx_;                      ///< Final constructed transaction
@@ -161,7 +161,7 @@ private:
     /**
      * @brief Find, lock, and sort unspent shielded notes for spending
      *
-     * Populates saplingInputs_ and orchardInputs_ from wallet notes meeting
+     * Populates saplingInputs_ and ironwoodInputs_ from wallet notes meeting
      * mindepth_. Notes are immediately wallet-locked to prevent duplicate
      * selection by concurrent operations. Both collections are sorted
      * descending by value before returning.

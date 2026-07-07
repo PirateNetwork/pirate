@@ -215,13 +215,13 @@ UniValue TxShieldedOutputsToJSON(const rust::Vec<sapling::Output>& saplingOutput
 }
 
 /**
- * @brief Converts Orchard action descriptions to JSON format
+ * @brief Converts Ironwood action descriptions to JSON format
  * 
- * Serializes Orchard actions which combine both spend and output functionality
+ * Serializes Ironwood actions which combine both spend and output functionality
  * in a single cryptographic action, including nullifiers, commitments, ciphertexts,
  * and authorization signatures.
  * 
- * @param actions Vector of Orchard actions from the transaction bundle
+ * @param actions Vector of Ironwood actions from the transaction bundle
  * @return UniValue JSON array of action objects with unified spend/output data
  */
 UniValue TxActionsToJSON(const rust::Vec<ironwood_bundle::Action>& actions)
@@ -251,23 +251,23 @@ UniValue TxActionsToJSON(const rust::Vec<ironwood_bundle::Action>& actions)
 }
 
 /**
- * @brief Converts Orchard transaction bundle to JSON format with error handling
+ * @brief Converts Ironwood transaction bundle to JSON format with error handling
  * 
- * Extracts and serializes Orchard bundle data including actions, value balance,
+ * Extracts and serializes Ironwood bundle data including actions, value balance,
  * flags, anchors, proofs, and binding signatures. Implements defensive programming
  * to handle missing bundles and processing errors gracefully.
  * 
- * @param tx Transaction containing the Orchard bundle
+ * @param tx Transaction containing the Ironwood bundle
  * @param entry Reference to transaction JSON object (unused but kept for consistency)
- * @return UniValue JSON object containing Orchard bundle data or empty object if unavailable
+ * @return UniValue JSON object containing Ironwood bundle data or empty object if unavailable
  */
-UniValue TxOrchardBundleToJSON(const CTransaction& tx, UniValue& entry)
+UniValue TxIronwoodBundleToJSON(const CTransaction& tx, UniValue& entry)
 {
     UniValue obj(UniValue::VOBJ);
     
-    // Check if the transaction has an Orchard bundle
+    // Check if the transaction has an Ironwood bundle
     if (!tx.GetIronwoodBundle().IsPresent()) {
-        return obj; // Return empty object if no Orchard bundle
+        return obj; // Return empty object if no Ironwood bundle
     }
     
     try {
@@ -297,7 +297,7 @@ UniValue TxOrchardBundleToJSON(const CTransaction& tx, UniValue& entry)
             obj.pushKV("bindingSig", HexStr(bindingSig.begin(), bindingSig.end()));
         }
     } catch (const std::exception& e) {
-        // If there's any error processing the Orchard bundle, return empty object
+        // If there's any error processing the Ironwood bundle, return empty object
         return UniValue(UniValue::VOBJ);
     }
     
@@ -332,12 +332,12 @@ int32_t myIsutxo_spent(uint256 &spenttxid,uint256 txid,int32_t vout)
  * @brief Converts transaction to comprehensive JSON representation
  * 
  * Primary transaction serialization function supporting all transaction types including
- * transparent, Sprout JoinSplit, Sapling, and Orchard. Handles version-specific features,
+ * transparent, Sprout JoinSplit, Sapling, and Ironwood. Handles version-specific features,
  * block context, confirmation data, and optional components like notarization info.
  * 
  * Key features:
  * - Multi-version transaction support (v1-v5)
- * - Shielded transaction data (JoinSplit, Sapling, Orchard)
+ * - Shielded transaction data (JoinSplit, Sapling, Ironwood)
  * - Input/output analysis with spent index information
  * - Block context and confirmation tracking
  * - Interest calculation for time-locked outputs
@@ -498,9 +498,9 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, 
             }
         }
         if (tx.nVersion >= IRONWOOD_TX_VERSION && tx.GetIronwoodBundle().IsPresent()) {
-            UniValue orchard = TxOrchardBundleToJSON(tx, entry);
-            if (!orchard.empty()) {
-                entry.pushKV("orchard", orchard);
+            UniValue ironwood = TxIronwoodBundleToJSON(tx, entry);
+            if (!ironwood.empty()) {
+                entry.pushKV("ironwood", ironwood);
             }
         }
     }
@@ -539,7 +539,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, 
  * 
  * Fetches transaction data from mempool or blockchain and returns either raw hex
  * or detailed JSON representation. Supports all transaction types including
- * transparent, Sapling, and Orchard shielded transactions.
+ * transparent, Sapling, and Ironwood shielded transactions.
  * 
  * @param params RPC parameters: [txid, verbose]
  * @param fHelp Whether to display help information
@@ -552,7 +552,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         throw runtime_error(
             "getrawtransaction \"txid\" ( verbose )\n"
             "\nReturn the raw transaction data for a given transaction id.\n"
-            "Retrieves complete transaction information including transparent, Sapling, and Orchard data.\n"
+            "Retrieves complete transaction information including transparent, Sapling, and Ironwood data.\n"
             "\nNOTE: By default this function only works sometimes. This is when the tx is in the mempool\n"
             "or there is an unspent output in the utxo for this transaction. To make it always work,\n"
             "you need to maintain a transaction index, using the -txindex command line option.\n"
@@ -659,7 +659,7 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
             "     ,...\n"
             "  ],\n"
             "  \"bindingSig\" : \"hex\",    (string, optional) Sapling binding signature (if Sapling data present)\n"
-            "  \"orchard\" : {             (object, optional) Orchard bundle data (if tx version >= 5)\n"
+            "  \"ironwood\" : {             (object, optional) Ironwood bundle data (if tx version >= 5)\n"
             "    \"actions\" : [           (array of json objects)\n"
             "       {\n"
             "         \"cv\" : \"hex\",          (string) Value commitment\n"
@@ -673,8 +673,8 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
             "       }\n"
             "       ,...\n"
             "    ],\n"
-            "    \"valueBalance\" : x.xxx,   (numeric) Orchard value balance\n"
-            "    \"valueBalanceZat\" : nnn,  (numeric) Orchard value balance in zatoshis\n"
+            "    \"valueBalance\" : x.xxx,   (numeric) Ironwood value balance\n"
+            "    \"valueBalanceZat\" : nnn,  (numeric) Ironwood value balance in zatoshis\n"
             "    \"flags\" : {              (object, optional)\n"
             "      \"enableSpends\" : bool, (boolean) Whether spends are enabled\n"
             "      \"enableOutputs\" : bool (boolean) Whether outputs are enabled\n"
@@ -1075,7 +1075,7 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
         throw runtime_error(
             "decoderawtransaction \"hexstring\"\n"
             "\nReturn a JSON object representing the serialized, hex-encoded transaction.\n"
-            "Supports all transaction types including transparent, Sapling, and Orchard shielded transactions.\n"
+            "Supports all transaction types including transparent, Sapling, and Ironwood shielded transactions.\n"
 
             "\nArguments:\n"
             "1. \"hexstring\" (string, required) The transaction hex string\n"
@@ -1172,7 +1172,7 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
             "     ,...\n"
             "  ],\n"
             "  \"bindingSig\" : \"hex\",    (string, optional) Sapling binding signature (if Sapling data present)\n"
-            "  \"orchard\" : {             (object, optional) Orchard bundle data (if tx version >= 5)\n"
+            "  \"ironwood\" : {             (object, optional) Ironwood bundle data (if tx version >= 5)\n"
             "    \"actions\" : [           (array of json objects)\n"
             "       {\n"
             "         \"cv\" : \"hex\",          (string) Value commitment\n"
@@ -1186,8 +1186,8 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
             "       }\n"
             "       ,...\n"
             "    ],\n"
-            "    \"valueBalance\" : x.xxx,   (numeric) Orchard value balance\n"
-            "    \"valueBalanceZat\" : nnn,  (numeric) Orchard value balance in zatoshis\n"
+            "    \"valueBalance\" : x.xxx,   (numeric) Ironwood value balance\n"
+            "    \"valueBalanceZat\" : nnn,  (numeric) Ironwood value balance in zatoshis\n"
             "    \"flags\" : {              (object, optional)\n"
             "      \"enableSpends\" : bool, (boolean) Whether spends are enabled\n"
             "      \"enableOutputs\" : bool (boolean) Whether outputs are enabled\n"
@@ -1263,22 +1263,22 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
             inputs.push_back(input);
         }
 
-        for (int i = 0; i < tb.vOrchardSpends.size(); i++) {
+        for (int i = 0; i < tb.vIronwoodSpends.size(); i++) {
             //Return Hex encoded serialized merkle path
             CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << tb.vOrchardSpends[i].orchardMerklePath;
+            ss << tb.vIronwoodSpends[i].ironwoodMerklePath;
 
             UniValue input(UniValue::VOBJ);
-            input.push_back(Pair("type","orchard"));
-            input.push_back(Pair("fromaddr",EncodePaymentAddress(tb.vOrchardSpends[i].addr)));
-            input.push_back(Pair("value", ValueFromAmount(CAmount(tb.vOrchardSpends[i].value))));
-            input.push_back(Pair("valueZat", tb.vOrchardSpends[i].value));
-            input.push_back(Pair("txid",tb.vOrchardSpends[i].op.hash.ToString()));
-            input.push_back(Pair("shieldedoutputindex",(uint64_t)tb.vOrchardSpends[i].op.n));
-            input.push_back(Pair("rho", tb.vOrchardSpends[i].rho.ToString()));
-            input.push_back(Pair("rseed", tb.vOrchardSpends[i].rseed.ToString()));
+            input.push_back(Pair("type","ironwood"));
+            input.push_back(Pair("fromaddr",EncodePaymentAddress(tb.vIronwoodSpends[i].addr)));
+            input.push_back(Pair("value", ValueFromAmount(CAmount(tb.vIronwoodSpends[i].value))));
+            input.push_back(Pair("valueZat", tb.vIronwoodSpends[i].value));
+            input.push_back(Pair("txid",tb.vIronwoodSpends[i].op.hash.ToString()));
+            input.push_back(Pair("shieldedoutputindex",(uint64_t)tb.vIronwoodSpends[i].op.n));
+            input.push_back(Pair("rho", tb.vIronwoodSpends[i].rho.ToString()));
+            input.push_back(Pair("rseed", tb.vIronwoodSpends[i].rseed.ToString()));
             input.push_back(Pair("merklepath",HexStr(ss.begin(), ss.end())));
-            input.push_back(Pair("anchor", tb.vOrchardSpends[i].anchor.ToString()));
+            input.push_back(Pair("anchor", tb.vIronwoodSpends[i].anchor.ToString()));
 
             inputs.push_back(input);
         }
@@ -1310,14 +1310,14 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
             outputs.push_back(output);
         }
 
-        for (int i = 0; i < tb.vOrchardOutputs.size(); i++) {
+        for (int i = 0; i < tb.vIronwoodOutputs.size(); i++) {
             UniValue output(UniValue::VOBJ);
-            output.push_back(Pair("type","orchard"));
-            output.push_back(Pair("toaddr",EncodePaymentAddress(tb.vOrchardOutputs[i].addr)));
-            output.push_back(Pair("value", ValueFromAmount(CAmount(tb.vOrchardOutputs[i].value))));
-            output.push_back(Pair("valueZat", tb.vOrchardOutputs[i].value));;
+            output.push_back(Pair("type","ironwood"));
+            output.push_back(Pair("toaddr",EncodePaymentAddress(tb.vIronwoodOutputs[i].addr)));
+            output.push_back(Pair("value", ValueFromAmount(CAmount(tb.vIronwoodOutputs[i].value))));
+            output.push_back(Pair("valueZat", tb.vIronwoodOutputs[i].value));;
 
-            auto memoBytes = tb.vOrchardOutputs[i].memo.has_value() ? tb.vOrchardOutputs[i].memo.value().ToBytes() : libzcash::Memo::ToBytes(std::nullopt);
+            auto memoBytes = tb.vIronwoodOutputs[i].memo.has_value() ? tb.vIronwoodOutputs[i].memo.value().ToBytes() : libzcash::Memo::ToBytes(std::nullopt);
             output.push_back(Pair("memo", HexStr(memoBytes)));
             if (memoBytes[0] <= 0xf4) {
                 // Trim off trailing zeroes
@@ -1852,7 +1852,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
  * @brief RPC command to build and finalize shielded transactions from builder instructions
  * 
  * Processes transaction builder hex data to construct complete shielded transactions
- * with Sapling and Orchard components. Handles witness generation, proof creation,
+ * with Sapling and Ironwood components. Handles witness generation, proof creation,
  * and transaction signing for offline transaction construction workflows.
  * 
  * @param params RPC parameters: [hexstring]
@@ -1867,7 +1867,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           "z_buildrawtransaction \"hexstring\"\n"
           "\nBuild and finalize a shielded transaction from transaction builder data.\n"
           "Processes hex-encoded transaction builder instructions to create a complete\n"
-          "shielded transaction for Sapling or Orchard pools.\n"
+          "shielded transaction for Sapling or Ironwood pools.\n"
 
           "\nArguments:\n"
           "1. \"hex\"      (string, required) The transaction builder hex string\n"
@@ -1910,15 +1910,15 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder checksum is invalid.");
   }
 
-  if (tb.vSaplingSpends.size() > 0 && tb.vOrchardSpends.size() > 0 ) {
-      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder contains both Sapling Spends and Orchard Spends, coins must be spent from Sapling Orchard.");
+  if (tb.vSaplingSpends.size() > 0 && tb.vIronwoodSpends.size() > 0 ) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder contains both Sapling Spends and Ironwood Spends, coins must be spent from Sapling Ironwood.");
   }
 
-  if (tb.vSaplingSpends.size() == 0 && tb.vOrchardSpends.size() == 0 ) {
-      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder does not contain Sapling Spends or Orchard Spends, coins must be spent from Sapling or Orchard.");
+  if (tb.vSaplingSpends.size() == 0 && tb.vIronwoodSpends.size() == 0 ) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder does not contain Sapling Spends or Ironwood Spends, coins must be spent from Sapling or Ironwood.");
   }
 
-  //Outgoing viewing key to be set by either the Sapling spending key or the Orchard spending key
+  //Outgoing viewing key to be set by either the Sapling spending key or the Ironwood spending key
   uint256 ovk;
 
   //Sapling
@@ -1970,64 +1970,64 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       ovk = primarySaplingKey.ToXFVK().fvk.ovk;
   }
 
-  //Orchard
-  bool orchardInitialized = false;
-  if (tb.vOrchardSpends.size() > 0) {
-      LogPrintf("Adding Orchard Spends\n");
-      libzcash::OrchardExtendedSpendingKeyPirate primaryOrchardKey;
+  //Ironwood
+  bool ironwoodInitialized = false;
+  if (tb.vIronwoodSpends.size() > 0) {
+      LogPrintf("Adding Ironwood Spends\n");
+      libzcash::IronwoodExtendedSpendingKeyPirate primaryIronwoodKey;
       uint256 primaryAnchor;
 
       //Get the spending key for each address referenced
-      for (int i = 0; i < tb.vOrchardSpends.size(); i++) {
-          libzcash::OrchardPaymentAddress addr = tb.vOrchardSpends[i].addr;
+      for (int i = 0; i < tb.vIronwoodSpends.size(); i++) {
+          libzcash::IronwoodPaymentAddress addr = tb.vIronwoodSpends[i].addr;
 
-          libzcash::OrchardIncomingViewingKey ivk;
-          if (!pwalletMain->GetOrchardIncomingViewingKey(addr, ivk))
+          libzcash::IronwoodIncomingViewingKey ivk;
+          if (!pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk))
               throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Incoming Viewing key for Sapling Spend not found.");
 
-          libzcash::OrchardExtendedSpendingKeyPirate extsk;
-          if (!pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk))
+          libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+          if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk))
               throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for Sapling Spend not found.");
 
           //Validate the all of the spending keys are the same. Not a consensus rule, better for wallet useability.
           if (i == 0) {
-            primaryOrchardKey= extsk;
-          } else if (!(primaryOrchardKey == extsk)) {
+            primaryIronwoodKey= extsk;
+          } else if (!(primaryIronwoodKey == extsk)) {
               throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction with that use multiple spending keys are not supported.");
           }
 
           if (i == 0) {
-            primaryAnchor = tb.vOrchardSpends[i].anchor;
-          } else if (!(primaryAnchor == tb.vOrchardSpends[i].anchor)) {
-              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "All Orchard inputs must have the same anchor.");
+            primaryAnchor = tb.vIronwoodSpends[i].anchor;
+          } else if (!(primaryAnchor == tb.vIronwoodSpends[i].anchor)) {
+              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "All Ironwood inputs must have the same anchor.");
           }
 
       }
 
       //Validate the anchor passed is not null
       if (primaryAnchor.IsNull()) {
-          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Orchard Anchor cannot be null.");
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Ironwood Anchor cannot be null.");
       }
 
-      //Create a new orchard bulider before converting the store orchard actions, Enable both Spend and Outputs
+      //Create a new ironwood bulider before converting the store ironwood actions, Enable both Spend and Outputs
       tb.InitializeIronwood(true, true, primaryAnchor);
-      orchardInitialized = true;
+      ironwoodInitialized = true;
 
-      //Add the stored orchard action to the orchard builder
-      if (!tb.ConvertRawOrchardSpend(primaryOrchardKey)) {
-          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Orchard Spends failed.");
+      //Add the stored ironwood action to the ironwood builder
+      if (!tb.ConvertRawIronwoodSpend(primaryIronwoodKey)) {
+          throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Ironwood Spends failed.");
       }
 
       //Get the OVK for the spending key being used
-      auto fvkOpt = primaryOrchardKey.GetXFVK();
+      auto fvkOpt = primaryIronwoodKey.GetXFVK();
       if (fvkOpt == std::nullopt) {
-        throw JSONRPCError(RPC_DESERIALIZATION_ERROR,"FVK not found for Orchard spending key. Stopping.");
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR,"FVK not found for Ironwood spending key. Stopping.");
       }
 
       auto fvk = fvkOpt.value().fvk;
-      libzcash::OrchardOutgoingViewingKey ovkObj;
+      libzcash::IronwoodOutgoingViewingKey ovkObj;
       if (!fvk.DeriveOVK(&ovkObj)) {
-        throw JSONRPCError(RPC_DESERIALIZATION_ERROR,"OVK not found for Orchard spending key. Stopping.");
+        throw JSONRPCError(RPC_DESERIALIZATION_ERROR,"OVK not found for Ironwood spending key. Stopping.");
       }
 
       ovk = ovkObj.ovk;
@@ -2039,7 +2039,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   }
 
   //Initialize the sapling builder if there are sapling outputs but no sapling spends.
-  //This can happen when spending from Orchard and sending to a Sapling address (cross-pool send).
+  //This can happen when spending from Ironwood and sending to a Sapling address (cross-pool send).
   if (tb.vSaplingSpends.size() == 0 && tb.vSaplingOutputs.size() > 0) {
       tb.InitializeSapling(uint256());
   }
@@ -2049,15 +2049,15 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Sapling Outputs failed.");
   }
 
-  //Initialize the orchard builder if there are orchard outputs and the orchard builder has not already been initialized
-  //This can happen when there are no orchard spends but there are orchard outputs
-  if(orchardInitialized == false && tb.vOrchardOutputs.size() > 0) {
+  //Initialize the ironwood builder if there are ironwood outputs and the ironwood builder has not already been initialized
+  //This can happen when there are no ironwood spends but there are ironwood outputs
+  if(ironwoodInitialized == false && tb.vIronwoodOutputs.size() > 0) {
       tb.InitializeIronwood(false, true, uint256());
   }
 
-  //Add the stored outputs to the orchard builder
-  if (tb.vOrchardOutputs.size() > 0 && !tb.ConvertRawOrchardOutput(ovk)) {
-      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Orchard Outputs failed.");
+  //Add the stored outputs to the ironwood builder
+  if (tb.vIronwoodOutputs.size() > 0 && !tb.ConvertRawIronwoodOutput(ovk)) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Ironwood Outputs failed.");
   }
 
   //Build and sign transaction
@@ -2088,7 +2088,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "z_createbuildinstructions \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
           "\nCreate transaction builder instructions for offline shielded transaction construction.\n"
           "Generates hex-encoded builder data that can be used to create shielded transactions\n"
-          "from transparent or shielded addresses to shielded (Sapling/Orchard) addresses.\n"
+          "from transparent or shielded addresses to shielded (Sapling/Ironwood) addresses.\n"
           "Change generated from a transparent address flows to a new transparent address,\n"
           "while change generated from a shielded address returns to itself.\n"
           "\nWhen sending coinbase UTXOs to a shielded address, change is not allowed.\n"
@@ -2099,7 +2099,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "1. \"fromaddress\"         (string, required) The transparent or shielded address to send funds from\n"
           "2. \"amounts\"             (array, required) Array of output destinations and amounts\n"
           "    [{\n"
-          "      \"address\":address  (string, required) The Sapling or Orchard shielded address\n"
+          "      \"address\":address  (string, required) The Sapling or Ironwood shielded address\n"
           "      \"amount\":amount    (numeric, required) The amount in " + CURRENCY_UNIT + "\n"
           "      \"memo\":memo        (string, optional) Hex-encoded memo data for shielded addresses\n"
           "    }, ... ]\n"
@@ -2154,12 +2154,12 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
 
           bool toSapling = false;
-          bool toOrchard = false;
+          bool toIronwood = false;
           string address = find_value(o, "address").get_str();
           CTxDestination taddr = DecodeDestination(address);
 
           if (IsValidDestination(taddr)) {
-              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard.");
+              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood.");
           }
 
           auto res = DecodePaymentAddress(address);
@@ -2168,8 +2168,8 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
               // Remember whether this is Sapling address
               toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
-              // Remember whether this is Orchard address
-              toOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
+              // Remember whether this is Ironwood address
+              toIronwood = std::get_if<libzcash::IronwoodPaymentAddress>(&res) != nullptr;
 
               // Remember whether this is Sprout address
               bool toSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
@@ -2177,7 +2177,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
               if (toSprout)
                   throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage has expired");
 
-              if (!(toSapling || toOrchard))
+              if (!(toSapling || toIronwood))
                   throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
 
           } else {
@@ -2224,8 +2224,8 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
           if (toSapling) {
               tb.AddSaplingOutputRaw(*std::get_if<libzcash::SaplingPaymentAddress>(&res), nAmount, hexMemo);
-          } else if (toOrchard) {
-              tb.AddOrchardOutputRaw(*std::get_if<libzcash::OrchardPaymentAddress>(&res), nAmount, hexMemo);
+          } else if (toIronwood) {
+              tb.AddIronwoodOutputRaw(*std::get_if<libzcash::IronwoodPaymentAddress>(&res), nAmount, hexMemo);
           } else {
               throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
           }
@@ -2241,29 +2241,29 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
       CTxDestination taddr = DecodeDestination(fromaddress);
       bool fromTaddr = IsValidDestination(taddr);
       if (fromTaddr) {
-          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard.");
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood.");
       }
 
       auto res = DecodePaymentAddress(fromaddress);
       if (!IsValidPaymentAddress(res)) {
           // invalid
-          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr, sapling or orchard.");
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr, sapling or ironwood.");
       }
 
       // Remember whether this is Sapling address
       bool fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
-      // Remember whether this is Orchard address
-      bool fromOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
+      // Remember whether this is Ironwood address
+      bool fromIronwood = std::get_if<libzcash::IronwoodPaymentAddress>(&res) != nullptr;
 
       // Remember whether this is Sprout address
       bool fromSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
       if (fromSprout) {
-          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard.");
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood.");
       }
 
-      if (!(fromSapling || fromOrchard)) {
-          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard.");
+      if (!(fromSapling || fromIronwood)) {
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood.");
       }
 
       // Minimum confirmations
@@ -2277,13 +2277,13 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
       //Get Notes
       std::vector<SaplingNoteEntry> saplingEntries;
-      std::vector<OrchardNoteEntry> orchardEntries;
+      std::vector<IronwoodNoteEntry> ironwoodEntries;
       CAmount totalIn = 0;
 
       {
           LOCK2(cs_main, pwalletMain->cs_wallet);
           // Offline transaction, Does not require the spending key in this wallet
-          pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress, nMinDepth, true, false);
+          pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress, nMinDepth, true, false);
 
 
           // Select Sapling notes
@@ -2312,20 +2312,20 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
               }
           }
 
-          for (auto entry : orchardEntries) {
+          for (auto entry : ironwoodEntries) {
 
-              libzcash::MerklePath orchardMerklePath;
-              if (!pwalletMain->OrchardWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, orchardMerklePath)) {
-                  throw JSONRPCError(RPC_WALLET_ERROR, "Merkle Path not found for Orchard note. Stopping.");
+              libzcash::MerklePath ironwoodMerklePath;
+              if (!pwalletMain->IronwoodWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, ironwoodMerklePath)) {
+                  throw JSONRPCError(RPC_WALLET_ERROR, "Merkle Path not found for Ironwood note. Stopping.");
               }
 
               uint256 anchor;
-              if (!pwalletMain->OrchardWalletGetPathRootWithCMU(orchardMerklePath, entry.note.cmx(), anchor)) {
-                  throw JSONRPCError(RPC_WALLET_ERROR,"Getting Orchard Anchor failed. Stopping.");
+              if (!pwalletMain->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, entry.note.cmx(), anchor)) {
+                  throw JSONRPCError(RPC_WALLET_ERROR,"Getting Ironwood Anchor failed. Stopping.");
               }
 
-              if (!tb.AddOrchardSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rho(), entry.note.rseed(), orchardMerklePath, anchor)) {
-                  throw JSONRPCError(RPC_WALLET_ERROR,"Adding Raw Orchard Spend failed. Stopping.");
+              if (!tb.AddIronwoodSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rho(), entry.note.rseed(), ironwoodMerklePath, anchor)) {
+                  throw JSONRPCError(RPC_WALLET_ERROR,"Adding Raw Ironwood Spend failed. Stopping.");
               }
 
               totalIn += entry.note.value();

@@ -35,7 +35,7 @@ public:
     enum ColumnIndex {
         isMine = 0,
         Balance = 1,
-        Scope = 2,   /**< Orchard IVK scope (External/Internal) */
+        Scope = 2,   /**< Ironwood IVK scope (External/Internal) */
         Address = 3,  /**< Komodo z-address */
         Label = 4,   /**< User specified label */
 

@@ -221,18 +221,18 @@ TEST(wallet_zkeys_tests, WriteCryptedSaplingZkeyDirectToDb) {
     ASSERT_EQ(address2, keyOut.DefaultAddress());
 }
 
-TEST(wallet_zkeys_tests, StoreAndLoadOrchardKeys) {
+TEST(wallet_zkeys_tests, StoreAndLoadIronwoodKeys) {
     SelectParams(CBaseChainParams::MAIN);
 
     CWallet wallet;
 
     // wallet should be empty
-    std::set<libzcash::OrchardPaymentAddress> orchardAddrs;
-    wallet.GetOrchardPaymentAddresses(orchardAddrs);
-    ASSERT_EQ(0, orchardAddrs.size());
+    std::set<libzcash::IronwoodPaymentAddress> ironwoodAddrs;
+    wallet.GetIronwoodPaymentAddresses(ironwoodAddrs);
+    ASSERT_EQ(0, ironwoodAddrs.size());
 
     // No HD seed in the wallet
-    EXPECT_ANY_THROW(wallet.GenerateNewOrchardZKey());
+    EXPECT_ANY_THROW(wallet.GenerateNewIronwoodZKey());
 
     // Load the all-zeroes seed
     CKeyingMaterial rawSeed(32, 0);
@@ -240,38 +240,38 @@ TEST(wallet_zkeys_tests, StoreAndLoadOrchardKeys) {
     wallet.LoadHDSeed(seed);
 
     // Now this call succeeds
-    auto orchardAddr = wallet.GenerateNewOrchardZKey();
+    auto ironwoodAddr = wallet.GenerateNewIronwoodZKey();
 
     // wallet should have one key
-    wallet.GetOrchardPaymentAddresses(orchardAddrs);
-    ASSERT_EQ(1, orchardAddrs.size());
-    ASSERT_TRUE(orchardAddrs.count(orchardAddr));
+    wallet.GetIronwoodPaymentAddresses(ironwoodAddrs);
+    ASSERT_EQ(1, ironwoodAddrs.size());
+    ASSERT_TRUE(ironwoodAddrs.count(ironwoodAddr));
 
     // verify wallet has incoming viewing key for the address
-    ASSERT_TRUE(wallet.HaveOrchardIncomingViewingKey(orchardAddr));
+    ASSERT_TRUE(wallet.HaveIronwoodIncomingViewingKey(ironwoodAddr));
 
     // manually add new spending key to wallet
     uint32_t bip44CoinType = Params().BIP44CoinType();
-    auto orchardSkOpt = libzcash::OrchardExtendedSpendingKeyPirate::Master(seed).Derive(bip44CoinType,0);
-    ASSERT_TRUE(orchardSkOpt.has_value());
+    auto ironwoodSkOpt = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed).Derive(bip44CoinType,0);
+    ASSERT_TRUE(ironwoodSkOpt.has_value());
 
-    auto orchardSk = orchardSkOpt.value();
-    ASSERT_TRUE(wallet.AddOrchardZKey(orchardSk));
+    auto ironwoodSk = ironwoodSkOpt.value();
+    ASSERT_TRUE(wallet.AddIronwoodZKey(ironwoodSk));
 
     // verify wallet did add it
-    auto orchardFvkOpt = orchardSk.GetXFVK();
-    ASSERT_TRUE(orchardFvkOpt.has_value());
+    auto ironwoodFvkOpt = ironwoodSk.GetXFVK();
+    ASSERT_TRUE(ironwoodFvkOpt.has_value());
 
-    auto orchardFvk = orchardFvkOpt.value();
-    ASSERT_TRUE(wallet.HaveOrchardSpendingKey(orchardFvk));
+    auto ironwoodFvk = ironwoodFvkOpt.value();
+    ASSERT_TRUE(wallet.HaveIronwoodSpendingKey(ironwoodFvk));
 
     // verify spending key stored correctly
-    libzcash::OrchardExtendedSpendingKeyPirate keyOut;
-    wallet.GetOrchardSpendingKey(orchardFvk, keyOut);
-    ASSERT_EQ(orchardSk, keyOut);
+    libzcash::IronwoodExtendedSpendingKeyPirate keyOut;
+    wallet.GetIronwoodSpendingKey(ironwoodFvk, keyOut);
+    ASSERT_EQ(ironwoodSk, keyOut);
 }
 
-TEST(wallet_zkeys_tests, EncryptAndUnlockOrchardKeys) {
+TEST(wallet_zkeys_tests, EncryptAndUnlockIronwoodKeys) {
     SelectParams(CBaseChainParams::TESTNET);
 
     boost::filesystem::path pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
@@ -279,23 +279,23 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockOrchardKeys) {
     mapArgs["-datadir"] = pathTemp.string();
 
     bool fFirstRun;
-    CWallet wallet("wallet_crypted_orchard.dat");
+    CWallet wallet("wallet_crypted_ironwood.dat");
     ASSERT_EQ(DB_LOAD_OK, wallet.LoadWallet(fFirstRun));
 
     ASSERT_FALSE(wallet.HaveHDSeed());
     wallet.GenerateNewSeed();
 
     // wallet should be empty
-    std::set<libzcash::OrchardPaymentAddress> orchardAddrs;
-    wallet.GetOrchardPaymentAddresses(orchardAddrs);
-    ASSERT_EQ(0, orchardAddrs.size());
+    std::set<libzcash::IronwoodPaymentAddress> ironwoodAddrs;
+    wallet.GetIronwoodPaymentAddresses(ironwoodAddrs);
+    ASSERT_EQ(0, ironwoodAddrs.size());
 
     // Add random key to the wallet
-    auto orchardAddr = wallet.GenerateNewOrchardZKey();
+    auto ironwoodAddr = wallet.GenerateNewIronwoodZKey();
 
     // wallet should have one key
-    wallet.GetOrchardPaymentAddresses(orchardAddrs);
-    ASSERT_EQ(1, orchardAddrs.size());
+    wallet.GetIronwoodPaymentAddresses(ironwoodAddrs);
+    ASSERT_EQ(1, ironwoodAddrs.size());
 
     // encrypt wallet
     SecureString strWalletPass;
@@ -304,14 +304,14 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockOrchardKeys) {
     ASSERT_TRUE(wallet.EncryptWallet(strWalletPass));
 
     // adding a new key will fail as the wallet is locked
-    EXPECT_ANY_THROW(wallet.GenerateNewOrchardZKey());
+    EXPECT_ANY_THROW(wallet.GenerateNewIronwoodZKey());
 
     // unlock wallet and then add
     wallet.Unlock(strWalletPass);
-    auto orchardAddr2 = wallet.GenerateNewOrchardZKey();
+    auto ironwoodAddr2 = wallet.GenerateNewIronwoodZKey();
 
     // Create a new wallet from the existing wallet path
-    CWallet wallet2("wallet_crypted_orchard.dat");
+    CWallet wallet2("wallet_crypted_ironwood.dat");
     ASSERT_EQ(DB_LOAD_CRYPTED, wallet2.InitalizeCryptedLoad());
     wallet2.SetDBCrypted();
     ASSERT_EQ(DB_LOAD_OK, wallet2.LoadCryptedSeedFromDB());
@@ -327,24 +327,24 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockOrchardKeys) {
     ASSERT_TRUE(wallet2.HaveHDSeed());
 
     // wallet should have two addresses
-    wallet2.GetOrchardPaymentAddresses(orchardAddrs);
-    ASSERT_EQ(2, orchardAddrs.size());
-    ASSERT_TRUE(orchardAddrs.count(orchardAddr));
-    ASSERT_TRUE(orchardAddrs.count(orchardAddr2));
+    wallet2.GetIronwoodPaymentAddresses(ironwoodAddrs);
+    ASSERT_EQ(2, ironwoodAddrs.size());
+    ASSERT_TRUE(ironwoodAddrs.count(ironwoodAddr));
+    ASSERT_TRUE(ironwoodAddrs.count(ironwoodAddr2));
 
     // spending key is crypted, so we can't extract valid spending key
-    libzcash::OrchardExtendedSpendingKeyPirate keyOut;
-    EXPECT_FALSE(wallet2.GetOrchardExtendedSpendingKey(orchardAddr, keyOut));
+    libzcash::IronwoodExtendedSpendingKeyPirate keyOut;
+    EXPECT_FALSE(wallet2.GetIronwoodExtendedSpendingKey(ironwoodAddr, keyOut));
 
-    libzcash::OrchardPaymentAddress defaultAddr;
+    libzcash::IronwoodPaymentAddress defaultAddr;
     ASSERT_TRUE(keyOut.sk.DeriveDefaultAddress(&defaultAddr));
-    ASSERT_FALSE(orchardAddr == defaultAddr);
+    ASSERT_FALSE(ironwoodAddr == defaultAddr);
 
     // unlock wallet to get spending keys and verify payment addresses
     wallet2.Unlock(strWalletPass);
 
-    EXPECT_TRUE(wallet2.GetOrchardExtendedSpendingKey(orchardAddr, keyOut));
+    EXPECT_TRUE(wallet2.GetIronwoodExtendedSpendingKey(ironwoodAddr, keyOut));
     ASSERT_TRUE(keyOut.sk.DeriveDefaultAddress(&defaultAddr));
 
-    ASSERT_EQ(orchardAddr, defaultAddr);
+    ASSERT_EQ(ironwoodAddr, defaultAddr);
 }

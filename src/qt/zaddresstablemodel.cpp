@@ -139,8 +139,8 @@ public:
                 balances[addr] = 0;
         }
 
-        std::set<libzcash::OrchardPaymentAddress> orchAddresses;
-        wallet->GetOrchardPaymentAddresses(orchAddresses);
+        std::set<libzcash::IronwoodPaymentAddress> orchAddresses;
+        wallet->GetIronwoodPaymentAddresses(orchAddresses);
         for (auto addr : orchAddresses) {
             if (balances.count(addr) == 0)
                 balances[addr] = 0;
@@ -200,9 +200,9 @@ public:
             std::map<QString, QList<ZAddressTableEntry>> groupedAddresses;
             QList<ZAddressTableEntry> ungroupedAddresses;  // Collect ungrouped addresses separately
             std::map<libzcash::SaplingExtendedFullViewingKey, QString> saplingFvkToGroup;
-            std::map<libzcash::OrchardExtendedFullViewingKeyPirate, QString> orchardFvkToGroup;
+            std::map<libzcash::IronwoodExtendedFullViewingKeyPirate, QString> ironwoodFvkToGroup;
             int saplingGroupCounter = 1;  // 1-based counter for Sapling groups
-            int orchardGroupCounter = 1;  // 1-based counter for Orchard groups
+            int ironwoodGroupCounter = 1;  // 1-based counter for Ironwood groups
 
             for (const std::pair<libzcash::PaymentAddress, CAddressBookData>& item : wallet->mapZAddressBook)
             {
@@ -236,26 +236,26 @@ public:
                     }
                 }
 
-                // Check if this is an Orchard address
-                auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&zaddr);
-                if (orchardAddr != nullptr) {
-                    libzcash::OrchardIncomingViewingKey ivk;
-                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                    if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
-                        wallet->GetOrchardFullViewingKey(ivk, extfvk)) {
+                // Check if this is an Ironwood address
+                auto ironwoodAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&zaddr);
+                if (ironwoodAddr != nullptr) {
+                    libzcash::IronwoodIncomingViewingKey ivk;
+                    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                    if (wallet->GetIronwoodIncomingViewingKey(*ironwoodAddr, ivk) &&
+                        wallet->GetIronwoodFullViewingKey(ivk, extfvk)) {
                             // Group by FVK regardless of whether we have the spending key
-                            if (orchardFvkToGroup.find(extfvk) == orchardFvkToGroup.end()) {
-                                orchardFvkToGroup[extfvk] = QString("orch_%1").arg(orchardGroupCounter++);
+                            if (ironwoodFvkToGroup.find(extfvk) == ironwoodFvkToGroup.end()) {
+                                ironwoodFvkToGroup[extfvk] = QString("orch_%1").arg(ironwoodGroupCounter++);
                             }
-                            groupKey = orchardFvkToGroup[extfvk];
-                            if (wallet->HaveOrchardSpendingKey(extfvk)) {
+                            groupKey = ironwoodFvkToGroup[extfvk];
+                            if (wallet->HaveIronwoodSpendingKey(extfvk)) {
                                 mine = true;
                             }
                     }
 
-                    // Get scope for Orchard addresses
+                    // Get scope for Ironwood addresses
                     KeyScope orchScope;
-                    if (wallet->GetOrchardKeyScope(*orchardAddr, orchScope)) {
+                    if (wallet->GetIronwoodKeyScope(*ironwoodAddr, orchScope)) {
                         scope = (orchScope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
                     } else {
                         scope = QString("");
@@ -322,7 +322,7 @@ public:
                 if (key.startsWith("sapl_"))
                     displayName = QObject::tr("Sapling Key Group ") + key.mid(5);
                 else if (key.startsWith("orch_"))
-                    displayName = QObject::tr("Orchard Key Group ") + key.mid(5);
+                    displayName = QObject::tr("Ironwood Key Group ") + key.mid(5);
                 else
                     displayName = key;
                 groupHeader.label = QString("");
@@ -504,9 +504,9 @@ public:
         ZAddressTableEntry newEntry;
         libzcash::PaymentAddress zaddr = DecodePaymentAddress(address.toStdString());
         auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&zaddr);
-        auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&zaddr);
+        auto ironwoodAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&zaddr);
 
-        if (saplingAddr != nullptr || orchardAddr != nullptr) {
+        if (saplingAddr != nullptr || ironwoodAddr != nullptr) {
 
             if (saplingAddr != nullptr) {
                 libzcash::SaplingIncomingViewingKey ivk;
@@ -518,12 +518,12 @@ public:
                 }
             }
 
-            if (orchardAddr != nullptr) {
-                libzcash::OrchardIncomingViewingKey ivk;
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                if (wallet->GetOrchardIncomingViewingKey(*orchardAddr, ivk) &&
-                    wallet->GetOrchardFullViewingKey(ivk, extfvk) &&
-                    wallet->HaveOrchardSpendingKey(extfvk)) {
+            if (ironwoodAddr != nullptr) {
+                libzcash::IronwoodIncomingViewingKey ivk;
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                if (wallet->GetIronwoodIncomingViewingKey(*ironwoodAddr, ivk) &&
+                    wallet->GetIronwoodFullViewingKey(ivk, extfvk) &&
+                    wallet->HaveIronwoodSpendingKey(extfvk)) {
                         mine = true;
                 }
             }
@@ -555,9 +555,9 @@ public:
                 cachedAddressTable[foundIndex].label = label;
                 
                 // Update scope/type for addresses
-                if (orchardAddr != nullptr) {
+                if (ironwoodAddr != nullptr) {
                     KeyScope scope;
-                    if (wallet->GetOrchardKeyScope(*orchardAddr, scope)) {
+                    if (wallet->GetIronwoodKeyScope(*ironwoodAddr, scope)) {
                         cachedAddressTable[foundIndex].scope = (scope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
                     } else {
                         cachedAddressTable[foundIndex].scope = QString("");
@@ -910,7 +910,7 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
         // Generate a new address to associate with given label
         // Check which shielded address type to generate based on network upgrade activation
         bool saplingActive = false;
-        bool orchardActive = false;
+        bool ironwoodActive = false;
         
         {
             LOCK(cs_main);
@@ -919,18 +919,18 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
                 const Consensus::Params& consensusParams = Params().GetConsensus();
                 
                 saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-                orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
+                ironwoodActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
             }
         }
         
         // Use user-specified address type if provided, otherwise use default behavior
-        bool useOrchard = false;
+        bool useIronwood = false;
         bool useSapling = false;
         
         if (!addressType.isEmpty()) {
             // User explicitly chose a type
-            if (addressType == "orchard" && orchardActive) {
-                useOrchard = true;
+            if (addressType == "ironwood" && ironwoodActive) {
+                useIronwood = true;
             } else if (addressType == "sapling" && saplingActive) {
                 useSapling = true;
             } else {
@@ -939,9 +939,9 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
                 return QString();
             }
         } else {
-            // Auto-select: prefer Orchard if active, otherwise Sapling
-            if (orchardActive) {
-                useOrchard = true;
+            // Auto-select: prefer Ironwood if active, otherwise Sapling
+            if (ironwoodActive) {
+                useIronwood = true;
             } else if (saplingActive) {
                 useSapling = true;
             } else {
@@ -951,12 +951,12 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
             }
         }
         
-        if (useOrchard) {
-            // Generate Orchard address
+        if (useIronwood) {
+            // Generate Ironwood address
             if (useDiversified) {
-                strAddress = EncodePaymentAddress(wallet->GenerateNewOrchardDiversifiedAddress());
+                strAddress = EncodePaymentAddress(wallet->GenerateNewIronwoodDiversifiedAddress());
             } else {
-                strAddress = EncodePaymentAddress(wallet->GenerateNewOrchardZKey());
+                strAddress = EncodePaymentAddress(wallet->GenerateNewIronwoodZKey());
             }
         }
         else if (useSapling) {

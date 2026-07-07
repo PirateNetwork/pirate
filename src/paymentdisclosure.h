@@ -55,20 +55,20 @@ public:
 };
 
 /**
- * Structure representing an Orchard Output Disclosure with associated transaction information.
+ * Structure representing an Ironwood Output Disclosure with associated transaction information.
  * This is used for proof-of-payment functionality, allowing someone to prove they paid to a
- * specific Orchard output without revealing the full spending key.
+ * specific Ironwood output without revealing the full spending key.
  */
-class OrchardOutputDisclosure
+class IronwoodOutputDisclosure
 {
 public:
     uint256 txid;                      // Transaction ID
     uint32_t outputIndex;              // Output index in the transaction (action index)
     uint256_t ock;      // The Outgoing Cipher Key (32 bytes)
 
-    OrchardOutputDisclosure() : txid(), outputIndex(0), ock() {}
+    IronwoodOutputDisclosure() : txid(), outputIndex(0), ock() {}
 
-    OrchardOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const uint256_t& ock_)
+    IronwoodOutputDisclosure(const uint256& txid_, uint32_t outputIndex_, const uint256_t& ock_)
         : txid(txid_), outputIndex(outputIndex_), ock(ock_) {}
 
     ADD_SERIALIZE_METHODS;
@@ -83,11 +83,11 @@ public:
         }
     }
 
-    bool operator==(const OrchardOutputDisclosure& other) const {
+    bool operator==(const IronwoodOutputDisclosure& other) const {
         return txid == other.txid && outputIndex == other.outputIndex && ock == other.ock;
     }
 
-    bool operator!=(const OrchardOutputDisclosure& other) const {
+    bool operator!=(const IronwoodOutputDisclosure& other) const {
         return !(*this == other);
     }
 };
@@ -108,16 +108,16 @@ class CWallet;
 std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int outputIndex);
 
 /**
- * Generate an Orchard action disclosure key for a given transaction and action index.
+ * Generate an Ironwood action disclosure key for a given transaction and action index.
  * This function searches the wallet for an OVK that can decrypt the action and creates
  * an encoded disclosure that can be shared for proof-of-payment.
  * 
  * @param wallet The wallet to search for OVKs
  * @param txid The transaction ID
- * @param actionIndex The index of the Orchard action to create a disclosure for
+ * @param actionIndex The index of the Ironwood action to create a disclosure for
  * @return The encoded disclosure string, or empty string if no matching OVK found
  */
-std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int actionIndex);
+std::string GenerateIronwoodDisclosure(CWallet* wallet, const uint256& txid, int actionIndex);
 
 /**
  * Structure representing the result of verifying a Sapling output disclosure
@@ -133,9 +133,9 @@ struct SaplingDisclosureVerificationResult {
 };
 
 /**
- * Structure representing the result of verifying an Orchard action disclosure
+ * Structure representing the result of verifying an Ironwood action disclosure
  */
-struct OrchardDisclosureVerificationResult {
+struct IronwoodDisclosureVerificationResult {
     bool success;
     std::string error;
     uint256 txid;
@@ -154,32 +154,32 @@ struct OrchardDisclosureVerificationResult {
 SaplingDisclosureVerificationResult VerifySaplingDisclosure(const std::string& disclosureStr);
 
 /**
- * Verify and decrypt an Orchard action disclosure.
+ * Verify and decrypt an Ironwood action disclosure.
  * 
- * @param disclosureStr The bech32-encoded Orchard disclosure key
+ * @param disclosureStr The bech32-encoded Ironwood disclosure key
  * @return A result structure containing the decrypted data or error information
  */
-OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& disclosureStr);
+IronwoodDisclosureVerificationResult VerifyIronwoodDisclosure(const std::string& disclosureStr);
 
 /**
- * Unified structure for disclosure verification results that handles both Sapling and Orchard
+ * Unified structure for disclosure verification results that handles both Sapling and Ironwood
  */
 struct UnifiedDisclosureVerificationResult {
     bool success;
     std::string error;
-    std::string disclosureType;  // "Sapling" or "Orchard"
+    std::string disclosureType;  // "Sapling" or "Ironwood"
     uint256 txid;
-    uint32_t outputIndex;  // For both output index (Sapling) and action index (Orchard)
+    uint32_t outputIndex;  // For both output index (Sapling) and action index (Ironwood)
     uint64_t value;
     std::string address;
     std::string memoHex;
 };
 
 /**
- * Verify and decrypt a payment disclosure of any type (Sapling or Orchard).
+ * Verify and decrypt a payment disclosure of any type (Sapling or Ironwood).
  * Automatically detects the disclosure type by attempting to decode it.
  * 
- * @param disclosureStr The bech32-encoded disclosure key (Sapling or Orchard)
+ * @param disclosureStr The bech32-encoded disclosure key (Sapling or Ironwood)
  * @return A unified result structure containing the decrypted data or error information
  */
 UnifiedDisclosureVerificationResult VerifyPaymentDisclosure(const std::string& disclosureStr);

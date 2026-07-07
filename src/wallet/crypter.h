@@ -144,7 +144,7 @@ private:
     CryptedKeyMap mapCryptedKeys;
     CryptedSproutSpendingKeyMap mapCryptedSproutSpendingKeys;
     CryptedSaplingSpendingKeyMap mapCryptedSaplingSpendingKeys;
-    CryptedOrchardSpendingKeyMap mapCryptedOrchardSpendingKeys;
+    CryptedIronwoodSpendingKeyMap mapCryptedIronwoodSpendingKeys;
 
     CKeyingMaterial vMasterKey;
 
@@ -290,18 +290,18 @@ public:
     }
     bool GetSaplingSpendingKey(const libzcash::SaplingExtendedFullViewingKey& extfvk, libzcash::SaplingExtendedSpendingKey& skOut) const;
 
-    //! Orchard
-    bool AddCryptedOrchardSpendingKey(
-        const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk,
+    //! Ironwood
+    bool AddCryptedIronwoodSpendingKey(
+        const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk,
         const std::vector<unsigned char>& vchCryptedSecret);
 
-    bool HaveOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk) const
+    bool HaveIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk) const
     {
         {
             LOCK(cs_KeyStore);
             if (!IsCrypted())
-                return CBasicKeyStore::HaveOrchardSpendingKey(extfvk);
-            for (auto entry : mapCryptedOrchardSpendingKeys) {
+                return CBasicKeyStore::HaveIronwoodSpendingKey(extfvk);
+            for (auto entry : mapCryptedIronwoodSpendingKeys) {
                 if (entry.first == extfvk) {
                     return true;
                 }
@@ -309,7 +309,7 @@ public:
         }
         return false;
     }
-    bool GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk, libzcash::OrchardExtendedSpendingKeyPirate& extskOut) const;
+    bool GetIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk, libzcash::IronwoodExtendedSpendingKeyPirate& extskOut) const;
 
     /**
      * Wallet status (encrypted, locked) changed.

@@ -61,14 +61,14 @@ std::string EncodeSaplingOutputDisclosure(const SaplingOutputDisclosure& disclos
 std::optional<SaplingOutputDisclosure> DecodeSaplingOutputDisclosure(const std::string& str);
 
 /**
- * Encode an OrchardOutputDisclosure as bech32 string
+ * Encode an IronwoodOutputDisclosure as bech32 string
  */
-std::string EncodeOrchardOutputDisclosure(const OrchardOutputDisclosure& disclosure);
+std::string EncodeIronwoodOutputDisclosure(const IronwoodOutputDisclosure& disclosure);
 
 /**
- * Decode a bech32 string to OrchardOutputDisclosure
+ * Decode a bech32 string to IronwoodOutputDisclosure
  * Returns an optional that contains the disclosure if decoding was successful
  */
-std::optional<OrchardOutputDisclosure> DecodeOrchardOutputDisclosure(const std::string& str);
+std::optional<IronwoodOutputDisclosure> DecodeIronwoodOutputDisclosure(const std::string& str);
 
 #endif // BITCOIN_KEYIO_H

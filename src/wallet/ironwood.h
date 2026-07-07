@@ -11,7 +11,7 @@
 #include "transaction_builder.h"
 
 #include "rust/ironwood/wallet.h"
-#include "zcash/address/orchard.hpp"
+#include "zcash/address/ironwood.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 
 class IronwoodWallet

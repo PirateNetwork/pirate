@@ -192,7 +192,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_getpaymentdisclosure", 1},
     { "z_getpaymentdisclosure", 2},
     { "z_exportsaplingdisclosure", 1},
-    { "z_exportorcharddisclosure", 1},
+    { "z_exportironwooddisclosure", 1},
     // crosschain
     { "assetchainproof", 1},
     { "crosschainproof", 1},

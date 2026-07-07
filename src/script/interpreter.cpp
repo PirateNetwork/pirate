@@ -1242,7 +1242,7 @@ SigVersion SignatureHashVersion(const CTransaction& txTo)
 {
     if (txTo.fOverwintered) {
         if (txTo.nVersionGroupId == IRONWOOD_VERSION_GROUP_ID) {
-            return SIGVERSION_ORCHARD;
+            return SIGVERSION_IRONWOOD;
         } else if (txTo.nVersionGroupId == SAPLING_VERSION_GROUP_ID) {
             return SIGVERSION_SAPLING;
         } else {
@@ -1280,7 +1280,7 @@ uint256 SignatureHash(
 
     auto sigversion = SignatureHashVersion(txTo);
 
-    if (sigversion == SIGVERSION_ORCHARD) {
+    if (sigversion == SIGVERSION_IRONWOOD) {
         // ZIP 244, S.2: transparent_sig_digest
         //
         // If we are producing a hash for either a coinbase transaction, or a

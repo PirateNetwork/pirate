@@ -139,7 +139,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
         mapSaplingNullifiers[nf] = &tx;
     }
     for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
-        mapOrchardNullifiers[nf] = &tx;
+        mapIronwoodNullifiers[nf] = &tx;
     }
     for (const auto& spend : tx.GetSaplingSpends()) {
         auto zkproof = spend.zkproof();
@@ -395,7 +395,7 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
                 mapSaplingNullifiers.erase(nf);
             }
             for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
-                mapOrchardNullifiers.erase(nf);
+                mapIronwoodNullifiers.erase(nf);
             }
             for (const auto& spend : tx.GetSaplingSpends()) {
                 auto zkproof = spend.zkproof();
@@ -480,7 +480,7 @@ void CTxMemPool::removeWithAnchor(const uint256 &invalidRoot, ShieldedType type)
                     }
                 }
             break;
-            case ORCHARDFRONTIER:
+            case IRONWOODFRONTIER:
                 if (tx.GetIronwoodBundle().IsPresent()) {
                     if (tx.GetIronwoodBundle().GetAnchor().value() == invalidRoot) {
                         transactionsToRemove.push_back(tx);
@@ -536,8 +536,8 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
         }
     }
     for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
-        std::map<uint256, const CTransaction*>::iterator it = mapOrchardNullifiers.find(nf);
-        if (it != mapOrchardNullifiers.end()) {
+        std::map<uint256, const CTransaction*>::iterator it = mapIronwoodNullifiers.find(nf);
+        if (it != mapIronwoodNullifiers.end()) {
             const CTransaction &txConflict = *it->second;
             if (txConflict != tx) {
                 remove(txConflict, removed, true);
@@ -658,7 +658,7 @@ void CTxMemPool::clear()
     // duplicate nullifier/proof rejections after the pool is emptied.
     mapSproutNullifiers.clear();
     mapSaplingNullifiers.clear();
-    mapOrchardNullifiers.clear();
+    mapIronwoodNullifiers.clear();
     mapZkSpendProofHash.clear();
     mapZkOutputProofHash.clear();
     totalTxSize = 0;
@@ -776,16 +776,16 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
             assert(!pcoins->GetNullifier(nullifier, SAPLINGFRONTIER));
         }
 
-        // Check Orchard
+        // Check Ironwood
         for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
-            assert(!pcoins->GetNullifier(nf, ORCHARDFRONTIER));
+            assert(!pcoins->GetNullifier(nf, IRONWOODFRONTIER));
         }
 
         if (tx.GetIronwoodBundle().IsPresent()) {
             std::optional<uint256> root = tx.GetIronwoodBundle().GetAnchor();
             if (root) {
                 IronwoodMerkleFrontier tree;
-                assert(pcoins->GetOrchardFrontierAnchorAt(root.value(), tree));
+                assert(pcoins->GetIronwoodFrontierAnchorAt(root.value(), tree));
             }
         }
 
@@ -828,7 +828,7 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
 
     checkNullifiers(SPROUT);
     checkNullifiers(SAPLINGFRONTIER);
-    checkNullifiers(ORCHARDFRONTIER);
+    checkNullifiers(IRONWOODFRONTIER);
 
 
     assert(totalTxSize == checkTotal);
@@ -845,8 +845,8 @@ void CTxMemPool::checkNullifiers(ShieldedType type) const
         case SAPLINGFRONTIER:
             mapToUse = &mapSaplingNullifiers;
             break;
-        case ORCHARDFRONTIER:
-            mapToUse = &mapOrchardNullifiers;
+        case IRONWOODFRONTIER:
+            mapToUse = &mapIronwoodNullifiers;
             break;
         default:
             throw runtime_error("Unknown nullifier type");
@@ -968,8 +968,8 @@ bool CTxMemPool::nullifierExists(const uint256& nullifier, ShieldedType type) co
             return mapSproutNullifiers.count(nullifier);
         case SAPLINGFRONTIER:
             return mapSaplingNullifiers.count(nullifier);
-        case ORCHARDFRONTIER:
-            return mapOrchardNullifiers.count(nullifier);
+        case IRONWOODFRONTIER:
+            return mapIronwoodNullifiers.count(nullifier);
         default:
             throw runtime_error("Unknown nullifier type");
     }

@@ -150,19 +150,19 @@ public:
     MOCK_METHOD3(WriteTx, bool(uint256 hash, const CWalletTx& wtx, bool txnProtected));
     MOCK_METHOD3(WriteArcTx, bool(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected));
     MOCK_METHOD3(WriteArcSaplingOp, bool(uint256 nullifier, SaplingOutPoint op, bool txnProtected));
-    MOCK_METHOD3(WriteArcOrchardOp, bool(uint256 nullifier, OrchardOutPoint op, bool txnProtected));
+    MOCK_METHOD3(WriteArcIronwoodOp, bool(uint256 nullifier, IronwoodOutPoint op, bool txnProtected));
     MOCK_METHOD2(WriteSaplingPaymentAddress, bool(const libzcash::SaplingIncomingViewingKey &ivk, const libzcash::SaplingPaymentAddress &addr));
-    MOCK_METHOD3(WriteOrchardPaymentAddress, bool(const libzcash::OrchardIncomingViewingKey &ivk,const libzcash::OrchardPaymentAddress &addr,KeyScope scope));
+    MOCK_METHOD3(WriteIronwoodPaymentAddress, bool(const libzcash::IronwoodIncomingViewingKey &ivk,const libzcash::IronwoodPaymentAddress &addr,KeyScope scope));
 
     MOCK_METHOD4(WriteCryptedTx, bool(uint256 txid,uint256 hash,const std::vector<unsigned char>& vchCryptedSecret,bool txnProtected));
     MOCK_METHOD4(WriteCryptedArcTx, bool(uint256 txid, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
     MOCK_METHOD4(WriteCryptedArcSaplingOp, bool(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
-    MOCK_METHOD4(WriteCryptedArcOrchardOp, bool(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
+    MOCK_METHOD4(WriteCryptedArcIronwoodOp, bool(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
     MOCK_METHOD3(WriteCryptedSaplingPaymentAddress, bool(libzcash::SaplingPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecret));
-    MOCK_METHOD3(WriteCryptedOrchardPaymentAddress, bool(libzcash::OrchardPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecre));
+    MOCK_METHOD3(WriteCryptedIronwoodPaymentAddress, bool(libzcash::IronwoodPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecre));
     
     MOCK_METHOD1(WriteSaplingWitnesses, bool(const SaplingWallet& wallet));
-    MOCK_METHOD1(WriteOrchardWitnesses, bool(const IronwoodWallet& wallet));
+    MOCK_METHOD1(WriteIronwoodWitnesses, bool(const IronwoodWallet& wallet));
 
 };
 
@@ -311,7 +311,7 @@ public:
         return false;
     }
     
-    bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
+    bool GetIronwoodFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
         return false;
     }
 

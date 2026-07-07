@@ -1,7 +1,7 @@
 #ifndef ZC_ADDRESS_H_
 #define ZC_ADDRESS_H_
 
-#include "zcash/address/orchard.hpp"
+#include "zcash/address/ironwood.hpp"
 #include "zcash/address/sapling.hpp"
 #include "zcash/address/sprout.hpp"
 #include "zcash/address/zip32.h"
@@ -17,24 +17,24 @@ public:
     friend bool operator<(const InvalidEncoding &a, const InvalidEncoding &b) { return true; }
 };
 
-typedef std::variant<InvalidEncoding, SproutPaymentAddress, SaplingPaymentAddress, OrchardPaymentAddress> PaymentAddress;
-typedef std::variant<InvalidEncoding, SproutViewingKey, SaplingExtendedFullViewingKey, OrchardExtendedFullViewingKeyPirate> ViewingKey;
-typedef std::variant<InvalidEncoding, SaplingDiversifiedExtendedFullViewingKey, OrchardDiversifiedExtendedFullViewingKeyPirate> DiversifiedViewingKey;
-typedef std::variant<InvalidEncoding, SproutSpendingKey, SaplingExtendedSpendingKey, OrchardExtendedSpendingKeyPirate> SpendingKey;
-typedef std::variant<InvalidEncoding, SaplingDiversifiedExtendedSpendingKey, OrchardDiversifiedExtendedSpendingKeyPirate> DiversifiedSpendingKey;
+typedef std::variant<InvalidEncoding, SproutPaymentAddress, SaplingPaymentAddress, IronwoodPaymentAddress> PaymentAddress;
+typedef std::variant<InvalidEncoding, SproutViewingKey, SaplingExtendedFullViewingKey, IronwoodExtendedFullViewingKeyPirate> ViewingKey;
+typedef std::variant<InvalidEncoding, SaplingDiversifiedExtendedFullViewingKey, IronwoodDiversifiedExtendedFullViewingKeyPirate> DiversifiedViewingKey;
+typedef std::variant<InvalidEncoding, SproutSpendingKey, SaplingExtendedSpendingKey, IronwoodExtendedSpendingKeyPirate> SpendingKey;
+typedef std::variant<InvalidEncoding, SaplingDiversifiedExtendedSpendingKey, IronwoodDiversifiedExtendedSpendingKeyPirate> DiversifiedSpendingKey;
 
 class AddressInfoFromSpendingKey : public boost::static_visitor<std::pair<std::string, PaymentAddress>> {
 public:
     std::pair<std::string, PaymentAddress> operator()(const SproutSpendingKey&) const;
     std::pair<std::string, PaymentAddress> operator()(const struct SaplingExtendedSpendingKey&) const;
-    std::pair<std::string, PaymentAddress> operator()(const struct OrchardExtendedSpendingKeyPirate&) const;
+    std::pair<std::string, PaymentAddress> operator()(const struct IronwoodExtendedSpendingKeyPirate&) const;
     std::pair<std::string, PaymentAddress> operator()(const InvalidEncoding&) const;
 };
 
 class AddressInfoFromDiversifiedSpendingKey : public boost::static_visitor<std::pair<std::string, PaymentAddress>> {
 public:
     std::pair<std::string, PaymentAddress> operator()(const struct SaplingDiversifiedExtendedSpendingKey&) const;
-    std::pair<std::string, PaymentAddress> operator()(const struct OrchardDiversifiedExtendedSpendingKeyPirate&) const;
+    std::pair<std::string, PaymentAddress> operator()(const struct IronwoodDiversifiedExtendedSpendingKeyPirate&) const;
     std::pair<std::string, PaymentAddress> operator()(const InvalidEncoding&) const;
 };
 
@@ -42,14 +42,14 @@ class AddressInfoFromViewingKey : public boost::static_visitor<std::pair<std::st
 public:
     std::pair<std::string, PaymentAddress> operator()(const SproutViewingKey&) const;
     std::pair<std::string, PaymentAddress> operator()(const struct SaplingExtendedFullViewingKey&) const;
-    std::pair<std::string, PaymentAddress> operator()(const struct OrchardExtendedFullViewingKeyPirate&) const;
+    std::pair<std::string, PaymentAddress> operator()(const struct IronwoodExtendedFullViewingKeyPirate&) const;
     std::pair<std::string, PaymentAddress> operator()(const InvalidEncoding&) const;
 };
 
 class AddressInfoFromDiversifiedViewingKey : public boost::static_visitor<std::pair<std::string, PaymentAddress>> {
 public:
     std::pair<std::string, PaymentAddress> operator()(const struct SaplingDiversifiedExtendedFullViewingKey&) const;
-    std::pair<std::string, PaymentAddress> operator()(const struct OrchardDiversifiedExtendedFullViewingKeyPirate&) const;
+    std::pair<std::string, PaymentAddress> operator()(const struct IronwoodDiversifiedExtendedFullViewingKeyPirate&) const;
     std::pair<std::string, PaymentAddress> operator()(const InvalidEncoding&) const;
 };
 

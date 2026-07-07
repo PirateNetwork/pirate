@@ -34,7 +34,7 @@
 #define NOTEENCRYPTION_AUTH_BYTES 16
 
 // ---------------------------------------------------------------------------
-// Diversifier size (shared by Sapling and Orchard)
+// Diversifier size (shared by Sapling and Ironwood)
 // ---------------------------------------------------------------------------
 
 //! Diversifier size in bytes — selects a distinct address from the same IVK.
@@ -102,33 +102,33 @@ const size_t SerializedSaplingDiversifiableFullViewingKeySize = 128;
 const size_t SerializedSaplingExtendedSpendingKeySize = 169;
 
 // -------------------------------------------------------------------
-// Orchard — serialized byte sizes
+// Ironwood — serialized byte sizes
 // -------------------------------------------------------------------
 
-//! Serialized Orchard payment address: d (11) || pk_d (32).
-const size_t SerializedOrchardPaymentAddressSize                    = 43;
-//! Serialized Orchard outgoing viewing key (ovk scalar, 32 bytes).
-const size_t SerializedOrchardOutgoingKeySize                       = 32;
-//! Serialized Orchard incoming viewing key: dk (32) || ivk (32).
-const size_t SerializedOrchardIncomingViewingKeySize                = 64;
-//! Serialized Orchard full viewing key: ak (32) || nk (32) || rivk (32).
-const size_t SerializedOrchardFullViewingKeySize                    = 96;
-//! Serialized Orchard extended full viewing key (FVK + chain code + depth/index metadata).
-const size_t SerializedOrchardExtendedFullViewingKeySize            = 137;
-//! Serialized Orchard diversified extended full viewing key (XFVK + cached diversifier).
-const size_t SerializedOrchardDiversifiedExtendedFullViewingKeySize = 148;
-//! Serialized Orchard spending key (raw scalar, 32 bytes).
-const size_t SerializedOrchardSpendingKeySize                       = 32;
-//! Serialized Orchard extended spending key (XSK = sk + chain code + depth/index metadata).
-const size_t SerializedOrchardExtendedSpendingKeySize               = 73;
-//! Serialized Orchard diversified extended spending key (XXSK + cached diversifier).
-const size_t SerializedOrchardDiversifiedExtendedSpendingKeySize    = 84;
+//! Serialized Ironwood payment address: d (11) || pk_d (32).
+const size_t SerializedIronwoodPaymentAddressSize                    = 43;
+//! Serialized Ironwood outgoing viewing key (ovk scalar, 32 bytes).
+const size_t SerializedIronwoodOutgoingKeySize                       = 32;
+//! Serialized Ironwood incoming viewing key: dk (32) || ivk (32).
+const size_t SerializedIronwoodIncomingViewingKeySize                = 64;
+//! Serialized Ironwood full viewing key: ak (32) || nk (32) || rivk (32).
+const size_t SerializedIronwoodFullViewingKeySize                    = 96;
+//! Serialized Ironwood extended full viewing key (FVK + chain code + depth/index metadata).
+const size_t SerializedIronwoodExtendedFullViewingKeySize            = 137;
+//! Serialized Ironwood diversified extended full viewing key (XFVK + cached diversifier).
+const size_t SerializedIronwoodDiversifiedExtendedFullViewingKeySize = 148;
+//! Serialized Ironwood spending key (raw scalar, 32 bytes).
+const size_t SerializedIronwoodSpendingKeySize                       = 32;
+//! Serialized Ironwood extended spending key (XSK = sk + chain code + depth/index metadata).
+const size_t SerializedIronwoodExtendedSpendingKeySize               = 73;
+//! Serialized Ironwood diversified extended spending key (XXSK + cached diversifier).
+const size_t SerializedIronwoodDiversifiedExtendedSpendingKeySize    = 84;
 
 // -------------------------------------------------------------------
 // Shared primitive typedefs
 // -------------------------------------------------------------------
 
-//! 11-byte diversifier — selects a distinct address from the same IVK (Sapling & Orchard).
+//! 11-byte diversifier — selects a distinct address from the same IVK (Sapling & Ironwood).
 typedef std::array<unsigned char, ZC_DIVERSIFIER_SIZE> diversifier_t;
 
 //! 88-bit (11-byte) alias for diversifier_t, exposed as a uint type.
@@ -169,21 +169,21 @@ typedef std::array<unsigned char, SerializedSaplingDiversifiableFullViewingKeySi
 typedef std::array<unsigned char, SerializedSaplingExtendedSpendingKeySize> SaplingExtendedSpendingKey_FFI_t;
 
 // -------------------------------------------------------------------
-// Orchard FFI transfer types
+// Ironwood FFI transfer types
 // -------------------------------------------------------------------
 
-//! Opaque buffer for transferring an Orchard payment address across the FFI boundary.
-typedef std::array<unsigned char, SerializedOrchardPaymentAddressSize>      OrchardPaymentAddress_FFI_t;
-//! Opaque buffer for an Orchard incoming viewing key (dk || ivk).
-typedef std::array<unsigned char, SerializedOrchardIncomingViewingKeySize>  OrchardIncomingViewingKey_FFI_t;
-//! Opaque buffer for an Orchard outgoing viewing key.
-typedef std::array<unsigned char, SerializedOrchardOutgoingKeySize>         OrchardOutgoingViewingKey_FFI_t;
-//! Opaque buffer for an Orchard full viewing key (ak || nk || rivk).
-typedef std::array<unsigned char, SerializedOrchardFullViewingKeySize>      OrchardFullViewingKey_FFI_t;
-//! Opaque buffer for an Orchard spending key (raw scalar).
-typedef std::array<unsigned char, SerializedOrchardSpendingKeySize>         OrchardSpendingKey_FFI_t;
-//! Opaque buffer for an Orchard extended spending key.
-typedef std::array<unsigned char, SerializedOrchardExtendedSpendingKeySize> OrchardExtendedSpendingKey_FFI_t;
+//! Opaque buffer for transferring an Ironwood payment address across the FFI boundary.
+typedef std::array<unsigned char, SerializedIronwoodPaymentAddressSize>      IronwoodPaymentAddress_FFI_t;
+//! Opaque buffer for an Ironwood incoming viewing key (dk || ivk).
+typedef std::array<unsigned char, SerializedIronwoodIncomingViewingKeySize>  IronwoodIncomingViewingKey_FFI_t;
+//! Opaque buffer for an Ironwood outgoing viewing key.
+typedef std::array<unsigned char, SerializedIronwoodOutgoingKeySize>         IronwoodOutgoingViewingKey_FFI_t;
+//! Opaque buffer for an Ironwood full viewing key (ak || nk || rivk).
+typedef std::array<unsigned char, SerializedIronwoodFullViewingKeySize>      IronwoodFullViewingKey_FFI_t;
+//! Opaque buffer for an Ironwood spending key (raw scalar).
+typedef std::array<unsigned char, SerializedIronwoodSpendingKeySize>         IronwoodSpendingKey_FFI_t;
+//! Opaque buffer for an Ironwood extended spending key.
+typedef std::array<unsigned char, SerializedIronwoodExtendedSpendingKeySize> IronwoodExtendedSpendingKey_FFI_t;
 
 } // namespace libzcash
 

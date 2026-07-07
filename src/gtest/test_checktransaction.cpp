@@ -632,7 +632,7 @@ TEST(ChecktransactionTests, NonCanonicalEd25519Signature) {
 //     SelectParams(CBaseChainParams::REGTEST);
 //     auto consensus = Params().GetConsensus();
 //     std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
-//     std::optional<rust::Box<orchard::BatchValidator>> orchardAuth = std::nullopt;
+//     std::optional<rust::Box<ironwood::BatchValidator>> ironwoodAuth = std::nullopt;
 
 //     auto saplingBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 //     auto blossomBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_BLOSSOM].nBranchId;
@@ -652,7 +652,7 @@ TEST(ChecktransactionTests, NonCanonicalEd25519Signature) {
 //     CCoinsViewCache view(&baseView);
 //     // Ensure that the transaction validates against Sapling.
 //     EXPECT_TRUE(ContextualCheckShieldedInputs(
-//         tx, txdata, state, view, saplingAuth, orchardAuth, consensus, saplingBranchId, false, false,
+//         tx, txdata, state, view, saplingAuth, ironwoodAuth, consensus, saplingBranchId, false, false,
 //         [](const Consensus::Params&) { return false; }));
 
 //     // Attempt to validate the inputs against Blossom. We should be notified
@@ -664,7 +664,7 @@ TEST(ChecktransactionTests, NonCanonicalEd25519Signature) {
 //             HexInt(saplingBranchId)),
 //         false, "")).Times(1);
 //     EXPECT_FALSE(ContextualCheckShieldedInputs(
-//         tx, txdata, state, view, saplingAuth, orchardAuth, consensus, blossomBranchId, false, false,
+//         tx, txdata, state, view, saplingAuth, ironwoodAuth, consensus, blossomBranchId, false, false,
 //         [](const Consensus::Params&) { return false; }));
 
 //     // Attempt to validate the inputs against Heartwood. All we should learn is
@@ -674,7 +674,7 @@ TEST(ChecktransactionTests, NonCanonicalEd25519Signature) {
 //         10, false, REJECT_INVALID,
 //         "bad-txns-invalid-joinsplit-signature", false, "")).Times(1);
 //     EXPECT_FALSE(ContextualCheckShieldedInputs(
-//         tx, txdata, state, view, saplingAuth, orchardAuth, consensus, heartwoodBranchId, false, false,
+//         tx, txdata, state, view, saplingAuth, ironwoodAuth, consensus, heartwoodBranchId, false, false,
 //         [](const Consensus::Params&) { return false; }));
 // }
 
@@ -825,16 +825,16 @@ TEST(ChecktransactionTests, OverwinterExpiryHeight) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
-TEST(ChecktransactionTests, OrchardExpiryHeight) {
+TEST(ChecktransactionTests, IronwoodExpiryHeight) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, 100);
 
-    CMutableTransaction preOrchardMtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 99);
-    EXPECT_EQ(preOrchardMtx.nExpiryHeight, 100 - 1);
-    CMutableTransaction orchardMtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 100);
-    EXPECT_EQ(orchardMtx.nExpiryHeight, 100 + expiryDelta);
+    CMutableTransaction preIronwoodMtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 99);
+    EXPECT_EQ(preIronwoodMtx.nExpiryHeight, 100 - 1);
+    CMutableTransaction ironwoodMtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 100);
+    EXPECT_EQ(ironwoodMtx.nExpiryHeight, 100 + expiryDelta);
 
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);

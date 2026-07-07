@@ -96,9 +96,9 @@ public:
  *   ├─ Input: My address B, -30 ARRR
  *   └─ Fee: 0.001 ARRR
  * 
- * TRANSPARENT, SAPLING, AND ORCHARD:
+ * TRANSPARENT, SAPLING, AND IRONWOOD:
  * All three privacy pool types (transparent P2PKH/P2SH, Sapling z-addresses,
- * Orchard z-addresses) are handled uniformly. Memos are preserved for
+ * Ironwood z-addresses) are handled uniformly. Memos are preserved for
  * shielded transactions.
  */
 class TransactionRecord
@@ -174,7 +174,7 @@ public:
      * Creates parent record showing transaction summary (net balance change,
      * total debit/credit) plus child records for each input/output address.
      * Aggregates multiple UTXOs from same address into single child record.
-     * Handles transparent, Sapling, and Orchard uniformly.
+     * Handles transparent, Sapling, and Ironwood uniformly.
      * 
      * @param arcTx Archived transaction with all pool components
      * @return List: parent first, then children (external outputs, internal outputs, inputs, fee)

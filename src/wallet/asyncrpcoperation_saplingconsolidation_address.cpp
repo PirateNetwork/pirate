@@ -146,10 +146,10 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
         // notes (half smallest + half largest by value) for this address, exiting early
         // as soon as the aggregate value meets the fee_ + 1 threshold.
         std::vector<SaplingNoteEntry> saplingEntries;
-        std::vector<OrchardNoteEntry> orchardEntries;
+        std::vector<IronwoodNoteEntry> ironwoodEntries;
         {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
+            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                           11, INT_MAX, true, true, true,
                                           maxNotes_, fee_ + 1);
             // Lock immediately so no other async operation can select the same notes.
@@ -311,8 +311,8 @@ bool AsyncRPCOperation_saplingconsolidation_address::main_impl() {
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         std::vector<SaplingNoteEntry> remainingSapling;
-        std::vector<OrchardNoteEntry> remainingOrchard;
-        pwalletMain->GetFilteredNotes(remainingSapling, remainingOrchard, filterAddresses, 11, INT_MAX, true, true, false);
+        std::vector<IronwoodNoteEntry> remainingIronwood;
+        pwalletMain->GetFilteredNotes(remainingSapling, remainingIronwood, filterAddresses, 11, INT_MAX, true, true, false);
         remainingNotes = (int)remainingSapling.size();
     }
 

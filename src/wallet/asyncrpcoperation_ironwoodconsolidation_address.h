@@ -2,20 +2,20 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#ifndef ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_ADDRESS_H
-#define ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_ADDRESS_H
+#ifndef ASYNCRPCOPERATION_IRONWOODCONSOLIDATION_ADDRESS_H
+#define ASYNCRPCOPERATION_IRONWOODCONSOLIDATION_ADDRESS_H
 
 /**
- * @file asyncrpcoperation_orchardconsolidation_address.h
- * @brief Asynchronous RPC operation for consolidating Orchard notes to a single address
+ * @file asyncrpcoperation_ironwoodconsolidation_address.h
+ * @brief Asynchronous RPC operation for consolidating Ironwood notes to a single address
  * 
- * This file defines the AsyncRPCOperation_orchardconsolidation_address class, which implements
- * an asynchronous operation for consolidating multiple small Orchard notes into fewer, larger
+ * This file defines the AsyncRPCOperation_ironwoodconsolidation_address class, which implements
+ * an asynchronous operation for consolidating multiple small Ironwood notes into fewer, larger
  * notes at the same address. This helps reduce wallet fragmentation and improves transaction
  * performance by reducing the number of notes that need to be processed in future transactions.
  * 
  * The consolidation process:
- * 1. Identifies all notes at the specified Orchard address
+ * 1. Identifies all notes at the specified Ironwood address
  * 2. Groups them into batches (respecting maxNotes and maxTransactions limits)
  * 3. Creates consolidation transactions that spend multiple small notes and create one larger note
  * 4. Uses intelligent note selection to optimize for fee coverage and batch efficiency
@@ -31,10 +31,10 @@
 #include "zcash/address/zip32.h"
 
 /**
- * @class AsyncRPCOperation_orchardconsolidation_address
- * @brief Asynchronous operation for consolidating Orchard notes at a specific address
+ * @class AsyncRPCOperation_ironwoodconsolidation_address
+ * @brief Asynchronous operation for consolidating Ironwood notes at a specific address
  * 
- * This class implements an asynchronous RPC operation that consolidates multiple Orchard notes
+ * This class implements an asynchronous RPC operation that consolidates multiple Ironwood notes
  * at a given address into fewer, larger notes. The operation runs in the background and can
  * be monitored using the standard async RPC operation status mechanisms.
  * 
@@ -51,14 +51,14 @@
  * - Uses minimum confirmation depth of 11 blocks for note selection
  * - Validates all cryptographic proofs before transaction commitment
  */
-class AsyncRPCOperation_orchardconsolidation_address : public AsyncRPCOperation
+class AsyncRPCOperation_ironwoodconsolidation_address : public AsyncRPCOperation
 {
 public:
     /**
-     * @brief Constructs a new Orchard address consolidation operation
+     * @brief Constructs a new Ironwood address consolidation operation
      * 
      * @param targetHeight The blockchain height at which to create transactions
-     * @param address The Orchard payment address to consolidate notes for
+     * @param address The Ironwood payment address to consolidate notes for
      * @param spendingKey The extended spending key for the address (must be valid)
      * @param fee The fee amount in zatoshis to pay per consolidation transaction
      * @param maxNotes Maximum number of notes to include in a single consolidation transaction
@@ -68,9 +68,9 @@ public:
      *       allowing the operation to proceed even if the wallet is locked afterwards.
      * @note A fee of 10000 zatoshis (0.0001 ARRR) is recommended for reliable network acceptance.
      */
-    AsyncRPCOperation_orchardconsolidation_address(int targetHeight, 
-                                                   const libzcash::OrchardPaymentAddress& address,
-                                                   const libzcash::OrchardExtendedSpendingKeyPirate& spendingKey,
+    AsyncRPCOperation_ironwoodconsolidation_address(int targetHeight, 
+                                                   const libzcash::IronwoodPaymentAddress& address,
+                                                   const libzcash::IronwoodExtendedSpendingKeyPirate& spendingKey,
                                                    CAmount fee, 
                                                    int maxNotes,
                                                    int maxTransactions = 10);
@@ -78,13 +78,13 @@ public:
     /**
      * @brief Destructor - cleans up resources and clears sensitive data
      */
-    virtual ~AsyncRPCOperation_orchardconsolidation_address();
+    virtual ~AsyncRPCOperation_ironwoodconsolidation_address();
 
     // We don't want to be copied or moved around
-    AsyncRPCOperation_orchardconsolidation_address(AsyncRPCOperation_orchardconsolidation_address const&) = delete;
-    AsyncRPCOperation_orchardconsolidation_address(AsyncRPCOperation_orchardconsolidation_address&&) = delete;
-    AsyncRPCOperation_orchardconsolidation_address& operator=(AsyncRPCOperation_orchardconsolidation_address const&) = delete;
-    AsyncRPCOperation_orchardconsolidation_address& operator=(AsyncRPCOperation_orchardconsolidation_address&&) = delete;
+    AsyncRPCOperation_ironwoodconsolidation_address(AsyncRPCOperation_ironwoodconsolidation_address const&) = delete;
+    AsyncRPCOperation_ironwoodconsolidation_address(AsyncRPCOperation_ironwoodconsolidation_address&&) = delete;
+    AsyncRPCOperation_ironwoodconsolidation_address& operator=(AsyncRPCOperation_ironwoodconsolidation_address const&) = delete;
+    AsyncRPCOperation_ironwoodconsolidation_address& operator=(AsyncRPCOperation_ironwoodconsolidation_address&&) = delete;
 
     /**
      * @brief Main entry point for the consolidation operation
@@ -112,8 +112,8 @@ public:
 
 private:
     int targetHeight_;                                        ///< Blockchain height for transaction creation
-    libzcash::OrchardPaymentAddress address_;          ///< Target address for consolidation
-    libzcash::OrchardExtendedSpendingKeyPirate spendingKey_; ///< Spending key (captured during construction)
+    libzcash::IronwoodPaymentAddress address_;          ///< Target address for consolidation
+    libzcash::IronwoodExtendedSpendingKeyPirate spendingKey_; ///< Spending key (captured during construction)
     CAmount fee_;                                            ///< Fee per transaction in zatoshis
     int maxNotes_;                                           ///< Maximum notes per transaction
     int maxTransactions_;                                    ///< Maximum transactions to create
@@ -145,4 +145,4 @@ private:
     void setConsolidationResult(int numTxCreated, const CAmount& amountConsolidated, const std::vector<std::string>& consolidationTxIds, int notesConsolidated, int notesRemaining);
 };
 
-#endif /* ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_ADDRESS_H */
+#endif /* ASYNCRPCOPERATION_IRONWOODCONSOLIDATION_ADDRESS_H */

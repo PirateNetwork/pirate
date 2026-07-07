@@ -42,7 +42,7 @@ static const int SPROUT_VALUE_VERSION = 80101;
 static const int SAPLING_VALUE_VERSION = 80102;
 static const int TRANSPARENT_VALUE_VERSION = 80103;
 static const int BURNED_VALUE_VERSION = 80104;
-static const int ORCHARD_VALUE_VERSION = 80105;
+static const int IRONWOOD_VALUE_VERSION = 80105;
 
 // These 5 are declared here to avoid circular dependencies
 // code used this moved into .cpp
@@ -192,9 +192,9 @@ public:
 
     //! Root of the authorizing data commitment tree for this block.
     //!
-    //! - For blocks prior to (not including) the Orchard activation block, this is always
+    //! - For blocks prior to (not including) the Ironwood activation block, this is always
     //!   null.
-    //! - For blocks including and after the Orchard activation block, this is only set once
+    //! - For blocks including and after the Ironwood activation block, this is only set once
     //!   a block has been connected to the main chain, and will be null otherwise.
     uint256 hashAuthDataRoot;
 
@@ -261,12 +261,12 @@ public:
     //! Will be std::nullopt if nChainTx is zero.
     std::optional<CAmount> nChainSaplingValue;
 
-    //! Change in value held by the Orchard circuit over this block.
-    //! Not a std::optional because this was added before Orchard activated, so we can
+    //! Change in value held by the Ironwood circuit over this block.
+    //! Not a std::optional because this was added before Ironwood activated, so we can
     //! rely on the invariant that every block before this was added had nIronwoodValue = 0.
     CAmount nIronwoodValue;
 
-    //! (memory only) Total value held by the Orchard circuit up to and including this block.
+    //! (memory only) Total value held by the Ironwood circuit up to and including this block.
     //! Will be std::nullopt if and only if nChainTx is zero.
     std::optional<CAmount> nChainIronwoodValue;
 
@@ -278,13 +278,13 @@ public:
     //!   once a block has been connected to the main chain, and will be null otherwise.
     uint256 hashFinalSaplingRoot;
 
-    //! Root of the Orchard commitment tree as of the end of this block.
+    //! Root of the Ironwood commitment tree as of the end of this block.
     //!
     //! - For blocks prior to (not including) the NU5 activation block, this is always
     //!   null.
     //! - For blocks including and after the NU5 activation block, this is only set
     //!   once a block has been connected to the main chain, and will be null otherwise.
-    uint256 hashFinalOrchardRoot;
+    uint256 hashFinalIronwoodRoot;
 
     //! Root of the ZIP 221 history tree as of the end of the previous block.
     //!
@@ -340,7 +340,7 @@ public:
         hashSproutAnchor = uint256();
         hashFinalSproutRoot = uint256();
         hashFinalSaplingRoot = uint256();
-        hashFinalOrchardRoot = uint256();
+        hashFinalIronwoodRoot = uint256();
         hashChainHistoryRoot = uint256();
         nSequenceId = 0;
 
@@ -579,7 +579,7 @@ public:
 
         // Only read/write hashFinalSaplingRoot and hashChainHistoryRoot if the
         // client version used to create this index was storing them.
-        if ((s.GetType() & SER_DISK) && (nVersion >= ORCHARD_VALUE_VERSION)) {
+        if ((s.GetType() & SER_DISK) && (nVersion >= IRONWOOD_VALUE_VERSION)) {
             READWRITE(hashFinalSaplingRoot);
             READWRITE(hashChainHistoryRoot);
         } else if (ser_action.ForRead()) {
@@ -591,9 +591,9 @@ public:
         // Only read/write NU5 data if the client version used to create this
         // index was storing them. For block indices written before the client
         // was NU5-aware, these are always null / zero.
-        if ((s.GetType() & SER_DISK) && (nVersion >= ORCHARD_VALUE_VERSION)) {
+        if ((s.GetType() & SER_DISK) && (nVersion >= IRONWOOD_VALUE_VERSION)) {
             READWRITE(hashAuthDataRoot);
-            READWRITE(hashFinalOrchardRoot);
+            READWRITE(hashFinalIronwoodRoot);
             READWRITE(nIronwoodValue);
         }
 

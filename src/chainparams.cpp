@@ -221,13 +221,13 @@ public:
         bech32HRPs[SAPLING_DIVERSIFIED_EXTENDED_FVK]          = "zdxviews";
         bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]                 = "pirate-sapling-payment-disclosure";
 
-        bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate";
-        bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key";
-        bech32HRPs[ORCHARD_EXTENDED_FVK]                      = "pirate-extended-viewing-key";
-        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key";
-        bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key";
-        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key";
-        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "pirate-orchard-payment-disclosure";
+        bech32HRPs[IRONWOOD_PAYMENT_ADDRESS]                   = "pirate";
+        bech32HRPs[IRONWOOD_FULL_VIEWING_KEY]                  = "pirate-viewing-key";
+        bech32HRPs[IRONWOOD_EXTENDED_FVK]                      = "pirate-extended-viewing-key";
+        bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key";
+        bech32HRPs[IRONWOOD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key";
+        bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key";
+        bech32HRPs[IRONWOOD_OUTPUT_DISCLOSURE]                 = "pirate-ironwood-payment-disclosure";
 
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
@@ -438,13 +438,13 @@ public:
         bech32HRPs[SAPLING_EXTENDED_FVK]         = "zxviewtestsapling";
         bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]    = "zdisctest";
 
-        bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate-test";
-        bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-test";
-        bech32HRPs[ORCHARD_EXTENDED_FVK]                      = "pirate-extended-viewing-key-test";
-        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-test";
-        bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-test";
-        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-test";
-        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "odisctest";
+        bech32HRPs[IRONWOOD_PAYMENT_ADDRESS]                   = "pirate-test";
+        bech32HRPs[IRONWOOD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-test";
+        bech32HRPs[IRONWOOD_EXTENDED_FVK]                      = "pirate-extended-viewing-key-test";
+        bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-test";
+        bech32HRPs[IRONWOOD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-test";
+        bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-test";
+        bech32HRPs[IRONWOOD_OUTPUT_DISCLOSURE]                 = "idisctest";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_test), std::end(chainparams_seed_test));
 
@@ -569,13 +569,13 @@ public:
         bech32HRPs[SAPLING_EXTENDED_FVK]         = "zxviewregtestsapling";
         bech32HRPs[SAPLING_OUTPUT_DISCLOSURE]    = "zdiscregtest";
 
-        bech32HRPs[ORCHARD_PAYMENT_ADDRESS]                   = "pirate-regtest";
-        bech32HRPs[ORCHARD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-regtest";
-        bech32HRPs[ORCHARD_EXTENDED_FVK]                      = "pirate-extended-viewing-key-regtest";
-        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-regtest";
-        bech32HRPs[ORCHARD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-regtest";
-        bech32HRPs[ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-regtest";
-        bech32HRPs[ORCHARD_OUTPUT_DISCLOSURE]                 = "odiscregtest";
+        bech32HRPs[IRONWOOD_PAYMENT_ADDRESS]                   = "pirate-regtest";
+        bech32HRPs[IRONWOOD_FULL_VIEWING_KEY]                  = "pirate-viewing-key-regtest";
+        bech32HRPs[IRONWOOD_EXTENDED_FVK]                      = "pirate-extended-viewing-key-regtest";
+        bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_FVK]          = "pirate-diversified-extended-viewing-key-regtest";
+        bech32HRPs[IRONWOOD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key-regtest";
+        bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key-regtest";
+        bech32HRPs[IRONWOOD_OUTPUT_DISCLOSURE]                 = "idiscregtest";
 
         // Founders reward script expects a vector of 2-of-3 multisig addresses
         vFoundersRewardAddress = { "t2FwcEhFdNXuFMv1tcYwaBJtYVtMj8b1uTg" };
@@ -695,7 +695,7 @@ void komodo_setironwood(int32_t height)
 {
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = height;
     ASSETCHAINS_IRONWOOD = height;
-    fprintf(stdout,"SET ORCHARD ACTIVATION height.%d\n",height);
+    fprintf(stdout,"SET IRONWOOD ACTIVATION height.%d\n",height);
 }
 
 /* This function returns the checkpoint list for a currently active asset chain.

@@ -230,17 +230,17 @@ bool CBasicKeyStore::AddSaplingWatchOnly(const libzcash::SaplingExtendedFullView
 }
 
 /**
- * @brief Add an Orchard watch-only extended full viewing key
- * @param extfvk The Orchard extended full viewing key
+ * @brief Add an Ironwood watch-only extended full viewing key
+ * @param extfvk The Ironwood extended full viewing key
  * @return true on success
  * 
- * Enables watching Orchard addresses (both external and internal) without spending capability.
+ * Enables watching Ironwood addresses (both external and internal) without spending capability.
  * Can decrypt incoming transactions but cannot create spending signatures.
  */
-bool CBasicKeyStore::AddOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CBasicKeyStore::AddIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     LOCK(cs_KeyStore);
-    setOrchardWatchOnly.insert(extfvk);
+    setIronwoodWatchOnly.insert(extfvk);
     return true;
 }
 
@@ -269,14 +269,14 @@ bool CBasicKeyStore::RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullV
 }
 
 /**
- * @brief Remove an Orchard watch-only viewing key
- * @param extfvk The Orchard extended full viewing key to remove
+ * @brief Remove an Ironwood watch-only viewing key
+ * @param extfvk The Ironwood extended full viewing key to remove
  * @return true on success
  */
-bool CBasicKeyStore::RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CBasicKeyStore::RemoveIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     LOCK(cs_KeyStore);
-    setOrchardWatchOnly.erase(extfvk);
+    setIronwoodWatchOnly.erase(extfvk);
     return true;
 }
 
@@ -303,18 +303,18 @@ bool CBasicKeyStore::HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullVie
 }
 
 /**
- * @brief Check if an Orchard viewing key is in watch-only mode
- * @param extfvk The Orchard extended full viewing key to check
+ * @brief Check if an Ironwood viewing key is in watch-only mode
+ * @param extfvk The Ironwood extended full viewing key to check
  * @return true if viewing key is watch-only, false otherwise
  */
-bool CBasicKeyStore::HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const
+bool CBasicKeyStore::HaveIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) const
 {
     LOCK(cs_KeyStore);
-    return setOrchardWatchOnly.count(extfvk) > 0;
+    return setIronwoodWatchOnly.count(extfvk) > 0;
 }
 
 /**
- * @brief Check if keystore has any watch-only addresses (transparent, Sapling, or Orchard)
+ * @brief Check if keystore has any watch-only addresses (transparent, Sapling, or Ironwood)
  * @return true if any watch-only keys exist, false otherwise
  */
 bool CBasicKeyStore::HaveWatchOnly() const
@@ -327,7 +327,7 @@ bool CBasicKeyStore::HaveWatchOnly() const
     if (!setSaplingWatchOnly.empty())
         return true;
 
-    if (!setOrchardWatchOnly.empty())
+    if (!setIronwoodWatchOnly.empty())
         return true;
 
     return false;
@@ -380,8 +380,8 @@ bool CBasicKeyStore::AddSaplingSpendingKey(
 }
 
 /**
- * @brief Add an Orchard extended spending key to the keystore
- * @param extsk The Orchard extended spending key to add
+ * @brief Add an Ironwood extended spending key to the keystore
+ * @param extsk The Ironwood extended spending key to add
  * @return true on success, false if XFVK derivation fails or XFVK addition fails
  * 
  * Derives the extended full viewing key (XFVK) from the spending key and adds both
@@ -390,10 +390,10 @@ bool CBasicKeyStore::AddSaplingSpendingKey(
  * - Default external and internal payment addresses
  * - Associated incoming and outgoing viewing keys
  * 
- * The spending key is stored in mapOrchardSpendingKeys for signing operations.
+ * The spending key is stored in mapIronwoodSpendingKeys for signing operations.
  */
-bool CBasicKeyStore::AddOrchardSpendingKey(
-    const libzcash::OrchardExtendedSpendingKeyPirate &extsk)
+bool CBasicKeyStore::AddIronwoodSpendingKey(
+    const libzcash::IronwoodExtendedSpendingKeyPirate &extsk)
 {
     LOCK(cs_KeyStore);
     
@@ -405,12 +405,12 @@ bool CBasicKeyStore::AddOrchardSpendingKey(
     auto extfvk = extfvkOpt.value();
 
     // Add the XFVK (this will add both external and internal keys/addresses)
-    if (!CBasicKeyStore::AddOrchardExtendedFullViewingKey(extfvk)) {
+    if (!CBasicKeyStore::AddIronwoodExtendedFullViewingKey(extfvk)) {
         return false;
     }
 
     // Store the spending key for transaction signing
-    mapOrchardSpendingKeys[extfvk] = extsk;
+    mapIronwoodSpendingKeys[extfvk] = extsk;
 
     return true;
 }
@@ -468,8 +468,8 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
 
     // Derive and register internal IVK + internal default address (change address)
     // Also register internal IVK in mapSaplingFullViewingKeys so that GetSaplingFullViewingKey
-    // succeeds for change addresses — mirrors how Orchard registers both scopes in
-    // mapOrchardFullViewingKeys, and is required for correct Qt group assignment.
+    // succeeds for change addresses — mirrors how Ironwood registers both scopes in
+    // mapIronwoodFullViewingKeys, and is required for correct Qt group assignment.
     libzcash::SaplingIncomingViewingKey ivkInternal;
     libzcash::SaplingPaymentAddress addrInternal;
     if (extfvk.DeriveIVKinternal(&ivkInternal) &&
@@ -482,8 +482,8 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
 }
 
 /**
- * @brief Add an Orchard extended full viewing key (XFVK) with both external and internal scopes
- * @param extfvk The Orchard extended full viewing key to add
+ * @brief Add an Ironwood extended full viewing key (XFVK) with both external and internal scopes
+ * @param extfvk The Ironwood extended full viewing key to add
  * @return true on success, false if key derivation fails
  * 
  * This function extracts and stores both external and internal keys from the XFVK:
@@ -497,22 +497,22 @@ bool CBasicKeyStore::AddSaplingExtendedFullViewingKey(
  * - Proper transaction scanning (identifying received vs change outputs)
  * - Scope preservation during database persistence
  */
-bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
-    const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk)
+bool CBasicKeyStore::AddIronwoodExtendedFullViewingKey(
+    const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk)
 {
     LOCK(cs_KeyStore);
 
     // Derive external keys
-    libzcash::OrchardIncomingViewingKey ivk;
-    libzcash::OrchardOutgoingViewingKey ovk;
-    libzcash::OrchardPaymentAddress address;
+    libzcash::IronwoodIncomingViewingKey ivk;
+    libzcash::IronwoodOutgoingViewingKey ovk;
+    libzcash::IronwoodPaymentAddress address;
     bool ivkDerived         = extfvk.fvk.DeriveIVK(&ivk);
     bool ovkDerived         = extfvk.fvk.DeriveOVK(&ovk);
     bool addressDerived     = extfvk.fvk.DeriveDefaultAddress(&address);
 
     // Derive internal keys (IVK + address only; OVK not stored — tx_builder derives it from the spending key)
-    libzcash::OrchardIncomingViewingKey ivkInternal;
-    libzcash::OrchardPaymentAddress addressInternal;
+    libzcash::IronwoodIncomingViewingKey ivkInternal;
+    libzcash::IronwoodPaymentAddress addressInternal;
     bool ivkInternalDerived     = extfvk.fvk.DeriveIVKinternal(&ivkInternal);
     bool addressInternalDerived = extfvk.fvk.DeriveDefaultAddressInternal(&addressInternal);
 
@@ -522,22 +522,22 @@ bool CBasicKeyStore::AddOrchardExtendedFullViewingKey(
     }
 
     // Store external FVK and OVK
-    OrchardIVKWithScope ivkExternal(ivk, KeyScope::External);
-    OrchardOVKWithScope ovkExternal(ovk, KeyScope::External);
-    mapOrchardFullViewingKeys[ivkExternal] = extfvk;
-    setOrchardOutgoingViewingKeys.insert(ovkExternal);
+    IronwoodIVKWithScope ivkExternal(ivk, KeyScope::External);
+    IronwoodOVKWithScope ovkExternal(ovk, KeyScope::External);
+    mapIronwoodFullViewingKeys[ivkExternal] = extfvk;
+    setIronwoodOutgoingViewingKeys.insert(ovkExternal);
 
     // Store internal FVK (no internal OVK entry)
-    OrchardIVKWithScope ivkInternalScoped(ivkInternal, KeyScope::Internal);
-    mapOrchardFullViewingKeys[ivkInternalScoped] = extfvk;
+    IronwoodIVKWithScope ivkInternalScoped(ivkInternal, KeyScope::Internal);
+    mapIronwoodFullViewingKeys[ivkInternalScoped] = extfvk;
 
     // Add external IVK with default address
-    if (!CBasicKeyStore::AddOrchardIncomingViewingKey(ivk, address, KeyScope::External)) {
+    if (!CBasicKeyStore::AddIronwoodIncomingViewingKey(ivk, address, KeyScope::External)) {
         return false;
     }
     
     // Add internal IVK with default internal address
-    return CBasicKeyStore::AddOrchardIncomingViewingKey(ivkInternal, addressInternal, KeyScope::Internal);
+    return CBasicKeyStore::AddIronwoodIncomingViewingKey(ivkInternal, addressInternal, KeyScope::Internal);
 }
 
 // Stores the (IVK, scope) pair, enabling distinction of External (receive) vs Internal (change) addresses.
@@ -554,9 +554,9 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
 }
 
 /**
- * @brief Add an Orchard incoming viewing key (IVK) with its associated payment address and scope
- * @param ivk The Orchard incoming viewing key to add
- * @param addr The Orchard payment address associated with this IVK
+ * @brief Add an Ironwood incoming viewing key (IVK) with its associated payment address and scope
+ * @param ivk The Ironwood incoming viewing key to add
+ * @param addr The Ironwood payment address associated with this IVK
  * @param scope The scope (External or Internal) of this IVK
  * @return true on success
  * 
@@ -565,28 +565,28 @@ bool CBasicKeyStore::AddSaplingIncomingViewingKey(
  * during transaction scanning. If the same IVK is added with a different scope, the scope
  * in the set will be updated to the most recent value.
  * 
- * The mapUnsavedOrchardIncomingViewingKeys is used to track new address->IVK mappings
+ * The mapUnsavedIronwoodIncomingViewingKeys is used to track new address->IVK mappings
  * discovered while the wallet is locked, and is cleared during SetBestChainINTERNAL.
  */
-bool CBasicKeyStore::AddOrchardIncomingViewingKey(
-    const libzcash::OrchardIncomingViewingKey &ivk,
-    const libzcash::OrchardPaymentAddress &addr,
+bool CBasicKeyStore::AddIronwoodIncomingViewingKey(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
+    const libzcash::IronwoodPaymentAddress &addr,
     KeyScope scope)
 {
     LOCK(cs_KeyStore);
 
-    // Add addr -> (ivk, scope) to OrchardIncomingViewingKeyMap
+    // Add addr -> (ivk, scope) to IronwoodIncomingViewingKeyMap
     // This map is used to retrieve the IVK and scope for a given payment address
-    mapOrchardIncomingViewingKeys[addr] = std::make_pair(ivk, scope);
+    mapIronwoodIncomingViewingKeys[addr] = std::make_pair(ivk, scope);
     
     // Add IVK to set for transaction scanning, updating scope if IVK already exists
     // Note: The same IVK can be used with different scopes (external/internal),
     // but the set only tracks one scope per IVK (the most recently added)
-    setOrchardIncomingViewingKeys[ivk] = scope;
+    setIronwoodIncomingViewingKeys[ivk] = scope;
 
     // Track new address->IVK pairs discovered while wallet is locked
     // This is cleared during SetBestChainINTERNAL to capture new diversified addresses
-    mapUnsavedOrchardIncomingViewingKeys[addr] = std::make_pair(ivk, scope);
+    mapUnsavedIronwoodIncomingViewingKeys[addr] = std::make_pair(ivk, scope);
 
     return true;
 }
@@ -617,8 +617,8 @@ bool CBasicKeyStore::AddSaplingDiversifiedAddress(
 }
 
 /**
- * @brief Add an Orchard diversified payment address with its derivation path
- * @param addr The Orchard payment address
+ * @brief Add an Ironwood diversified payment address with its derivation path
+ * @param addr The Ironwood payment address
  * @param ivk The incoming viewing key used to derive this address
  * @param path The 88-byte diversification path used to generate this address
  * @return true on success
@@ -627,16 +627,16 @@ bool CBasicKeyStore::AddSaplingDiversifiedAddress(
  * This enables the wallet to track which diversifier was used for address generation,
  * supporting proper address management and re-derivation.
  */
-bool CBasicKeyStore::AddOrchardDiversifiedAddress(
-    const libzcash::OrchardPaymentAddress &addr,
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CBasicKeyStore::AddIronwoodDiversifiedAddress(
+    const libzcash::IronwoodPaymentAddress &addr,
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path
 )
 {
     LOCK(cs_KeyStore);
-    OrchardDiversifierPath dPath(ivk, path);
+    IronwoodDiversifierPath dPath(ivk, path);
 
-    mapOrchardPaymentAddresses[addr] = dPath;
+    mapIronwoodPaymentAddresses[addr] = dPath;
 
     return true;
 }
@@ -663,21 +663,21 @@ bool CBasicKeyStore::AddLastSaplingDiversifierUsed(
 }
 
 /**
- * @brief Record the last diversifier path used for an Orchard IVK
- * @param ivk The Orchard incoming viewing key
+ * @brief Record the last diversifier path used for an Ironwood IVK
+ * @param ivk The Ironwood incoming viewing key
  * @param path The last diversifier path used with this IVK
  * @return true on success
  * 
  * Tracks the most recently used diversifier for each IVK to enable sequential
  * address generation and proper gap limit handling during wallet recovery.
  */
-bool CBasicKeyStore::AddLastOrchardDiversifierUsed(
-    const libzcash::OrchardIncomingViewingKey &ivk,
+bool CBasicKeyStore::AddLastIronwoodDiversifierUsed(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
     const blob88 &path)
 {
     LOCK(cs_KeyStore);
 
-    mapLastOrchardDiversifierPath[ivk] = path;
+    mapLastIronwoodDiversifierPath[ivk] = path;
 
     return true;
 }
@@ -720,20 +720,20 @@ bool CBasicKeyStore::HaveSaplingFullViewingKey(const libzcash::SaplingIncomingVi
 }
 
 /**
- * @brief Check if keystore has an Orchard full viewing key for an IVK
- * @param ivk The Orchard incoming viewing key to check
+ * @brief Check if keystore has an Ironwood full viewing key for an IVK
+ * @param ivk The Ironwood incoming viewing key to check
  * @return true if full viewing key exists (external or internal scope), false otherwise
  * 
  * Checks both external and internal scope since the same IVK can exist with either scope.
  */
-bool CBasicKeyStore::HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKey &ivk) const
+bool CBasicKeyStore::HaveIronwoodFullViewingKey(const libzcash::IronwoodIncomingViewingKey &ivk) const
 {
     LOCK(cs_KeyStore);
     // Check both external and internal scope
-    OrchardIVKWithScope ivkExternal(ivk, KeyScope::External);
-    OrchardIVKWithScope ivkInternal(ivk, KeyScope::Internal);
-    return mapOrchardFullViewingKeys.count(ivkExternal) > 0 || 
-           mapOrchardFullViewingKeys.count(ivkInternal) > 0;
+    IronwoodIVKWithScope ivkExternal(ivk, KeyScope::External);
+    IronwoodIVKWithScope ivkInternal(ivk, KeyScope::Internal);
+    return mapIronwoodFullViewingKeys.count(ivkExternal) > 0 || 
+           mapIronwoodFullViewingKeys.count(ivkInternal) > 0;
 }
 
 /**
@@ -748,14 +748,14 @@ bool CBasicKeyStore::HaveSaplingIncomingViewingKey(const libzcash::SaplingPaymen
 }
 
 /**
- * @brief Check if keystore has an Orchard IVK for a payment address
- * @param addr The Orchard payment address to check
+ * @brief Check if keystore has an Ironwood IVK for a payment address
+ * @param addr The Ironwood payment address to check
  * @return true if IVK exists for this address, false otherwise
  */
-bool CBasicKeyStore::HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const
+bool CBasicKeyStore::HaveIronwoodIncomingViewingKey(const libzcash::IronwoodPaymentAddress &addr) const
 {
     LOCK(cs_KeyStore);
-    return mapOrchardIncomingViewingKeys.count(addr) > 0;
+    return mapIronwoodIncomingViewingKeys.count(addr) > 0;
 }
 
 /**
@@ -797,30 +797,30 @@ bool CBasicKeyStore::GetSaplingFullViewingKey(
 }
 
 /**
- * @brief Retrieve an Orchard extended full viewing key from an IVK
- * @param ivk The Orchard incoming viewing key
+ * @brief Retrieve an Ironwood extended full viewing key from an IVK
+ * @param ivk The Ironwood incoming viewing key
  * @param extfvkOut[out] The extended full viewing key (if found)
  * @return true if XFVK found (external or internal scope), false otherwise
  * 
  * Searches for the XFVK in both external and internal scope. External scope
  * is checked first as it's more commonly used. Returns the first match found.
  */
-bool CBasicKeyStore::GetOrchardFullViewingKey(
-    const libzcash::OrchardIncomingViewingKey &ivk,
-    libzcash::OrchardExtendedFullViewingKeyPirate &extfvkOut) const
+bool CBasicKeyStore::GetIronwoodFullViewingKey(
+    const libzcash::IronwoodIncomingViewingKey &ivk,
+    libzcash::IronwoodExtendedFullViewingKeyPirate &extfvkOut) const
 {
     LOCK(cs_KeyStore);
     // Try external scope first
-    OrchardIVKWithScope ivkExternal(ivk, KeyScope::External);
-    OrchardFullViewingKeyMap::const_iterator mi = mapOrchardFullViewingKeys.find(ivkExternal);
-    if (mi != mapOrchardFullViewingKeys.end()) {
+    IronwoodIVKWithScope ivkExternal(ivk, KeyScope::External);
+    IronwoodFullViewingKeyMap::const_iterator mi = mapIronwoodFullViewingKeys.find(ivkExternal);
+    if (mi != mapIronwoodFullViewingKeys.end()) {
         extfvkOut = mi->second;
         return true;
     }
     // Try internal scope
-    OrchardIVKWithScope ivkInternal(ivk, KeyScope::Internal);
-    mi = mapOrchardFullViewingKeys.find(ivkInternal);
-    if (mi != mapOrchardFullViewingKeys.end()) {
+    IronwoodIVKWithScope ivkInternal(ivk, KeyScope::Internal);
+    mi = mapIronwoodFullViewingKeys.find(ivkInternal);
+    if (mi != mapIronwoodFullViewingKeys.end()) {
         extfvkOut = mi->second;
         return true;
     }
@@ -858,21 +858,21 @@ bool CBasicKeyStore::GetSaplingKeyScope(const libzcash::SaplingPaymentAddress &a
 }
 
 /**
- * @brief Retrieve the Orchard incoming viewing key for a given payment address
- * @param addr The Orchard payment address to look up
+ * @brief Retrieve the Ironwood incoming viewing key for a given payment address
+ * @param addr The Ironwood payment address to look up
  * @param ivkOut[out] The IVK associated with the address (if found)
  * @return true if address found and IVK retrieved, false otherwise
  * 
  * Looks up the IVK from the address->IVK map. Note that this returns only the IVK
- * and not the scope. To retrieve both IVK and scope, access mapOrchardIncomingViewingKeys
+ * and not the scope. To retrieve both IVK and scope, access mapIronwoodIncomingViewingKeys
  * directly and use .first for IVK and .second for scope.
  */
-bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr,
-                                   libzcash::OrchardIncomingViewingKey &ivkOut) const
+bool CBasicKeyStore::GetIronwoodIncomingViewingKey(const libzcash::IronwoodPaymentAddress &addr,
+                                   libzcash::IronwoodIncomingViewingKey &ivkOut) const
 {
     LOCK(cs_KeyStore);
-    OrchardIncomingViewingKeyMap::const_iterator mi = mapOrchardIncomingViewingKeys.find(addr);
-    if (mi != mapOrchardIncomingViewingKeys.end()) {
+    IronwoodIncomingViewingKeyMap::const_iterator mi = mapIronwoodIncomingViewingKeys.find(addr);
+    if (mi != mapIronwoodIncomingViewingKeys.end()) {
         ivkOut = mi->second.first;  // Extract IVK from (IVK, scope) pair
         return true;
     }
@@ -880,17 +880,17 @@ bool CBasicKeyStore::GetOrchardIncomingViewingKey(const libzcash::OrchardPayment
 }
 
 /**
- * @brief Retrieve the scope (External/Internal) for an Orchard payment address
- * @param addr The Orchard payment address
+ * @brief Retrieve the scope (External/Internal) for an Ironwood payment address
+ * @param addr The Ironwood payment address
  * @param scopeOut[out] The scope (External or Internal) if found
  * @return true if address exists in keystore, false otherwise
  */
-bool CBasicKeyStore::GetOrchardKeyScope(const libzcash::OrchardPaymentAddress &addr,
+bool CBasicKeyStore::GetIronwoodKeyScope(const libzcash::IronwoodPaymentAddress &addr,
                                         KeyScope &scopeOut) const
 {
     LOCK(cs_KeyStore);
-    OrchardIncomingViewingKeyMap::const_iterator mi = mapOrchardIncomingViewingKeys.find(addr);
-    if (mi != mapOrchardIncomingViewingKeys.end()) {
+    IronwoodIncomingViewingKeyMap::const_iterator mi = mapIronwoodIncomingViewingKeys.find(addr);
+    if (mi != mapIronwoodIncomingViewingKeys.end()) {
         scopeOut = mi->second.second;  // Extract scope from (IVK, scope) pair
         return true;
     }
@@ -923,8 +923,8 @@ bool CBasicKeyStore::GetSaplingExtendedSpendingKey(const libzcash::SaplingPaymen
 }
 
 /**
- * @brief Retrieve the Orchard extended spending key for a given payment address
- * @param addr The Orchard payment address
+ * @brief Retrieve the Ironwood extended spending key for a given payment address
+ * @param addr The Ironwood payment address
  * @param extskOut[out] The extended spending key (if found)
  * @return true if the spending key was found, false otherwise
  * 
@@ -936,14 +936,14 @@ bool CBasicKeyStore::GetSaplingExtendedSpendingKey(const libzcash::SaplingPaymen
  * This only succeeds if the wallet has the full spending authority for this address.
  * Watch-only wallets will not have the spending key even if they have the viewing keys.
  */
-bool CBasicKeyStore::GetOrchardExtendedSpendingKey(const libzcash::OrchardPaymentAddress &addr,
-                                    libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const {
-    libzcash::OrchardIncomingViewingKey ivk;
-    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+bool CBasicKeyStore::GetIronwoodExtendedSpendingKey(const libzcash::IronwoodPaymentAddress &addr,
+                                    libzcash::IronwoodExtendedSpendingKeyPirate &extskOut) const {
+    libzcash::IronwoodIncomingViewingKey ivk;
+    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
     LOCK(cs_KeyStore);
     // Chain lookup: addr -> ivk -> extfvk -> spending key
-    return GetOrchardIncomingViewingKey(addr, ivk) &&
-            GetOrchardFullViewingKey(ivk, extfvk) &&
-            GetOrchardSpendingKey(extfvk, extskOut);
+    return GetIronwoodIncomingViewingKey(addr, ivk) &&
+            GetIronwoodFullViewingKey(ivk, extfvk) &&
+            GetIronwoodSpendingKey(extfvk, extskOut);
 }

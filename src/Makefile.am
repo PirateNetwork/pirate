@@ -264,7 +264,7 @@ LIBZCASH_H = \
   zcash/Note.hpp \
   zcash/prf.h \
   zcash/Proof.hpp \
-	zcash/address/orchard.hpp \
+	zcash/address/ironwood.hpp \
 	zcash/address/sapling.hpp \
 	zcash/address/sprout.hpp \
 	zcash/History.hpp \
@@ -400,8 +400,8 @@ BITCOIN_CORE_H = \
   wallet/asyncrpcoperation_mergetoaddress.h \
 	wallet/asyncrpcoperation_saplingconsolidation.h \
 	wallet/asyncrpcoperation_saplingconsolidation_address.h \
-	wallet/asyncrpcoperation_orchardconsolidation_address.h \
-  wallet/asyncrpcoperation_orchardconsolidation.h \
+	wallet/asyncrpcoperation_ironwoodconsolidation_address.h \
+  wallet/asyncrpcoperation_ironwoodconsolidation.h \
 	wallet/asyncrpcoperation_sweeptoaddress.h \
   wallet/asyncrpcoperation_sendmany.h \
   wallet/asyncrpcoperation_shieldcoinbase.h \
@@ -556,8 +556,8 @@ libbitcoin_wallet_a_SOURCES = \
   wallet/asyncrpcoperation_mergetoaddress.cpp \
 	wallet/asyncrpcoperation_saplingconsolidation.cpp \
 	wallet/asyncrpcoperation_saplingconsolidation_address.cpp \
-	wallet/asyncrpcoperation_orchardconsolidation_address.cpp \
-  wallet/asyncrpcoperation_orchardconsolidation.cpp \
+	wallet/asyncrpcoperation_ironwoodconsolidation_address.cpp \
+  wallet/asyncrpcoperation_ironwoodconsolidation.cpp \
 	wallet/asyncrpcoperation_sweeptoaddress.cpp \
   wallet/asyncrpcoperation_sendmany.cpp \
   wallet/asyncrpcoperation_shieldcoinbase.cpp \
@@ -871,7 +871,7 @@ libzcash_a_SOURCES = \
 	zcash/memo.cpp \
 	zcash/Note.cpp \
 	zcash/prf.cpp \
-	zcash/address/orchard.cpp \
+	zcash/address/ironwood.cpp \
 	zcash/address/sapling.cpp \
 	zcash/address/sprout.cpp \
 	zcash/History.cpp \

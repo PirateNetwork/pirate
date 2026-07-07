@@ -7,7 +7,7 @@
  * @brief Asynchronous sweep-to-address operation
  * 
  * Implements consolidation of funds from multiple addresses into a single
- * destination address. Supports both Sapling and Orchard protocols with
+ * destination address. Supports both Sapling and Ironwood protocols with
  * intelligent consolidation strategies.
  * 
  * Purpose: Consolidate funds from multiple addresses to single destination
@@ -29,14 +29,14 @@ static const CAmount DEFAULT_SWEEP_FEE = 10000;
 extern CAmount fSweepTxFee;
 extern bool fSweepMapUsed;
 extern std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
-extern std::optional<libzcash::OrchardPaymentAddress> rpcOrchardSweepAddress;
+extern std::optional<libzcash::IronwoodPaymentAddress> rpcIronwoodSweepAddress;
 
 /**
  * @class AsyncRPCOperation_sweeptoaddress
  * @brief Asynchronous sweep-to-address operation
  * 
  * Consolidates funds from multiple addresses into a single destination address.
- * Supports Sapling and Orchard protocols with spending-key-based consolidation.
+ * Supports Sapling and Ironwood protocols with spending-key-based consolidation.
  * 
  * Purpose: Sweep fragmented funds to single destination
  * Inputs: Multiple addresses with notes/UTXOs
@@ -94,11 +94,11 @@ public:
     void setSaplingSweepAddress(const libzcash::SaplingPaymentAddress& address);
     
     /**
-     * @brief Set Orchard destination address for RPC-initiated sweeps
+     * @brief Set Ironwood destination address for RPC-initiated sweeps
      * 
-     * @param address Orchard payment address to sweep funds to
+     * @param address Ironwood payment address to sweep funds to
      */
-    void setOrchardSweepAddress(const libzcash::OrchardPaymentAddress& address);
+    void setIronwoodSweepAddress(const libzcash::IronwoodPaymentAddress& address);
 
 private:
     int targetHeight_;    ///< Target blockchain height for transactions

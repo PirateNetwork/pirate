@@ -5,7 +5,7 @@
 
 /**
  * @file Note.cpp
- * @brief Shielded note operations for Sprout, Sapling, and Orchard
+ * @brief Shielded note operations for Sprout, Sapling, and Ironwood
  *
  * Implements note creation, encryption, decryption, and commitment computation.
  * Sapling cmu/rcm are cached from Rust decryption to avoid expensive recomputation.
@@ -458,18 +458,18 @@ std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
 }
 
 //==============================================================================
-// Orchard Note Implementation
+// Ironwood Note Implementation
 //==============================================================================
 
 /**
- * @brief Compute the nullifier for an Orchard note
+ * @brief Compute the nullifier for an Ironwood note
  * @param fvk The full viewing key used to compute the nullifier
  * @return The unique nullifier, or std::nullopt on failure
  *
  * Uses CDataStream to serialize the viewing key and address for the
  * Rust bridge, then calls ironwood::compute_nullifier to compute the nullifier.
  */
-std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewingKey& fvk) const
+std::optional<uint256> IronwoodNote::nullifier(const libzcash::IronwoodFullViewingKey& fvk) const
 {
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -477,8 +477,8 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    libzcash::OrchardFullViewingKey_FFI_t fvk_t;
-    libzcash::OrchardPaymentAddress_FFI_t address_t;
+    libzcash::IronwoodFullViewingKey_FFI_t fvk_t;
+    libzcash::IronwoodPaymentAddress_FFI_t address_t;
     uint256 nullifier_t;
 
     // Serialize sending data
@@ -502,21 +502,21 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
 }
 
 //==============================================================================
-// Orchard Note Plaintext Implementation
+// Ironwood Note Plaintext Implementation
 //==============================================================================
 
 /**
- * @brief Attempt to decrypt an Orchard action using an incoming viewing key
- * @param action The Orchard action to decrypt
+ * @brief Attempt to decrypt an Ironwood action using an incoming viewing key
+ * @param action The Ironwood action to decrypt
  * @param ivk The incoming viewing key to use for decryption
  * @return Decrypted plaintext, or std::nullopt on failure
  *
  * All cryptographic operations delegated to Rust try_ironwood_decrypt_action_ivk.
  * Payment address is deserialized from array format after decryption.
  */
-std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
+std::optional<IronwoodNotePlaintext> IronwoodNotePlaintext::AttemptDecryptIronwoodAction(
     const ironwood_bundle::Action* action,
-    const libzcash::OrchardIncomingViewingKey ivk
+    const libzcash::IronwoodIncomingViewingKey ivk
 )
 {
     // Datastreams for serialization
@@ -524,8 +524,8 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    libzcash::OrchardIncomingViewingKey_FFI_t ivk_t;
-    libzcash::OrchardPaymentAddress_FFI_t address_t;
+    libzcash::IronwoodIncomingViewingKey_FFI_t ivk_t;
+    libzcash::IronwoodPaymentAddress_FFI_t address_t;
     std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
     uint64_t value_t;
     uint256 rho_t;
@@ -547,11 +547,11 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     }
 
     // Deserialize returned data
-    libzcash::OrchardPaymentAddress address_r;
+    libzcash::IronwoodPaymentAddress address_r;
     rs << address_t;
     rs >> address_r;
 
-    OrchardNotePlaintext ret = OrchardNotePlaintext(
+    IronwoodNotePlaintext ret = IronwoodNotePlaintext(
         value_t, address_r, memo_t, rho_t, rseed_t, 
         std::nullopt, uint256::FromRawBytes(action->cmx()));
 
@@ -559,24 +559,24 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
 }
 
 /**
- * @brief Attempt to decrypt an Orchard action using an outgoing viewing key
- * @param action The Orchard action to decrypt
+ * @brief Attempt to decrypt an Ironwood action using an outgoing viewing key
+ * @param action The Ironwood action to decrypt
  * @param ovk The outgoing viewing key to use for decryption
  * @return Decrypted plaintext, or std::nullopt on failure
  *
  * Similar to IVK decryption but uses outgoing viewing key.
  * Allows sender to decrypt their own sent notes.
  */
-std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
+std::optional<IronwoodNotePlaintext> IronwoodNotePlaintext::AttemptDecryptIronwoodAction(
     const ironwood_bundle::Action* action,
-    const libzcash::OrchardOutgoingViewingKey ovk
+    const libzcash::IronwoodOutgoingViewingKey ovk
 )
 {
     // Datastreams for serialization
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
 
     // Transfer Data
-    libzcash::OrchardPaymentAddress_FFI_t address_t;
+    libzcash::IronwoodPaymentAddress_FFI_t address_t;
     std::array<unsigned char, ZC_MEMO_SIZE> memo_t;
     uint64_t value_t;
     uint256 rho_t;
@@ -594,11 +594,11 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     }
 
     // Deserialize returned data
-    libzcash::OrchardPaymentAddress address_r;
+    libzcash::IronwoodPaymentAddress address_r;
     rs << address_t;
     rs >> address_r;
 
-    OrchardNotePlaintext ret = OrchardNotePlaintext(
+    IronwoodNotePlaintext ret = IronwoodNotePlaintext(
         value_t, address_r, memo_t, rho_t, rseed_t, 
         std::nullopt, uint256::FromRawBytes(action->cmx()));
 
@@ -606,23 +606,23 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
 }
 
 /**
- * @brief Compute nullifier directly from an encrypted Orchard action
- * @param action The encrypted Orchard action
+ * @brief Compute nullifier directly from an encrypted Ironwood action
+ * @param action The encrypted Ironwood action
  * @param fvk The full viewing key used to decrypt and compute the nullifier
  * @return The unique nullifier, or std::nullopt on failure
  *
  * This method decrypts the action and computes the nullifier in one call,
  * using the bridge to call the Rust Action::compute_nullifier method.
- * Unlike Sapling, Orchard does not require a position parameter.
+ * Unlike Sapling, Ironwood does not require a position parameter.
  */
-std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
+std::optional<uint256> IronwoodNotePlaintext::ComputeNullifierFromAction(
     const ironwood_bundle::Action& action,
-    const libzcash::OrchardFullViewingKey& fvk
+    const libzcash::IronwoodFullViewingKey& fvk
 )
 {
     // FVK is the single source of truth — IVK is derived internally in Rust.
     CDataStream fvk_stream(SER_NETWORK, PROTOCOL_VERSION);
-    libzcash::OrchardFullViewingKey_FFI_t fvk_t;
+    libzcash::IronwoodFullViewingKey_FFI_t fvk_t;
     uint256_t result_t;
     
     fvk_stream << fvk;
@@ -640,10 +640,10 @@ std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
 }
 
 /**
- * @brief Reconstruct an Orchard note from plaintext
- * @return An OrchardNote with the plaintext's values
+ * @brief Reconstruct an Ironwood note from plaintext
+ * @return An IronwoodNote with the plaintext's values
  */
-std::optional<OrchardNote> OrchardNotePlaintext::note() const
+std::optional<IronwoodNote> IronwoodNotePlaintext::note() const
 {
-    return OrchardNote(address, value_, rho, rseed, cmx);
+    return IronwoodNote(address, value_, rho, rseed, cmx);
 }

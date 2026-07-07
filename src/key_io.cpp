@@ -105,7 +105,7 @@ public:
         return bech32::Encode(m_params.Bech32HRP(CChainParams::SAPLING_PAYMENT_ADDRESS), data);
     }
 
-    std::string operator()(const libzcash::OrchardPaymentAddress& zaddr) const
+    std::string operator()(const libzcash::IronwoodPaymentAddress& zaddr) const
     {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << zaddr;
@@ -115,7 +115,7 @@ public:
         // See calculation comment below
         data.reserve((seraddr.size() * 8 + 4) / 5);
         ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, seraddr.begin(), seraddr.end());
-        return bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_PAYMENT_ADDRESS), data);
+        return bech32::Encode(m_params.Bech32HRP(CChainParams::IRONWOOD_PAYMENT_ADDRESS), data);
     }
 
     std::string operator()(const libzcash::InvalidEncoding& no) const { return {}; }
@@ -156,7 +156,7 @@ public:
         return ret;
     }
 
-    std::string operator()(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk) const
+    std::string operator()(const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk) const
     {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << extfvk;
@@ -166,7 +166,7 @@ public:
         // See calculation comment below
         data.reserve((serkey.size() * 8 + 4) / 5);
         ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
-        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_EXTENDED_FVK), data);
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::IRONWOOD_EXTENDED_FVK), data);
         memory_cleanse(serkey.data(), serkey.size());
         memory_cleanse(data.data(), data.size());
         return ret;
@@ -199,7 +199,7 @@ public:
         return ret;
     }
 
-    std::string operator()(const libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate& extfvk) const
+    std::string operator()(const libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate& extfvk) const
     {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << extfvk;
@@ -209,7 +209,7 @@ public:
         // See calculation comment below
         data.reserve((serkey.size() * 8 + 4) / 5);
         ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
-        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_FVK), data);
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::IRONWOOD_DIVERSIFIED_EXTENDED_FVK), data);
         memory_cleanse(serkey.data(), serkey.size());
         memory_cleanse(data.data(), data.size());
         return ret;
@@ -253,7 +253,7 @@ public:
         return ret;
     }
 
-    std::string operator()(const libzcash::OrchardExtendedSpendingKeyPirate& zkey) const
+    std::string operator()(const libzcash::IronwoodExtendedSpendingKeyPirate& zkey) const
     {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << zkey;
@@ -263,7 +263,7 @@ public:
         // See calculation comment below
         data.reserve((serkey.size() * 8 + 4) / 5);
         ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
-        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_EXTENDED_SPEND_KEY), data);
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::IRONWOOD_EXTENDED_SPEND_KEY), data);
         memory_cleanse(serkey.data(), serkey.size());
         memory_cleanse(data.data(), data.size());
         return ret;
@@ -296,7 +296,7 @@ public:
         return ret;
     }
 
-    std::string operator()(const libzcash::OrchardDiversifiedExtendedSpendingKeyPirate& zkey) const
+    std::string operator()(const libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate& zkey) const
     {
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << zkey;
@@ -306,7 +306,7 @@ public:
         // See calculation comment below
         data.reserve((serkey.size() * 8 + 4) / 5);
         ConvertBits<8, 5, true>([&](unsigned char c) { data.push_back(c); }, serkey.begin(), serkey.end());
-        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY), data);
+        std::string ret = bech32::Encode(m_params.Bech32HRP(CChainParams::IRONWOOD_DIVERSIFIED_EXTENDED_SPEND_KEY), data);
         memory_cleanse(serkey.data(), serkey.size());
         memory_cleanse(data.data(), data.size());
         return ret;
@@ -325,11 +325,11 @@ const size_t ConvertedSaplingDiversifiedExtendedFullViewingKeySize = (SAPLING_ZI
 const size_t ConvertedSaplingExtendedSpendingKeySize = (SAPLING_ZIP32_XSK_SIZE * 8 + 4) / 5;
 const size_t ConvertedSaplingDiversifiedExtendedSpendingKeySize = (SAPLING_ZIP32_DXSK_SIZE * 8 + 4) / 5;
 
-const size_t ConvertedOrchardPaymentAddressSize = (libzcash::SerializedOrchardPaymentAddressSize * 8 + 4) / 5;
-const size_t ConvertedOrchardExtendedFullViewingKeySize = (libzcash::SerializedOrchardExtendedFullViewingKeySize * 8 + 4) / 5;
-const size_t ConvertedOrchardDiversifiedExtendedFullViewingKeySize = (libzcash::SerializedOrchardDiversifiedExtendedFullViewingKeySize * 8 + 4) / 5;
-const size_t ConvertedOrchardExtendedSpendingKeySize = (libzcash::SerializedOrchardExtendedSpendingKeySize * 8 + 4) / 5;
-const size_t ConvertedOrchardDiversifiedExtendedSpendingKeySize = (libzcash::SerializedOrchardDiversifiedExtendedSpendingKeySize * 8 + 4) / 5;
+const size_t ConvertedIronwoodPaymentAddressSize = (libzcash::SerializedIronwoodPaymentAddressSize * 8 + 4) / 5;
+const size_t ConvertedIronwoodExtendedFullViewingKeySize = (libzcash::SerializedIronwoodExtendedFullViewingKeySize * 8 + 4) / 5;
+const size_t ConvertedIronwoodDiversifiedExtendedFullViewingKeySize = (libzcash::SerializedIronwoodDiversifiedExtendedFullViewingKeySize * 8 + 4) / 5;
+const size_t ConvertedIronwoodExtendedSpendingKeySize = (libzcash::SerializedIronwoodExtendedSpendingKeySize * 8 + 4) / 5;
+const size_t ConvertedIronwoodDiversifiedExtendedSpendingKeySize = (libzcash::SerializedIronwoodDiversifiedExtendedSpendingKeySize * 8 + 4) / 5;
 
 } // namespace
 
@@ -495,13 +495,13 @@ libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
     }
     data.clear();
     auto bechOrchAddr = bech32::Decode(str);
-    if (bechOrchAddr.first == Params().Bech32HRP(CChainParams::ORCHARD_PAYMENT_ADDRESS) &&
-        bechOrchAddr.second.size() == ConvertedOrchardPaymentAddressSize) {
+    if (bechOrchAddr.first == Params().Bech32HRP(CChainParams::IRONWOOD_PAYMENT_ADDRESS) &&
+        bechOrchAddr.second.size() == ConvertedIronwoodPaymentAddressSize) {
         // Bech32 decoding
         data.reserve((bechOrchAddr.second.size() * 5) / 8);
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchAddr.second.begin(), bechOrchAddr.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-            libzcash::OrchardPaymentAddress ret;
+            libzcash::IronwoodPaymentAddress ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
@@ -555,13 +555,13 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str)
     }
     data.clear();
     auto bechOrchFvk = bech32::Decode(str);
-    if(bechOrchFvk.first == Params().Bech32HRP(CChainParams::ORCHARD_EXTENDED_FVK) &&
-       bechOrchFvk.second.size() == ConvertedOrchardExtendedFullViewingKeySize) {
+    if(bechOrchFvk.first == Params().Bech32HRP(CChainParams::IRONWOOD_EXTENDED_FVK) &&
+       bechOrchFvk.second.size() == ConvertedIronwoodExtendedFullViewingKeySize) {
         // Bech32 decoding
         data.reserve((bechOrchFvk.second.size() * 5) / 8);
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchFvk.second.begin(), bechOrchFvk.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-            libzcash::OrchardExtendedFullViewingKeyPirate ret;
+            libzcash::IronwoodExtendedFullViewingKeyPirate ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
@@ -611,13 +611,13 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
     }
     data.clear();
     auto bechOrchSK = bech32::Decode(str);
-    if (bechOrchSK.first == Params().Bech32HRP(CChainParams::ORCHARD_EXTENDED_SPEND_KEY) &&
-        bechOrchSK.second.size() == ConvertedOrchardExtendedSpendingKeySize) {
+    if (bechOrchSK.first == Params().Bech32HRP(CChainParams::IRONWOOD_EXTENDED_SPEND_KEY) &&
+        bechOrchSK.second.size() == ConvertedIronwoodExtendedSpendingKeySize) {
         // Bech32 decoding
         data.reserve((bechOrchSK.second.size() * 5) / 8);
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchSK.second.begin(), bechOrchSK.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-            libzcash::OrchardExtendedSpendingKeyPirate ret;
+            libzcash::IronwoodExtendedSpendingKeyPirate ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
@@ -652,13 +652,13 @@ libzcash::DiversifiedSpendingKey DecodeDiversifiedSpendingKey(const std::string&
             return ret;
         }
     }
-    if (bech.first == Params().Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_SPEND_KEY) &&
-        bech.second.size() == ConvertedOrchardDiversifiedExtendedSpendingKeySize) {
+    if (bech.first == Params().Bech32HRP(CChainParams::IRONWOOD_DIVERSIFIED_EXTENDED_SPEND_KEY) &&
+        bech.second.size() == ConvertedIronwoodDiversifiedExtendedSpendingKeySize) {
         // Bech32 decoding
         data.reserve((bech.second.size() * 5) / 8);
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-            libzcash::OrchardDiversifiedExtendedSpendingKeyPirate ret;
+            libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
@@ -693,13 +693,13 @@ libzcash::DiversifiedViewingKey DecodeDiversifiedViewingKey(const std::string& s
             return ret;
         }
     }
-    if (bech.first == Params().Bech32HRP(CChainParams::ORCHARD_DIVERSIFIED_EXTENDED_FVK) &&
-        bech.second.size() == ConvertedOrchardDiversifiedExtendedFullViewingKeySize) {
+    if (bech.first == Params().Bech32HRP(CChainParams::IRONWOOD_DIVERSIFIED_EXTENDED_FVK) &&
+        bech.second.size() == ConvertedIronwoodDiversifiedExtendedFullViewingKeySize) {
         // Bech32 decoding
         data.reserve((bech.second.size() * 5) / 8);
         if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bech.second.begin(), bech.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-            libzcash::OrchardDiversifiedExtendedFullViewingKeyPirate ret;
+            libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
@@ -762,7 +762,7 @@ std::optional<SaplingOutputDisclosure> DecodeSaplingOutputDisclosure(const std::
     }
 }
 
-std::string EncodeOrchardOutputDisclosure(const OrchardOutputDisclosure& disclosure)
+std::string EncodeIronwoodOutputDisclosure(const IronwoodOutputDisclosure& disclosure)
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << disclosure;
@@ -775,14 +775,14 @@ std::string EncodeOrchardOutputDisclosure(const OrchardOutputDisclosure& disclos
     bech32Data.reserve((data.size() * 8 + 4) / 5);
     ConvertBits<8, 5, true>([&](unsigned char c) { bech32Data.push_back(c); }, data.begin(), data.end());
     
-    // Encode with the ORCHARD_OUTPUT_DISCLOSURE HRP
+    // Encode with the IRONWOOD_OUTPUT_DISCLOSURE HRP
     return bech32::Encode(
-        Params().Bech32HRP(CChainParams::ORCHARD_OUTPUT_DISCLOSURE),
+        Params().Bech32HRP(CChainParams::IRONWOOD_OUTPUT_DISCLOSURE),
         bech32Data
     );
 }
 
-std::optional<OrchardOutputDisclosure> DecodeOrchardOutputDisclosure(const std::string& str)
+std::optional<IronwoodOutputDisclosure> DecodeIronwoodOutputDisclosure(const std::string& str)
 {
     // Decode bech32
     auto bech = bech32::Decode(str);
@@ -791,7 +791,7 @@ std::optional<OrchardOutputDisclosure> DecodeOrchardOutputDisclosure(const std::
     }
     
     // Check if HRP matches
-    if (bech.first != Params().Bech32HRP(CChainParams::ORCHARD_OUTPUT_DISCLOSURE)) {
+    if (bech.first != Params().Bech32HRP(CChainParams::IRONWOOD_OUTPUT_DISCLOSURE)) {
         return std::nullopt;
     }
     
@@ -805,7 +805,7 @@ std::optional<OrchardOutputDisclosure> DecodeOrchardOutputDisclosure(const std::
     // Deserialize
     try {
         CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
-        OrchardOutputDisclosure disclosure;
+        IronwoodOutputDisclosure disclosure;
         ss >> disclosure;
         return disclosure;
     } catch (const std::exception&) {

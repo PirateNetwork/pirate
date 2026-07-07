@@ -76,9 +76,9 @@ int find_output(UniValue obj, int n)
  * 
  * @param consensusParams Consensus parameters for the current network
  * @param blockHeight Current blockchain height
- * @param fromAddress Source address (Sapling or Orchard shielded)
+ * @param fromAddress Source address (Sapling or Ironwood shielded)
  * @param saplingOutputs Vector of Sapling recipients
- * @param orchardOutputs Vector of Orchard recipients  
+ * @param ironwoodOutputs Vector of Ironwood recipients  
  * @param minimumConfirmationDepth Minimum confirmation depth for inputs
  * @param transactionFee Transaction fee amount
  * @param contextInfo Context information for logging and status
@@ -90,18 +90,18 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
     const int blockHeight,
     std::string fromAddress,
     std::vector<SendManyRecipient> saplingOutputs,
-    std::vector<SendManyRecipient> orchardOutputs,
+    std::vector<SendManyRecipient> ironwoodOutputs,
     int minimumConfirmationDepth,
     CAmount transactionFee,
     UniValue contextInfo) 
     : fromaddress_(fromAddress),
       saplingOutputs_(std::move(saplingOutputs)),
-      orchardOutputs_(std::move(orchardOutputs)),
+      ironwoodOutputs_(std::move(ironwoodOutputs)),
       mindepth_(minimumConfirmationDepth),
       fee_(transactionFee),
       contextinfo_(contextInfo),
       isFromSaplingAddress_(false),
-      isFromOrchardAddress_(false),
+      isFromIronwoodAddress_(false),
       hasOfflineSpendingKey(false),
       builder_(TransactionBuilder(consensusParams, blockHeight, pwalletMain))
 {
@@ -114,7 +114,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
         throw JSONRPCError(RPC_INVALID_PARAMETER, "From address parameter missing");
     }
 
-    if (saplingOutputs_.empty() && orchardOutputs_.empty()) {
+    if (saplingOutputs_.empty() && ironwoodOutputs_.empty()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No recipients");
     }
 
@@ -134,14 +134,14 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
             isFromSaplingAddress_ = true;
         }
 
-        // Check if this is an Orchard payment address
-        auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddress);
-        if (orchardPaymentAddress != nullptr) {
-            isFromOrchardAddress_ = true;
+        // Check if this is an Ironwood payment address
+        auto ironwoodPaymentAddress = std::get_if<libzcash::IronwoodPaymentAddress>(&decodedAddress);
+        if (ironwoodPaymentAddress != nullptr) {
+            isFromIronwoodAddress_ = true;
         }
 
         // Ensure we have a valid shielded address type
-        if (!isFromSaplingAddress_ && !isFromOrchardAddress_) {
+        if (!isFromSaplingAddress_ && !isFromIronwoodAddress_) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address");
         }
 
@@ -163,7 +163,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
     }
 
     // Shielded addresses require minimum confirmation depth > 0
-    if ((isFromSaplingAddress_ || isFromOrchardAddress_) && minimumConfirmationDepth == 0) {
+    if ((isFromSaplingAddress_ || isFromIronwoodAddress_) && minimumConfirmationDepth == 0) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Minconf cannot be zero when sending from zaddr");
     }
 
@@ -274,7 +274,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
         LOCK2(cs_main, pwalletMain->cs_wallet);
         for (const auto& e : saplingInputs_)
             pwalletMain->UnlockNote(e.op);
-        for (const auto& e : orchardInputs_)
+        for (const auto& e : ironwoodInputs_)
             pwalletMain->UnlockNote(e.op);
     };
 
@@ -285,10 +285,10 @@ bool AsyncRPCOperation_sendmany::main_impl()
         totalSaplingInputs += saplingInput.note.value();
     }
 
-    // Calculate total Orchard inputs
-    CAmount totalOrchardInputs = 0;
-    for (const auto& orchardInput : orchardInputs_) {
-        totalOrchardInputs += orchardInput.note.value();
+    // Calculate total Ironwood inputs
+    CAmount totalIronwoodInputs = 0;
+    for (const auto& ironwoodInput : ironwoodInputs_) {
+        totalIronwoodInputs += ironwoodInput.note.value();
     }
 
     // Calculate total Sapling outputs
@@ -297,13 +297,13 @@ bool AsyncRPCOperation_sendmany::main_impl()
         totalSaplingOutputs += std::get<1>(saplingOutput);
     }
 
-    // Calculate total Orchard outputs
-    CAmount totalOrchardOutputs = 0;
-    for (const SendManyRecipient& orchardOutput : orchardOutputs_) {
-        totalOrchardOutputs += std::get<1>(orchardOutput);
+    // Calculate total Ironwood outputs
+    CAmount totalIronwoodOutputs = 0;
+    for (const SendManyRecipient& ironwoodOutput : ironwoodOutputs_) {
+        totalIronwoodOutputs += std::get<1>(ironwoodOutput);
     }
 
-    CAmount totalSendAmount = totalSaplingOutputs + totalOrchardOutputs;
+    CAmount totalSendAmount = totalSaplingOutputs + totalIronwoodOutputs;
     CAmount totalTargetAmount = totalSendAmount + minersFee;
 
     // STEP 3: Validate input/output consistency and sufficiency.
@@ -315,10 +315,10 @@ bool AsyncRPCOperation_sendmany::main_impl()
         return false;
     }
 
-    if (isFromOrchardAddress_ && (totalOrchardInputs < totalTargetAmount)) {
+    if (isFromIronwoodAddress_ && (totalIronwoodInputs < totalTargetAmount)) {
         set_error_code(RPC_WALLET_INSUFFICIENT_FUNDS);
         set_error_message(strprintf("Insufficient shielded funds, have %s, need %s",
-                                    FormatMoney(totalOrchardInputs), FormatMoney(totalTargetAmount)));
+                                    FormatMoney(totalIronwoodInputs), FormatMoney(totalTargetAmount)));
         unlock_notes();
         return false;
     }
@@ -326,17 +326,17 @@ bool AsyncRPCOperation_sendmany::main_impl()
     // Log transaction composition for debugging purposes
     LogPrint("zrpcunsafe", "%s: spending %s to send %s with fee %s\n",
              getId(), FormatMoney(totalTargetAmount), FormatMoney(totalSendAmount), FormatMoney(minersFee));
-    LogPrint("zrpcunsafe", "%s: shielded input: %s sapling + %s orchard = %s total (to choose from)\n",
-             getId(), FormatMoney(totalSaplingInputs), FormatMoney(totalOrchardInputs),
-             FormatMoney(totalSaplingInputs + totalOrchardInputs));
-    LogPrint("zrpcunsafe", "%s: shielded output: %s sapling + %s orchard = %s total\n",
-             getId(), FormatMoney(totalSaplingOutputs), FormatMoney(totalOrchardOutputs),
-             FormatMoney(totalSaplingOutputs + totalOrchardOutputs));
+    LogPrint("zrpcunsafe", "%s: shielded input: %s sapling + %s ironwood = %s total (to choose from)\n",
+             getId(), FormatMoney(totalSaplingInputs), FormatMoney(totalIronwoodInputs),
+             FormatMoney(totalSaplingInputs + totalIronwoodInputs));
+    LogPrint("zrpcunsafe", "%s: shielded output: %s sapling + %s ironwood = %s total\n",
+             getId(), FormatMoney(totalSaplingOutputs), FormatMoney(totalIronwoodOutputs),
+             FormatMoney(totalSaplingOutputs + totalIronwoodOutputs));
     LogPrint("zrpc", "%s: fee: %s\n", getId(), FormatMoney(minersFee));
 
     builder_.SetFee(minersFee);
 
-    // OVK will be set based on the from address type (Sapling or Orchard spending key).
+    // OVK will be set based on the from address type (Sapling or Ironwood spending key).
     uint256 ovk;
 
     const int maxQuantity = rand() % 35 + 10;
@@ -423,16 +423,16 @@ bool AsyncRPCOperation_sendmany::main_impl()
         }
     }
 
-    // STEP 5: Handle Orchard shielded address spending.
-    if (isFromOrchardAddress_) {
+    // STEP 5: Handle Ironwood shielded address spending.
+    if (isFromIronwoodAddress_) {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
         // Extract the spending key, derive the FVK, and obtain the OVK for output encryption.
-        OrchardExtendedSpendingKeyPirate extsk;
-        auto extskPtr = std::get_if<libzcash::OrchardExtendedSpendingKeyPirate>(&spendingkey_);
+        IronwoodExtendedSpendingKeyPirate extsk;
+        auto extskPtr = std::get_if<libzcash::IronwoodExtendedSpendingKeyPirate>(&spendingkey_);
         if (!extskPtr) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: Invalid Orchard spending key type. Stopping.", getId()));
+            set_error_message(strprintf("%s: Invalid Ironwood spending key type. Stopping.", getId()));
             unlock_notes();
             return false;
         }
@@ -441,16 +441,16 @@ bool AsyncRPCOperation_sendmany::main_impl()
         auto fvkOpt = extsk.GetXFVK();
         if (!fvkOpt) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: FVK not found for Orchard spending key. Stopping.", getId()));
+            set_error_message(strprintf("%s: FVK not found for Ironwood spending key. Stopping.", getId()));
             unlock_notes();
             return false;
         }
 
         auto fvk = fvkOpt.value().fvk;
-        OrchardOutgoingViewingKey ovkObj;
+        IronwoodOutgoingViewingKey ovkObj;
         if (!fvk.DeriveOVK(&ovkObj)) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: OVK not found for Orchard spending key. Stopping.", getId()));
+            set_error_message(strprintf("%s: OVK not found for Ironwood spending key. Stopping.", getId()));
             unlock_notes();
             return false;
         }
@@ -460,9 +460,9 @@ bool AsyncRPCOperation_sendmany::main_impl()
         // Select notes largest-first until sum meets the target amount.
         std::vector<size_t> selectedIdx;
         CAmount sum = 0;
-        for (size_t i = 0; i < orchardInputs_.size(); i++) {
+        for (size_t i = 0; i < ironwoodInputs_.size(); i++) {
             selectedIdx.push_back(i);
-            sum += orchardInputs_[i].note.value();
+            sum += ironwoodInputs_[i].note.value();
             if (sum >= totalTargetAmount)
                 break;
         }
@@ -470,32 +470,32 @@ bool AsyncRPCOperation_sendmany::main_impl()
         // Opportunistic consolidation: if >100 notes are available, backfill with
         // the smallest notes (from the low end of the descending-sorted set) until
         // we reach 50 inputs total. The builder returns excess as change.
-        if (orchardInputs_.size() > 100 && (int)selectedIdx.size() < maxQuantity) {
-            for (int i = (int)orchardInputs_.size() - 1;
+        if (ironwoodInputs_.size() > 100 && (int)selectedIdx.size() < maxQuantity) {
+            for (int i = (int)ironwoodInputs_.size() - 1;
                  i >= (int)selectedIdx.size() && (int)selectedIdx.size() < maxQuantity; i--) {
                 selectedIdx.push_back((size_t)i);
             }
         }
 
-        std::vector<OrchardOutPoint> ops;
+        std::vector<IronwoodOutPoint> ops;
         for (size_t idx : selectedIdx) {
-            ops.push_back(orchardInputs_[idx].op);
+            ops.push_back(ironwoodInputs_[idx].op);
         }
 
         uint256 anchor;
-        std::vector<libzcash::MerklePath> orchardMerklePaths;
-        if (!pwalletMain->GetOrchardNoteMerklePaths(ops, orchardMerklePaths, anchor)) {
+        std::vector<libzcash::MerklePath> ironwoodMerklePaths;
+        if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: Merkle Path not found for Orchard note. Stopping.", getId()));
+            set_error_message(strprintf("%s: Merkle Path not found for Ironwood note. Stopping.", getId()));
             unlock_notes();
             return false;
         }
 
         for (size_t i = 0; i < ops.size(); i++) {
-            const auto& entry = orchardInputs_[selectedIdx[i]];
-            if (!builder_.AddOrchardSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rho(), entry.note.rseed(), orchardMerklePaths[i], anchor)) {
+            const auto& entry = ironwoodInputs_[selectedIdx[i]];
+            if (!builder_.AddIronwoodSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rho(), entry.note.rseed(), ironwoodMerklePaths[i], anchor)) {
                 set_error_code(RPC_WALLET_ERROR);
-                set_error_message(strprintf("%s: Adding Raw Orchard Spend failed. Stopping.", getId()));
+                set_error_message(strprintf("%s: Adding Raw Ironwood Spend failed. Stopping.", getId()));
                 unlock_notes();
                 return false;
             }
@@ -503,16 +503,16 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         builder_.InitializeIronwood(true, true, anchor);
 
-        if (!builder_.ConvertRawOrchardSpend(extsk)) {
+        if (!builder_.ConvertRawIronwoodSpend(extsk)) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: Converting Raw Orchard Spends failed.", getId()));
+            set_error_message(strprintf("%s: Converting Raw Ironwood Spends failed.", getId()));
             unlock_notes();
             return false;
         }
 
     } else {
-        // Initialize Orchard builder without spending (outputs only)
-        if (!orchardOutputs_.empty()) {
+        // Initialize Ironwood builder without spending (outputs only)
+        if (!ironwoodOutputs_.empty()) {
             builder_.InitializeIronwood(false, true, uint256());
         }
     }
@@ -558,13 +558,13 @@ bool AsyncRPCOperation_sendmany::main_impl()
         return false;
     }
 
-    // Process Orchard outputs
-    for (const auto& [recipientAddress, outputValue, hexMemo] : orchardOutputs_) {
+    // Process Ironwood outputs
+    for (const auto& [recipientAddress, outputValue, hexMemo] : ironwoodOutputs_) {
 
-        // Decode and validate the Orchard payment address
+        // Decode and validate the Ironwood payment address
         auto decodedAddress = DecodePaymentAddress(recipientAddress);
-        assert(std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddress) != nullptr);
-        auto orchardPaymentAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddress));
+        assert(std::get_if<libzcash::IronwoodPaymentAddress>(&decodedAddress) != nullptr);
+        auto ironwoodPaymentAddress = *(std::get_if<libzcash::IronwoodPaymentAddress>(&decodedAddress));
 
         // Convert hex memo to Memo object or nullopt
         std::optional<libzcash::Memo> memo = std::nullopt;
@@ -573,20 +573,20 @@ bool AsyncRPCOperation_sendmany::main_impl()
             memo = libzcash::Memo(memoArray);
         }
 
-        // Add the raw Orchard output to the transaction builder
-        if (!builder_.AddOrchardOutputRaw(orchardPaymentAddress, outputValue, memo)) {
+        // Add the raw Ironwood output to the transaction builder
+        if (!builder_.AddIronwoodOutputRaw(ironwoodPaymentAddress, outputValue, memo)) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: Adding Raw Orchard Output failed. Stopping.", getId()));
+            set_error_message(strprintf("%s: Adding Raw Ironwood Output failed. Stopping.", getId()));
             unlock_notes();
             return false;
         }
     }
 
-    // Convert raw Orchard outputs with OVK for encryption.
-    if (!orchardOutputs_.empty()) {
-        if (!builder_.ConvertRawOrchardOutput(ovk)) {
+    // Convert raw Ironwood outputs with OVK for encryption.
+    if (!ironwoodOutputs_.empty()) {
+        if (!builder_.ConvertRawIronwoodOutput(ovk)) {
             set_error_code(RPC_WALLET_ERROR);
-            set_error_message(strprintf("%s: Converting Raw Orchard Outputs failed.", getId()));
+            set_error_message(strprintf("%s: Converting Raw Ironwood Outputs failed.", getId()));
             unlock_notes();
             return false;
         }
@@ -649,7 +649,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
 /**
  * @brief Find and lock unspent shielded notes for use as transaction inputs
  *
- * Queries the wallet for unspent Sapling and Orchard notes belonging to
+ * Queries the wallet for unspent Sapling and Ironwood notes belonging to
  * fromaddress_ that meet the minimum confirmation depth. In offline-key mode
  * unconfirmed notes are excluded. All discovered notes are immediately
  * wallet-locked (LockNote) so parallel async operations cannot select the
@@ -661,23 +661,23 @@ bool AsyncRPCOperation_sendmany::main_impl()
 bool AsyncRPCOperation_sendmany::find_unspent_notes()
 {
     std::vector<SaplingNoteEntry> saplingNoteEntries;
-    std::vector<OrchardNoteEntry> orchardNoteEntries;
+    std::vector<IronwoodNoteEntry> ironwoodNoteEntries;
     
     // Retrieve filtered notes based on spending mode
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         
         if (hasOfflineSpendingKey) {
-            pwalletMain->GetFilteredNotes(saplingNoteEntries, orchardNoteEntries,
+            pwalletMain->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
                                           fromaddress_, mindepth_, true, false);
         } else {
-            pwalletMain->GetFilteredNotes(saplingNoteEntries, orchardNoteEntries,
+            pwalletMain->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
                                           fromaddress_, mindepth_, true, true);
         }
         // Lock immediately so no other async operation can select the same notes.
         for (const auto& e : saplingNoteEntries)
             pwalletMain->LockNote(e.op);
-        for (const auto& e : orchardNoteEntries)
+        for (const auto& e : ironwoodNoteEntries)
             pwalletMain->LockNote(e.op);
     }
 
@@ -695,22 +695,22 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes()
         saplingInputs_.push_back(entry);
     }
 
-    // Process Orchard note entries
-    orchardInputs_.reserve(orchardNoteEntries.size());
-    for (const auto& entry : orchardNoteEntries) {
+    // Process Ironwood note entries
+    ironwoodInputs_.reserve(ironwoodNoteEntries.size());
+    for (const auto& entry : ironwoodNoteEntries) {
         if (LogAcceptCategory("zrpcunsafe")) {
-            LogPrint("zrpcunsafe", "%s: found unspent Orchard note (txid=%s, output=%d, amount=%s, memo=%s)\n",
+            LogPrint("zrpcunsafe", "%s: found unspent Ironwood note (txid=%s, output=%d, amount=%s, memo=%s)\n",
                      getId(),
                      entry.op.hash.ToString().substr(0, 10),
                      entry.op.n,
                      FormatMoney(entry.note.value()),
                      HexStr(entry.memo).substr(0, 10));
         }
-        orchardInputs_.push_back(entry);
+        ironwoodInputs_.push_back(entry);
     }
 
     // Return false if no notes were found
-    if (saplingInputs_.empty() && orchardInputs_.empty()) {
+    if (saplingInputs_.empty() && ironwoodInputs_.empty()) {
         return false;
     }
 
@@ -721,8 +721,8 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes()
                   return note1.note.value() > note2.note.value();
               });
 
-    std::sort(orchardInputs_.begin(), orchardInputs_.end(),
-              [](const OrchardNoteEntry& note1, const OrchardNoteEntry& note2) -> bool {
+    std::sort(ironwoodInputs_.begin(), ironwoodInputs_.end(),
+              [](const IronwoodNoteEntry& note1, const IronwoodNoteEntry& note2) -> bool {
                   return note1.note.value() > note2.note.value();
               });
 

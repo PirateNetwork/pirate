@@ -27,7 +27,7 @@ uint256 ProduceShieldedSignatureHash(
     const CTransaction& tx,
     const std::vector<CTxOut>& allPrevOutputs,
     const sapling::UnauthorizedBundle& saplingBundle,
-    const std::optional<ironwood::UnauthorizedBundle>& orchardBundle);
+    const std::optional<ironwood::UnauthorizedBundle>& ironwoodBundle);
 
 namespace ironwood
 {
@@ -67,17 +67,17 @@ public:
     /// Returns `false` if the given Merkle path does not have the required anchor
     /// for the given note.
     bool AddSpendFromParts(
-        const libzcash::OrchardFullViewingKey fvk,
-        const libzcash::OrchardPaymentAddress addr,
+        const libzcash::IronwoodFullViewingKey fvk,
+        const libzcash::IronwoodPaymentAddress addr,
         const CAmount value,
         const uint256 rho,
         const uint256 rseed,
-        const libzcash::MerklePath orchardMerklePath);
+        const libzcash::MerklePath ironwoodMerklePath);
 
     /// Adds an address which will receive funds in this bundle.
     bool AddOutput(
         const std::optional<uint256>& ovk,
-        const libzcash::OrchardPaymentAddress& to,
+        const libzcash::IronwoodPaymentAddress& to,
         CAmount value,
         const std::optional<libzcash::Memo>& memo = std::nullopt);
 
@@ -120,7 +120,7 @@ private:
         const CTransaction& tx,
         const std::vector<CTxOut>& allPrevOutputs,
         const sapling::UnauthorizedBundle& saplingBundle,
-        const std::optional<ironwood::UnauthorizedBundle>& orchardBundle));
+        const std::optional<ironwood::UnauthorizedBundle>& ironwoodBundle));
 
 public:
     // UnauthorizedBundle should never be copied
@@ -144,7 +144,7 @@ public:
     /// object in any way will cause an exception. This emulates Rust's compile-time
     /// move semantics at runtime.
     std::optional<IronwoodBundle> ProveAndSign(
-        std::vector<libzcash::OrchardSpendingKey> keys,
+        std::vector<libzcash::IronwoodSpendingKey> keys,
         uint256 sighash);
 };
 
@@ -184,27 +184,27 @@ public:
     }
 };
 
-class OrchardSpendDescriptionInfo
+class IronwoodSpendDescriptionInfo
 {
 public:
-    OrchardOutPoint op;
-    libzcash::OrchardPaymentAddress addr;
+    IronwoodOutPoint op;
+    libzcash::IronwoodPaymentAddress addr;
     CAmount value;
     uint256 rho;
     uint256 rseed;
-    libzcash::MerklePath orchardMerklePath;
+    libzcash::MerklePath ironwoodMerklePath;
     uint256 anchor;
 
-    OrchardSpendDescriptionInfo() {}
+    IronwoodSpendDescriptionInfo() {}
 
-    OrchardSpendDescriptionInfo(
-        OrchardOutPoint opIn,
-        libzcash::OrchardPaymentAddress addrIn,
+    IronwoodSpendDescriptionInfo(
+        IronwoodOutPoint opIn,
+        libzcash::IronwoodPaymentAddress addrIn,
         CAmount valueIn,
         uint256 rhoIn,
         uint256 rseedIn,
-        libzcash::MerklePath orchardMerklePathIn,
-        uint256 anchorIn) : op(opIn), addr(addrIn), value(valueIn), rho(rhoIn), rseed(rseedIn), orchardMerklePath(orchardMerklePathIn), anchor(anchorIn) {}
+        libzcash::MerklePath ironwoodMerklePathIn,
+        uint256 anchorIn) : op(opIn), addr(addrIn), value(valueIn), rho(rhoIn), rseed(rseedIn), ironwoodMerklePath(ironwoodMerklePathIn), anchor(anchorIn) {}
 
     ADD_SERIALIZE_METHODS;
 
@@ -216,7 +216,7 @@ public:
         READWRITE(value);
         READWRITE(rho);
         READWRITE(rseed);
-        READWRITE(orchardMerklePath);
+        READWRITE(ironwoodMerklePath);
         READWRITE(anchor);
     }
 };
@@ -249,16 +249,16 @@ public:
     }
 };
 
-class OrchardOutputDescriptionInfo
+class IronwoodOutputDescriptionInfo
 {
 public:
-    libzcash::OrchardPaymentAddress addr;
+    libzcash::IronwoodPaymentAddress addr;
     CAmount value;
     std::optional<libzcash::Memo> memo;
 
-    OrchardOutputDescriptionInfo() : memo(std::nullopt) {}
-    OrchardOutputDescriptionInfo(
-        libzcash::OrchardPaymentAddress addrIn,
+    IronwoodOutputDescriptionInfo() : memo(std::nullopt) {}
+    IronwoodOutputDescriptionInfo(
+        libzcash::IronwoodPaymentAddress addrIn,
         CAmount valueIn,
         const std::optional<libzcash::Memo>& memoIn = std::nullopt)
     : addr(addrIn), value(valueIn), memo(memoIn)
@@ -317,22 +317,22 @@ private:
     std::vector<CTxOut> tIns;
 
     std::optional<SaplingBundle> saplingBundle;
-    std::optional<IronwoodBundle> orchardBundle;
+    std::optional<IronwoodBundle> ironwoodBundle;
 
-    std::optional<ironwood::Builder> orchardBuilder;
+    std::optional<ironwood::Builder> ironwoodBuilder;
     CAmount valueBalanceSapling = 0;
     std::optional<rust::Box<sapling::Builder>> saplingBuilder;
-    CAmount valueBalanceOrchard = 0;
+    CAmount valueBalanceIronwood = 0;
 
     uint256 saplingAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
-    uint256 orchardAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
+    uint256 ironwoodAnchor = uint256S("0000000000000000000000000000000000000000000000000000000000000000");
 
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> firstSaplingChangeAddr;
     std::optional<std::pair<uint256, libzcash::SaplingPaymentAddress>> saplingChangeAddr;
 
-    std::vector<libzcash::OrchardSpendingKey> orchardSpendingKeys;
-    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddress>> firstOrchardChangeAddr;
-    std::optional<std::pair<uint256, libzcash::OrchardPaymentAddress>> orchardChangeAddr;
+    std::vector<libzcash::IronwoodSpendingKey> ironwoodSpendingKeys;
+    std::optional<std::pair<uint256, libzcash::IronwoodPaymentAddress>> firstIronwoodChangeAddr;
+    std::optional<std::pair<uint256, libzcash::IronwoodPaymentAddress>> ironwoodChangeAddr;
 
     std::optional<CTxDestination> tChangeAddr;
     std::optional<CScript> opReturn;
@@ -343,8 +343,8 @@ public:
     std::vector<SaplingSpendDescriptionInfo> vSaplingSpends;
     std::vector<SaplingOutputDescriptionInfo> vSaplingOutputs;
 
-    std::vector<OrchardSpendDescriptionInfo> vOrchardSpends;
-    std::vector<OrchardOutputDescriptionInfo> vOrchardOutputs;
+    std::vector<IronwoodSpendDescriptionInfo> vIronwoodSpends;
+    std::vector<IronwoodOutputDescriptionInfo> vIronwoodOutputs;
 
     // Running totals of shielded components that have been committed to the
     // Rust builders via ConvertRaw*(). The staging vectors above are cleared
@@ -352,8 +352,8 @@ public:
     // for use by IsValidSize().
     size_t nCommittedSaplingSpends  = 0;
     size_t nCommittedSaplingOutputs = 0;
-    size_t nCommittedOrchardSpends  = 0;
-    size_t nCommittedOrchardOutputs = 0;
+    size_t nCommittedIronwoodSpends  = 0;
+    size_t nCommittedIronwoodOutputs = 0;
 
 
     TransactionBuilder();
@@ -409,23 +409,23 @@ public:
         bool outputsEnabled,
         uint256 anchor);
 
-    bool AddOrchardSpendRaw(
-        OrchardOutPoint op,
-        libzcash::OrchardPaymentAddress addr,
+    bool AddIronwoodSpendRaw(
+        IronwoodOutPoint op,
+        libzcash::IronwoodPaymentAddress addr,
         CAmount value,
         uint256 rho,
         uint256 rseed,
-        libzcash::MerklePath orchardMerklePath,
+        libzcash::MerklePath ironwoodMerklePath,
         uint256 anchor);
 
-    bool ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendingKeyPirate extsk);
+    bool ConvertRawIronwoodSpend(libzcash::IronwoodExtendedSpendingKeyPirate extsk);
 
-    bool AddOrchardOutputRaw(
-        libzcash::OrchardPaymentAddress to,
+    bool AddIronwoodOutputRaw(
+        libzcash::IronwoodPaymentAddress to,
         CAmount value,
         const std::optional<libzcash::Memo>& memo = std::nullopt);
 
-    bool ConvertRawOrchardOutput(uint256 ovk);
+    bool ConvertRawIronwoodOutput(uint256 ovk);
 
 
     // Transaparent Addresses
@@ -439,7 +439,7 @@ public:
 
 
     // Change
-    void SendChangeTo(libzcash::OrchardPaymentAddress changeAddr, uint256 ovk);
+    void SendChangeTo(libzcash::IronwoodPaymentAddress changeAddr, uint256 ovk);
 
     void SendChangeTo(libzcash::SaplingPaymentAddress changeAddr, uint256 ovk);
 
@@ -457,8 +457,8 @@ public:
      *   Transparent output:  34 bytes
      *   Sapling spend:      384 bytes
      *   Sapling output:     948 bytes
-     *   Orchard action:     820 bytes
-     *   Orchard bundle overhead (proof + binding sig): 2208 bytes
+     *   Ironwood action:     820 bytes
+     *   Ironwood bundle overhead (proof + binding sig): 2208 bytes
      *   Sapling bundle overhead (anchor + valueBalance + binding sig): 104 bytes
      *
      * @param extraOutputs  Number of additional outputs not yet in the vectors
@@ -484,9 +484,9 @@ public:
         READWRITE(saplingAnchor);
         READWRITE(vSaplingSpends);
         READWRITE(vSaplingOutputs);
-        READWRITE(orchardAnchor);
-        READWRITE(vOrchardSpends);
-        READWRITE(vOrchardOutputs);
+        READWRITE(ironwoodAnchor);
+        READWRITE(vIronwoodSpends);
+        READWRITE(vIronwoodOutputs);
         READWRITE(fee);
         READWRITE(checksum);
     }

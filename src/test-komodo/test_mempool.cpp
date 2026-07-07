@@ -74,7 +74,7 @@ public:
         return false;
     }
 
-     bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
+     bool GetIronwoodFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
         return false;
     }
 
@@ -112,14 +112,14 @@ public:
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
-                    const uint256 &hashOrchardFrontierAnchor,
+                    const uint256 &hashIronwoodFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
-                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
+                    CAnchorsIronwoodFrontierMap &mapIronwoodFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CNullifiersMap &mapOrchardNullifiers,
+                    CNullifiersMap &mapIronwoodNullifiers,
                     CHistoryCacheMap &historyCacheMap) {
         return false;
     }

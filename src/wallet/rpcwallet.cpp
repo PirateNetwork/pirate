@@ -56,8 +56,8 @@
 #include "wallet/asyncrpcoperation_shieldcoinbase.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation_address.h"
-#include "wallet/asyncrpcoperation_orchardconsolidation_address.h"
-#include "wallet/asyncrpcoperation_orchardconsolidation.h"
+#include "wallet/asyncrpcoperation_ironwoodconsolidation_address.h"
+#include "wallet/asyncrpcoperation_ironwoodconsolidation.h"
 #include "wallet/asyncrpcoperation_sweeptoaddress.h"
 
 #include "consensus/upgrades.h"
@@ -91,7 +91,7 @@ using namespace libzcash;
 //extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
 const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
-const std::string ADDR_TYPE_ORCHARD = "orchard";
+const std::string ADDR_TYPE_IRONWOOD = "ironwood";
 
 int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
@@ -3264,8 +3264,8 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     //Get All Notes
     std::vector<SaplingNoteEntry> saplingEntries;
-    std::vector<OrchardNoteEntry> orchardEntries;
-    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
     std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapResultsSapling;
 
     for (auto & entry : saplingEntries) {
@@ -3292,9 +3292,9 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
 
-    std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>> mapResultsOrchard;
+    std::map<libzcash::IronwoodPaymentAddress, std::vector<IronwoodNoteEntry>> mapResultsIronwood;
 
-    for (auto & entry : orchardEntries) {
+    for (auto & entry : ironwoodEntries) {
         //Only Look at notes with the filtered address or add the note address to the address set
         if (filterAddresses) {
             std::set<libzcash::PaymentAddress>::iterator it;
@@ -3307,14 +3307,14 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
 
         //Map all notes by address
-        std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>>::iterator it;
-        it = mapResultsOrchard.find(entry.address);
-        if (it != mapResultsOrchard.end()) {
+        std::map<libzcash::IronwoodPaymentAddress, std::vector<IronwoodNoteEntry>>::iterator it;
+        it = mapResultsIronwood.find(entry.address);
+        if (it != mapResultsIronwood.end()) {
             it->second.push_back(entry);
         } else {
-            std::vector<OrchardNoteEntry> entries;
+            std::vector<IronwoodNoteEntry> entries;
             entries.push_back(entry);
-            mapResultsOrchard[entry.address] = entries;
+            mapResultsIronwood[entry.address] = entries;
         }
     }
 
@@ -3364,12 +3364,12 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
 
-    for (std::map<libzcash::OrchardPaymentAddress, std::vector<OrchardNoteEntry>>::iterator itOrchard = mapResultsOrchard.begin(); itOrchard != mapResultsOrchard.end(); itOrchard++) {
+    for (std::map<libzcash::IronwoodPaymentAddress, std::vector<IronwoodNoteEntry>>::iterator itIronwood = mapResultsIronwood.begin(); itIronwood != mapResultsIronwood.end(); itIronwood++) {
 
-        std::vector<OrchardNoteEntry> entries = (*itOrchard).second;
+        std::vector<IronwoodNoteEntry> entries = (*itIronwood).second;
 
         for (int i = 0; i < entries.size(); i++) {
-            OrchardNoteEntry entry = entries[i];
+            IronwoodNoteEntry entry = entries[i];
 
             UniValue obj(UniValue::VOBJ);
 
@@ -3384,19 +3384,19 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("outindex", (int)entry.op.n));
             obj.push_back(Pair("confirmations", dpowconfs));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
-            libzcash::OrchardIncomingViewingKey ivk;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-            pwalletMain->GetOrchardIncomingViewingKey(entry.address, ivk);
-            pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-            bool hasOrchardSpendingKey = pwalletMain->HaveOrchardSpendingKey(extfvk);
-            bool hasOrchardFullViewingKey = pwalletMain->HaveOrchardFullViewingKey(ivk);
+            libzcash::IronwoodIncomingViewingKey ivk;
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+            pwalletMain->GetIronwoodIncomingViewingKey(entry.address, ivk);
+            pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+            bool hasIronwoodSpendingKey = pwalletMain->HaveIronwoodSpendingKey(extfvk);
+            bool hasIronwoodFullViewingKey = pwalletMain->HaveIronwoodFullViewingKey(ivk);
 
-            obj.push_back(Pair("spendable", hasOrchardSpendingKey));
+            obj.push_back(Pair("spendable", hasIronwoodSpendingKey));
             obj.push_back(Pair("address", EncodePaymentAddress(entry.address)));
             obj.push_back(Pair("amount", ValueFromAmount(CAmount(entry.note.value())))); // note.value() is equivalent to plaintext.value()
             obj.push_back(Pair("memo", HexStr(entry.memo)));
-            if (hasOrchardFullViewingKey) {
-                obj.push_back(Pair("change", pwalletMain->IsNoteOrchardChange(nullifierSet, entry.address, entry.op)));
+            if (hasIronwoodFullViewingKey) {
+                obj.push_back(Pair("change", pwalletMain->IsNoteIronwoodChange(nullifierSet, entry.address, entry.op)));
             } else {
                 obj.push_back(Pair("change", false));
             }
@@ -3599,15 +3599,15 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
     // Check protocol activation status
     int nextBlockHeight = chainActive.Height() + 1;
     bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     std::string defaultType;
     if (!saplingActive) {
         throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet. Cannot create shielded addresses.");
-    } else if (!orchardActive) {
+    } else if (!ironwoodActive) {
         defaultType = ADDR_TYPE_SAPLING;
     } else {
-        defaultType = ADDR_TYPE_ORCHARD;
+        defaultType = ADDR_TYPE_IRONWOOD;
     }
 
     if (fHelp || params.size() > 1)
@@ -3618,13 +3618,13 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
             "\nWith no arguments, returns a Sapling address.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
-            + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_ORCHARD + "\"].\n"
+            + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_IRONWOOD + "\"].\n"
             "\nResult:\n"
             "\"" + chainName.ToString() + "_address\"    (string) The new shielded address.\n"
             "\nExamples:\n"
             + HelpExampleCli("z_getnewaddresskey", "")
             + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_SAPLING)
-            + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_ORCHARD)
+            + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_IRONWOOD)
             + HelpExampleRpc("z_getnewaddresskey", "")
         );
 
@@ -3644,12 +3644,12 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
         auto zAddress = pwalletMain->GenerateNewSaplingZKey();
         pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         return EncodePaymentAddress(zAddress);
-    } else if (addrType == ADDR_TYPE_ORCHARD) {
-        if (!orchardActive) {
-            throw JSONRPCError(RPC_INVALID_REQUEST, "Orchard is not activated yet. Use Sapling addresses instead.");
+    } else if (addrType == ADDR_TYPE_IRONWOOD) {
+        if (!ironwoodActive) {
+            throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
         }
-        auto zAddress = pwalletMain->GenerateNewOrchardZKey();
-        pwalletMain->SetZAddressBook(zAddress, "orchard", "");
+        auto zAddress = pwalletMain->GenerateNewIronwoodZKey();
+        pwalletMain->SetZAddressBook(zAddress, "ironwood", "");
         return EncodePaymentAddress(zAddress);
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
@@ -3664,15 +3664,15 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     // Check protocol activation status
     int nextBlockHeight = chainActive.Height() + 1;
     bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     std::string defaultType;
     if (!saplingActive) {
         throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet. Cannot create shielded addresses.");
-    } else if (!orchardActive) {
+    } else if (!ironwoodActive) {
         defaultType = ADDR_TYPE_SAPLING;
     } else {
-        defaultType = ADDR_TYPE_ORCHARD;
+        defaultType = ADDR_TYPE_IRONWOOD;
     }
 
     if (fHelp || params.size() > 1)
@@ -3681,7 +3681,7 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
             "\nReturns a new diversified shielded address for receiving payments from the set primary key.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
-            + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_ORCHARD + "\"].\n"
+            + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_IRONWOOD + "\"].\n"
             "\nResult:\n"
             "\"" + strprintf("%s",chainName.symbol()) + "_address\"    (string) The new diversified shielded address.\n"
             "\nExamples:\n"
@@ -3705,12 +3705,12 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
         pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
         return EncodePaymentAddress(zAddress);
-    } else if (addrType == ADDR_TYPE_ORCHARD) {
-        if (!orchardActive) {
-            throw JSONRPCError(RPC_INVALID_REQUEST, "Orchard is not activated yet. Use Sapling addresses instead.");
+    } else if (addrType == ADDR_TYPE_IRONWOOD) {
+        if (!ironwoodActive) {
+            throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
         }
-        auto zAddress = pwalletMain->GenerateNewOrchardDiversifiedAddress();
-        pwalletMain->SetZAddressBook(zAddress, "orchard", "");
+        auto zAddress = pwalletMain->GenerateNewIronwoodDiversifiedAddress();
+        pwalletMain->SetZAddressBook(zAddress, "ironwood", "");
         return EncodePaymentAddress(zAddress);
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
@@ -3862,13 +3862,13 @@ CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ign
 CAmount getBalanceZaddr(std::string address, int minDepth = 1, bool ignoreUnspendable=true) {
     CAmount balance = 0;
     std::vector<SaplingNoteEntry> saplingEntries;
-    std::vector<OrchardNoteEntry> orchardEntries;
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, address, minDepth, true, ignoreUnspendable);
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, address, minDepth, true, ignoreUnspendable);
     for (auto & entry : saplingEntries) {
         balance += CAmount(entry.note.value());
     }
-    for (auto & entry : orchardEntries) {
+    for (auto & entry : ironwoodEntries) {
         balance += CAmount(entry.note.value());
     }
     return balance;
@@ -3931,8 +3931,8 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
 
     UniValue result(UniValue::VARR);
     std::vector<SaplingNoteEntry> saplingEntries;
-    std::vector<OrchardNoteEntry> orchardEntries;
-    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress, nMinDepth, false, false);
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress, nMinDepth, false, false);
 
     if (std::get_if<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
 
@@ -3965,14 +3965,14 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
         }
     }
 
-    if (std::get_if<libzcash::OrchardPaymentAddress>(&zaddr) != nullptr) {
+    if (std::get_if<libzcash::IronwoodPaymentAddress>(&zaddr) != nullptr) {
 
         std::set<std::pair<PaymentAddress, uint256>> nullifierSet = pwalletMain->GetNullifiersForAddresses({zaddr});
-        libzcash::OrchardIncomingViewingKey ivk;
-        pwalletMain->GetOrchardIncomingViewingKey(*(std::get_if<libzcash::OrchardPaymentAddress>(&zaddr)), ivk);
-        bool hasOrchardFullViewingKey = pwalletMain->HaveOrchardFullViewingKey(ivk);
+        libzcash::IronwoodIncomingViewingKey ivk;
+        pwalletMain->GetIronwoodIncomingViewingKey(*(std::get_if<libzcash::IronwoodPaymentAddress>(&zaddr)), ivk);
+        bool hasIronwoodFullViewingKey = pwalletMain->HaveIronwoodFullViewingKey(ivk);
 
-        for (OrchardNoteEntry & entry : orchardEntries) {
+        for (IronwoodNoteEntry & entry : ironwoodEntries) {
             UniValue obj(UniValue::VOBJ);
 
             int nHeight   = tx_height(entry.op.hash);
@@ -3987,8 +3987,8 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
             obj.push_back(Pair("outindex", (int)entry.op.n));
             obj.push_back(Pair("rawconfirmations", entry.confirmations));
             obj.push_back(Pair("confirmations", dpowconfs));
-            if (hasOrchardFullViewingKey) {
-                obj.push_back(Pair("change", pwalletMain->IsNoteOrchardChange(nullifierSet, entry.address, entry.op)));
+            if (hasIronwoodFullViewingKey) {
+                obj.push_back(Pair("change", pwalletMain->IsNoteIronwoodChange(nullifierSet, entry.address, entry.op)));
             } else {
                 obj.push_back(Pair("change", false));
             }
@@ -4068,7 +4068,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() > 2)
         throw runtime_error(
             "z_getbalances ( includeWatchonly address )\n"
-            "\nReturns array of wallet sapling and orchard addresses with balances and note counts.\n"
+            "\nReturns array of wallet sapling and ironwood addresses with balances and note counts.\n"
             "Results are an array of Objects, each of which has:\n"
             "{address, balance, notes, unconfirmed, unconfirmednotes, spendable}\n"
             "\nArguments:\n"
@@ -4077,7 +4077,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nResult\n"
             "[                             (array of json object)\n"
             "  {\n"
-            "    \"address\" : \"address\",      (string) sapling (zs) or orchard (pirate1) address\n"
+            "    \"address\" : \"address\",      (string) sapling (zs) or ironwood (pirate1) address\n"
             "    \"balance\" : n               (numeric) confirmed address balance in ARRR\n"
             "    \"notes\" : n                 (numeric) number of confirmed unspent notes at this address\n"
             "    \"unconfirmed\" : n           (numeric) unconfirmed address balance in ARRR\n"
@@ -4122,7 +4122,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
     UniValue results(UniValue::VARR);
 
     std::map<libzcash::SaplingPaymentAddress, std::vector<CAmount>> mapSaplingResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
-    std::map<libzcash::OrchardPaymentAddress, std::vector<CAmount>> mapOrchardResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
+    std::map<libzcash::IronwoodPaymentAddress, std::vector<CAmount>> mapIronwoodResults; // [0]=balance, [1]=confirmedNotes, [2]=unconfirmed, [3]=unconfirmedNotes
 
     // Initialize all wallet addresses with zero balance and note count
     {
@@ -4143,19 +4143,19 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
     {
-        std::set<libzcash::OrchardPaymentAddress> orchardAddresses;
-        pwalletMain->GetOrchardPaymentAddresses(orchardAddresses);
-        for (auto addr : orchardAddresses) {
+        std::set<libzcash::IronwoodPaymentAddress> ironwoodAddresses;
+        pwalletMain->GetIronwoodPaymentAddresses(ironwoodAddresses);
+        for (auto addr : ironwoodAddresses) {
             if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) {
                 // Skip if filtering by address and this isn't it
                 if (filterAddress.has_value()) {
-                    auto filterOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&filterAddress.value());
-                    if (!filterOrchard || *filterOrchard != addr) {
+                    auto filterIronwood = std::get_if<libzcash::IronwoodPaymentAddress>(&filterAddress.value());
+                    if (!filterIronwood || *filterIronwood != addr) {
                         continue;
                     }
                 }
                 std::vector<CAmount> balance = {0, 0, 0, 0}; // balance, confirmedNotes, unconfirmed, unconfirmedNotes
-                mapOrchardResults[addr] = balance;
+                mapIronwoodResults[addr] = balance;
             }
         }
     }
@@ -4166,8 +4166,8 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         zaddrs.insert(filterAddress.value());
     }
     std::vector<SaplingNoteEntry> saplingEntries;
-    std::vector<OrchardNoteEntry> orchardEntries;
-    pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs, 0, INT_MAX, true, !fIncludeWatchonly, false);
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs, 0, INT_MAX, true, !fIncludeWatchonly, false);
 
     for (auto & entry : saplingEntries) {
         //Get Note depths
@@ -4206,15 +4206,15 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         results.push_back(obj);
     }
 
-    for (auto & entry : orchardEntries) {
+    for (auto & entry : ironwoodEntries) {
         //Get Note depths
         int nHeight   = tx_height(entry.op.hash);
         int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
 
         //Map all balances by address
-        std::map<libzcash::OrchardPaymentAddress, std::vector<CAmount>>::iterator it;
-        it = mapOrchardResults.find(entry.address);
-        if (it != mapOrchardResults.end()) {
+        std::map<libzcash::IronwoodPaymentAddress, std::vector<CAmount>>::iterator it;
+        it = mapIronwoodResults.find(entry.address);
+        if (it != mapIronwoodResults.end()) {
             CAmount noteValue = CAmount(entry.note.value());
             if (entry.confirmations > 0) {
                 it->second[0] += noteValue;
@@ -4232,7 +4232,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // so we skip it (it won't be in results)
     }
 
-    for (std::map<libzcash::OrchardPaymentAddress, std::vector<CAmount>>::iterator it = mapOrchardResults.begin(); it != mapOrchardResults.end(); it++) {
+    for (std::map<libzcash::IronwoodPaymentAddress, std::vector<CAmount>>::iterator it = mapIronwoodResults.begin(); it != mapIronwoodResults.end(); it++) {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("address", EncodePaymentAddress(it->first)));
         obj.push_back(Pair("balance", ValueFromAmount(it->second[0])));
@@ -4666,12 +4666,12 @@ std::vector<SaplingNoteEntry> z_sapling_inputs_;
 bool rpcwallet__find_unspent_notes(std::string fromaddress_,  int mindepth_)
 {
     std::vector<SaplingNoteEntry> saplingEntries;
-    std::vector<OrchardNoteEntry> orchardEntries;
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
         //printf("rpcwallet__find_unspent_notes() enter\n"); fflush(stdout);
         //Local transaction: Require the spending key
-        pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, fromaddress_, mindepth_,true,true);
+        pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress_, mindepth_,true,true);
         //printf("rpcwallet__find_unspent_notes() done\n"); fflush(stdout);
     }
 
@@ -5475,15 +5475,15 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
             "z_sendmany \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
-            "\nSend multiple times from a shielded (Sapling or Orchard) address. Amounts are decimal numbers with at most 8 digits of precision."
+            "\nSend multiple times from a shielded (Sapling or Ironwood) address. Amounts are decimal numbers with at most 8 digits of precision."
             "\nChange generated from a zaddr returns to itself."
             "\nTo send from a transparent address, use z_shieldcoinbase instead.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
-            "1. \"fromaddress\"         (string, required) The Sapling or Orchard zaddr to send funds from.\n"
+            "1. \"fromaddress\"         (string, required) The Sapling or Ironwood zaddr to send funds from.\n"
             "2. \"amounts\"             (array, required) An array of json objects representing the amounts to send.\n"
             "    [{\n"
-            "      \"address\":address  (string, required) The recipient Sapling or Orchard address\n"
+            "      \"address\":address  (string, required) The recipient Sapling or Ironwood address\n"
             "      \"amount\":amount    (numeric, required) The numeric amount in " + CURRENCY_UNIT + " is the value\n"
             "      \"memo\":memo        (string, optional) Raw data represented in hexadecimal string format\n"
             "    }, ... ]\n"
@@ -5506,7 +5506,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // Check that the from address is valid.
     auto fromaddress = params[0].get_str();
     bool fromSapling = false;
-    bool fromOrchard = false;
+    bool fromIronwood = false;
 
     CTxDestination taddr = DecodeDestination(fromaddress);
     if (IsValidDestination(taddr)) {
@@ -5517,7 +5517,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     auto res = DecodePaymentAddress(fromaddress);
     if (!IsValidPaymentAddress(res)) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard address.");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood address.");
     }
 
     // Check that we have the spending key
@@ -5526,11 +5526,11 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     if (std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or orchard address.");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood address.");
     }
 
     fromSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
-    fromOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
+    fromIronwood = std::get_if<libzcash::IronwoodPaymentAddress>(&res) != nullptr;
 
     UniValue outputs = params[1].get_array();
 
@@ -5542,11 +5542,11 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Recipients
     std::vector<SendManyRecipient> saplingRecipients;
-    std::vector<SendManyRecipient> orchardRecipients;
+    std::vector<SendManyRecipient> ironwoodRecipients;
     CAmount nTotalOut = 0;
 
     bool containsSaplingOutput = false;
-    bool containsOrchardOutput = false;
+    bool containsIronwoodOutput = false;
 
     for (const UniValue& o : outputs.getValues()) {
         if (!o.isObject())
@@ -5560,7 +5560,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
 
         bool toSapling = false;
-        bool toOrchard = false;
+        bool toIronwood = false;
         string address = find_value(o, "address").get_str();
         CTxDestination taddr = DecodeDestination(address);
         if (!IsValidDestination(taddr)) {
@@ -5570,8 +5570,8 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 // Remember whether this is Sapling address
                 toSapling = std::get_if<libzcash::SaplingPaymentAddress>(&res) != nullptr;
 
-                // Remember whether this is Orchard address
-                toOrchard = std::get_if<libzcash::OrchardPaymentAddress>(&res) != nullptr;
+                // Remember whether this is Ironwood address
+                toIronwood = std::get_if<libzcash::IronwoodPaymentAddress>(&res) != nullptr;
 
                 // Remember whether this is Sprout address
                 bool toSprout = std::get_if<libzcash::SproutPaymentAddress>(&res) != nullptr;
@@ -5579,7 +5579,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 if (toSprout)
                     throw JSONRPCError(RPC_INVALID_PARAMETER,"Sprout usage has expired");
 
-                if (!(toSapling || toOrchard))
+                if (!(toSapling || toIronwood))
                     throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
 
             } else {
@@ -5612,9 +5612,9 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if (toSapling) {
             saplingRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
             containsSaplingOutput = true;
-        } else if (toOrchard) {
-            orchardRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
-            containsOrchardOutput = true;
+        } else if (toIronwood) {
+            ironwoodRecipients.push_back( SendManyRecipient(address, nAmount, memo) );
+            containsIronwoodOutput = true;
         } else {
             throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
         }
@@ -5631,10 +5631,10 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
 
-    // If Orchard is not active, do not allow sending from or sending to Orchard addresses.
+    // If Ironwood is not active, do not allow sending from or sending to Ironwood addresses.
     if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
-        if (fromOrchard || containsOrchardOutput) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Orchard has not activated");
+        if (fromIronwood || containsIronwoodOutput) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Ironwood has not activated");
         }
     }
 
@@ -5683,7 +5683,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, orchardRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, ironwoodRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     return operationId;
@@ -5811,7 +5811,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     //printf("z_sendmany_prepare_offline() 4 Process recipients\n");fflush(stdout);
     // Recipients
     std::vector<SendManyRecipient> saplingRecipients;
-    std::vector<SendManyRecipient> orchardRecipients;
+    std::vector<SendManyRecipient> ironwoodRecipients;
     CAmount nTotalOut = 0;
     string sZaddrRecipients;
     char cBuf[1000];
@@ -6056,7 +6056,7 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     // Create operation and add to global queue
     //printf("z_sendmany_prepare_offline() Create AsyncRPCOperation_sendmany()\n");
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, orchardRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, ironwoodRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     //printf("z_sendmany_prepare_offline() operationId returned\n");
@@ -6426,32 +6426,32 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
       }
       result.push_back(Pair("sapling", saplingStatus));
 
-      // Orchard consolidation status
-      UniValue orchardStatus(UniValue::VOBJ);
-      orchardStatus.push_back(Pair("consolidationEnabled", pwalletMain->fOrchardConsolidationEnabled));
-      orchardStatus.push_back(Pair("isRunning", pwalletMain->fOrchardConsolidationRunning));
-      if (pwalletMain->fOrchardConsolidationRunning) {
-          orchardStatus.push_back(Pair("nextConsolidation", pwalletMain->orchardConsolidationInterval + chainActive.Tip()->nHeight));
+      // Ironwood consolidation status
+      UniValue ironwoodStatus(UniValue::VOBJ);
+      ironwoodStatus.push_back(Pair("consolidationEnabled", pwalletMain->fIronwoodConsolidationEnabled));
+      ironwoodStatus.push_back(Pair("isRunning", pwalletMain->fIronwoodConsolidationRunning));
+      if (pwalletMain->fIronwoodConsolidationRunning) {
+          ironwoodStatus.push_back(Pair("nextConsolidation", pwalletMain->ironwoodConsolidationInterval + chainActive.Tip()->nHeight));
       } else {
-          if (pwalletMain->nextOrchardConsolidation == 0) {
-              orchardStatus.push_back(Pair("nextConsolidation",  chainActive.Tip()->nHeight + 1));
+          if (pwalletMain->nextIronwoodConsolidation == 0) {
+              ironwoodStatus.push_back(Pair("nextConsolidation",  chainActive.Tip()->nHeight + 1));
           } else {
-              orchardStatus.push_back(Pair("nextConsolidation", pwalletMain->nextOrchardConsolidation));
+              ironwoodStatus.push_back(Pair("nextConsolidation", pwalletMain->nextIronwoodConsolidation));
           }
       }
-      orchardStatus.push_back(Pair("consolidationInterval", pwalletMain->orchardConsolidationInterval));
-      orchardStatus.push_back(Pair("targetQty", pwalletMain->targetOrchardConsolidationQty));
-      orchardStatus.push_back(Pair("consolidationTxFee", fOrchardConsolidationTxFee));
-      orchardStatus.push_back(Pair("addressFilterEnabled", fOrchardConsolidationMapUsed));
+      ironwoodStatus.push_back(Pair("consolidationInterval", pwalletMain->ironwoodConsolidationInterval));
+      ironwoodStatus.push_back(Pair("targetQty", pwalletMain->targetIronwoodConsolidationQty));
+      ironwoodStatus.push_back(Pair("consolidationTxFee", fIronwoodConsolidationTxFee));
+      ironwoodStatus.push_back(Pair("addressFilterEnabled", fIronwoodConsolidationMapUsed));
       {
           UniValue addrs(UniValue::VARR);
-          if (fOrchardConsolidationMapUsed) {
-              for (const std::string& a : mapMultiArgs["-consolidateorchardaddress"])
+          if (fIronwoodConsolidationMapUsed) {
+              for (const std::string& a : mapMultiArgs["-consolidateironwoodaddress"])
                   addrs.push_back(a);
           }
-          orchardStatus.push_back(Pair("consolidationAddresses", addrs));
+          ironwoodStatus.push_back(Pair("consolidationAddresses", addrs));
       }
-      result.push_back(Pair("orchard", orchardStatus));
+      result.push_back(Pair("ironwood", ironwoodStatus));
 
       return result;
 }
@@ -6699,7 +6699,7 @@ UniValue enablesweep(const UniValue& params, bool fHelp, const CPubKey& mypk)
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
     if (enabled) {
-        bool hasAddress = rpcSaplingSweepAddress.has_value() || rpcOrchardSweepAddress.has_value() ||
+        bool hasAddress = rpcSaplingSweepAddress.has_value() || rpcIronwoodSweepAddress.has_value() ||
                           (!mapMultiArgs["-sweepaddress"].empty());
         if (!hasAddress)
             throw JSONRPCError(RPC_WALLET_ERROR,
@@ -6755,8 +6755,8 @@ UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
     result.push_back(Pair("sweepTxFee", fSweepTxFee));
     if (rpcSaplingSweepAddress.has_value()) {
         result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcSaplingSweepAddress.value())));
-    } else if (rpcOrchardSweepAddress.has_value()) {
-        result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcOrchardSweepAddress.value())));
+    } else if (rpcIronwoodSweepAddress.has_value()) {
+        result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcIronwoodSweepAddress.value())));
     } else if (fSweepMapUsed) {
         const vector<string>& v = mapMultiArgs["-sweepaddress"];
         result.push_back(Pair("sweepAddress", v.empty() ? "(not set)" : v[0]));
@@ -6870,7 +6870,7 @@ UniValue setsweepaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
 
     rpcSaplingSweepAddress = *saplingAddr;
-    rpcOrchardSweepAddress.reset();
+    rpcIronwoodSweepAddress.reset();
 
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("sweepAddress", EncodePaymentAddress(*saplingAddr)));
@@ -6908,11 +6908,11 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
     if (fHelp || params.size() < 1 || params.size() > 4)
         throw runtime_error(
             "consolidateaddress \"address\" ( fee maxnotes maxtransactions )\n"
-            "\nConsolidate Sapling or Orchard notes at a specific address by combining multiple small notes into fewer larger notes.\n"
+            "\nConsolidate Sapling or Ironwood notes at a specific address by combining multiple small notes into fewer larger notes.\n"
             "This operation helps reduce wallet fragmentation and improves future transaction performance.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
-            "1. address               (string, required) The Sapling (zs) or Orchard (u1) address to consolidate notes for.\n"
+            "1. address               (string, required) The Sapling (zs) or Ironwood (u1) address to consolidate notes for.\n"
             "2. fee                   (numeric, optional, default=0.0001) The fee amount to use for consolidation transactions.\n"
             "3. maxnotes              (numeric, optional, default=50) Maximum number of notes to consolidate per transaction.\n"
             "4. maxtransactions       (numeric, optional, default=10) Maximum number of consolidation transactions to create.\n"
@@ -6956,11 +6956,11 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
 
     // Check if it's a Sapling address
     auto saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decodedAddr);
-    // Check if it's an Orchard address
-    auto orchardAddr = std::get_if<libzcash::OrchardPaymentAddress>(&decodedAddr);
+    // Check if it's an Ironwood address
+    auto ironwoodAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&decodedAddr);
     
-    if (saplingAddr == nullptr && orchardAddr == nullptr) {
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address must be a Sapling (zs) or Orchard (u1) address");
+    if (saplingAddr == nullptr && ironwoodAddr == nullptr) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address must be a Sapling (zs) or Ironwood (u1) address");
     }
 
     // Handle optional fee parameter - default to 0.0001 ARRR if not specified
@@ -7017,8 +7017,8 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         // Count notes before consolidation
         {
             std::vector<SaplingNoteEntry> saplingEntries;
-            std::vector<OrchardNoteEntry> orchardEntries;
-            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
+            std::vector<IronwoodNoteEntry> ironwoodEntries;
+            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, "", 11);
             
             for (const auto& entry : saplingEntries) {
                 if (entry.address == *saplingAddr) {
@@ -7031,32 +7031,32 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
             new AsyncRPCOperation_saplingconsolidation_address(nextBlockHeight, *saplingAddr, extsk, nFee, maxNotes, maxTransactions)
         );
     } else {
-        // Orchard consolidation
+        // Ironwood consolidation
         if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Orchard is not yet active");
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Ironwood is not yet active");
         }
 
         // Check that we have the spending key for this address
-        libzcash::OrchardExtendedSpendingKeyPirate extsk;
-        if (!pwalletMain->GetOrchardExtendedSpendingKey(*orchardAddr, extsk)) {
-            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Orchard address");
+        libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+        if (!pwalletMain->GetIronwoodExtendedSpendingKey(*ironwoodAddr, extsk)) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Ironwood address");
         }
 
         // Count notes before consolidation
         {
             std::vector<SaplingNoteEntry> saplingEntries;
-            std::vector<OrchardNoteEntry> orchardEntries;
-            pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, "", 11);
+            std::vector<IronwoodNoteEntry> ironwoodEntries;
+            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, "", 11);
             
-            for (const auto& entry : orchardEntries) {
-                if (entry.address == *orchardAddr) {
+            for (const auto& entry : ironwoodEntries) {
+                if (entry.address == *ironwoodAddr) {
                     noteCount++;
                 }
             }
         }
 
         operation = std::shared_ptr<AsyncRPCOperation>(
-            new AsyncRPCOperation_orchardconsolidation_address(nextBlockHeight, *orchardAddr, extsk, nFee, maxNotes, maxTransactions)
+            new AsyncRPCOperation_ironwoodconsolidation_address(nextBlockHeight, *ironwoodAddr, extsk, nFee, maxNotes, maxTransactions)
         );
     }
 
@@ -7073,18 +7073,18 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
 #define MERGE_TO_ADDRESS_DEFAULT_TRANSPARENT_LIMIT 50
 #define MERGE_TO_ADDRESS_DEFAULT_SPROUT_LIMIT 10
 #define MERGE_TO_ADDRESS_DEFAULT_SAPLING_LIMIT 90
-#define MERGE_TO_ADDRESS_DEFAULT_ORCHARD_LIMIT 90
+#define MERGE_TO_ADDRESS_DEFAULT_IRONWOOD_LIMIT 90
 
 #define JOINSPLIT_SIZE GetSerializeSize(JSDescription(), SER_NETWORK, PROTOCOL_VERSION)
 #define OUTPUTDESCRIPTION_SIZE 948
 #define SPENDDESCRIPTION_SIZE 384
-#define ORCHARD_ACTIONSIZE 852
+#define IRONWOOD_ACTIONSIZE 852
 
 /**
  * @brief Merge multiple UTXOs and notes into a single UTXO or note
  * 
  * This RPC command provides functionality to consolidate multiple UTXOs (transparent outputs)
- * and shielded notes (Sapling/Orchard) into a single output. This is useful for reducing
+ * and shielded notes (Sapling/Ironwood) into a single output. This is useful for reducing
  * wallet fragmentation and improving privacy by consolidating funds.
  * 
  * Key Features:
@@ -7105,7 +7105,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
  * @param params[1] toaddress - Destination address (t-addr or z-addr)
  * @param params[2] fee - Optional transaction fee (default: MERGE_TO_ADDRESS_OPERATION_DEFAULT_MINERS_FEE)
  * @param params[3] transparent_limit - Optional limit on UTXOs to merge (default: 50)
- * @param params[4] shielded_limit - Optional limit on notes to merge (default: 90 Sapling/Orchard)
+ * @param params[4] shielded_limit - Optional limit on notes to merge (default: 90 Sapling/Ironwood)
  * @param params[5] maximum_utxo_size - Optional max UTXO size filter for inclusion
  * @param params[6] memo - Optional memo for shielded destinations (hex encoded)
  * 
@@ -7250,12 +7250,12 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     const int nextBlockHeight = chainActive.Height() + 1;
     const bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     const bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    const bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+    const bool ironwoodActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     // Validate the destination address
     auto destaddress = params[1].get_str();
     bool isToSaplingZaddr = false;
-    bool isToOrchardZaddr = false;
+    bool isToIronwoodZaddr = false;
     CTxDestination taddr = DecodeDestination(destaddress);
     
     if (!IsValidDestination(taddr)) {
@@ -7268,11 +7268,11 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
                     throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
                 }
             } 
-            // Validate Orchard destination
-            else if (std::get_if<libzcash::OrchardPaymentAddress>(&decodeAddr) != nullptr) {
-                isToOrchardZaddr = true;
-                if (!orchardActive) {
-                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Orchard has not activated");
+            // Validate Ironwood destination
+            else if (std::get_if<libzcash::IronwoodPaymentAddress>(&decodeAddr) != nullptr) {
+                isToIronwoodZaddr = true;
+                if (!ironwoodActive) {
+                    throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Ironwood has not activated");
                 }
             } 
             // Reject Sprout destinations
@@ -7314,7 +7314,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     int saplingNoteLimit = MERGE_TO_ADDRESS_DEFAULT_SAPLING_LIMIT;
-    int orchardNoteLimit = MERGE_TO_ADDRESS_DEFAULT_ORCHARD_LIMIT;
+    int ironwoodNoteLimit = MERGE_TO_ADDRESS_DEFAULT_IRONWOOD_LIMIT;
     if (params.size() > 4) {
         int nNoteLimit = params[4].get_int();
         if (nNoteLimit < 0) {
@@ -7322,7 +7322,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
         }
 
         saplingNoteLimit = nNoteLimit;
-        orchardNoteLimit = nNoteLimit;
+        ironwoodNoteLimit = nNoteLimit;
     }
 
     CAmount maximum_utxo_size;
@@ -7338,8 +7338,8 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     std::string memo;
     if (params.size() > 6) {
         memo = params[6].get_str();
-        // FIXED: Memo can only be used with shielded destinations (Sapling OR Orchard)
-        if (!(isToSaplingZaddr || isToOrchardZaddr)) {
+        // FIXED: Memo can only be used with shielded destinations (Sapling OR Ironwood)
+        if (!(isToSaplingZaddr || isToIronwoodZaddr)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo can only be used with shielded addresses (z-addrs), not transparent addresses (t-addrs).");
         } else if (!IsHex(memo)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, expected memo data in hexadecimal format.");
@@ -7358,7 +7358,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     // Prepare to get UTXOs and notes
     std::vector<MergeToAddressInputUTXO> utxoInputs;
     std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs;
-    std::vector<MergeToAddressInputOrchardNote> orchardNoteInputs;
+    std::vector<MergeToAddressInputIronwoodNote> ironwoodNoteInputs;
     CAmount mergedUTXOValue = 0;
     CAmount mergedNoteValue = 0;
     CAmount remainingUTXOValue = 0;
@@ -7441,16 +7441,16 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     if (useAnySapling || zaddrs.size() > 0) {
         // Get available shielded notes from wallet
         std::vector<SaplingNoteEntry> saplingEntries;
-        std::vector<OrchardNoteEntry> orchardEntries;
-        pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, zaddrs);
+        std::vector<IronwoodNoteEntry> ironwoodEntries;
+        pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs);
 
         // Validate network upgrade compatibility for source addresses
         if (!saplingActive && saplingEntries.size() > 0) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Sapling has not activated");
         }
 
-        if (!orchardActive && orchardEntries.size() > 0) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Orchard has not activated");
+        if (!ironwoodActive && ironwoodEntries.size() > 0) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Ironwood has not activated");
         }
 
         // Process Sapling notes
@@ -7480,23 +7480,23 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
             }
         }
 
-        for (const OrchardNoteEntry& entry : orchardEntries) {
+        for (const IronwoodNoteEntry& entry : ironwoodEntries) {
             noteCounter++;
             CAmount nValue = entry.note.value();
             if (!maxedOutNotesFlag) {
-                size_t increase = ORCHARD_ACTIONSIZE;
+                size_t increase = IRONWOOD_ACTIONSIZE;
                 if (estimatedTxSize + increase >= max_tx_size ||
-                    (orchardNoteLimit > 0 && noteCounter > orchardNoteLimit))
+                    (ironwoodNoteLimit > 0 && noteCounter > ironwoodNoteLimit))
                 {
                     maxedOutNotesFlag = true;
                 } else {
                     estimatedTxSize += increase;
-                    libzcash::OrchardExtendedSpendingKeyPirate extsk;
-                    if (!pwalletMain->GetOrchardExtendedSpendingKey(entry.address, extsk)) {
+                    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+                    if (!pwalletMain->GetIronwoodExtendedSpendingKey(entry.address, extsk)) {
                         throw JSONRPCError(RPC_INVALID_PARAMETER, "Could not find spending key for payment address.");
                     }
 
-                    orchardNoteInputs.emplace_back(entry.op, entry.note, nValue, extsk);
+                    ironwoodNoteInputs.emplace_back(entry.op, entry.note, nValue, extsk);
                     mergedNoteValue += nValue;
                 }
             }
@@ -7512,7 +7512,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     // =====================================================
 
     size_t numUtxos = utxoInputs.size();
-    size_t numNotes = saplingNoteInputs.size() + orchardNoteInputs.size();
+    size_t numNotes = saplingNoteInputs.size() + ironwoodNoteInputs.size();
 
     // Ensure we have sufficient inputs to justify a merge operation
     if (numUtxos < 2 && numNotes == 0) {
@@ -7553,7 +7553,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     // Create operation and add to global async queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
     std::shared_ptr<AsyncRPCOperation> operation(
-        new AsyncRPCOperation_mergetoaddress(Params().GetConsensus(), nextBlockHeight, contextualTx, utxoInputs, saplingNoteInputs, orchardNoteInputs, recipient, nFee, contextInfo));
+        new AsyncRPCOperation_mergetoaddress(Params().GetConsensus(), nextBlockHeight, contextualTx, utxoInputs, saplingNoteInputs, ironwoodNoteInputs, recipient, nFee, contextInfo));
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
 
@@ -10136,20 +10136,20 @@ UniValue z_exportsaplingdisclosure(const UniValue& params, bool fHelp, const CPu
 }
 
 /**
- * z_exportorcharddisclosure - Export an Orchard action disclosure for proof of payment
+ * z_exportironwooddisclosure - Export an Ironwood action disclosure for proof of payment
  * 
  * The disclosure key is derived from the Outgoing Viewing Key (OVK) and can be used to decrypt
  * a specific transaction action without revealing the full OVK.
  */
-UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk)
+UniValue z_exportironwooddisclosure(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 2)
         throw runtime_error(
-            "z_exportorcharddisclosure \"txid\" action_index\n"
-            "\nExports an Orchard action disclosure for proof of payment.\n"
+            "z_exportironwooddisclosure \"txid\" action_index\n"
+            "\nExports an Ironwood action disclosure for proof of payment.\n"
             "The disclosure can be used to decrypt the action without revealing the full Outgoing Viewing Key.\n"
             "The result is encoded in bech32 format with 'odisc' prefix (mainnet) or 'odisctest' (testnet).\n"
             "\nArguments:\n"
@@ -10158,8 +10158,8 @@ UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPu
             "\nResult:\n"
             "\"encoded_disclosure\"  (string) The disclosure key encoded in bech32 format\n"
             "\nExamples:\n"
-            + HelpExampleCli("z_exportorcharddisclosure", "\"mytxid\" 0")
-            + HelpExampleRpc("z_exportorcharddisclosure", "\"mytxid\", 0")
+            + HelpExampleCli("z_exportironwooddisclosure", "\"mytxid\" 0")
+            + HelpExampleRpc("z_exportironwooddisclosure", "\"mytxid\", 0")
         );
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
@@ -10173,7 +10173,7 @@ UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPu
     }
 
     // Use the shared function to generate the disclosure
-    std::string encodedDisclosure = GenerateOrchardDisclosure(pwalletMain, txid, actionIndex);
+    std::string encodedDisclosure = GenerateIronwoodDisclosure(pwalletMain, txid, actionIndex);
     
     if (encodedDisclosure.empty()) {
         // Check why it failed
@@ -10183,14 +10183,14 @@ UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPu
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
         }
 
-        const auto& orchardBundle = tx.GetIronwoodBundle();
-        if (!orchardBundle.IsPresent()) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
+        const auto& ironwoodBundle = tx.GetIronwoodBundle();
+        if (!ironwoodBundle.IsPresent()) {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Ironwood actions");
         }
 
-        const auto& bundleDetails = orchardBundle.GetDetails();
+        const auto& bundleDetails = ironwoodBundle.GetDetails();
         if (bundleDetails.num_actions() == 0) {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Ironwood actions");
         }
 
         if (actionIndex >= (int)bundleDetails.num_actions()) {
@@ -10205,7 +10205,7 @@ UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPu
 }
 
 /**
- * z_verifydisclosure - Unified RPC to verify/decrypt either Sapling or Orchard disclosure
+ * z_verifydisclosure - Unified RPC to verify/decrypt either Sapling or Ironwood disclosure
  * 
  * Automatically detects the disclosure type and verifies accordingly.
  */
@@ -10214,17 +10214,17 @@ UniValue z_verifydisclosure(const UniValue& params, bool fHelp, const CPubKey& m
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "z_verifydisclosure \"disclosure\"\n"
-            "\nVerifies and decrypts a Sapling or Orchard transaction output/action using a disclosure key.\n"
-            "Automatically detects whether the disclosure is for Sapling or Orchard.\n"
-            "The disclosure should be in bech32 encoded format (as returned by z_exportsaplingdisclosure or z_exportorcharddisclosure).\n"
+            "\nVerifies and decrypts a Sapling or Ironwood transaction output/action using a disclosure key.\n"
+            "Automatically detects whether the disclosure is for Sapling or Ironwood.\n"
+            "The disclosure should be in bech32 encoded format (as returned by z_exportsaplingdisclosure or z_exportironwooddisclosure).\n"
             "\nArguments:\n"
             "1. \"disclosure\"    (string, required) The disclosure key in bech32 format\n"
             "\nResult:\n"
             "{\n"
-            "  \"disclosure_type\": \"type\",   (string) Either \"Sapling\" or \"Orchard\"\n"
+            "  \"disclosure_type\": \"type\",   (string) Either \"Sapling\" or \"Ironwood\"\n"
             "  \"txid\": \"hex\",                (string) The transaction id\n"
             "  \"output_index\": n,            (numeric) The output index (for Sapling)\n"
-            "  \"action_index\": n,            (numeric) The action index (for Orchard)\n"
+            "  \"action_index\": n,            (numeric) The action index (for Ironwood)\n"
             "  \"value\": n,                   (numeric) The note value in zatoshis\n"
             "  \"address\": \"address\",        (string) The payment address\n"
             "  \"memo\": \"hex\"               (string) The memo in hex format\n"
@@ -10251,7 +10251,7 @@ UniValue z_verifydisclosure(const UniValue& params, bool fHelp, const CPubKey& m
     jsonResult.push_back(Pair("txid", result.txid.GetHex()));
     
     // Use appropriate field name based on disclosure type
-    if (result.disclosureType == "Orchard") {
+    if (result.disclosureType == "Ironwood") {
         jsonResult.push_back(Pair("action_index", static_cast<int>(result.outputIndex)));
     } else {
         jsonResult.push_back(Pair("output_index", static_cast<int>(result.outputIndex)));
@@ -10330,7 +10330,7 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_exportkey",              &z_exportkey,              true  },
     { "wallet",             "z_exportseedphrase",       &z_exportseedphrase,       true  },
     { "wallet",             "z_exportsaplingdisclosure", &z_exportsaplingdisclosure, true  },
-    { "wallet",             "z_exportorcharddisclosure", &z_exportorcharddisclosure, true  },
+    { "wallet",             "z_exportironwooddisclosure", &z_exportironwooddisclosure, true  },
     { "wallet",             "z_verifydisclosure",        &z_verifydisclosure,        false },
     { "wallet",             "z_importkey",              &z_importkey,              true  },
     { "wallet",             "z_exportviewingkey",       &z_exportviewingkey,       true  },

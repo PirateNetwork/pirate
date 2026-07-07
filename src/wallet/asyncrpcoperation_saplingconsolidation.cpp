@@ -180,12 +180,12 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
         // GetFilteredNotes exits early once maxNotes is reached, so lock hold is bounded.
         {
             std::vector<SaplingNoteEntry> saplingProbe;
-            std::vector<OrchardNoteEntry> orchardProbe;
+            std::vector<IronwoodNoteEntry> ironwoodProbe;
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 std::set<libzcash::PaymentAddress> filterAddr;
                 filterAddr.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingProbe, orchardProbe, filterAddr,
+                pwalletMain->GetFilteredNotes(saplingProbe, ironwoodProbe, filterAddr,
                                               11, INT_MAX, true, true, true,
                                               consolidationTarget, 0);
             }
@@ -205,12 +205,12 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 break;
             }
             std::vector<SaplingNoteEntry> saplingEntries;
-            std::vector<OrchardNoteEntry> orchardEntries;
+            std::vector<IronwoodNoteEntry> ironwoodEntries;
             {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 std::set<libzcash::PaymentAddress> filterAddresses;
                 filterAddresses.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingEntries, orchardEntries, filterAddresses,
+                pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
                                               maxQuantity, fSaplingConsolidationTxFee + 1);
                 // Lock immediately so no other async operation can select the same notes.

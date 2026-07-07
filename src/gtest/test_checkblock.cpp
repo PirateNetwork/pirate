@@ -299,7 +299,7 @@ TEST_F(ContextualCheckBlockTest, BlockBlossomRulesAcceptBlossomTx) {
     mtx.nVersion = SAPLING_TX_VERSION;
     mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
 
-    SCOPED_TRACE("BlockOrchardRulesAcceptOrchardTx");
+    SCOPED_TRACE("BlockIronwoodRulesAcceptIronwoodTx");
     ExpectValidBlockFromTx(CTransaction(mtx));
 }
 
@@ -408,8 +408,8 @@ TEST_F(ContextualCheckBlockTest, BlockSaplingRulesRejectOtherTx) {
 }
 
 
-// Test block evaluated under Orchard rules cannot contain non-Orchard transactions.
-TEST_F(ContextualCheckBlockTest, BlockOrchardRulesRejectOtherTx) {
+// Test block evaluated under Ironwood rules cannot contain non-Ironwood transactions.
+TEST_F(ContextualCheckBlockTest, BlockIronwoodRulesRejectOtherTx) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
@@ -421,7 +421,7 @@ TEST_F(ContextualCheckBlockTest, BlockOrchardRulesRejectOtherTx) {
     mtx.nVersion = 2;
 
     {
-        SCOPED_TRACE("BlockOrchardRulesRejectSproutTx");
+        SCOPED_TRACE("BlockIronwoodRulesRejectSproutTx");
         ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "tx-overwintered-flag-not-set");
     }
 
@@ -431,7 +431,7 @@ TEST_F(ContextualCheckBlockTest, BlockOrchardRulesRejectOtherTx) {
     mtx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
 
     {
-        SCOPED_TRACE("BlockOrchardRulesRejectOverwinterTx");
-        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-orchard-tx-version-group-id");
+        SCOPED_TRACE("BlockIronwoodRulesRejectOverwinterTx");
+        ExpectInvalidBlockFromTx(CTransaction(mtx), 100, "bad-ironwood-tx-version-group-id");
     }
 }

@@ -41,7 +41,7 @@
  * External scope (0): Keys used for receiving funds from external sources
  * Internal scope (1): Keys used for change addresses and internal transfers
  *
- * Shared by both Sapling and Orchard key management throughout the keystore.
+ * Shared by both Sapling and Ironwood key management throughout the keystore.
  */
 enum class KeyScope : uint8_t {
     External = 0,  //!< External addresses for receiving funds
@@ -54,14 +54,14 @@ enum class KeyScope : uint8_t {
  * 
  * Provides a unified interface for managing cryptographic keys across different
  * address types: transparent (Bitcoin-style), Sprout (legacy shielded), Sapling
- * (shielded), and Orchard (latest shielded) addresses.
+ * (shielded), and Ironwood (latest shielded) addresses.
  * 
  * Key management includes:
  * - HD wallet seed management
  * - Transparent key pairs (CKey/CPubKey)
  * - Redeem scripts for P2SH addresses
  * - Watch-only addresses (view without spend capability)
- * - Shielded spending and viewing keys for Sprout/Sapling/Orchard
+ * - Shielded spending and viewing keys for Sprout/Sapling/Ironwood
  * - Diversified address tracking
  * 
  * Thread-safety: All operations should be protected by cs_KeyStore mutex.
@@ -107,13 +107,13 @@ public:
     //! Support for Watch-only addresses (can view but not spend)
     virtual bool AddWatchOnly(const CScript &dest) =0;
     virtual bool AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
-    virtual bool AddOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
+    virtual bool AddIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) =0;
     virtual bool RemoveWatchOnly(const CScript &dest) =0;
     virtual bool RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) =0;
-    virtual bool RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
+    virtual bool RemoveIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) =0;
     virtual bool HaveWatchOnly(const CScript &dest) const =0;
     virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const =0;
-    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const =0;
+    virtual bool HaveIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) const =0;
     virtual bool HaveWatchOnly() const =0;
 
     // ========== Sprout Shielded Addresses ==========
@@ -157,36 +157,36 @@ public:
     virtual void GetSaplingPaymentAddresses(std::set<libzcash::SaplingPaymentAddress> &setAddress) const =0;
 
 
-    // ========== Orchard Shielded Addresses ==========
-    //! Add an Orchard spending key to the store.
-    virtual bool AddOrchardSpendingKey(
-        const libzcash::OrchardExtendedSpendingKeyPirate &extsk) =0;
+    // ========== Ironwood Shielded Addresses ==========
+    //! Add an Ironwood spending key to the store.
+    virtual bool AddIronwoodSpendingKey(
+        const libzcash::IronwoodExtendedSpendingKeyPirate &extsk) =0;
 
-    //! Check whether an Orchard spending key corresponding to a given Orchard viewing key is present in the store.
-    virtual bool HaveOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const =0;
-    virtual bool GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk, libzcash::OrchardExtendedSpendingKeyPirate& extskOut) const =0;
+    //! Check whether an Ironwood spending key corresponding to a given Ironwood viewing key is present in the store.
+    virtual bool HaveIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) const =0;
+    virtual bool GetIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk, libzcash::IronwoodExtendedSpendingKeyPirate& extskOut) const =0;
 
-    //! Support for Orchard full viewing keys (XFVK) with external/internal scope
-    virtual bool AddOrchardExtendedFullViewingKey(
-        const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) =0;
-    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKey &ivk) const =0;
-    virtual bool GetOrchardFullViewingKey(
-        const libzcash::OrchardIncomingViewingKey &ivk,
-        libzcash::OrchardExtendedFullViewingKeyPirate& extfvkOut) const =0;
+    //! Support for Ironwood full viewing keys (XFVK) with external/internal scope
+    virtual bool AddIronwoodExtendedFullViewingKey(
+        const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) =0;
+    virtual bool HaveIronwoodFullViewingKey(const libzcash::IronwoodIncomingViewingKey &ivk) const =0;
+    virtual bool GetIronwoodFullViewingKey(
+        const libzcash::IronwoodIncomingViewingKey &ivk,
+        libzcash::IronwoodExtendedFullViewingKeyPirate& extfvkOut) const =0;
 
-    //! Orchard incoming viewing keys (IVK) with scope tracking
-    virtual bool AddOrchardIncomingViewingKey(
-        const libzcash::OrchardIncomingViewingKey &ivk,
-        const libzcash::OrchardPaymentAddress &addr,
+    //! Ironwood incoming viewing keys (IVK) with scope tracking
+    virtual bool AddIronwoodIncomingViewingKey(
+        const libzcash::IronwoodIncomingViewingKey &ivk,
+        const libzcash::IronwoodPaymentAddress &addr,
         KeyScope scope) =0;
-    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const =0;
-    virtual bool GetOrchardIncomingViewingKey(
-        const libzcash::OrchardPaymentAddress &addr,
-        libzcash::OrchardIncomingViewingKey& ivkOut) const =0;
-    virtual bool GetOrchardKeyScope(
-        const libzcash::OrchardPaymentAddress &addr,
+    virtual bool HaveIronwoodIncomingViewingKey(const libzcash::IronwoodPaymentAddress &addr) const =0;
+    virtual bool GetIronwoodIncomingViewingKey(
+        const libzcash::IronwoodPaymentAddress &addr,
+        libzcash::IronwoodIncomingViewingKey& ivkOut) const =0;
+    virtual bool GetIronwoodKeyScope(
+        const libzcash::IronwoodPaymentAddress &addr,
         KeyScope& scopeOut) const =0;
-    virtual void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddress> &setAddress) const =0;
+    virtual void GetIronwoodPaymentAddresses(std::set<libzcash::IronwoodPaymentAddress> &setAddress) const =0;
 
     // ========== Diversified Address Management ==========
     //! Sapling diversified addresses
@@ -199,14 +199,14 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path) =0;
 
-    //! Orchard diversified addresses
-    virtual bool AddOrchardDiversifiedAddress(
-        const libzcash::OrchardPaymentAddress &addr,
-        const libzcash::OrchardIncomingViewingKey &ivk,
+    //! Ironwood diversified addresses
+    virtual bool AddIronwoodDiversifiedAddress(
+        const libzcash::IronwoodPaymentAddress &addr,
+        const libzcash::IronwoodIncomingViewingKey &ivk,
         const blob88 &path) =0;
 
-    virtual bool AddLastOrchardDiversifierUsed(
-        const libzcash::OrchardIncomingViewingKey &ivk,
+    virtual bool AddLastIronwoodDiversifierUsed(
+        const libzcash::IronwoodIncomingViewingKey &ivk,
         const blob88 &path) =0;
 
     // ========== Sprout Viewing Keys ==========
@@ -228,7 +228,7 @@ typedef std::map<CScriptID, CScript> ScriptMap;
 //! Watch-only address sets (view without spend capability)
 typedef std::set<CScript> WatchOnlySet;
 typedef std::set<libzcash::SaplingExtendedFullViewingKey> SaplingWatchOnlySet;
-typedef std::set<libzcash::OrchardExtendedFullViewingKeyPirate> OrchardWatchOnlySet;
+typedef std::set<libzcash::IronwoodExtendedFullViewingKeyPirate> IronwoodWatchOnlySet;
 
 //! Sprout shielded address key storage
 typedef std::map<libzcash::SproutPaymentAddress, libzcash::SproutSpendingKey> SproutSpendingKeyMap;
@@ -259,88 +259,88 @@ typedef std::pair<libzcash::SaplingIncomingViewingKey, blob88> SaplingDiversifie
 typedef std::map<libzcash::SaplingPaymentAddress, SaplingDiversifierPath> SaplingPaymentAddresses;
 typedef std::map<libzcash::SaplingIncomingViewingKey, blob88> LastSaplingDiversifierPath;
 
-// ========== Orchard Type Definitions ==========
+// ========== Ironwood Type Definitions ==========
 
 /**
- * @struct OrchardIVKWithScope
- * @brief Wrapper to track Orchard incoming viewing key with its scope
+ * @struct IronwoodIVKWithScope
+ * @brief Wrapper to track Ironwood incoming viewing key with its scope
  * 
  * Associates an IVK with External or Internal scope to enable:
  * - Proper address generation (external vs internal/change)
  * - Correct transaction scanning and output classification
  * - Scope preservation during database operations
  */
-struct OrchardIVKWithScope {
-    libzcash::OrchardIncomingViewingKey ivk;  //!< The incoming viewing key
+struct IronwoodIVKWithScope {
+    libzcash::IronwoodIncomingViewingKey ivk;  //!< The incoming viewing key
     KeyScope scope;                           //!< External or Internal scope
     
-    OrchardIVKWithScope() : ivk(), scope(KeyScope::External) {}
-    OrchardIVKWithScope(const libzcash::OrchardIncomingViewingKey& ivk_, KeyScope scope_) 
+    IronwoodIVKWithScope() : ivk(), scope(KeyScope::External) {}
+    IronwoodIVKWithScope(const libzcash::IronwoodIncomingViewingKey& ivk_, KeyScope scope_) 
         : ivk(ivk_), scope(scope_) {}
     
     //! Comparison operator for map/set storage (compares both IVK and scope)
-    bool operator<(const OrchardIVKWithScope& other) const {
+    bool operator<(const IronwoodIVKWithScope& other) const {
         if (ivk < other.ivk) return true;
         if (other.ivk < ivk) return false;
         return static_cast<uint8_t>(scope) < static_cast<uint8_t>(other.scope);
     }
     
-    bool operator==(const OrchardIVKWithScope& other) const {
+    bool operator==(const IronwoodIVKWithScope& other) const {
         return ivk == other.ivk && scope == other.scope;
     }
 };
 
 /**
- * @struct OrchardOVKWithScope
- * @brief Wrapper to track Orchard outgoing viewing key with its scope
+ * @struct IronwoodOVKWithScope
+ * @brief Wrapper to track Ironwood outgoing viewing key with its scope
  * 
  * Associates an OVK with External or Internal scope for proper
  * sent note decryption based on output type (external payment vs change).
  */
-struct OrchardOVKWithScope {
-    libzcash::OrchardOutgoingViewingKey ovk;  //!< The outgoing viewing key
+struct IronwoodOVKWithScope {
+    libzcash::IronwoodOutgoingViewingKey ovk;  //!< The outgoing viewing key
     KeyScope scope;                     //!< External or Internal scope
     
-    OrchardOVKWithScope() : ovk(), scope(KeyScope::External) {}
-    OrchardOVKWithScope(const libzcash::OrchardOutgoingViewingKey& ovk_, KeyScope scope_) 
+    IronwoodOVKWithScope() : ovk(), scope(KeyScope::External) {}
+    IronwoodOVKWithScope(const libzcash::IronwoodOutgoingViewingKey& ovk_, KeyScope scope_) 
         : ovk(ovk_), scope(scope_) {}
     
     //! Comparison operator for set storage (compares both OVK and scope)
-    bool operator<(const OrchardOVKWithScope& other) const {
+    bool operator<(const IronwoodOVKWithScope& other) const {
         if (ovk < other.ovk) return true;
         if (other.ovk < ovk) return false;
         return static_cast<uint8_t>(scope) < static_cast<uint8_t>(other.scope);
     }
     
-    bool operator==(const OrchardOVKWithScope& other) const {
+    bool operator==(const IronwoodOVKWithScope& other) const {
         return ovk == other.ovk && scope == other.scope;
     }
 };
 
-//! Orchard spending and viewing key storage
-typedef std::map<libzcash::OrchardExtendedFullViewingKeyPirate, libzcash::OrchardExtendedSpendingKeyPirate> OrchardSpendingKeyMap;
-typedef std::map<OrchardIVKWithScope, libzcash::OrchardExtendedFullViewingKeyPirate> OrchardFullViewingKeyMap;
+//! Ironwood spending and viewing key storage
+typedef std::map<libzcash::IronwoodExtendedFullViewingKeyPirate, libzcash::IronwoodExtendedSpendingKeyPirate> IronwoodSpendingKeyMap;
+typedef std::map<IronwoodIVKWithScope, libzcash::IronwoodExtendedFullViewingKeyPirate> IronwoodFullViewingKeyMap;
 
 /**
  * Maps discovered address -> (ivk, scope) for transaction scanning.
  * Each address maps to exactly one (IVK, scope) pair.
  */
-typedef std::map<libzcash::OrchardPaymentAddress, std::pair<libzcash::OrchardIncomingViewingKey, KeyScope>> OrchardIncomingViewingKeyMap;
+typedef std::map<libzcash::IronwoodPaymentAddress, std::pair<libzcash::IronwoodIncomingViewingKey, KeyScope>> IronwoodIncomingViewingKeyMap;
 
 /**
  * Maps IVK -> scope for efficient iteration during transaction scanning.
  * Note: If the same IVK is used with different scopes, only the most
  * recently added scope is tracked.
  */
-typedef std::map<libzcash::OrchardIncomingViewingKey, KeyScope> OrchardIncomingViewingKeySet;
+typedef std::map<libzcash::IronwoodIncomingViewingKey, KeyScope> IronwoodIncomingViewingKeySet;
 
 //! Set of outgoing viewing keys with scope for sent note decryption
-typedef std::set<OrchardOVKWithScope> OrchardOutgoingViewingKeySet;
+typedef std::set<IronwoodOVKWithScope> IronwoodOutgoingViewingKeySet;
 
-//! Diversified Orchard address management
-typedef std::pair<libzcash::OrchardIncomingViewingKey, blob88> OrchardDiversifierPath;
-typedef std::map<libzcash::OrchardPaymentAddress, OrchardDiversifierPath> OrchardPaymentAddresses;
-typedef std::map<libzcash::OrchardIncomingViewingKey, blob88> LastOrchardDiversifierPath;
+//! Diversified Ironwood address management
+typedef std::pair<libzcash::IronwoodIncomingViewingKey, blob88> IronwoodDiversifierPath;
+typedef std::map<libzcash::IronwoodPaymentAddress, IronwoodDiversifierPath> IronwoodPaymentAddresses;
+typedef std::map<libzcash::IronwoodIncomingViewingKey, blob88> LastIronwoodDiversifierPath;
 
 /**
  * @class CBasicKeyStore
@@ -353,7 +353,7 @@ typedef std::map<libzcash::OrchardIncomingViewingKey, blob88> LastOrchardDiversi
  * - Transparent: mapKeys (CKeyID -> CKey)
  * - Sprout: mapSproutSpendingKeys, mapSproutViewingKeys
  * - Sapling: mapSaplingSpendingKeys, mapSaplingFullViewingKeys, mapSaplingIncomingViewingKeys
- * - Orchard: mapOrchardSpendingKeys, mapOrchardFullViewingKeys (scope-aware), mapOrchardIncomingViewingKeys
+ * - Ironwood: mapIronwoodSpendingKeys, mapIronwoodFullViewingKeys (scope-aware), mapIronwoodIncomingViewingKeys
  * 
  * Thread-safety: All methods use LOCK(cs_KeyStore) for thread-safe access.
  */
@@ -369,7 +369,7 @@ protected:
     // Watch-only addresses (view without spend)
     WatchOnlySet setWatchOnly;                          //!< Transparent watch-only scripts
     SaplingWatchOnlySet setSaplingWatchOnly;            //!< Sapling watch-only XFVKs
-    OrchardWatchOnlySet setOrchardWatchOnly;            //!< Orchard watch-only XFVKs
+    IronwoodWatchOnlySet setIronwoodWatchOnly;            //!< Ironwood watch-only XFVKs
     
     // Sprout shielded keys
     SproutSpendingKeyMap mapSproutSpendingKeys;         //!< Sprout spending keys
@@ -386,15 +386,15 @@ protected:
     SaplingPaymentAddresses mapSaplingPaymentAddresses;        //!< Diversified address tracking
     LastSaplingDiversifierPath mapLastSaplingDiversifierPath;  //!< Last used diversifier per IVK
 
-    // Orchard shielded keys (with scope tracking)
-    OrchardSpendingKeyMap mapOrchardSpendingKeys;              //!< Orchard spending keys (encrypted in wallet)
-    OrchardFullViewingKeyMap mapOrchardFullViewingKeys;        //!< Orchard XFVK with scope (unencrypted)
-    OrchardIncomingViewingKeyMap mapOrchardIncomingViewingKeys;//!< Address -> (IVK, scope) mapping
-    OrchardIncomingViewingKeyMap mapUnsavedOrchardIncomingViewingKeys; //!< Unsaved IVKs (cleared during SetBestChainINTERNAL)
-    OrchardIncomingViewingKeySet setOrchardIncomingViewingKeys;//!< IVK -> scope mapping for transaction scanning
-    OrchardOutgoingViewingKeySet setOrchardOutgoingViewingKeys;//!< OVK with scope for sent note decryption
-    OrchardPaymentAddresses mapOrchardPaymentAddresses;        //!< Diversified address tracking
-    LastOrchardDiversifierPath mapLastOrchardDiversifierPath;  //!< Last used diversifier per IVK
+    // Ironwood shielded keys (with scope tracking)
+    IronwoodSpendingKeyMap mapIronwoodSpendingKeys;              //!< Ironwood spending keys (encrypted in wallet)
+    IronwoodFullViewingKeyMap mapIronwoodFullViewingKeys;        //!< Ironwood XFVK with scope (unencrypted)
+    IronwoodIncomingViewingKeyMap mapIronwoodIncomingViewingKeys;//!< Address -> (IVK, scope) mapping
+    IronwoodIncomingViewingKeyMap mapUnsavedIronwoodIncomingViewingKeys; //!< Unsaved IVKs (cleared during SetBestChainINTERNAL)
+    IronwoodIncomingViewingKeySet setIronwoodIncomingViewingKeys;//!< IVK -> scope mapping for transaction scanning
+    IronwoodOutgoingViewingKeySet setIronwoodOutgoingViewingKeys;//!< OVK with scope for sent note decryption
+    IronwoodPaymentAddresses mapIronwoodPaymentAddresses;        //!< Diversified address tracking
+    LastIronwoodDiversifierPath mapLastIronwoodDiversifierPath;  //!< Last used diversifier per IVK
 
 public:
     // ========== HD Wallet Seed Management (implemented in keystore.cpp) ==========
@@ -468,13 +468,13 @@ public:
     // ========== Watch-Only Addresses (implemented in keystore.cpp) ==========
     virtual bool AddWatchOnly(const CScript &dest);
     virtual bool AddSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
-    virtual bool AddOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    virtual bool AddIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk);
     virtual bool RemoveWatchOnly(const CScript &dest);
     virtual bool RemoveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk);
-    virtual bool RemoveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
+    virtual bool RemoveIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk);
     virtual bool HaveWatchOnly(const CScript &dest) const;
     virtual bool HaveSaplingWatchOnly(const libzcash::SaplingExtendedFullViewingKey &extfvk) const;
-    virtual bool HaveOrchardWatchOnly(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const;
+    virtual bool HaveIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) const;
     virtual bool HaveWatchOnly() const;
 
     // ========== Sprout Shielded Addresses ==========
@@ -673,64 +673,64 @@ public:
         const libzcash::SaplingIncomingViewingKey &ivk,
         const blob88 &path);
 
-    // ========== Orchard Shielded Addresses (with Scope Tracking) ==========
+    // ========== Ironwood Shielded Addresses (with Scope Tracking) ==========
     
     /**
-     * @brief Get all Orchard IVK->scope mappings for transaction scanning
+     * @brief Get all Ironwood IVK->scope mappings for transaction scanning
      * @param ivks Output set to populate with (IVK, scope) pairs
      * 
      * Note: If an IVK is used with multiple scopes, only the most recently
      * added scope is returned in the set.
      */
-    void GetOrchardIncomingViewingKeySet(OrchardIncomingViewingKeySet &ivks) {
+    void GetIronwoodIncomingViewingKeySet(IronwoodIncomingViewingKeySet &ivks) {
         LOCK(cs_KeyStore);
-        for (OrchardIncomingViewingKeySet::iterator it = setOrchardIncomingViewingKeys.begin(); it != setOrchardIncomingViewingKeys.end(); it++) {
+        for (IronwoodIncomingViewingKeySet::iterator it = setIronwoodIncomingViewingKeys.begin(); it != setIronwoodIncomingViewingKeys.end(); it++) {
             ivks.insert(*it);
         }
     }
     
     /**
-     * @brief Get all Orchard OVK+scope pairs for sent note decryption
+     * @brief Get all Ironwood OVK+scope pairs for sent note decryption
      * @param ovks Output set to populate with (OVK, scope) wrappers
      */
-    void GetOrchardOutgoingViewingKeySet(OrchardOutgoingViewingKeySet &ovks) {
+    void GetIronwoodOutgoingViewingKeySet(IronwoodOutgoingViewingKeySet &ovks) {
         LOCK(cs_KeyStore);
-        for (OrchardOutgoingViewingKeySet::iterator it = setOrchardOutgoingViewingKeys.begin(); it != setOrchardOutgoingViewingKeys.end(); it++) {
+        for (IronwoodOutgoingViewingKeySet::iterator it = setIronwoodOutgoingViewingKeys.begin(); it != setIronwoodOutgoingViewingKeys.end(); it++) {
             ovks.insert(*it);
         }
     }
 
-    virtual bool AddOrchardSpendingKey(
-        const libzcash::OrchardExtendedSpendingKeyPirate &extsk);
+    virtual bool AddIronwoodSpendingKey(
+        const libzcash::IronwoodExtendedSpendingKeyPirate &extsk);
         
     /**
-     * @brief Check if keystore has an Orchard spending key for the given XFVK
+     * @brief Check if keystore has an Ironwood spending key for the given XFVK
      * @param extfvk The extended full viewing key to check
      * @return true if corresponding spending key exists
      */
-    bool HaveOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk) const
+    bool HaveIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk) const
     {
         bool result;
         {
             LOCK(cs_KeyStore);
-            result = (mapOrchardSpendingKeys.count(extfvk) > 0);
+            result = (mapIronwoodSpendingKeys.count(extfvk) > 0);
         }
         return result;
     }
     
     /**
-     * @brief Retrieve an Orchard spending key by its XFVK
+     * @brief Retrieve an Ironwood spending key by its XFVK
      * @param extfvk The extended full viewing key
      * @param extskOut Output parameter for the spending key
      * @return true if key was found
      */
-    bool GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk, libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const
+    bool GetIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk, libzcash::IronwoodExtendedSpendingKeyPirate &extskOut) const
     {
         {
             LOCK(cs_KeyStore);
 
-            OrchardSpendingKeyMap::const_iterator mi = mapOrchardSpendingKeys.find(extfvk);
-            if (mi != mapOrchardSpendingKeys.end())
+            IronwoodSpendingKeyMap::const_iterator mi = mapIronwoodSpendingKeys.find(extfvk);
+            if (mi != mapIronwoodSpendingKeys.end())
             {
                 extskOut = mi->second;
                 return true;
@@ -739,41 +739,41 @@ public:
         return false;
     }
 
-    virtual bool AddOrchardExtendedFullViewingKey(
-        const libzcash::OrchardExtendedFullViewingKeyPirate &extfvk);
-    virtual bool HaveOrchardFullViewingKey(const libzcash::OrchardIncomingViewingKey &ivk) const;
-    virtual bool GetOrchardFullViewingKey(
-        const libzcash::OrchardIncomingViewingKey &ivk,
-        libzcash::OrchardExtendedFullViewingKeyPirate& extfvkOut) const;
+    virtual bool AddIronwoodExtendedFullViewingKey(
+        const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk);
+    virtual bool HaveIronwoodFullViewingKey(const libzcash::IronwoodIncomingViewingKey &ivk) const;
+    virtual bool GetIronwoodFullViewingKey(
+        const libzcash::IronwoodIncomingViewingKey &ivk,
+        libzcash::IronwoodExtendedFullViewingKeyPirate& extfvkOut) const;
 
-    virtual bool AddOrchardIncomingViewingKey(
-        const libzcash::OrchardIncomingViewingKey &ivk,
-        const libzcash::OrchardPaymentAddress &addr,
+    virtual bool AddIronwoodIncomingViewingKey(
+        const libzcash::IronwoodIncomingViewingKey &ivk,
+        const libzcash::IronwoodPaymentAddress &addr,
         KeyScope scope);
-    virtual bool HaveOrchardIncomingViewingKey(const libzcash::OrchardPaymentAddress &addr) const;
-    virtual bool GetOrchardIncomingViewingKey(
-        const libzcash::OrchardPaymentAddress &addr,
-        libzcash::OrchardIncomingViewingKey& ivkOut) const;
+    virtual bool HaveIronwoodIncomingViewingKey(const libzcash::IronwoodPaymentAddress &addr) const;
+    virtual bool GetIronwoodIncomingViewingKey(
+        const libzcash::IronwoodPaymentAddress &addr,
+        libzcash::IronwoodIncomingViewingKey& ivkOut) const;
 
-    virtual bool GetOrchardKeyScope(
-        const libzcash::OrchardPaymentAddress &addr,
+    virtual bool GetIronwoodKeyScope(
+        const libzcash::IronwoodPaymentAddress &addr,
         KeyScope& scopeOut) const;
 
-    bool GetOrchardExtendedSpendingKey(
-        const libzcash::OrchardPaymentAddress &addr,
-        libzcash::OrchardExtendedSpendingKeyPirate &extskOut) const;
+    bool GetIronwoodExtendedSpendingKey(
+        const libzcash::IronwoodPaymentAddress &addr,
+        libzcash::IronwoodExtendedSpendingKeyPirate &extskOut) const;
 
     /**
-     * @brief Get all Orchard payment addresses from the keystore
+     * @brief Get all Ironwood payment addresses from the keystore
      * @param setAddress Output set to populate with addresses
      */
-    void GetOrchardPaymentAddresses(std::set<libzcash::OrchardPaymentAddress> &setAddress) const
+    void GetIronwoodPaymentAddresses(std::set<libzcash::IronwoodPaymentAddress> &setAddress) const
     {
         setAddress.clear();
         {
             LOCK(cs_KeyStore);
-            auto mi = mapOrchardIncomingViewingKeys.begin();
-            while (mi != mapOrchardIncomingViewingKeys.end())
+            auto mi = mapIronwoodIncomingViewingKeys.begin();
+            while (mi != mapIronwoodIncomingViewingKeys.end())
             {
                 setAddress.insert((*mi).first);
                 mi++;
@@ -781,14 +781,14 @@ public:
         }
     }
 
-    // ========== Orchard Diversified Addresses ==========
-    virtual bool AddOrchardDiversifiedAddress(
-        const libzcash::OrchardPaymentAddress &addr,
-        const libzcash::OrchardIncomingViewingKey &ivk,
+    // ========== Ironwood Diversified Addresses ==========
+    virtual bool AddIronwoodDiversifiedAddress(
+        const libzcash::IronwoodPaymentAddress &addr,
+        const libzcash::IronwoodIncomingViewingKey &ivk,
         const blob88 &path);
 
-    virtual bool AddLastOrchardDiversifierUsed(
-        const libzcash::OrchardIncomingViewingKey &ivk,
+    virtual bool AddLastIronwoodDiversifierUsed(
+        const libzcash::IronwoodIncomingViewingKey &ivk,
         const blob88 &path);
 
     // ========== Sprout Viewing Keys ==========
@@ -814,7 +814,7 @@ typedef std::map<libzcash::SproutPaymentAddress, std::vector<unsigned char> > Cr
 //! Encrypted Sapling spending keys (XFVK -> encrypted key)
 typedef std::map<libzcash::SaplingExtendedFullViewingKey, std::vector<unsigned char> > CryptedSaplingSpendingKeyMap;
 
-//! Encrypted Orchard spending keys (XFVK -> encrypted key)
-typedef std::map<libzcash::OrchardExtendedFullViewingKeyPirate, std::vector<unsigned char> > CryptedOrchardSpendingKeyMap;
+//! Encrypted Ironwood spending keys (XFVK -> encrypted key)
+typedef std::map<libzcash::IronwoodExtendedFullViewingKeyPirate, std::vector<unsigned char> > CryptedIronwoodSpendingKeyMap;
 
 #endif // BITCOIN_KEYSTORE_H

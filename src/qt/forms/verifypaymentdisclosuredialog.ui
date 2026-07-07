@@ -17,7 +17,7 @@
    <item>
     <widget class="QLabel" name="labelInstructions">
      <property name="text">
-      <string>Enter a payment disclosure key (Sapling or Orchard) to verify and decrypt the transaction output/action:</string>
+      <string>Enter a payment disclosure key (Sapling or Ironwood) to verify and decrypt the transaction output/action:</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

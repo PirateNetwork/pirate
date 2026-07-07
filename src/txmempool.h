@@ -154,7 +154,7 @@ private:
 
     std::map<uint256, const CTransaction*> mapSproutNullifiers;
     std::map<uint256, const CTransaction*> mapSaplingNullifiers;
-    std::map<uint256, const CTransaction*> mapOrchardNullifiers;
+    std::map<uint256, const CTransaction*> mapIronwoodNullifiers;
     std::map<uint256, const CTransaction*> mapZkOutputProofHash;
     std::map<uint256, const CTransaction*> mapZkSpendProofHash;
 

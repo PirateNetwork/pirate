@@ -917,9 +917,9 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
         defaultroots.push_back(Pair("merkleroot", pblock->hashMerkleRoot.GetHex()));
         defaultroots.push_back(Pair("chainhistoryroot", pblocktemplate->hashChainHistoryRoot.GetHex()));
         
-        // Check if we're post-Orchard activation and add NU5-specific fields
-        bool isOrchardActive = NetworkUpgradeActive(pindexPrev->nHeight + 1, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
-        if (isOrchardActive) {
+        // Check if we're post-Ironwood activation and add NU5-specific fields
+        bool isIronwoodActive = NetworkUpgradeActive(pindexPrev->nHeight + 1, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+        if (isIronwoodActive) {
             defaultroots.push_back(Pair("authdataroot", pblocktemplate->hashAuthDataRoot.GetHex()));
             defaultroots.push_back(Pair("blockcommitmentshash", pblock->hashBlockCommitments.GetHex()));
         }

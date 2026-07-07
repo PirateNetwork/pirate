@@ -80,7 +80,7 @@ struct ShieldCoinbaseUTXO {
  * 
  * Supported destination types:
  * - Sapling shielded addresses (z-addresses)
- * - Orchard shielded addresses (z-addresses)
+ * - Ironwood shielded addresses (z-addresses)
  * 
  * Note: Sprout addresses are no longer supported for new shielding operations.
  */
@@ -181,7 +181,7 @@ private:
  * @brief Visitor pattern implementation for handling different shielded address types
  * 
  * This class uses the boost::static_visitor pattern to handle shielding to different
- * types of shielded addresses (Sapling, Orchard) with type-specific logic for each.
+ * types of shielded addresses (Sapling, Ironwood) with type-specific logic for each.
  * The visitor pattern allows for clean separation of address-type-specific code.
  */
 class ShieldToAddress : public boost::static_visitor<bool>
@@ -216,12 +216,12 @@ public:
     bool operator()(const libzcash::SaplingPaymentAddress& zaddr) const;
     
     /**
-     * @brief Handler for Orchard addresses
+     * @brief Handler for Ironwood addresses
      * 
-     * @param zaddr Orchard payment address
+     * @param zaddr Ironwood payment address
      * @return true if transaction was successfully built and sent
      */
-    bool operator()(const libzcash::OrchardPaymentAddress& zaddr) const;
+    bool operator()(const libzcash::IronwoodPaymentAddress& zaddr) const;
     
     /**
      * @brief Handler for invalid address encoding

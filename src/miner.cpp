@@ -293,8 +293,8 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         SaplingMerkleFrontier sapling_frontier_tree;
         assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
 
-        IronwoodMerkleFrontier orchard_frontier_tree;
-        assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
+        IronwoodMerkleFrontier ironwood_frontier_tree;
+        assert(view.GetIronwoodFrontierAnchorAt(view.GetBestAnchor(IRONWOODFRONTIER), ironwood_frontier_tree));
 
         // Priority order to process transactions
         list<COrphan> vOrphan; // list memory doesn't move
@@ -621,9 +621,9 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
                 sapling_frontier_tree.AppendBundle(tx.GetSaplingBundle());
             }
 
-            //Append Orchard Actions to orchardFrontierTree
+            //Append Ironwood Actions to ironwoodFrontierTree
             if (tx.GetIronwoodBundle().IsPresent()) {
-                orchard_frontier_tree.AppendBundle(tx.GetIronwoodBundle());
+                ironwood_frontier_tree.AppendBundle(tx.GetIronwoodBundle());
             }
 
             // Added
@@ -986,7 +986,7 @@ void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& 
     pblock->vtx[0] = txCoinbase;
     pblock->hashMerkleRoot = pblock->BuildMerkleTree();
 
-    // For Orchard blocks, we also need to update hashBlockCommitments since
+    // For Ironwood blocks, we also need to update hashBlockCommitments since
     // changing the coinbase transaction changes the auth data root
     if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         // Get the chain history root from the current view

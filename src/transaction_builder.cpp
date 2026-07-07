@@ -23,7 +23,7 @@ uint256 ProduceShieldedSignatureHash(
     const CTransaction& tx,
     const std::vector<CTxOut>& allPrevOutputs,
     const sapling::UnauthorizedBundle& saplingBundle,
-    const std::optional<ironwood::UnauthorizedBundle>& orchardBundle)
+    const std::optional<ironwood::UnauthorizedBundle>& ironwoodBundle)
 {
     CDataStream sTx(SER_NETWORK, PROTOCOL_VERSION);
     sTx << tx;
@@ -31,11 +31,11 @@ uint256 ProduceShieldedSignatureHash(
     CDataStream sAllPrevOutputs(SER_NETWORK, PROTOCOL_VERSION);
     sAllPrevOutputs << allPrevOutputs;
 
-    const IronwoodUnauthorizedBundlePtr* orchardBundlePtr;
-    if (orchardBundle.has_value()) {
-        orchardBundlePtr = orchardBundle->inner.get();
+    const IronwoodUnauthorizedBundlePtr* ironwoodBundlePtr;
+    if (ironwoodBundle.has_value()) {
+        ironwoodBundlePtr = ironwoodBundle->inner.get();
     } else {
-        orchardBundlePtr = nullptr;
+        ironwoodBundlePtr = nullptr;
     }
 
     auto dataToBeSigned = builder::shielded_signature_digest(
@@ -43,7 +43,7 @@ uint256 ProduceShieldedSignatureHash(
         {reinterpret_cast<const unsigned char*>(sTx.data()), sTx.size()},
         {reinterpret_cast<const unsigned char*>(sAllPrevOutputs.data()), sAllPrevOutputs.size()},
         saplingBundle,
-        orchardBundlePtr);
+        ironwoodBundlePtr);
     return uint256::FromRawBytes(dataToBeSigned);
 }
 
@@ -59,12 +59,12 @@ Builder::Builder(
 }
 
 bool Builder::AddSpendFromParts(
-    const libzcash::OrchardFullViewingKey fvk,
-    const libzcash::OrchardPaymentAddress addr,
+    const libzcash::IronwoodFullViewingKey fvk,
+    const libzcash::IronwoodPaymentAddress addr,
     const CAmount value,
     const uint256 rho,
     const uint256 rseed,
-    const libzcash::MerklePath orchardMerklePath)
+    const libzcash::MerklePath ironwoodMerklePath)
 {
     if (!inner) {
         throw std::logic_error("ironwood::Builder has already been used");
@@ -84,7 +84,7 @@ bool Builder::AddSpendFromParts(
 
     // Serialize Merkle Path to pass to Rust
     CDataStream ssMerklePath(SER_NETWORK, PROTOCOL_VERSION);
-    ssMerklePath << orchardMerklePath;
+    ssMerklePath << ironwoodMerklePath;
     std::array<unsigned char, 1065> merklepath_t;
     std::move(ssMerklePath.begin(), ssMerklePath.end(), merklepath_t.begin());
 
@@ -104,7 +104,7 @@ bool Builder::AddSpendFromParts(
 
 bool Builder::AddOutput(
     const std::optional<uint256>& ovk,
-    const libzcash::OrchardPaymentAddress& to,
+    const libzcash::IronwoodPaymentAddress& to,
     CAmount value,
     const std::optional<libzcash::Memo>& memo)
 {
@@ -140,7 +140,7 @@ std::optional<UnauthorizedBundle> Builder::Build()
 }
 
 std::optional<IronwoodBundle> UnauthorizedBundle::ProveAndSign(
-    std::vector<libzcash::OrchardSpendingKey> keys,
+    std::vector<libzcash::IronwoodSpendingKey> keys,
     uint256 sighash)
 {
     if (!inner) {
@@ -514,50 +514,50 @@ void TransactionBuilder::InitializeIronwood(
         throw std::runtime_error("TransactionBuilder cannot initialize Ironwood before Ironwood activation");
     }
 
-    orchardBuilder = ironwood::Builder(spendsEnabled, outputsEnabled, anchor);
+    ironwoodBuilder = ironwood::Builder(spendsEnabled, outputsEnabled, anchor);
 }
 
-bool TransactionBuilder::AddOrchardSpendRaw(
-    OrchardOutPoint op,
-    libzcash::OrchardPaymentAddress addr,
+bool TransactionBuilder::AddIronwoodSpendRaw(
+    IronwoodOutPoint op,
+    libzcash::IronwoodPaymentAddress addr,
     CAmount value,
     uint256 rho,
     uint256 rseed,
-    libzcash::MerklePath orchardMerklePath,
+    libzcash::MerklePath ironwoodMerklePath,
     uint256 anchor)
 {
     if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
-        throw std::runtime_error("TransactionBuilder cannot add Orchard Spend before Orchard activation");
+        throw std::runtime_error("TransactionBuilder cannot add Ironwood Spend before Ironwood activation");
     }
 
     // Consistency check: all anchors must equal the first one
-    if (orchardAnchor.IsNull()) {
+    if (ironwoodAnchor.IsNull()) {
         // Set the anchor if not already set
-        orchardAnchor = anchor;
-    } else if (orchardAnchor != anchor) {
+        ironwoodAnchor = anchor;
+    } else if (ironwoodAnchor != anchor) {
         // If the anchor is already set, it must match the new one
         return false;
     }
 
-    vOrchardSpends.emplace_back(op, addr, value, rho, rseed, orchardMerklePath, anchor);
+    vIronwoodSpends.emplace_back(op, addr, value, rho, rseed, ironwoodMerklePath, anchor);
 
     return true;
 }
 
-bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendingKeyPirate extsk)
+bool TransactionBuilder::ConvertRawIronwoodSpend(libzcash::IronwoodExtendedSpendingKeyPirate extsk)
 {
-    //Exit early if there are no Orchard spends to process
-    if (vOrchardSpends.size() == 0) {
+    //Exit early if there are no Ironwood spends to process
+    if (vIronwoodSpends.size() == 0) {
         return true;
     }
 
-    // Sanity check: cannot add Orchard Spend to pre-Orchard transaction
-    if (!orchardBuilder.has_value()) {
+    // Sanity check: cannot add Ironwood Spend to pre-Ironwood transaction
+    if (!ironwoodBuilder.has_value()) {
         // Try to give a useful error.
         if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
-            throw std::runtime_error("TransactionBuilder cannot add Orchard Spend before Orchard activation");
+            throw std::runtime_error("TransactionBuilder cannot add Ironwood Spend before Ironwood activation");
         } else {
-            throw std::runtime_error("TransactionBuilder cannot add Orchard Spend without Orchard Builder");
+            throw std::runtime_error("TransactionBuilder cannot add Ironwood Spend without Ironwood Builder");
         }
     }
 
@@ -567,111 +567,111 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
     }
     auto fvk = fvkOpt.value().fvk;
 
-    if (!firstOrchardChangeAddr.has_value()) {
-        libzcash::OrchardOutgoingViewingKey ovk;
+    if (!firstIronwoodChangeAddr.has_value()) {
+        libzcash::IronwoodOutgoingViewingKey ovk;
         if (!fvk.DeriveOVK(&ovk)) {
             throw std::runtime_error("TransactionBuilder cannot get ovk from FVK");
         }
 
-        libzcash::OrchardPaymentAddress changeAddr;
+        libzcash::IronwoodPaymentAddress changeAddr;
         if (!fvk.DeriveDefaultAddressInternal(&changeAddr)) {
             throw std::runtime_error("TransactionBuilder cannot get default internal address from FVK");
         }
 
-        firstOrchardChangeAddr = std::make_pair(ovk.ovk, changeAddr);
+        firstIronwoodChangeAddr = std::make_pair(ovk.ovk, changeAddr);
     }
 
-    for (int i = 0; i < vOrchardSpends.size(); i++) {
-        if (orchardAnchor != vOrchardSpends[i].anchor) {
+    for (int i = 0; i < vIronwoodSpends.size(); i++) {
+        if (ironwoodAnchor != vIronwoodSpends[i].anchor) {
             return false;
         }
 
         // Check FVK is valid for Address — try external scope first, then internal (change).
-        libzcash::OrchardPaymentAddress checkAddr;
+        libzcash::IronwoodPaymentAddress checkAddr;
         bool addrMatched = false;
-        if (fvk.DeriveAddress(&checkAddr, vOrchardSpends[i].addr.d) && checkAddr == vOrchardSpends[i].addr) {
+        if (fvk.DeriveAddress(&checkAddr, vIronwoodSpends[i].addr.d) && checkAddr == vIronwoodSpends[i].addr) {
             addrMatched = true;
-        } else if (fvk.DeriveAddressInternal(&checkAddr, vOrchardSpends[i].addr.d) && checkAddr == vOrchardSpends[i].addr) {
+        } else if (fvk.DeriveAddressInternal(&checkAddr, vIronwoodSpends[i].addr.d) && checkAddr == vIronwoodSpends[i].addr) {
             addrMatched = true;
         }
         if (!addrMatched) {
-            fprintf(stderr, "Note Address %s\n", EncodePaymentAddress(vOrchardSpends[i].addr).c_str());
-            fprintf(stderr, "TransactionBuilder cannot add Orchard Spend with FVK that does not match Address\n");
-            throw std::runtime_error("TransactionBuilder cannot add Orchard Spend with FVK that does not match Address");
+            fprintf(stderr, "Note Address %s\n", EncodePaymentAddress(vIronwoodSpends[i].addr).c_str());
+            fprintf(stderr, "TransactionBuilder cannot add Ironwood Spend with FVK that does not match Address\n");
+            throw std::runtime_error("TransactionBuilder cannot add Ironwood Spend with FVK that does not match Address");
         }
 
-        if (!orchardBuilder->AddSpendFromParts(
+        if (!ironwoodBuilder->AddSpendFromParts(
                 fvk,
-                vOrchardSpends[i].addr,
-                vOrchardSpends[i].value,
-                vOrchardSpends[i].rho,
-                vOrchardSpends[i].rseed,
-                vOrchardSpends[i].orchardMerklePath)) {
+                vIronwoodSpends[i].addr,
+                vIronwoodSpends[i].value,
+                vIronwoodSpends[i].rho,
+                vIronwoodSpends[i].rseed,
+                vIronwoodSpends[i].ironwoodMerklePath)) {
             throw std::runtime_error("TransactionBuilder: ironwood_builder_add_spend_from_parts failed");
         }
 
-        valueBalanceOrchard += vOrchardSpends[i].value;
-        LogPrintf("Adding orchard spend value %i\n", vOrchardSpends[i].value);
-        LogPrintf("Adding total orchard value %i\n", valueBalanceOrchard);
+        valueBalanceIronwood += vIronwoodSpends[i].value;
+        LogPrintf("Adding ironwood spend value %i\n", vIronwoodSpends[i].value);
+        LogPrintf("Adding total ironwood value %i\n", valueBalanceIronwood);
     }
 
     // Add to list of keys to sign bundle
-    orchardSpendingKeys.push_back(extsk.sk);
+    ironwoodSpendingKeys.push_back(extsk.sk);
 
     // Accumulate committed count before clearing the staging vector
-    nCommittedOrchardSpends += vOrchardSpends.size();
+    nCommittedIronwoodSpends += vIronwoodSpends.size();
 
     // reset spend vector
-    vOrchardSpends.resize(0);
+    vIronwoodSpends.resize(0);
 
     return true;
 }
 
-bool TransactionBuilder::AddOrchardOutputRaw(
-    libzcash::OrchardPaymentAddress to,
+bool TransactionBuilder::AddIronwoodOutputRaw(
+    libzcash::IronwoodPaymentAddress to,
     CAmount value,
     const std::optional<libzcash::Memo>& memo)
 {
     // Try to give a useful error.
     if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
-        throw std::runtime_error("TransactionBuilder cannot add Orchard Output before Orchard activation");
+        throw std::runtime_error("TransactionBuilder cannot add Ironwood Output before Ironwood activation");
     }
 
-    vOrchardOutputs.emplace_back(to, value, memo);
+    vIronwoodOutputs.emplace_back(to, value, memo);
 
     return true;
 }
 
-bool TransactionBuilder::ConvertRawOrchardOutput(uint256 ovk)
+bool TransactionBuilder::ConvertRawIronwoodOutput(uint256 ovk)
 {
-    // If there are no Orchard outputs to process, return early
-    if (vOrchardOutputs.size() == 0) {
+    // If there are no Ironwood outputs to process, return early
+    if (vIronwoodOutputs.size() == 0) {
         return true;
     }
 
-    // Sanity check: cannot add Orchard output to pre-Orchard transaction
-    if (!orchardBuilder.has_value()) {
+    // Sanity check: cannot add Ironwood output to pre-Ironwood transaction
+    if (!ironwoodBuilder.has_value()) {
         // Try to give a useful error.
         if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
-            throw std::runtime_error("TransactionBuilder cannot add Orchard Output before Orchard activation");
+            throw std::runtime_error("TransactionBuilder cannot add Ironwood Output before Ironwood activation");
         } else {
-            throw std::runtime_error("TransactionBuilder cannot add Orchard Output without Orchard Builder");
+            throw std::runtime_error("TransactionBuilder cannot add Ironwood Output without Ironwood Builder");
         }
     }
 
-    for (int i = 0; i < vOrchardOutputs.size(); i++) {
-        if (!orchardBuilder->AddOutput(ovk, vOrchardOutputs[i].addr, vOrchardOutputs[i].value, vOrchardOutputs[i].memo)) {
+    for (int i = 0; i < vIronwoodOutputs.size(); i++) {
+        if (!ironwoodBuilder->AddOutput(ovk, vIronwoodOutputs[i].addr, vIronwoodOutputs[i].value, vIronwoodOutputs[i].memo)) {
             return false;
         }
 
-        valueBalanceOrchard -= vOrchardOutputs[i].value;
+        valueBalanceIronwood -= vIronwoodOutputs[i].value;
     }
 
     // Accumulate committed count before clearing the staging vector
-    nCommittedOrchardOutputs += vOrchardOutputs.size();
+    nCommittedIronwoodOutputs += vIronwoodOutputs.size();
 
     // reset Output Vector
-    vOrchardOutputs.resize(0);
+    vIronwoodOutputs.resize(0);
 
     return true;
 }
@@ -719,9 +719,9 @@ void TransactionBuilder::AddOpRet(CScript& s)
 }
 
 
-void TransactionBuilder::SendChangeTo(libzcash::OrchardPaymentAddress changeAddr, uint256 ovk)
+void TransactionBuilder::SendChangeTo(libzcash::IronwoodPaymentAddress changeAddr, uint256 ovk)
 {
-    orchardChangeAddr = std::make_pair(ovk, changeAddr);
+    ironwoodChangeAddr = std::make_pair(ovk, changeAddr);
     tChangeAddr = std::nullopt;
     saplingChangeAddr = std::nullopt;
 }
@@ -730,7 +730,7 @@ void TransactionBuilder::SendChangeTo(libzcash::SaplingPaymentAddress changeAddr
 {
     saplingChangeAddr = std::make_pair(ovk, changeAddr);
     tChangeAddr = std::nullopt;
-    orchardChangeAddr = std::nullopt;
+    ironwoodChangeAddr = std::nullopt;
 }
 
 bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
@@ -741,14 +741,14 @@ bool TransactionBuilder::SendChangeTo(CTxDestination& changeAddr)
 
     tChangeAddr = changeAddr;
     saplingChangeAddr = std::nullopt;
-    orchardChangeAddr = std::nullopt;
+    ironwoodChangeAddr = std::nullopt;
 
     return true;
 }
 
 // Returns true if the estimated transaction size fits within 95% of the protocol limit.
 // Transparent base is measured by serializing mtx (scriptSigs absent) + 107 bytes/input.
-// Orchard proof model (empirical, verified n=2,4,39,85): proof = 2720 + 2272*n bytes.
+// Ironwood proof model (empirical, verified n=2,4,39,85): proof = 2720 + 2272*n bytes.
 // Proof-length varint is 3 bytes for n<28, 5 bytes for n>=28 (proof exceeds 65535).
 // extraOutputs budgets for outputs not yet queued (e.g. change), routed to the active pool.
 bool TransactionBuilder::IsValidSize(int extraOutputs) const
@@ -757,12 +757,12 @@ bool TransactionBuilder::IsValidSize(int extraOutputs) const
     static constexpr size_t SAPLING_SPEND_SIZE           = 384;
     static constexpr size_t SAPLING_OUTPUT_SIZE          = 948;
     static constexpr size_t SAPLING_BUNDLE_OVERHEAD      = 104;
-    static constexpr size_t ORCHARD_ACTION_SIZE          = 884;
+    static constexpr size_t IRONWOOD_ACTION_SIZE          = 884;
     // Halo2 proof: verified exact at n=2,4,39,85: proof = 2720 + 2272*n
-    static constexpr size_t ORCHARD_PROOF_BASE           = 2720;
-    static constexpr size_t ORCHARD_PROOF_PER_ACTION     = 2272;
-    static constexpr size_t ORCHARD_BUNDLE_OVERHEAD_BASE = 106; // flags+valueBalance+anchor+bindingSig+varint
-    static constexpr size_t ORCHARD_LARGE_PROOF_THRESHOLD = 28; // proof >65535 bytes at n>=28
+    static constexpr size_t IRONWOOD_PROOF_BASE           = 2720;
+    static constexpr size_t IRONWOOD_PROOF_PER_ACTION     = 2272;
+    static constexpr size_t IRONWOOD_BUNDLE_OVERHEAD_BASE = 106; // flags+valueBalance+anchor+bindingSig+varint
+    static constexpr size_t IRONWOOD_LARGE_PROOF_THRESHOLD = 28; // proof >65535 bytes at n>=28
     static constexpr size_t P2PKH_SCRIPTSIG_SIZE         = 107;
 
     // Transparent: serialize mtx (empty scriptSigs) + estimate scriptSig bytes
@@ -775,13 +775,13 @@ bool TransactionBuilder::IsValidSize(int extraOutputs) const
     // Shielded counts: committed (already in Rust builder) + pending in staging vectors
     const size_t nSaplingSpends      = nCommittedSaplingSpends  + vSaplingSpends.size();
     const size_t nSaplingOutputsBase = nCommittedSaplingOutputs + vSaplingOutputs.size();
-    const size_t nOrchardSpends      = nCommittedOrchardSpends  + vOrchardSpends.size();
-    const size_t nOrchardOutputsBase = nCommittedOrchardOutputs + vOrchardOutputs.size();
+    const size_t nIronwoodSpends      = nCommittedIronwoodSpends  + vIronwoodSpends.size();
+    const size_t nIronwoodOutputsBase = nCommittedIronwoodOutputs + vIronwoodOutputs.size();
 
-    const bool orchardPoolActive = (nOrchardSpends > 0 || nOrchardOutputsBase > 0);
-    const size_t nSaplingOutputs = nSaplingOutputsBase + (orchardPoolActive ? 0 : static_cast<size_t>(extraOutputs));
-    const size_t nOrchardOutputs = nOrchardOutputsBase + (orchardPoolActive ? static_cast<size_t>(extraOutputs) : 0);
-    const size_t nOrchardActions = std::max(nOrchardSpends, nOrchardOutputs);
+    const bool ironwoodPoolActive = (nIronwoodSpends > 0 || nIronwoodOutputsBase > 0);
+    const size_t nSaplingOutputs = nSaplingOutputsBase + (ironwoodPoolActive ? 0 : static_cast<size_t>(extraOutputs));
+    const size_t nIronwoodOutputs = nIronwoodOutputsBase + (ironwoodPoolActive ? static_cast<size_t>(extraOutputs) : 0);
+    const size_t nIronwoodActions = std::max(nIronwoodSpends, nIronwoodOutputs);
 
     size_t estimate = transparentBase;
 
@@ -791,14 +791,14 @@ bool TransactionBuilder::IsValidSize(int extraOutputs) const
                   + SAPLING_BUNDLE_OVERHEAD;
     }
 
-    size_t orchardProofEst = 0;
+    size_t ironwoodProofEst = 0;
     size_t proofVarintSize = 0;
-    if (nOrchardActions > 0) {
-        orchardProofEst = ORCHARD_PROOF_BASE + nOrchardActions * ORCHARD_PROOF_PER_ACTION;
-        proofVarintSize = (nOrchardActions >= ORCHARD_LARGE_PROOF_THRESHOLD) ? 5 : 3;
-        estimate += nOrchardActions * ORCHARD_ACTION_SIZE
-                  + orchardProofEst + proofVarintSize
-                  + ORCHARD_BUNDLE_OVERHEAD_BASE;
+    if (nIronwoodActions > 0) {
+        ironwoodProofEst = IRONWOOD_PROOF_BASE + nIronwoodActions * IRONWOOD_PROOF_PER_ACTION;
+        proofVarintSize = (nIronwoodActions >= IRONWOOD_LARGE_PROOF_THRESHOLD) ? 5 : 3;
+        estimate += nIronwoodActions * IRONWOOD_ACTION_SIZE
+                  + ironwoodProofEst + proofVarintSize
+                  + IRONWOOD_BUNDLE_OVERHEAD_BASE;
     }
 
     const size_t maxTxSize = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING)
@@ -807,15 +807,15 @@ bool TransactionBuilder::IsValidSize(int extraOutputs) const
 
     // LogPrintf("IsValidSize: transparent_base=%u (serialized=%u scriptsig_est=%u inputs=%u outputs=%u) "
     //           "sapling_spends=%u sapling_outputs=%u "
-    //           "orchard_spends=%u orchard_outputs=%u orchard_actions=%u "
-    //           "orchard_proof_est=%u varint=%u "
+    //           "ironwood_spends=%u ironwood_outputs=%u ironwood_actions=%u "
+    //           "ironwood_proof_est=%u varint=%u "
     //           "estimated_total=%u limit=%u max=%u valid=%s\n",
     //     transparentBase,
     //     transparentBase - nTransparentInputs * P2PKH_SCRIPTSIG_SIZE,
     //     nTransparentInputs * P2PKH_SCRIPTSIG_SIZE,
     //     nTransparentInputs, nTransparentOutputs, nSaplingSpends, nSaplingOutputs,
-    //     nOrchardSpends, nOrchardOutputs, nOrchardActions,
-    //     orchardProofEst, proofVarintSize,
+    //     nIronwoodSpends, nIronwoodOutputs, nIronwoodActions,
+    //     ironwoodProofEst, proofVarintSize,
     //     estimate, limit, maxTxSize,
     //     (estimate <= limit ? "YES" : "NO"));
 
@@ -830,7 +830,7 @@ TransactionBuilderResult TransactionBuilder::Build()
 
     // Guard: staging vectors must have been flushed via Convert* before Build().
     if (!vSaplingSpends.empty() || !vSaplingOutputs.empty() ||
-        !vOrchardSpends.empty()  || !vOrchardOutputs.empty()) {
+        !vIronwoodSpends.empty()  || !vIronwoodOutputs.empty()) {
         return TransactionBuilderResult(
             "TransactionBuilder::Build called with unconverted staging spends/outputs; "
             "call ConvertRaw* before Build()");
@@ -839,11 +839,11 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Clear Pending Inputs and Outputs
     vSaplingSpends.resize(0);
     vSaplingOutputs.resize(0);
-    vOrchardSpends.resize(0);
-    vOrchardOutputs.resize(0);
+    vIronwoodSpends.resize(0);
+    vIronwoodOutputs.resize(0);
 
     // Validate change
-    CAmount change = valueBalanceSapling + valueBalanceOrchard - fee;
+    CAmount change = valueBalanceSapling + valueBalanceIronwood - fee;
 
     for (auto tIn : tIns) {
         change += tIn.nValue;
@@ -860,19 +860,19 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
     if (change > 0) {
         // Send change to the specified change address.
-        if (orchardChangeAddr) {
-            AddOrchardOutputRaw(orchardChangeAddr->second, change, std::nullopt);
-            ConvertRawOrchardOutput(orchardChangeAddr->first);
+        if (ironwoodChangeAddr) {
+            AddIronwoodOutputRaw(ironwoodChangeAddr->second, change, std::nullopt);
+            ConvertRawIronwoodOutput(ironwoodChangeAddr->first);
         } else if (saplingChangeAddr) {
             AddSaplingOutputRaw(saplingChangeAddr->second, change, std::nullopt);
             ConvertRawSaplingOutput(saplingChangeAddr->first);
         } else if (tChangeAddr) {
             assert(AddTransparentOutput(tChangeAddr.value(), change));
 
-        // If no change address was set, use the first Sapling or Orchard address
-        } else if (firstOrchardChangeAddr) {
-            AddOrchardOutputRaw(firstOrchardChangeAddr->second, change, std::nullopt);
-            ConvertRawOrchardOutput(firstOrchardChangeAddr->first);
+        // If no change address was set, use the first Sapling or Ironwood address
+        } else if (firstIronwoodChangeAddr) {
+            AddIronwoodOutputRaw(firstIronwoodChangeAddr->second, change, std::nullopt);
+            ConvertRawIronwoodOutput(firstIronwoodChangeAddr->first);
 
         } else if (firstSaplingChangeAddr) {
             AddSaplingOutputRaw(firstSaplingChangeAddr->second, change, std::nullopt);
@@ -904,15 +904,15 @@ TransactionBuilderResult TransactionBuilder::Build()
     auto saplingBundle = std::move(maybeSaplingBundle);
 
     //
-    // Orchard
+    // Ironwood
     //
-    std::optional<ironwood::UnauthorizedBundle> orchardBundle;
-    if (orchardBuilder.has_value() && orchardBuilder->HasActions()) {
-        auto bundle = orchardBuilder->Build();
+    std::optional<ironwood::UnauthorizedBundle> ironwoodBundle;
+    if (ironwoodBuilder.has_value() && ironwoodBuilder->HasActions()) {
+        auto bundle = ironwoodBuilder->Build();
         if (bundle.has_value()) {
-            orchardBundle = std::move(bundle);
+            ironwoodBundle = std::move(bundle);
         } else {
-            return TransactionBuilderResult("Failed to build Orchard bundle");
+            return TransactionBuilderResult("Failed to build Ironwood bundle");
         }
     }
 
@@ -934,7 +934,7 @@ TransactionBuilderResult TransactionBuilder::Build()
                 mtx,
                 tIns,
                 *saplingBundle.value(),
-                orchardBundle);
+                ironwoodBundle);
         } else {
             CScript scriptCode;
             const PrecomputedTransactionData txdata(mtx, tIns);
@@ -946,23 +946,23 @@ TransactionBuilderResult TransactionBuilder::Build()
         return TransactionBuilderResult("Could not construct signature hash: " + std::string(ex.what()));
     }
 
-    if (orchardBundle.has_value()) {
-        // Populate a random key when not spending from orchard.
-        if (orchardSpendingKeys.size() == 0) {
-            auto randomKey = libzcash::OrchardSpendingKey().random();
+    if (ironwoodBundle.has_value()) {
+        // Populate a random key when not spending from ironwood.
+        if (ironwoodSpendingKeys.size() == 0) {
+            auto randomKey = libzcash::IronwoodSpendingKey().random();
             if (randomKey != std::nullopt) {
-                orchardSpendingKeys.push_back(randomKey.value());
+                ironwoodSpendingKeys.push_back(randomKey.value());
             } else {
-                return TransactionBuilderResult("Failed to generate random Orchard spending key");
+                return TransactionBuilderResult("Failed to generate random Ironwood spending key");
             }
         }
-        auto authorizedBundle = orchardBundle.value().ProveAndSign(
-            orchardSpendingKeys,
+        auto authorizedBundle = ironwoodBundle.value().ProveAndSign(
+            ironwoodSpendingKeys,
             dataToBeSigned);
         if (authorizedBundle.has_value()) {
             mtx.ironwoodBundle = std::move(authorizedBundle.value());
         } else {
-            return TransactionBuilderResult("Failed to create Orchard proof or signatures");
+            return TransactionBuilderResult("Failed to create Ironwood proof or signatures");
         }
     }
 

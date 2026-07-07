@@ -353,16 +353,16 @@ public:
     std::string ToString() const;
 };
 
-/** An outpoint - a combination of a txid and an index n into its orchard
+/** An outpoint - a combination of a txid and an index n into its ironwood
  * actions */
-class OrchardOutPoint : public BaseOutPoint
+class IronwoodOutPoint : public BaseOutPoint
 {
 public:
     // In-Memory Only
     bool writeToDisk = true;
 
-    OrchardOutPoint() : BaseOutPoint() {};
-    OrchardOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
+    IronwoodOutPoint() : BaseOutPoint() {};
+    IronwoodOutPoint(uint256 hashIn, uint32_t nIn) : BaseOutPoint(hashIn, nIn) {};
     std::string ToString() const;
 };
 
@@ -374,8 +374,8 @@ public:
     int nIndex;
     std::set<libzcash::SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
-    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
+    std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
+    std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
 
     // In-Memory Only
     bool writeToDisk = true;
@@ -387,14 +387,14 @@ public:
         nIndex = nIn;
         writeToDisk = true;
     }
-    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<libzcash::SaplingIncomingViewingKey> nSaplingIvks, std::set<uint256> nSaplingOvks, std::set<libzcash::OrchardIncomingViewingKey> nOrchardIvks, std::set<libzcash::OrchardOutgoingViewingKey> nOrchardOvks)
+    ArchiveTxPoint(uint256 hashIn, int nIn, std::set<libzcash::SaplingIncomingViewingKey> nSaplingIvks, std::set<uint256> nSaplingOvks, std::set<libzcash::IronwoodIncomingViewingKey> nIronwoodIvks, std::set<libzcash::IronwoodOutgoingViewingKey> nIronwoodOvks)
     {
         hashBlock = hashIn;
         nIndex = nIn;
         saplingIvks = nSaplingIvks;
         saplingOvks = nSaplingOvks;
-        orchardIvks = nOrchardIvks;
-        orchardOvks = nOrchardOvks;
+        ironwoodIvks = nIronwoodIvks;
+        ironwoodOvks = nIronwoodOvks;
         writeToDisk = true;
     }
 
@@ -407,8 +407,8 @@ public:
         READWRITE(nIndex);
         READWRITE(saplingIvks);
         READWRITE(saplingOvks);
-        READWRITE(orchardIvks);
-        READWRITE(orchardOvks);
+        READWRITE(ironwoodIvks);
+        READWRITE(ironwoodOvks);
     }
 
     void SetNull()
@@ -417,11 +417,11 @@ public:
         nIndex = -1;
         saplingIvks.clear();
         saplingOvks.clear();
-        orchardIvks.clear();
-        orchardOvks.clear();
+        ironwoodIvks.clear();
+        ironwoodOvks.clear();
         writeToDisk = true;
     }
-    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1 && saplingIvks.size() == 0 && saplingOvks.size() == 0 && orchardIvks.size() == 0 && orchardOvks.size() == 0); }
+    bool IsNull() const { return (hashBlock.IsNull() && nIndex == -1 && saplingIvks.size() == 0 && saplingOvks.size() == 0 && ironwoodIvks.size() == 0 && ironwoodOvks.size() == 0); }
 };
 
 /** An input of a transaction.  It contains the location of the previous

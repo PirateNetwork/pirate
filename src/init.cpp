@@ -70,7 +70,7 @@
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
-#include "wallet/asyncrpcoperation_orchardconsolidation.h"
+#include "wallet/asyncrpcoperation_ironwoodconsolidation.h"
 #include "wallet/asyncrpcoperation_sweeptoaddress.h"
 #endif
 #include <stdint.h>
@@ -528,11 +528,11 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-saplingconsolidation", _("Enable auto Sapling note consolidation"));
     strUsage += HelpMessageOpt("-saplingconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Sapling consolidation transactions. (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_FEE));
     strUsage += HelpMessageOpt("-saplingconsolidationinterval=<n>", strprintf(_("Interval in blocks between Sapling note consolidation (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_INTERVAL));
-    strUsage += HelpMessageOpt("-orchardconsolidation", _("Enable auto Orchard note consolidation"));
-    strUsage += HelpMessageOpt("-orchardconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Orchard consolidation transactions. (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_FEE));
-    strUsage += HelpMessageOpt("-orchardconsolidationinterval=<n>", strprintf(_("Interval in blocks between Orchard note consolidation (default %i)"), DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL));
+    strUsage += HelpMessageOpt("-ironwoodconsolidation", _("Enable auto Ironwood note consolidation"));
+    strUsage += HelpMessageOpt("-ironwoodconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Ironwood consolidation transactions. (default %i)"), DEFAULT_IRONWOOD_CONSOLIDATION_FEE));
+    strUsage += HelpMessageOpt("-ironwoodconsolidationinterval=<n>", strprintf(_("Interval in blocks between Ironwood note consolidation (default %i)"), DEFAULT_IRONWOOD_CONSOLIDATION_INTERVAL));
     strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling address to consolidate (default: all). Must match sweep address when sweep is enabled."));
-    strUsage += HelpMessageOpt("-consolidateorchardaddress=<zaddr>", _("Specify Orchard address to consolidate (default: all). Must match sweep address when sweep is enabled."));
+    strUsage += HelpMessageOpt("-consolidateironwoodaddress=<zaddr>", _("Specify Ironwood address to consolidate (default: all). Must match sweep address when sweep is enabled."));
     strUsage += HelpMessageOpt("-consolidationtargetqty=<n>", strprintf(_("Minimum number of notes an address must have before auto-consolidation processes it (default: %i, minimum: 2)"), 100));
 
     // Deprecated consolidation commands
@@ -544,13 +544,13 @@ std::string HelpMessage(HelpMessageMode mode)
 
     // Sweep commands
     strUsage += HelpMessageOpt("-sweep", _("Enable auto note sweep, automatically move all funds to a single address periodically"));
-    strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify address to sweep funds to (supports both Sapling and Orchard addresses)"));
+    strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify address to sweep funds to (supports both Sapling and Ironwood addresses)"));
     strUsage += HelpMessageOpt("-sweeptxfee", strprintf(_("Fee amount in Satoshis used for sweep transactions. (default %i)"), DEFAULT_SWEEP_FEE));
     strUsage += HelpMessageOpt("-sweepinterval=<n>", _("Number of blocks between automatic sweep runs (default: ~15 minutes of blocks)"));
 
     // Deprecated sweep commands
     strUsage += HelpMessageOpt("-sweepsaplingaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
-    strUsage += HelpMessageOpt("-sweeporchardaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
+    strUsage += HelpMessageOpt("-sweepironwoodaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
     strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
     strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
     strUsage += HelpMessageOpt("-keeptxnum", strprintf(_("Keep the last <n> transactions (default: %i)"), DEFAULT_TX_RETENTION_LASTTX));
@@ -1672,9 +1672,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Initialize the validity caches. We currently have three:
     // - Transparent signature validity.
     // - Sapling bundle validity.
-    // - Orchard bundle validity.
+    // - Ironwood bundle validity.
     // Assign half of the cap to transparent signatures, and split the rest
-    // between Sapling and Orchard bundles.
+    // between Sapling and Ironwood bundles.
     size_t nMaxCacheSize = GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE) * ((size_t) 1 << 20);
     if (nMaxCacheSize <= 0) {
         return InitError(strprintf(_("-maxsigcachesize must be at least 1")));
@@ -2250,7 +2250,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             //Reset the saplingwallet on zap
             pwalletMain->SaplingWalletReset();
-            pwalletMain->OrchardWalletReset();
+            pwalletMain->IronwoodWalletReset();
 
             delete pwalletMain;
             pwalletMain = NULL;
@@ -2468,15 +2468,15 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->SetMaxVersion(nMaxVersion);
         }
 
-        // Check if we need to rederive Orchard address scopes (for wallet upgrade compatibility)
-        if (GetBoolArg("-rederiverorchardscopes", false)) {
-            uiInterface.InitMessage(_("Rederiving Orchard address scopes..."));
-            LogPrintf("Manual Orchard scope rederivation requested via -rederiverorchardscopes\n");
+        // Check if we need to rederive Ironwood address scopes (for wallet upgrade compatibility)
+        if (GetBoolArg("-rederiverironwoodscopes", false)) {
+            uiInterface.InitMessage(_("Rederiving Ironwood address scopes..."));
+            LogPrintf("Manual Ironwood scope rederivation requested via -rederiverironwoodscopes\n");
             LOCK(pwalletMain->cs_wallet);
-            if (!pwalletMain->RederiveOrchardAddressScopes()) {
-                InitWarning(_("Warning: Some Orchard address scopes could not be rederived"));
+            if (!pwalletMain->RederiveIronwoodAddressScopes()) {
+                InitWarning(_("Warning: Some Ironwood address scopes could not be rederived"));
             } else {
-                LogPrintf("Successfully rederived all Orchard address scopes\n");
+                LogPrintf("Successfully rederived all Ironwood address scopes\n");
             }
         }
 
@@ -2557,26 +2557,26 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Set Consolidation Configuration
         // Check for deprecated consolidation parameters and throw errors
         if (mapArgs.count("-consolidation")) {
-            return InitError("Deprecated parameter -consolidation is no longer supported. Use -saplingconsolidation and/or -orchardconsolidation instead.");
+            return InitError("Deprecated parameter -consolidation is no longer supported. Use -saplingconsolidation and/or -ironwoodconsolidation instead.");
         }
         if (mapArgs.count("-consolidationtxfee")) {
-            return InitError("Deprecated parameter -consolidationtxfee is no longer supported. Use -saplingconsolidationtxfee and/or -orchardconsolidationtxfee instead.");
+            return InitError("Deprecated parameter -consolidationtxfee is no longer supported. Use -saplingconsolidationtxfee and/or -ironwoodconsolidationtxfee instead.");
         }
         if (mapArgs.count("-consolidateaddress")) {
-            return InitError("Deprecated parameter -consolidateaddress is no longer supported. Use -consolidatesaplingaddress and/or -consolidateorchardaddress instead.");
+            return InitError("Deprecated parameter -consolidateaddress is no longer supported. Use -consolidatesaplingaddress and/or -consolidateironwoodaddress instead.");
         }
 
         // Protocol-specific consolidation configuration
         pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-saplingconsolidation", false);
-        pwalletMain->fOrchardConsolidationEnabled = GetBoolArg("-orchardconsolidation", false);
+        pwalletMain->fIronwoodConsolidationEnabled = GetBoolArg("-ironwoodconsolidation", false);
 
         // Set protocol-specific fees
         fSaplingConsolidationTxFee = GetArg("-saplingconsolidationtxfee", DEFAULT_SAPLING_CONSOLIDATION_FEE);
-        fOrchardConsolidationTxFee = GetArg("-orchardconsolidationtxfee", DEFAULT_ORCHARD_CONSOLIDATION_FEE);
+        fIronwoodConsolidationTxFee = GetArg("-ironwoodconsolidationtxfee", DEFAULT_IRONWOOD_CONSOLIDATION_FEE);
 
         // Address configuration
         fSaplingConsolidationMapUsed = !mapMultiArgs["-consolidatesaplingaddress"].empty();
-        fOrchardConsolidationMapUsed = !mapMultiArgs["-consolidateorchardaddress"].empty();
+        fIronwoodConsolidationMapUsed = !mapMultiArgs["-consolidateironwoodaddress"].empty();
 
         // Initialize consolidation target quantity (shared across protocols)
         {
@@ -2585,7 +2585,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 return InitError("-consolidationtargetqty must be at least 2");
             }
             pwalletMain->targetSaplingConsolidationQty = targetQty;
-            pwalletMain->targetOrchardConsolidationQty = targetQty;
+            pwalletMain->targetIronwoodConsolidationQty = targetQty;
         }
 
         // Initialize consolidation intervals with bounds validation
@@ -2596,12 +2596,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
             pwalletMain->saplingConsolidationInterval = interval;
         }
-        if (mapArgs.count("-orchardconsolidationinterval")) {
-            int interval = (int)GetArg("-orchardconsolidationinterval", 0);
+        if (mapArgs.count("-ironwoodconsolidationinterval")) {
+            int interval = (int)GetArg("-ironwoodconsolidationinterval", 0);
             if (interval < 1) {
-                return InitError("-orchardconsolidationinterval must be at least 1");
+                return InitError("-ironwoodconsolidationinterval must be at least 1");
             }
-            pwalletMain->orchardConsolidationInterval = interval;
+            pwalletMain->ironwoodConsolidationInterval = interval;
         }
 
         //Validate Sapling Consolidation Addresses
@@ -2618,17 +2618,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
         }
 
-        //Validate Orchard Consolidation Addresses
-        vector<string>& vorchardaddresses = mapMultiArgs["-consolidateorchardaddress"];
-        for (int i = 0; i < (int)vorchardaddresses.size(); i++) {
-            LogPrintf("Consolidating Orchard Address: %s\n", vorchardaddresses[i]);
-            auto orchardAddress = DecodePaymentAddress(vorchardaddresses[i]);
-            if (!IsValidPaymentAddress(orchardAddress)) {
-                return InitError("Invalid Orchard consolidation address");
+        //Validate Ironwood Consolidation Addresses
+        vector<string>& vironwoodaddresses = mapMultiArgs["-consolidateironwoodaddress"];
+        for (int i = 0; i < (int)vironwoodaddresses.size(); i++) {
+            LogPrintf("Consolidating Ironwood Address: %s\n", vironwoodaddresses[i]);
+            auto ironwoodAddress = DecodePaymentAddress(vironwoodaddresses[i]);
+            if (!IsValidPaymentAddress(ironwoodAddress)) {
+                return InitError("Invalid Ironwood consolidation address");
             }
-            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), orchardAddress);
+            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), ironwoodAddress);
             if (!hasSpendingKey) {
-                return InitError("Wallet must have the spending key for Orchard consolidation address: " + vorchardaddresses[i]);
+                return InitError("Wallet must have the spending key for Ironwood consolidation address: " + vironwoodaddresses[i]);
             }
         }
 
@@ -2637,8 +2637,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (mapArgs.count("-sweepsaplingaddress")) {
             return InitError("Deprecated parameter -sweepsaplingaddress is no longer supported. Use -sweepaddress instead.");
         }
-        if (mapArgs.count("-sweeporchardaddress")) {
-            return InitError("Deprecated parameter -sweeporchardaddress is no longer supported. Use -sweepaddress instead.");
+        if (mapArgs.count("-sweepironwoodaddress")) {
+            return InitError("Deprecated parameter -sweepironwoodaddress is no longer supported. Use -sweepaddress instead.");
         }
         
         pwalletMain->fUseDpowConfs = GetBoolArg("-usedpowconfs", false);
@@ -2704,13 +2704,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 }
             }
 
-            if (pwalletMain->fOrchardConsolidationEnabled) {
-                // When sweep is active, Orchard consolidation is automatically restricted to the
+            if (pwalletMain->fIronwoodConsolidationEnabled) {
+                // When sweep is active, Ironwood consolidation is automatically restricted to the
                 // sweep address at runtime regardless of the consolidation address list.
                 // A configured consolidation address list will be ignored while sweep is active.
-                vector<string>& vcons = mapMultiArgs["-consolidateorchardaddress"];
+                vector<string>& vcons = mapMultiArgs["-consolidateironwoodaddress"];
                 if (!vcons.empty() && (vcons.size() != 1 || vcons[0] != allSweepAddresses[0])) {
-                    LogPrintf("WARNING: Orchard consolidation address list will be ignored while sweep is enabled. "
+                    LogPrintf("WARNING: Ironwood consolidation address list will be ignored while sweep is enabled. "
                               "Consolidation will only process the sweep address.\n");
                 }
             }
@@ -2794,7 +2794,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pindexRescan = chainActive.Genesis();
             pwalletMain->nBirthday = 0;
             pwalletMain->SaplingWalletReset();
-            pwalletMain->OrchardWalletReset();
+            pwalletMain->IronwoodWalletReset();
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (chainActive.Tip() && rescanHeight > 0) {
@@ -2852,12 +2852,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             }
             pwalletMain->saplingWalletPositionsValidated=true;
 
-            LogPrintf("Validating Orchard Note Positions from height %i\n", chainActive.Height());
-            if (!pwalletMain->ValidateOrchardWalletTrackedPositions(chainActive.Tip())) {
-                pwalletMain->OrchardWalletReset();
-                pwalletMain->IncrementOrchardWallet(chainActive.Tip());
+            LogPrintf("Validating Ironwood Note Positions from height %i\n", chainActive.Height());
+            if (!pwalletMain->ValidateIronwoodWalletTrackedPositions(chainActive.Tip())) {
+                pwalletMain->IronwoodWalletReset();
+                pwalletMain->IncrementIronwoodWallet(chainActive.Tip());
             }
-            pwalletMain->orchardWalletPositionsValidated=true;
+            pwalletMain->ironwoodWalletPositionsValidated=true;
         }
 
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));

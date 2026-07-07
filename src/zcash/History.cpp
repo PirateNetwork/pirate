@@ -47,13 +47,13 @@ HistoryNode NewNode(
         uint32_t endTarget,
         uint256 startSaplingRoot,
         uint256 endSaplingRoot,
-        std::optional<uint256> startOrchardRoot,
-        std::optional<uint256> endOrchardRoot,
+        std::optional<uint256> startIronwoodRoot,
+        std::optional<uint256> endIronwoodRoot,
         uint256 subtreeTotalWork,
         uint64_t startHeight,
         uint64_t endHeight,
         uint64_t saplingTxCount,
-        std::optional<uint64_t> orchardTxCount
+        std::optional<uint64_t> ironwoodTxCount
     )
 {
     CDataStream buf(SER_DISK, 0);
@@ -70,11 +70,11 @@ HistoryNode NewNode(
     buf << COMPACTSIZE(startHeight);
     buf << COMPACTSIZE(endHeight);
     buf << COMPACTSIZE(saplingTxCount);
-    if (startOrchardRoot) {
-        // If startOrchardRoot is provided, assume all V2 fields are.
-        buf << startOrchardRoot.value();
-        buf << endOrchardRoot.value();
-        buf << COMPACTSIZE(orchardTxCount.value());
+    if (startIronwoodRoot) {
+        // If startIronwoodRoot is provided, assume all V2 fields are.
+        buf << startIronwoodRoot.value();
+        buf << endIronwoodRoot.value();
+        buf << COMPACTSIZE(ironwoodTxCount.value());
     }
 
     assert(buf.size() <= NODE_SERIALIZED_LENGTH);
@@ -114,11 +114,11 @@ HistoryNode NewV2Leaf(
     uint32_t time,
     uint32_t target,
     uint256 saplingRoot,
-    uint256 orchardRoot,
+    uint256 ironwoodRoot,
     uint256 totalWork,
     uint64_t height,
     uint64_t saplingTxCount,
-    uint64_t orchardTxCount
+    uint64_t ironwoodTxCount
 ) {
     return NewNode(
         commitment,
@@ -128,13 +128,13 @@ HistoryNode NewV2Leaf(
         target,
         saplingRoot,
         saplingRoot,
-        orchardRoot,
-        orchardRoot,
+        ironwoodRoot,
+        ironwoodRoot,
         totalWork,
         height,
         height,
         saplingTxCount,
-        orchardTxCount
+        ironwoodTxCount
     );
 }
 

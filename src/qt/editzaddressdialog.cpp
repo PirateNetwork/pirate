@@ -49,13 +49,13 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
                 const Consensus::Params& consensusParams = Params().GetConsensus();
                 
                 bool saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-                bool orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
+                bool ironwoodActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
                 
                 ui->addressTypeCombo->clear();
                 
-                if (orchardActive) {
-                    // Orchard is active - show Orchard as default (and recommended)
-                    ui->addressTypeCombo->addItem("Orchard (Recommended)", "orchard");
+                if (ironwoodActive) {
+                    // Ironwood is active - show Ironwood as default (and recommended)
+                    ui->addressTypeCombo->addItem("Ironwood (Recommended)", "ironwood");
                     // Also offer Sapling as an option if active
                     if (saplingActive) {
                         ui->addressTypeCombo->addItem("Sapling", "sapling");

@@ -387,14 +387,14 @@ public:
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
-                    const uint256 &hashOrchardFrontierAnchor,
+                    const uint256 &hashIronwoodFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
-                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
+                    CAnchorsIronwoodFrontierMap &mapIronwoodFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CNullifiersMap &mapOrchardNullifiers,
+                    CNullifiersMap &mapIronwoodNullifiers,
                     CHistoryCacheMap &historyCacheMap) {
         return false;
     }

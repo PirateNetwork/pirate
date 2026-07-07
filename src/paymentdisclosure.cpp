@@ -37,7 +37,7 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
 
     // Get the OVK from the wallet
     // We need to find which OVK can actually decrypt this output
-    // Try all OVKs in the wallet (both Sapling and Orchard) and use the one that successfully decrypts
+    // Try all OVKs in the wallet (both Sapling and Ironwood) and use the one that successfully decrypts
     uint256_t ovkBytes;
     uint256_t ock;
     bool found = false;
@@ -83,23 +83,23 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
         }
     }
 
-    // If not found with Sapling OVKs, try Orchard OVKs
-    // Transactions that spend from Orchard and send to Sapling use Orchard OVKs
+    // If not found with Sapling OVKs, try Ironwood OVKs
+    // Transactions that spend from Ironwood and send to Sapling use Ironwood OVKs
     if (!found) {
-        std::set<libzcash::OrchardPaymentAddress> orchardAddresses;
-        wallet->GetOrchardPaymentAddresses(orchardAddresses);
+        std::set<libzcash::IronwoodPaymentAddress> ironwoodAddresses;
+        wallet->GetIronwoodPaymentAddresses(ironwoodAddresses);
 
-        for (const auto& addr : orchardAddresses) {
+        for (const auto& addr : ironwoodAddresses) {
             // Get the spending key for this address if we have it
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (wallet->GetOrchardExtendedSpendingKey(addr, extsk)) {
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (wallet->GetIronwoodExtendedSpendingKey(addr, extsk)) {
                 // Get the FVK and then the OVK
-                libzcash::OrchardFullViewingKey fvk;
+                libzcash::IronwoodFullViewingKey fvk;
                 if (!extsk.sk.DeriveFVK(&fvk)) {
                     continue; // Try next key
                 }
                 
-                libzcash::OrchardOutgoingViewingKey ovkObj;
+                libzcash::IronwoodOutgoingViewingKey ovkObj;
                 if (!fvk.DeriveOVK(&ovkObj)) {
                     continue; // Try next key
                 }
@@ -133,7 +133,7 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
         }
     }
 
-    // If not found with Sapling or Orchard OVKs, try transparent OVK
+    // If not found with Sapling or Ironwood OVKs, try transparent OVK
     // Transactions that spend from transparent addresses use a derived transparent OVK
     if (!found) {
         HDSeed seed;
@@ -172,7 +172,7 @@ std::string GenerateSaplingDisclosure(CWallet* wallet, const uint256& txid, int 
     return EncodeSaplingOutputDisclosure(disclosureStruct);
 }
 
-std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int actionIndex)
+std::string GenerateIronwoodDisclosure(CWallet* wallet, const uint256& txid, int actionIndex)
 {
     // Get the transaction
     CTransaction tx;
@@ -181,13 +181,13 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
         return "";
     }
 
-    // Check if this is an Orchard transaction with actions
-    const auto& orchardBundle = tx.GetIronwoodBundle();
-    if (!orchardBundle.IsPresent()) {
+    // Check if this is an Ironwood transaction with actions
+    const auto& ironwoodBundle = tx.GetIronwoodBundle();
+    if (!ironwoodBundle.IsPresent()) {
         return "";
     }
 
-    const auto& bundleDetails = orchardBundle.GetDetails();
+    const auto& bundleDetails = ironwoodBundle.GetDetails();
     if (actionIndex < 0 || actionIndex >= (int)bundleDetails.num_actions()) {
         return "";
     }
@@ -203,21 +203,21 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
     uint256_t ock;
     bool found = false;
 
-    // Iterate through all Orchard addresses in the wallet
-    std::set<libzcash::OrchardPaymentAddress> addresses;
-    wallet->GetOrchardPaymentAddresses(addresses);
+    // Iterate through all Ironwood addresses in the wallet
+    std::set<libzcash::IronwoodPaymentAddress> addresses;
+    wallet->GetIronwoodPaymentAddresses(addresses);
 
     for (const auto& addr : addresses) {
         // Get the spending key for this address if we have it
-        libzcash::OrchardExtendedSpendingKeyPirate extsk;
-        if (wallet->GetOrchardExtendedSpendingKey(addr, extsk)) {
+        libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+        if (wallet->GetIronwoodExtendedSpendingKey(addr, extsk)) {
             // Get the FVK and then the OVK
-            libzcash::OrchardFullViewingKey fvk;
+            libzcash::IronwoodFullViewingKey fvk;
             if (!extsk.sk.DeriveFVK(&fvk)) {
                 continue; // Try next key
             }
             
-            libzcash::OrchardOutgoingViewingKey ovkObj;
+            libzcash::IronwoodOutgoingViewingKey ovkObj;
             if (!fvk.DeriveOVK(&ovkObj)) {
                 continue; // Try next key
             }
@@ -247,8 +247,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
         }
     }
 
-    // If not found with Orchard OVKs, try Sapling OVKs
-    // Transactions that spend from Sapling and send to Orchard use Sapling OVKs
+    // If not found with Ironwood OVKs, try Sapling OVKs
+    // Transactions that spend from Sapling and send to Ironwood use Sapling OVKs
     if (!found) {
         std::set<libzcash::SaplingPaymentAddress> saplingAddresses;
         wallet->GetSaplingPaymentAddresses(saplingAddresses);
@@ -283,7 +283,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
         }
     }
 
-    // If not found with Orchard or Sapling OVKs, try transparent OVK
+    // If not found with Ironwood or Sapling OVKs, try transparent OVK
     // Transactions that spend from transparent addresses use a derived transparent OVK
     if (!found) {
         HDSeed seed;
@@ -315,8 +315,8 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
     }
 
     // Create the disclosure structure and encode it
-    OrchardOutputDisclosure disclosureStruct(txid, static_cast<uint32_t>(actionIndex), ock);
-    return EncodeOrchardOutputDisclosure(disclosureStruct);
+    IronwoodOutputDisclosure disclosureStruct(txid, static_cast<uint32_t>(actionIndex), ock);
+    return EncodeIronwoodOutputDisclosure(disclosureStruct);
 }
 
 /**
@@ -401,22 +401,22 @@ SaplingDisclosureVerificationResult VerifySaplingDisclosure(const std::string& d
 }
 
 /**
- * Verify and decrypt an Orchard action disclosure
+ * Verify and decrypt an Ironwood action disclosure
  */
-OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& disclosureStr)
+IronwoodDisclosureVerificationResult VerifyIronwoodDisclosure(const std::string& disclosureStr)
 {
-    OrchardDisclosureVerificationResult result;
+    IronwoodDisclosureVerificationResult result;
     result.success = false;
 
     // Parse the bech32-encoded disclosure
-    auto disclosureOptional = DecodeOrchardOutputDisclosure(disclosureStr);
+    auto disclosureOptional = DecodeIronwoodOutputDisclosure(disclosureStr);
     
     if (!disclosureOptional) {
         result.error = "Invalid disclosure encoding";
         return result;
     }
     
-    OrchardOutputDisclosure disclosureStruct = *disclosureOptional;
+    IronwoodOutputDisclosure disclosureStruct = *disclosureOptional;
 
     // Get the transaction
     CTransaction tx;
@@ -426,16 +426,16 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
         return result;
     }
 
-    // Check if this is an Orchard transaction with actions
-    const auto& orchardBundle = tx.GetIronwoodBundle();
-    if (!orchardBundle.IsPresent()) {
-        result.error = "Transaction has no Orchard actions";
+    // Check if this is an Ironwood transaction with actions
+    const auto& ironwoodBundle = tx.GetIronwoodBundle();
+    if (!ironwoodBundle.IsPresent()) {
+        result.error = "Transaction has no Ironwood actions";
         return result;
     }
 
-    const auto& bundleDetails = orchardBundle.GetDetails();
+    const auto& bundleDetails = ironwoodBundle.GetDetails();
     if (bundleDetails.num_actions() == 0) {
-        result.error = "Transaction has no Orchard actions";
+        result.error = "Transaction has no Ironwood actions";
         return result;
     }
 
@@ -466,7 +466,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     std::copy(address.begin(), address.begin() + 11, div.begin());
     uint256 pkd;
     std::copy(address.begin() + 11, address.end(), pkd.begin());
-    libzcash::OrchardPaymentAddress paymentAddr(div, pkd);
+    libzcash::IronwoodPaymentAddress paymentAddr(div, pkd);
 
     // Build successful result
     result.success = true;
@@ -480,7 +480,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
 }
 
 /**
- * Unified verification function that detects and verifies either Sapling or Orchard disclosures
+ * Unified verification function that detects and verifies either Sapling or Ironwood disclosures
  */
 UnifiedDisclosureVerificationResult VerifyPaymentDisclosure(const std::string& disclosureStr)
 {
@@ -505,25 +505,25 @@ UnifiedDisclosureVerificationResult VerifyPaymentDisclosure(const std::string& d
         return result;
     }
 
-    // Try to decode as Orchard disclosure
-    auto orchardOptional = DecodeOrchardOutputDisclosure(disclosureStr);
-    if (orchardOptional) {
-        // Verify as Orchard
-        OrchardDisclosureVerificationResult orchardResult = VerifyOrchardDisclosure(disclosureStr);
+    // Try to decode as Ironwood disclosure
+    auto ironwoodOptional = DecodeIronwoodOutputDisclosure(disclosureStr);
+    if (ironwoodOptional) {
+        // Verify as Ironwood
+        IronwoodDisclosureVerificationResult ironwoodResult = VerifyIronwoodDisclosure(disclosureStr);
         
-        result.success = orchardResult.success;
-        result.error = orchardResult.error;
-        result.disclosureType = "Orchard";
-        result.txid = orchardResult.txid;
-        result.outputIndex = orchardResult.actionIndex;
-        result.value = orchardResult.value;
-        result.address = orchardResult.address;
-        result.memoHex = orchardResult.memoHex;
+        result.success = ironwoodResult.success;
+        result.error = ironwoodResult.error;
+        result.disclosureType = "Ironwood";
+        result.txid = ironwoodResult.txid;
+        result.outputIndex = ironwoodResult.actionIndex;
+        result.value = ironwoodResult.value;
+        result.address = ironwoodResult.address;
+        result.memoHex = ironwoodResult.memoHex;
         
         return result;
     }
 
     // Unable to decode as either type
-    result.error = "Invalid disclosure encoding - unable to decode as Sapling or Orchard disclosure";
+    result.error = "Invalid disclosure encoding - unable to decode as Sapling or Ironwood disclosure";
     return result;
 }

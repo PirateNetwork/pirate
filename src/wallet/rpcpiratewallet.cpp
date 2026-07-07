@@ -274,7 +274,7 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
             auto ovk = *it;
             TransactionSendZS send;
             
-            // Use new Orchard-style OVK decryption
+            // Use new Ironwood-style OVK decryption
             auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(rustOutput, ovk);
 
             if (pt) {
@@ -384,15 +384,15 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
 }
 
 template <typename RpcTx>
-void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardOutgoingViewingKey>& ovks, std::set<libzcash::OrchardOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend)
+void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, std::set<libzcash::IronwoodOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend)
 {
     // Outgoing Sapling Spends
     int shieldedActionIndex = 0;
     for (const auto& rustAction : tx.GetIronwoodActions()) {
-        for (std::set<libzcash::OrchardOutgoingViewingKey>::iterator it = ovks.begin(); it != ovks.end(); it++) {
+        for (std::set<libzcash::IronwoodOutgoingViewingKey>::iterator it = ovks.begin(); it != ovks.end(); it++) {
             auto ovk = *it;
             TransactionSendZO send;
-            auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ovk);
+            auto pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&rustAction, ovk);
 
             if (pt) {
                 auto note = pt.value();
@@ -406,8 +406,8 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
                 send.shieldedActionIndex = shieldedActionIndex;
                 send.memo = HexStr(memo);
 
-                libzcash::OrchardExtendedSpendingKeyPirate extsk;
-                bool addrIsMine = pwalletMain->GetOrchardExtendedSpendingKey(addr, extsk);
+                libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+                bool addrIsMine = pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk);
 
                 // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
                 // UTF-8-encoded text string.
@@ -428,7 +428,7 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
                 // Mark as internal scope (ZIP-32 change address)
                 {
                     KeyScope scope;
-                    if (pwalletMain->GetOrchardKeyScope(addr, scope) && scope == KeyScope::Internal)
+                    if (pwalletMain->GetIronwoodKeyScope(addr, scope) && scope == KeyScope::Internal)
                         send.isInternalScope = true;
                 }
 
@@ -442,7 +442,7 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
 }
 
 template <typename RpcTx>
-void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
+void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
 {
     // Sapling Inputs belonging to the wallet
     for (const auto& rustSpend : tx.GetIronwoodActions()) {
@@ -451,11 +451,11 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
         TransactionSpendZO spend;
 
         // Find the op of the nullifier
-        map<uint256, OrchardOutPoint>::iterator opit = pwalletMain->mapArcOrchardOutPoints.find(nullifier);
-        if (opit == pwalletMain->mapArcOrchardOutPoints.end()) {
+        map<uint256, IronwoodOutPoint>::iterator opit = pwalletMain->mapArcIronwoodOutPoints.find(nullifier);
+        if (opit == pwalletMain->mapArcIronwoodOutPoints.end()) {
             continue;
         }
-        OrchardOutPoint op = (*opit).second;
+        IronwoodOutPoint op = (*opit).second;
 
         // Get parent transaction and check action validity
         const CWalletTx* parentwtx = pwalletMain->GetWalletTx(op.hash);
@@ -470,9 +470,9 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
             // Access the action directly from the returned const reference
             const ironwood_bundle::Action& rustAction = vActions[op.n];
 
-            for (std::set<OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+            for (std::set<IronwoodIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                 auto ivk = *it;
-                auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
+                auto pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&rustAction, ivk);
 
                 if (pt) {
                     auto note = pt.value();
@@ -484,9 +484,9 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                     spend.spendShieldedActionIndex = (int)op.n;
                     spend.spendTxid = op.hash.ToString();
 
-                    libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                    pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                    spend.spendable = pwalletMain->HaveOrchardSpendingKey(extfvk);
+                    libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                    pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                    spend.spendable = pwalletMain->HaveIronwoodSpendingKey(extfvk);
 
                     if (spend.spendable || fIncludeWatchonly)
                         vSpend.push_back(spend);
@@ -533,9 +533,9 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 // Access the action directly from the returned const reference
                 const ironwood_bundle::Action& rustAction = vActions[op.n];
 
-                for (std::set<OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+                for (std::set<IronwoodIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                     auto ivk = *it;
-                    auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
+                    auto pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&rustAction, ivk);
 
                     if (pt) {
                         auto note = pt.value();
@@ -547,9 +547,9 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                         spend.spendShieldedActionIndex = (int)op.n;
                         spend.spendTxid = op.hash.ToString();
 
-                        libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                        pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                        spend.spendable = pwalletMain->HaveOrchardSpendingKey(extfvk);
+                        libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                        pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                        spend.spendable = pwalletMain->HaveIronwoodSpendingKey(extfvk);
 
                         if (spend.spendable || fIncludeWatchonly)
                             vSpend.push_back(spend);
@@ -563,15 +563,15 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
 }
 
 template <typename RpcTx>
-void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
+void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
 {
     int shieldedActionIndex = 0;
     for (const auto& rustAction : tx.GetIronwoodActions()) {
         TransactionReceivedZO received;
 
-        for (std::set<libzcash::OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
+        for (std::set<libzcash::IronwoodIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
             auto ivk = *it;
-            auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&rustAction, ivk);
+            auto pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&rustAction, ivk);
 
             if (pt) {
                 auto note = pt.value();
@@ -583,15 +583,15 @@ void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
                 received.shieldedActionIndex = shieldedActionIndex;
                 received.memo = HexStr(memo);
 
-                libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk);
-                received.spendable = pwalletMain->HaveOrchardSpendingKey(extfvk);
+                libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                received.spendable = pwalletMain->HaveIronwoodSpendingKey(extfvk);
 
                 // Mark as internal scope (ZIP-32 change address)
                 {
                     auto orchAddr = note.GetAddress();
                     KeyScope scope;
-                    if (pwalletMain->GetOrchardKeyScope(orchAddr, scope) && scope == KeyScope::Internal)
+                    if (pwalletMain->GetIronwoodKeyScope(orchAddr, scope) && scope == KeyScope::Internal)
                         received.isInternalScope = true;
                 }
 
@@ -643,40 +643,40 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
         }
     }
 
-    // get ovks for all orchard spending keys (Orchard OVKs can be used when the source is a Orchard note)
-    std::set<libzcash::OrchardOutgoingViewingKey> ovksOrchard;
+    // get ovks for all ironwood spending keys (Ironwood OVKs can be used when the source is a Ironwood note)
+    std::set<libzcash::IronwoodOutgoingViewingKey> ovksIronwood;
     if (fIncludeWatchonly) {
-        OrchardOutgoingViewingKeySet ovksScoped;
-        pwalletMain->GetOrchardOutgoingViewingKeySet(ovksScoped);
+        IronwoodOutgoingViewingKeySet ovksScoped;
+        pwalletMain->GetIronwoodOutgoingViewingKeySet(ovksScoped);
         // Extract the actual OVKs from the scoped structures
         for (const auto& ovkWithScope : ovksScoped) {
-            ovksOrchard.insert(ovkWithScope.ovk);
+            ovksIronwood.insert(ovkWithScope.ovk);
         }
     } else {
-        OrchardIncomingViewingKeySet setIvks;
-        pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
+        IronwoodIncomingViewingKeySet setIvks;
+        pwalletMain->GetIronwoodIncomingViewingKeySet(setIvks);
         for (const auto& ivkWithScope : setIvks) {
             const auto& ivk = ivkWithScope.first;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
-            if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveOrchardSpendingKey(extfvk) || fIncludeWatchonly) {
+            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveIronwoodSpendingKey(extfvk) || fIncludeWatchonly) {
                     // External OVK
-                    OrchardOutgoingViewingKey ovk_e;
+                    IronwoodOutgoingViewingKey ovk_e;
                     if (extfvk.fvk.DeriveOVK(&ovk_e)) {
-                        ovksOrchard.insert(ovk_e);
+                        ovksIronwood.insert(ovk_e);
                     }
                     // Internal OVK
-                    OrchardOutgoingViewingKey ovk_i;
+                    IronwoodOutgoingViewingKey ovk_i;
                     if (extfvk.fvk.DeriveOVKinternal(&ovk_i)) {
-                        ovksOrchard.insert(ovk_i);
+                        ovksIronwood.insert(ovk_i);
                     }
                 }
             }
         }
     }
 
-    for (std::set<libzcash::OrchardOutgoingViewingKey>::iterator it = ovksOrchard.begin(); it != ovksOrchard.end(); it++) {
+    for (std::set<libzcash::IronwoodOutgoingViewingKey>::iterator it = ovksIronwood.begin(); it != ovksIronwood.end(); it++) {
         ovks.insert(it->ovk);
     }
 
@@ -744,7 +744,7 @@ void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction
     }
 }
 
-void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool fIncludeWatchonly)
+void getAllIronwoodOVKs(std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bool fIncludeWatchonly)
 {
     // exit if pwalletMain is not set
     if (pwalletMain == nullptr)
@@ -752,28 +752,28 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
 
     // get ovks for all spending keys
     if (fIncludeWatchonly) {
-        OrchardOutgoingViewingKeySet ovksScoped;
-        pwalletMain->GetOrchardOutgoingViewingKeySet(ovksScoped);
+        IronwoodOutgoingViewingKeySet ovksScoped;
+        pwalletMain->GetIronwoodOutgoingViewingKeySet(ovksScoped);
         // Extract the actual OVKs from the scoped structures
         for (const auto& ovkWithScope : ovksScoped) {
             ovks.insert(ovkWithScope.ovk);
         }
     } else {
-        OrchardIncomingViewingKeySet setIvks;
-        pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
+        IronwoodIncomingViewingKeySet setIvks;
+        pwalletMain->GetIronwoodIncomingViewingKeySet(setIvks);
         for (const auto& ivkWithScope : setIvks) {
             const auto& ivk = ivkWithScope.first;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
-            if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveOrchardSpendingKey(extfvk) || fIncludeWatchonly) {
+            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveIronwoodSpendingKey(extfvk) || fIncludeWatchonly) {
                     // External OVK
-                    OrchardOutgoingViewingKey ovk_e;
+                    IronwoodOutgoingViewingKey ovk_e;
                     if (extfvk.fvk.DeriveOVK(&ovk_e)) {
                         ovks.insert(ovk_e);
                     }
                     // Internal OVK
-                    OrchardOutgoingViewingKey ovk_i;
+                    IronwoodOutgoingViewingKey ovk_i;
                     if (extfvk.fvk.DeriveOVKinternal(&ovk_i)) {
                         ovks.insert(ovk_i);
                     }
@@ -782,7 +782,7 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
         }
     }
 
-    // get ovks for all sapling spending keys (Sapling OVKs can be used for Orchard when the source is a Sapling note)
+    // get ovks for all sapling spending keys (Sapling OVKs can be used for Ironwood when the source is a Sapling note)
     std::set<uint256> ovksSapling;
     if (fIncludeWatchonly) {
         pwalletMain->GetSaplingOutgoingViewingKeySet(ovksSapling);
@@ -802,24 +802,24 @@ void getAllOrchardOVKs(std::set<libzcash::OrchardOutgoingViewingKey>& ovks, bool
     }
 
     for (std::set<uint256>::iterator it = ovksSapling.begin(); it != ovksSapling.end(); it++) {
-        ovks.insert(libzcash::OrchardOutgoingViewingKey(*it));
+        ovks.insert(libzcash::IronwoodOutgoingViewingKey(*it));
     }
 
     // ovk used of t addresses
     HDSeed seed;
     if (pwalletMain->GetHDSeed(seed)) {
-        ovks.insert(libzcash::OrchardOutgoingViewingKey(ovkForShieldingFromTaddr(seed)));
+        ovks.insert(libzcash::IronwoodOutgoingViewingKey(ovkForShieldingFromTaddr(seed)));
     }
 }
 
-void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKey>& ivks, bool fIncludeWatchonly)
+void getAllIronwoodIVKs(std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bool fIncludeWatchonly)
 {
     // exit if pwalletMain is not set
     if (pwalletMain == nullptr)
         return;
 
-    OrchardIncomingViewingKeySet setIvks;
-    pwalletMain->GetOrchardIncomingViewingKeySet(setIvks);
+    IronwoodIncomingViewingKeySet setIvks;
+    pwalletMain->GetIronwoodIncomingViewingKeySet(setIvks);
     // get ivks for all spending keys (both external and internal)
     for (const auto& ivkPair : setIvks) {
         const auto& ivk = ivkPair.first;
@@ -827,9 +827,9 @@ void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKey>& ivks, bool
         if (fIncludeWatchonly) {
             ivks.insert(ivk);
         } else {
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-            if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveOrchardSpendingKey(extfvk)) {
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                if (pwalletMain->HaveIronwoodSpendingKey(extfvk)) {
                     ivks.insert(ivk);
                 }
             }
@@ -837,20 +837,20 @@ void getAllOrchardIVKs(std::set<libzcash::OrchardIncomingViewingKey>& ivks, bool
     }
 }
 
-void getRpcArcTxOrchardKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly)
+void getRpcArcTxIronwoodKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly)
 {
     AssertLockHeld(pwalletMain->cs_wallet);
 
-    std::set<libzcash::OrchardIncomingViewingKey> ivks;
-    std::set<libzcash::OrchardOutgoingViewingKey> ovks;
+    std::set<libzcash::IronwoodIncomingViewingKey> ivks;
+    std::set<libzcash::IronwoodOutgoingViewingKey> ovks;
 
-    getAllOrchardOVKs(ovks, fIncludeWatchonly);
-    getAllOrchardIVKs(ivks, fIncludeWatchonly);
+    getAllIronwoodOVKs(ovks, fIncludeWatchonly);
+    getAllIronwoodIVKs(ivks, fIncludeWatchonly);
 
     auto params = Params().GetConsensus();
-    getOrchardSpends(params, txHeight, tx, ivks, arcTx.orchardIvks, arcTx.vZoSpend, fIncludeWatchonly);
-    getOrchardSends(params, txHeight, tx, ovks, arcTx.orchardOvks, arcTx.vZoSend);
-    getOrchardReceives(params, txHeight, tx, ivks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
+    getIronwoodSpends(params, txHeight, tx, ivks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
+    getIronwoodSends(params, txHeight, tx, ovks, arcTx.ironwoodOvks, arcTx.vZoSend);
+    getIronwoodReceives(params, txHeight, tx, ivks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     // Create Set of wallet address the belong to the wallet for this tx and have been spent from
     for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
@@ -892,8 +892,8 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     ArchiveTxPoint arcTxPt;
     std::set<SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
-    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
+    std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
+    std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
 
     // try to find the transaction to pull the hashblock
     std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txid);
@@ -904,16 +904,16 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
         nIndex = arcTxPt.nIndex;
 
         // Get Ivks and Ovks saved in ArchiveTxPoint
-        if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.orchardIvks.size() == 0 && arcTxPt.orchardOvks.size() == 0) || rescan) {
+        if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.ironwoodIvks.size() == 0 && arcTxPt.ironwoodOvks.size() == 0) || rescan) {
             getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
             getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-            getAllOrchardOVKs(orchardOvks, fIncludeWatchonly);
-            getAllOrchardIVKs(orchardIvks, fIncludeWatchonly);
+            getAllIronwoodOVKs(ironwoodOvks, fIncludeWatchonly);
+            getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
         } else {
             saplingIvks = arcTxPt.saplingIvks;
             saplingOvks = arcTxPt.saplingOvks;
-            orchardIvks = arcTxPt.orchardIvks;
-            orchardOvks = arcTxPt.orchardOvks;
+            ironwoodIvks = arcTxPt.ironwoodIvks;
+            ironwoodOvks = arcTxPt.ironwoodOvks;
             // Supplement with fresh IVKs for spend resolution. The cached set may
             // be incomplete if internal IVKs were added after this tx was first
             // processed (e.g. Sapling change-address spend support).
@@ -977,18 +977,18 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     // Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
     getSaplingSpends(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
-    getOrchardSpends(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoSpend, fIncludeWatchonly);
+    getIronwoodSpends(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
     getSaplingSends(params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
-    getOrchardSends(params, txHeight, tx, orchardOvks, arcTx.orchardOvks, arcTx.vZoSend);
+    getIronwoodSends(params, txHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
     getSaplingReceives(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
-    getOrchardReceives(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
+    getIronwoodReceives(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
-    arcTx.orchardValue = -tx.GetValueBalanceIronwood();
+    arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();
 
     // Create Sets of wallet address the belong to the wallet for this tx
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
@@ -1040,23 +1040,23 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
 
     std::set<SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
-    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
-    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
+    std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
+    std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
     ArchiveTxPoint arcTxPt;
     std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(tx.GetHash());
     if (it != pwalletMain->mapArcTxs.end()) {
         arcTxPt = it->second;
         // Get Ivks and Ovks saved in ArchiveTxPoint
-        if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.orchardIvks.size() == 0 && arcTxPt.orchardOvks.size() == 0) || rescan) {
+        if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.ironwoodIvks.size() == 0 && arcTxPt.ironwoodOvks.size() == 0) || rescan) {
             getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
             getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-            getAllOrchardOVKs(orchardOvks, fIncludeWatchonly);
-            getAllOrchardIVKs(orchardIvks, fIncludeWatchonly);
+            getAllIronwoodOVKs(ironwoodOvks, fIncludeWatchonly);
+            getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
         } else {
             saplingIvks = arcTxPt.saplingIvks;
             saplingOvks = arcTxPt.saplingOvks;
-            orchardIvks = arcTxPt.orchardIvks;
-            orchardOvks = arcTxPt.orchardOvks;
+            ironwoodIvks = arcTxPt.ironwoodIvks;
+            ironwoodOvks = arcTxPt.ironwoodOvks;
             // Supplement with fresh IVKs for spend resolution. The cached set may
             // be incomplete if internal IVKs were added after this tx was first
             // processed (e.g. Sapling change-address spend support).
@@ -1067,8 +1067,8 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     } else {
         getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
         getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-        getAllOrchardOVKs(orchardOvks, fIncludeWatchonly);
-        getAllOrchardIVKs(orchardIvks, fIncludeWatchonly);
+        getAllIronwoodOVKs(ironwoodOvks, fIncludeWatchonly);
+        getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
     }
 
 
@@ -1119,18 +1119,18 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     // Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
     getSaplingSpends(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
-    getOrchardSpends(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoSpend, fIncludeWatchonly);
+    getIronwoodSpends(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
     getSaplingSends(params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
-    getOrchardSends(params, txHeight, tx, orchardOvks, arcTx.orchardOvks, arcTx.vZoSend);
+    getIronwoodSends(params, txHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
     getSaplingReceives(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
-    getOrchardReceives(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
+    getIronwoodReceives(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
-    arcTx.orchardValue = -tx.GetValueBalanceIronwood();
+    arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();
 
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
         arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
@@ -1179,7 +1179,7 @@ void getRpcArcTxJSONHeader(RpcArcTransaction& arcTx, UniValue& ArcTxJSON)
 {
     CAmount txFee = 0;
     if (!arcTx.coinbase)
-        txFee = arcTx.transparentValue + arcTx.saplingValue + arcTx.orchardValue;
+        txFee = arcTx.transparentValue + arcTx.saplingValue + arcTx.ironwoodValue;
 
     ArcTxJSON.push_back(Pair("txid", arcTx.txid.ToString()));
     ArcTxJSON.push_back(Pair("coinbase", arcTx.coinbase));
@@ -1195,7 +1195,7 @@ void getRpcArcTxJSONHeader(RpcArcTransaction& arcTx, UniValue& ArcTxJSON)
     ArcTxJSON.push_back(Pair("size", arcTx.size));
     ArcTxJSON.push_back(Pair("transparentValue", arcTx.transparentValue));
     ArcTxJSON.push_back(Pair("saplingValue", arcTx.saplingValue));
-    ArcTxJSON.push_back(Pair("orchardValue", arcTx.orchardValue));
+    ArcTxJSON.push_back(Pair("ironwoodValue", arcTx.ironwoodValue));
     ArcTxJSON.push_back(Pair("fee", -txFee));
 }
 
@@ -1232,7 +1232,7 @@ void getRpcArcTxJSONSpends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool f
 
     for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
         UniValue obj(UniValue::VOBJ);
-        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("type", "ironwood"));
         obj.push_back(Pair("spend", i));
         obj.push_back(Pair("txidPrev", arcTx.vZoSpend[i].spendTxid));
         obj.push_back(Pair("outputPrev", arcTx.vZoSpend[i].spendShieldedActionIndex));
@@ -1283,7 +1283,7 @@ void getRpcArcTxJSONSends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool fi
         UniValue obj(UniValue::VOBJ);
         bool change = arcTx.vZoSend[i].isInternalScope ||
                       (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoSend[i].encodedAddress) != arcTx.spentFrom.end());
-        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("type", "ironwood"));
         obj.push_back(Pair("output", arcTx.vZoSend[i].shieldedActionIndex));
         obj.push_back(Pair("outgoing", !arcTx.vZoSend[i].mine ? true : false));
         obj.push_back(Pair("address", arcTx.vZoSend[i].encodedAddress));
@@ -1337,7 +1337,7 @@ void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool
         UniValue obj(UniValue::VOBJ);
         bool change = arcTx.vZoReceived[i].isInternalScope ||
                       (arcTx.spentFrom.size() > 0 && arcTx.spentFrom.find(arcTx.vZoReceived[i].encodedAddress) != arcTx.spentFrom.end());
-        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("type", "ironwood"));
         obj.push_back(Pair("output", arcTx.vZoReceived[i].shieldedActionIndex));
         obj.push_back(Pair("outgoing", false));
         obj.push_back(Pair("address", arcTx.vZoReceived[i].encodedAddress));
@@ -1543,7 +1543,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
             if (wtx.GetDepthInMainChain() < 0)
                 continue;
 
-            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
+            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted())
                 continue;
 
             // Excude transactions with less confirmations than required
@@ -1841,7 +1841,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
     CTxDestination tAddress = DecodeDestination(encodedAddress);
     auto zAddress = DecodePaymentAddress(encodedAddress);
     SaplingPaymentAddress zsAddress;
-    OrchardPaymentAddress zoAddress;
+    IronwoodPaymentAddress zoAddress;
 
     if (IsValidDestination(tAddress))
         isTAddress = true;
@@ -1851,8 +1851,8 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
             zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
             isZsAddress = true;
         }
-        if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
-            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&zAddress));
+        if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
+            zoAddress = *(std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress));
             isZoAddress = true;
         }
     }
@@ -1928,7 +1928,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
             if (wtx.GetDepthInMainChain() < 0)
                 continue;
 
-            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
+            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted())
                 continue;
 
             // Excude transactions with less confirmations than required
@@ -2130,7 +2130,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
     CTxDestination tAddress = DecodeDestination(encodedAddress);
     auto zAddress = DecodePaymentAddress(encodedAddress);
     SaplingPaymentAddress zsAddress;
-    OrchardPaymentAddress zoAddress;
+    IronwoodPaymentAddress zoAddress;
 
     if (IsValidDestination(tAddress))
         isTAddress = true;
@@ -2140,8 +2140,8 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
             zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
             isZsAddress = true;
         }
-        if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
-            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&zAddress));
+        if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
+            zoAddress = *(std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress));
             isZoAddress = true;
         }
     }
@@ -2216,7 +2216,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
             if (wtx.GetDepthInMainChain() < 0)
                 continue;
 
-            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
+            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted())
                 continue;
 
             // Excude transactions with less confirmations than required
@@ -2418,7 +2418,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
     CTxDestination tAddress = DecodeDestination(encodedAddress);
     auto zAddress = DecodePaymentAddress(encodedAddress);
     SaplingPaymentAddress zsAddress;
-    OrchardPaymentAddress zoAddress;
+    IronwoodPaymentAddress zoAddress;
 
     if (IsValidDestination(tAddress))
         isTAddress = true;
@@ -2428,8 +2428,8 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
             zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
             isZsAddress = true;
         }
-        if (std::get_if<libzcash::OrchardPaymentAddress>(&zAddress) != nullptr) {
-            zoAddress = *(std::get_if<libzcash::OrchardPaymentAddress>(&zAddress));
+        if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
+            zoAddress = *(std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress));
             isZoAddress = true;
         }
     }
@@ -2505,7 +2505,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
             if (wtx.GetDepthInMainChain() < 0)
                 continue;
 
-            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
+            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted())
                 continue;
 
             // Excude transactions with less confirmations than required
@@ -2711,7 +2711,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if (wtx.GetDepthInMainChain() < 0)
             continue;
 
-        if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
+        if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted())
             continue;
 
         // Get Block height of transaction
@@ -2821,21 +2821,21 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // Get Actions to decrypt
         auto vActions = wtx.GetIronwoodActions();
 
-        for (auto& pair : wtx.mapOrchardNoteData) {
-            OrchardOutPoint op = pair.first;
-            OrchardNoteData nd = pair.second;
+        for (auto& pair : wtx.mapIronwoodNoteData) {
+            IronwoodOutPoint op = pair.first;
+            IronwoodNoteData nd = pair.second;
 
             // Skip Spent
-            if (nd.nullifier && pwalletMain->IsOrchardSpent(*nd.nullifier))
+            if (nd.nullifier && pwalletMain->IsIronwoodSpent(*nd.nullifier))
                 continue;
 
-            // Decrypt orchard action
+            // Decrypt ironwood action
             auto ivk = nd.ivk;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-            if (pwalletMain->GetOrchardFullViewingKey(ivk, extfvk)) {
-                bool haveSpendingKey = pwalletMain->HaveOrchardSpendingKey(extfvk);
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                bool haveSpendingKey = pwalletMain->HaveIronwoodSpendingKey(extfvk);
                 if (haveSpendingKey || fIncludeWatchonly) {
-                    auto pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], ivk);
+                    auto pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], ivk);
 
                     if (txType == 0 && pwalletMain->IsLockedNote(op))
                         txType = 3;
@@ -2961,7 +2961,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             if (!CheckFinalTx(wtx))
                 continue;
 
-            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted())
+            if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted())
                 continue;
 
             // Excude transactions with less confirmations than required
@@ -3048,29 +3048,29 @@ void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight)
     getAllSaplingIVKs(saplingIvks, true);
 
     // get Ovks for sapling decryption
-    std::set<libzcash::OrchardOutgoingViewingKey> orchardOvks;
-    getAllOrchardOVKs(orchardOvks, true);
+    std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
+    getAllIronwoodOVKs(ironwoodOvks, true);
 
     // get Ivks for sapling decryption
-    std::set<libzcash::OrchardIncomingViewingKey> orchardIvks;
-    getAllOrchardIVKs(orchardIvks, true);
+    std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
+    getAllIronwoodIVKs(ironwoodIvks, true);
 
     auto params = Params().GetConsensus();
     // Spends must be located to determine if outputs are change
     getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, true);
     getSaplingSpends(params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, true);
-    getOrchardSpends(params, nHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoSpend, true);
+    getIronwoodSpends(params, nHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, true);
 
     getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
     getSaplingSends(params, nHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
-    getOrchardSends(params, nHeight, tx, orchardOvks, arcTx.orchardOvks, arcTx.vZoSend);
+    getIronwoodSends(params, nHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
 
     getTransparentRecieves(tx, arcTx.vTReceived, true);
     getSaplingReceives(params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, true);
-    getOrchardReceives(params, nHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, true);
+    getIronwoodReceives(params, nHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, true);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
-    arcTx.orchardValue = -tx.GetValueBalanceIronwood();
+    arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();
 
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);

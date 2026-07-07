@@ -30,15 +30,15 @@ class CCoinsViewTest : public CCoinsView
     uint256 hashBestSproutAnchor_;
     uint256 hashBestSaplingAnchor_;
     uint256 hashBestSaplingFrontierAnchor_;
-    uint256 hashBestOrchardFrontierAnchor_;
+    uint256 hashBestIronwoodFrontierAnchor_;
     std::map<uint256, CCoins> map_;
     std::map<uint256, SproutMerkleTree> mapSproutAnchors_;
     std::map<uint256, SaplingMerkleTree> mapSaplingAnchors_;
     std::map<uint256, SaplingMerkleFrontier> mapSaplingFrontierAnchors_;
-    std::map<uint256, IronwoodMerkleFrontier> mapOrchardFrontierAnchors_;
+    std::map<uint256, IronwoodMerkleFrontier> mapIronwoodFrontierAnchors_;
     std::map<uint256, bool> mapSproutNullifiers_;
     std::map<uint256, bool> mapSaplingNullifiers_;
-    std::map<uint256, bool> mapOrchardNullifiers_;
+    std::map<uint256, bool> mapIronwoodNullifiers_;
     std::map<uint32_t, HistoryCache> historyCacheMap_;
 
 
@@ -48,7 +48,7 @@ public:
         hashBestSproutAnchor_ = SproutMerkleTree::empty_root();
         hashBestSaplingAnchor_ = SaplingMerkleTree::empty_root();
         hashBestSaplingFrontierAnchor_ = SaplingMerkleFrontier::empty_root();
-        hashBestOrchardFrontierAnchor_ = IronwoodMerkleFrontier::empty_root();
+        hashBestIronwoodFrontierAnchor_ = IronwoodMerkleFrontier::empty_root();
     }
 
     bool GetSproutAnchorAt(const uint256& rt, SproutMerkleTree& tree) const
@@ -85,7 +85,7 @@ public:
         }
     }
 
-    bool GetOrchardFrontierAnchorAt(const uint256& rt, IronwoodMerkleFrontier& tree) const
+    bool GetIronwoodFrontierAnchorAt(const uint256& rt, IronwoodMerkleFrontier& tree) const
     {
         if (rt == IronwoodMerkleFrontier::empty_root()) {
             IronwoodMerkleFrontier new_tree;
@@ -93,8 +93,8 @@ public:
             return true;
         }
 
-        std::map<uint256, IronwoodMerkleFrontier>::const_iterator it = mapOrchardFrontierAnchors_.find(rt);
-        if (it == mapOrchardFrontierAnchors_.end()) {
+        std::map<uint256, IronwoodMerkleFrontier>::const_iterator it = mapIronwoodFrontierAnchors_.find(rt);
+        if (it == mapIronwoodFrontierAnchors_.end()) {
             return false;
         } else {
             tree = it->second;
@@ -113,8 +113,8 @@ public:
         case SAPLINGFRONTIER:
             mapToUse = &mapSaplingNullifiers_;
             break;
-        case ORCHARDFRONTIER:
-            mapToUse = &mapOrchardNullifiers_;
+        case IRONWOODFRONTIER:
+            mapToUse = &mapIronwoodNullifiers_;
             break;
         default:
             throw std::runtime_error("Unknown shielded type");
@@ -138,8 +138,8 @@ public:
         case SAPLINGFRONTIER:
             return hashBestSaplingFrontierAnchor_;
             break;
-        case ORCHARDFRONTIER:
-            return hashBestOrchardFrontierAnchor_;
+        case IRONWOODFRONTIER:
+            return hashBestIronwoodFrontierAnchor_;
             break;
         default:
             throw std::runtime_error("Unknown shielded type");
@@ -200,14 +200,14 @@ public:
                     const uint256& hashSproutAnchor,
                     const uint256& hashSaplingAnchor,
                     const uint256& hashSaplingFrontierAnchor,
-                    const uint256& hashOrchardFrontierAnchor,
+                    const uint256& hashIronwoodFrontierAnchor,
                     CAnchorsSproutMap& mapSproutAnchors,
                     CAnchorsSaplingMap& mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap& mapSaplingFrontierAnchors,
-                    CAnchorsOrchardFrontierMap& mapOrchardFrontierAnchors,
+                    CAnchorsIronwoodFrontierMap& mapIronwoodFrontierAnchors,
                     CNullifiersMap& mapSproutNullifiers,
                     CNullifiersMap& mapSaplingNullifiers,
-                    CNullifiersMap& mapOrchardNullifiers,
+                    CNullifiersMap& mapIronwoodNullifiers,
                     CHistoryCacheMap& historyCacheMap)
     {
         for (CCoinsMap::iterator it = mapCoins.begin(); it != mapCoins.end();) {
@@ -221,18 +221,18 @@ public:
 
         BatchWriteAnchors<SproutMerkleTree, CAnchorsSproutMap>(mapSproutAnchors, mapSproutAnchors_);
         BatchWriteAnchors<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap>(mapSaplingFrontierAnchors, mapSaplingFrontierAnchors_);
-        BatchWriteAnchors<IronwoodMerkleFrontier, CAnchorsOrchardFrontierMap>(mapOrchardFrontierAnchors, mapOrchardFrontierAnchors_);
+        BatchWriteAnchors<IronwoodMerkleFrontier, CAnchorsIronwoodFrontierMap>(mapIronwoodFrontierAnchors, mapIronwoodFrontierAnchors_);
 
         BatchWriteNullifiers(mapSproutNullifiers, mapSproutNullifiers_);
         BatchWriteNullifiers(mapSaplingNullifiers, mapSaplingNullifiers_);
-        BatchWriteNullifiers(mapOrchardNullifiers, mapOrchardNullifiers_);
+        BatchWriteNullifiers(mapIronwoodNullifiers, mapIronwoodNullifiers_);
 
         mapCoins.clear();
         mapSproutAnchors.clear();
         hashBestBlock_ = hashBlock;
         hashBestSproutAnchor_ = hashSproutAnchor;
         hashBestSaplingFrontierAnchor_ = hashSaplingFrontierAnchor;
-        hashBestOrchardFrontierAnchor_ = hashOrchardFrontierAnchor;
+        hashBestIronwoodFrontierAnchor_ = hashIronwoodFrontierAnchor;
         return true;
     }
 
@@ -250,10 +250,10 @@ public:
         size_t ret = memusage::DynamicUsage(cacheCoins) +
                      memusage::DynamicUsage(cacheSproutAnchors) +
                      memusage::DynamicUsage(cacheSaplingFrontierAnchors) +
-                     memusage::DynamicUsage(cacheOrchardFrontierAnchors) +
+                     memusage::DynamicUsage(cacheIronwoodFrontierAnchors) +
                      memusage::DynamicUsage(cacheSproutNullifiers) +
                      memusage::DynamicUsage(cacheSaplingNullifiers) +
-                     memusage::DynamicUsage(cacheOrchardNullifiers) +
+                     memusage::DynamicUsage(cacheIronwoodNullifiers) +
                      memusage::DynamicUsage(historyCacheMap);
         for (CCoinsMap::iterator it = cacheCoins.begin(); it != cacheCoins.end(); it++) {
             ret += it->second.coins.DynamicMemoryUsage();
@@ -268,13 +268,13 @@ public:
     CTransaction tx;
     uint256 sproutNullifier;
     uint256 saplingNullifier;
-    uint256 orchardNullifier;
+    uint256 ironwoodNullifier;
 
     TxWithNullifiers()
     {
         CMutableTransaction mutableTx;
         
-        // Set the transaction version to Orchard
+        // Set the transaction version to Ironwood
         mutableTx.fOverwintered = true;
         mutableTx.nVersionGroupId = IRONWOOD_VERSION_GROUP_ID;
         mutableTx.nVersion = IRONWOOD_TX_VERSION;
@@ -288,13 +288,13 @@ public:
         mutableTx.saplingBundle = sapling::test_only_invalid_bundle(1, 1, 0);
         saplingNullifier = uint256::FromRawBytes(mutableTx.saplingBundle.GetDetails().spends()[0].nullifier());
 
-        // The Orchard bundle builder always pads to two Actions, so we can just
-        // use an empty builder to create a dummy Orchard bundle.
-        uint256 orchardAnchor;
+        // The Ironwood bundle builder always pads to two Actions, so we can just
+        // use an empty builder to create a dummy Ironwood bundle.
+        uint256 ironwoodAnchor;
         uint256 dataToBeSigned;
-        auto builder = orchard::Builder(true, true, orchardAnchor);
-        mutableTx.orchardBundle = builder.Build().value().ProveAndSign({}, dataToBeSigned).value();
-        orchardNullifier = mutableTx.orchardBundle.GetNullifiers()[0];
+        auto builder = ironwood::Builder(true, true, ironwoodAnchor);
+        mutableTx.ironwoodBundle = builder.Build().value().ProveAndSign({}, dataToBeSigned).value();
+        ironwoodNullifier = mutableTx.ironwoodBundle.GetNullifiers()[0];
 
         tx = CTransaction(mutableTx);
     }
@@ -329,9 +329,9 @@ template<> void AppendRandomLeaf(IronwoodMerkleFrontier &tree) {
     // fortunately the tests only require that the tree root change.
     // TODO: Remove the need to create proofs by having a testing-only way to
     // append a random leaf to IronwoodMerkleFrontier.
-    uint256 orchardAnchor;
+    uint256 ironwoodAnchor;
     uint256 dataToBeSigned;
-    auto builder = orchard::Builder(true, true, orchardAnchor);
+    auto builder = ironwood::Builder(true, true, ironwoodAnchor);
     auto bundle = builder.Build().value().ProveAndSign({}, dataToBeSigned).value();
     tree.AppendBundle(bundle);
 }
@@ -351,25 +351,25 @@ bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SaplingMer
 template <>
 bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, IronwoodMerkleFrontier& tree)
 {
-    return cache.GetOrchardFrontierAnchorAt(rt, tree);
+    return cache.GetIronwoodFrontierAnchorAt(rt, tree);
 }
 
 void checkNullifierCache(const CCoinsViewCacheTest& cache, const TxWithNullifiers& txWithNullifiers, bool shouldBeInCache)
 {
     // Make sure the nullifiers have not gotten mixed up
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, SAPLINGFRONTIER));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, ORCHARDFRONTIER));
+    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, IRONWOODFRONTIER));
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, SPROUT));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, ORCHARDFRONTIER));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.orchardNullifier, SPROUT));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.orchardNullifier, SAPLINGFRONTIER));
+    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, IRONWOODFRONTIER));
+    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.ironwoodNullifier, SPROUT));
+    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.ironwoodNullifier, SAPLINGFRONTIER));
     // Check if the nullifiers either are or are not in the cache
     bool containsSproutNullifier = cache.GetNullifier(txWithNullifiers.sproutNullifier, SPROUT);
     bool containsSaplingNullifier = cache.GetNullifier(txWithNullifiers.saplingNullifier, SAPLINGFRONTIER);
-    bool containsOrchardNullifier = cache.GetNullifier(txWithNullifiers.orchardNullifier, ORCHARDFRONTIER);
+    bool containsIronwoodNullifier = cache.GetNullifier(txWithNullifiers.ironwoodNullifier, IRONWOODFRONTIER);
     EXPECT_TRUE(containsSproutNullifier == shouldBeInCache);
     EXPECT_TRUE(containsSaplingNullifier == shouldBeInCache);
-    EXPECT_TRUE(containsOrchardNullifier == shouldBeInCache);
+    EXPECT_TRUE(containsIronwoodNullifier == shouldBeInCache);
 }
 
 TEST(TestCoins, nullifier_regression_test)
@@ -540,7 +540,7 @@ TEST(TestCoins, anchor_pop_regression_test)
 {
     anchorPopRegressionTestImpl<SproutMerkleTree>(SPROUT);
     anchorPopRegressionTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorPopRegressionTestImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
+    anchorPopRegressionTestImpl<IronwoodMerkleFrontier>(IRONWOODFRONTIER);
 }
 
 template <typename Tree>
@@ -630,7 +630,7 @@ TEST(TestCoins, anchor_regression_test)
 {
     anchorRegressionTestImpl<SproutMerkleTree>(SPROUT);
     anchorRegressionTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorRegressionTestImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
+    anchorRegressionTestImpl<IronwoodMerkleFrontier>(IRONWOODFRONTIER);
 }
 
 TEST(TestCoins, nullifiers_test)
@@ -691,7 +691,7 @@ TEST(TestCoins, anchors_flush_test)
 {
     anchorsFlushImpl<SproutMerkleTree>(SPROUT);
     anchorsFlushImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorsFlushImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
+    anchorsFlushImpl<IronwoodMerkleFrontier>(IRONWOODFRONTIER);
 }
 
 TEST(TestCoins, chained_joinsplits)
@@ -848,7 +848,7 @@ TEST(TestCoins, anchors_test)
 {
     anchorsTestImpl<SproutMerkleTree>(SPROUT);
     anchorsTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorsTestImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
+    anchorsTestImpl<IronwoodMerkleFrontier>(IRONWOODFRONTIER);
 }
 
 static const unsigned int NUM_SIMULATION_ITERATIONS = 40000;

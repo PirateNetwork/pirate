@@ -41,9 +41,9 @@ int main(int argc, char **argv) {
     // Initialize the validity caches. We currently have three:
     // - Transparent signature validity.
     // - Sapling bundle validity.
-    // - Orchard bundle validity.
+    // - Ironwood bundle validity.
     // Assign half of the cap to transparent signatures, and split the rest
-    // between Sapling and Orchard bundles.
+    // between Sapling and Ironwood bundles.
     size_t nMaxCacheSize = DEFAULT_MAX_SIG_CACHE_SIZE * ((size_t) 1 << 20);
     InitSignatureCache(nMaxCacheSize / 2);
     bundlecache::init(nMaxCacheSize / 4);

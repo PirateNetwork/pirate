@@ -49,14 +49,14 @@ CScript scriptPubKey;
 //Sapling Address for regtest
 libzcash::SaplingPaymentAddress saplingAddress;
 
-//Orchard Address for regtest
-libzcash::OrchardPaymentAddress orchardAddress;
+//Ironwood Address for regtest
+libzcash::IronwoodPaymentAddress ironwoodAddress;
 
 //Create a Sapling Wallet
 SaplingWallet saplingWallet;
 
-// Create a Orchard Wallet
-IronwoodWallet orchardWallet;
+// Create a Ironwood Wallet
+IronwoodWallet ironwoodWallet;
 
 CTransaction CreateCoinBaseTransaction(int nHeight) {
 
@@ -109,18 +109,18 @@ TEST (WalletTests, SetupKeysRunAsSecondTest) {
         // Generate a Sapling spending key and address
         saplingAddress = pTestWallet->GenerateNewSaplingZKey();
 
-        // Generate a Orchard spending key and address
-        orchardAddress = pTestWallet->GenerateNewOrchardZKey();
+        // Generate a Ironwood spending key and address
+        ironwoodAddress = pTestWallet->GenerateNewIronwoodZKey();
     }
 }
 
-TEST (WalletTests, IntializeSaplingOrchardWalletsRunAsThirdTest) {
+TEST (WalletTests, IntializeSaplingIronwoodWalletsRunAsThirdTest) {
 
     SaplingMerkleFrontier saplingFrontierTree;
     EXPECT_NO_THROW(saplingWallet.InitNoteCommitmentTree(saplingFrontierTree));
 
-    IronwoodMerkleFrontier orchardFrontierTree;
-    EXPECT_NO_THROW(orchardWallet.InitNoteCommitmentTree(orchardFrontierTree));
+    IronwoodMerkleFrontier ironwoodFrontierTree;
+    EXPECT_NO_THROW(ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontierTree));
 }
 
 TEST(WalletTests, AddCoinbaseTransactionsToWallet) {
@@ -134,10 +134,10 @@ TEST(WalletTests, AddCoinbaseTransactionsToWallet) {
         std::vector<CTransaction> vtx;
         std::vector<CTransaction> addedVtx;
         std::set<libzcash::SaplingPaymentAddress> saplingAddrs;
-        std::set<libzcash::OrchardPaymentAddress> orchardAddrs;
+        std::set<libzcash::IronwoodPaymentAddress> ironwoodAddrs;
         vtx.push_back(coinbaseTx);
         CBlock block;
-        pTestWallet->AddToWalletIfInvolvingMe(vtx, addedVtx, &block, testHeight, true, saplingAddrs, orchardAddrs,true);
+        pTestWallet->AddToWalletIfInvolvingMe(vtx, addedVtx, &block, testHeight, true, saplingAddrs, ironwoodAddrs,true);
 
         // Update Coins
         UpdateCoins(coinbaseTx, view, testHeight);
@@ -355,8 +355,8 @@ TEST(WalletTests, AddCoinbaseTransactionsToWallet) {
 //     SelectParams(CBaseChainParams::REGTEST);
 
 //     std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
-//     const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateOrchard};
-//     void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateOrchard};
+//     const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateIronwood};
+//     void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateIronwood};
 
 //     for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
 //         auto consensusParams = (*activations[ver])();
@@ -758,8 +758,8 @@ TEST(WalletTests, AddCoinbaseTransactionsToWallet) {
 //     SelectParams(CBaseChainParams::REGTEST);
 
 //     std::vector<libzcash::Zip212Enabled> zip_212_enabled = {libzcash::Zip212Enabled::BeforeZip212, libzcash::Zip212Enabled::AfterZip212};
-//     const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateOrchard};
-//     void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateOrchard};
+//     const Consensus::Params& (*activations [])() = {RegtestActivateSapling, RegtestActivateIronwood};
+//     void (*deactivations [])() = {RegtestDeactivateSapling, RegtestDeactivateIronwood};
 
 //     for (int ver = 0; ver < zip_212_enabled.size(); ver++) {
 //         auto consensusParams = (*activations[ver])();

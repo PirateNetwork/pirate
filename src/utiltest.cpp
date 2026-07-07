@@ -23,19 +23,19 @@ void RegtestDeactivateSapling() {
 }
 
 
-const Consensus::Params& RegtestActivateOrchard(int orchardActivationHeight) {
+const Consensus::Params& RegtestActivateIronwood(int ironwoodActivationHeight) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, orchardActivationHeight);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, ironwoodActivationHeight);
     return Params().GetConsensus();
 }
 
-const Consensus::Params& RegtestActivateOrchard() {
-    return RegtestActivateOrchard(Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+const Consensus::Params& RegtestActivateIronwood() {
+    return RegtestActivateIronwood(Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
 }
 
-void RegtestDeactivateOrchard() {
+void RegtestDeactivateIronwood() {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);

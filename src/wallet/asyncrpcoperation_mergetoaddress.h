@@ -65,8 +65,8 @@ typedef std::tuple<COutPoint, CAmount, CScript> MergeToAddressInputUTXO;
 // Sapling note input is a tuple of (outpoint, note, amount, extended_spending_key)
 typedef std::tuple<SaplingOutPoint, SaplingNote, CAmount, SaplingExtendedSpendingKey> MergeToAddressInputSaplingNote;
 
-// Orchard note input is a tuple of (outpoint, note, amount, extended_spending_key)
-typedef std::tuple<OrchardOutPoint, OrchardNote, CAmount, OrchardExtendedSpendingKeyPirate> MergeToAddressInputOrchardNote;
+// Ironwood note input is a tuple of (outpoint, note, amount, extended_spending_key)
+typedef std::tuple<IronwoodOutPoint, IronwoodNote, CAmount, IronwoodExtendedSpendingKeyPirate> MergeToAddressInputIronwoodNote;
 
 // A recipient is a tuple of (address, memo) where memo is optional for transparent addresses
 typedef std::tuple<std::string, std::string> MergeToAddressRecipient;
@@ -76,7 +76,7 @@ typedef std::tuple<std::string, std::string> MergeToAddressRecipient;
  * @brief Asynchronous merge-to-address operation
  * 
  * Consolidates multiple UTXOs and shielded notes into a single output address.
- * Supports transparent UTXOs, Sapling notes, and Orchard notes as inputs.
+ * Supports transparent UTXOs, Sapling notes, and Ironwood notes as inputs.
  * 
  * Purpose: Consolidate fragmented funds to reduce wallet complexity
  * Inputs: Multiple UTXOs/notes from various sources
@@ -93,7 +93,7 @@ public:
      * @param contextualTx Base transaction context
      * @param utxoInputs Transparent UTXO inputs to merge
      * @param saplingNoteInputs Sapling note inputs to merge
-     * @param orchardNoteInputs Orchard note inputs to merge
+     * @param ironwoodNoteInputs Ironwood note inputs to merge
      * @param recipient Destination address and memo
      * @param fee Transaction fee amount
      * @param contextInfo Context information for status reporting
@@ -104,7 +104,7 @@ public:
         CMutableTransaction contextualTx,
         std::vector<MergeToAddressInputUTXO> utxoInputs,
         std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs,
-        std::vector<MergeToAddressInputOrchardNote> orchardNoteInputs,
+        std::vector<MergeToAddressInputIronwoodNote> ironwoodNoteInputs,
         MergeToAddressRecipient recipient,
         CAmount fee = MERGE_TO_ADDRESS_OPERATION_DEFAULT_MINERS_FEE,
         UniValue contextInfo = NullUniValue);
@@ -155,7 +155,7 @@ private:
     // Input collections
     std::vector<MergeToAddressInputUTXO> utxoInputs_;                    ///< Transparent UTXO inputs
     std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs_;      ///< Sapling note inputs
-    std::vector<MergeToAddressInputOrchardNote> orchardNoteInputs_;      ///< Orchard note inputs
+    std::vector<MergeToAddressInputIronwoodNote> ironwoodNoteInputs_;      ///< Ironwood note inputs
 
     // Transaction building
     TransactionBuilder builder_;           ///< Builder for constructing the transaction
@@ -201,14 +201,14 @@ private:
     void unlock_sapling_notes();
 
     /**
-     * @brief Lock Orchard notes to prevent double-spending
+     * @brief Lock Ironwood notes to prevent double-spending
      */
-    void lock_orchard_notes();
+    void lock_ironwood_notes();
 
     /**
-     * @brief Unlock Orchard notes to make them available again
+     * @brief Unlock Ironwood notes to make them available again
      */
-    void unlock_orchard_notes();
+    void unlock_ironwood_notes();
 
 };
 

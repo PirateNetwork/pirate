@@ -66,7 +66,7 @@ namespace {
 
 enum class ShieldedSubtreeProtocol {
     Sapling,
-    Orchard,
+    Ironwood,
 };
 
 ShieldedSubtreeProtocol ParseShieldedSubtreeProtocol(const UniValue& value)
@@ -79,11 +79,11 @@ ShieldedSubtreeProtocol ParseShieldedSubtreeProtocol(const UniValue& value)
     if (protocol == "sapling") {
         return ShieldedSubtreeProtocol::Sapling;
     }
-    if (protocol == "orchard") {
-        return ShieldedSubtreeProtocol::Orchard;
+    if (protocol == "ironwood") {
+        return ShieldedSubtreeProtocol::Ironwood;
     }
 
-    throw JSONRPCError(RPC_INVALID_PARAMETER, "shielded protocol must be \"sapling\" or \"orchard\"");
+    throw JSONRPCError(RPC_INVALID_PARAMETER, "shielded protocol must be \"sapling\" or \"ironwood\"");
 }
 
 uint64_t ParseNonNegativeUint64(const UniValue& value, const std::string& fieldName)
@@ -105,8 +105,8 @@ ShieldedType ToShieldedType(ShieldedSubtreeProtocol protocol)
     switch (protocol) {
     case ShieldedSubtreeProtocol::Sapling:
         return SAPLINGFRONTIER;
-    case ShieldedSubtreeProtocol::Orchard:
-        return ORCHARDFRONTIER;
+    case ShieldedSubtreeProtocol::Ironwood:
+        return IRONWOODFRONTIER;
     }
 
     throw JSONRPCError(RPC_INVALID_PARAMETER, "unknown shielded protocol");
@@ -193,7 +193,7 @@ double GetNetworkDifficulty(const CBlockIndex* blockindex)
 
 /**
  * @brief Create JSON description of a value pool for blockchain state
- * @param name Optional name of the value pool (transparent, sprout, sapling, orchard)
+ * @param name Optional name of the value pool (transparent, sprout, sapling, ironwood)
  * @param chainValue Total amount in the pool (optional)
  * @param valueDelta Change in pool value (optional)
  * @return JSON object describing the value pool
@@ -399,7 +399,7 @@ UniValue blockToDeltasJSON(const CBlock& block, const CBlockIndex* blockindex)
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false)
 {
     AssertLockHeld(cs_main);
-    bool orchardActive = NetworkUpgradeActive(blockindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(blockindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     UniValue result(UniValue::VOBJ);
     result.pushKV("hash", block.GetHash().GetHex());
@@ -418,9 +418,9 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     result.pushKV("blockcommitments", blockindex->hashBlockCommitments.GetHex());
     result.pushKV("authdataroot", blockindex->hashAuthDataRoot.GetHex());
     result.pushKV("finalsaplingroot", blockindex->hashFinalSaplingRoot.GetHex());
-    if (orchardActive) {
-        auto finalOrchardRootBytes = blockindex->hashFinalOrchardRoot;
-        result.pushKV("finalorchardroot", HexStr(finalOrchardRootBytes.begin(), finalOrchardRootBytes.end()));
+    if (ironwoodActive) {
+        auto finalIronwoodRootBytes = blockindex->hashFinalIronwoodRoot;
+        result.pushKV("finalironwoodroot", HexStr(finalIronwoodRootBytes.begin(), finalIronwoodRootBytes.end()));
     }
     result.pushKV("chainhistoryroot", blockindex->hashChainHistoryRoot.GetHex());
     UniValue txs(UniValue::VARR);
@@ -448,7 +448,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     valuePools.push_back(ValuePoolDesc("transparent", blockindex->nChainTransparentValue, blockindex->nTransparentValue));
     valuePools.push_back(ValuePoolDesc("sprout", blockindex->nChainSproutValue, blockindex->nSproutValue));
     valuePools.push_back(ValuePoolDesc("sapling", blockindex->nChainSaplingValue, blockindex->nSaplingValue));
-    valuePools.push_back(ValuePoolDesc("orchard", blockindex->nChainIronwoodValue, blockindex->nIronwoodValue));
+    valuePools.push_back(ValuePoolDesc("ironwood", blockindex->nChainIronwoodValue, blockindex->nIronwoodValue));
     result.pushKV("valuePools", valuePools);
 
     {
@@ -461,11 +461,11 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
             trees.pushKV("sapling", sapling);
         }
 
-        IronwoodMerkleFrontier orchardTree;
-        if (pcoinsTip != nullptr && pcoinsTip->GetOrchardFrontierAnchorAt(blockindex->hashFinalOrchardRoot, orchardTree)) {
-            UniValue orchard(UniValue::VOBJ);
-            orchard.pushKV("size", (uint64_t)orchardTree.size());
-            trees.pushKV("orchard", orchard);
+        IronwoodMerkleFrontier ironwoodTree;
+        if (pcoinsTip != nullptr && pcoinsTip->GetIronwoodFrontierAnchorAt(blockindex->hashFinalIronwoodRoot, ironwoodTree)) {
+            UniValue ironwood(UniValue::VOBJ);
+            ironwood.pushKV("size", (uint64_t)ironwoodTree.size());
+            trees.pushKV("ironwood", ironwood);
         }
 
         result.pushKV("trees", trees);
@@ -1185,7 +1185,7 @@ UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"blockcommitments\": \"hex\",   (string) Block commitments hash\n"
             "  \"authdataroot\": \"hex\",       (string) Auth data root hash\n"
             "  \"finalsaplingroot\": \"hex\",   (string) Final Sapling commitment tree root\n"
-            "  \"finalorchardroot\": \"hex\",   (string, optional) Final Orchard commitment tree root\n"
+            "  \"finalironwoodroot\": \"hex\",   (string, optional) Final Ironwood commitment tree root\n"
             "  \"chainhistoryroot\": \"hex\",   (string) Chain history root hash\n"
             "  \"tx\": [                       (array) Transaction IDs\n"
             "    \"txid\",                     (string) Transaction ID\n"
@@ -1207,7 +1207,7 @@ UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  },\n"
             "  \"valuePools\": [               (array) Value pool information\n"
             "    {\n"
-            "      \"id\": \"pool_name\",       (string) Pool name (transparent, sprout, sapling, orchard)\n"
+            "      \"id\": \"pool_name\",       (string) Pool name (transparent, sprout, sapling, ironwood)\n"
             "      \"monitored\": bool,        (boolean) Pool monitoring status\n"
             "      \"chainValue\": n.nn,       (numeric, optional) Pool value in ARRR\n"
             "      \"chainValueZat\": n,       (numeric, optional) Pool value in zatoshis\n"
@@ -1220,7 +1220,7 @@ UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "    \"sapling\": {                (object, optional) Sapling tree data\n"
             "      \"size\": n                 (numeric) Number of commitments\n"
             "    },\n"
-            "    \"orchard\": {                (object, optional) Orchard tree data\n"
+            "    \"ironwood\": {                (object, optional) Ironwood tree data\n"
             "      \"size\": n                 (numeric) Number of commitments\n"
             "    }\n"
             "  },\n"
@@ -1877,7 +1877,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
             "  },\n"
             "  \"valuePools\": [                (array) Information about each value pool\n"
             "    {\n"
-            "      \"id\": \"pool_name\",        (string) Pool name (transparent, sprout, sapling, orchard, burned)\n"
+            "      \"id\": \"pool_name\",        (string) Pool name (transparent, sprout, sapling, ironwood, burned)\n"
             "      \"monitored\": bool,         (boolean) Pool monitoring status\n"
             "      \"chainValue\": n.nnnnnnnn,  (numeric, optional) Pool value in ARRR\n"
             "      \"chainValueZat\": n         (numeric, optional) Pool value in zatoshis\n"
@@ -1950,7 +1950,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     valuePools.push_back(ValuePoolDesc(std::string("transparent"), tip->nChainTransparentValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc(std::string("sprout"), tip->nChainSproutValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc(std::string("sapling"), tip->nChainSaplingValue, std::nullopt));
-    valuePools.push_back(ValuePoolDesc(std::string("orchard"), tip->nChainIronwoodValue, std::nullopt));
+    valuePools.push_back(ValuePoolDesc(std::string("ironwood"), tip->nChainIronwoodValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc(std::string("burned"), tip->nChainTotalBurned, std::nullopt));
     obj.push_back(Pair("valuePools",            valuePools));
 
@@ -2127,7 +2127,7 @@ UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk)
  * @param params RPC parameters: [block_hash_or_height]
  * @param fHelp True to display help information
  * @param mypk Public key for authentication
- * @return JSON object with Sprout, Sapling, and Orchard commitment tree states
+ * @return JSON object with Sprout, Sapling, and Ironwood commitment tree states
  */
 UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -2158,12 +2158,12 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "      \"finalState\": \"hex\" (string, optional) Sapling frontier state\n"
             "    }\n"
             "  },\n"
-            "  \"orchard\": {\n"
-            "    \"active\": true|false,   (boolean) whether Orchard is active at this height\n"
+            "  \"ironwood\": {\n"
+            "    \"active\": true|false,   (boolean) whether Ironwood is active at this height\n"
             "    \"skipHash\": \"hash\",   (string, optional) hash of most recent block with more information\n"
             "    \"commitments\": {\n"
-            "      \"finalRoot\": \"hex\", (string) Orchard commitment tree root\n"
-            "      \"finalState\": \"hex\" (string, optional) Orchard frontier state\n"
+            "      \"finalRoot\": \"hex\", (string) Ironwood commitment tree root\n"
+            "      \"finalState\": \"hex\" (string, optional) Ironwood frontier state\n"
             "    }\n"
             "  }\n"
             "}\n"
@@ -2197,7 +2197,7 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     res.pushKV("time", int64_t(pindex->nTime));
 
     bool saplingActive = NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
+    bool ironwoodActive = NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     // sprout
     {
@@ -2255,35 +2255,35 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         res.pushKV("sapling", sapling_result);
     }
 
-    //Orchard Frontier
-    int orchard_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight;
-    //if (orchard_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
+    //Ironwood Frontier
+    int ironwood_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight;
+    //if (ironwood_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
     {
-        UniValue orchard_result(UniValue::VOBJ);
-        UniValue orchard_commitments(UniValue::VOBJ);
-        orchard_result.pushKV("active", orchardActive);
-        orchard_commitments.pushKV("finalRoot", HexStr(pindex->hashFinalOrchardRoot.begin(), pindex->hashFinalOrchardRoot.end()));
+        UniValue ironwood_result(UniValue::VOBJ);
+        UniValue ironwood_commitments(UniValue::VOBJ);
+        ironwood_result.pushKV("active", ironwoodActive);
+        ironwood_commitments.pushKV("finalRoot", HexStr(pindex->hashFinalIronwoodRoot.begin(), pindex->hashFinalIronwoodRoot.end()));
         bool need_skiphash = false;
         IronwoodMerkleFrontier tree;
-        if (pcoinsTip->GetOrchardFrontierAnchorAt(pindex->hashFinalOrchardRoot, tree)) {
+        if (pcoinsTip->GetIronwoodFrontierAnchorAt(pindex->hashFinalIronwoodRoot, tree)) {
             CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
             s << IronwoodMerkleFrontierLegacySer(tree);
-            orchard_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
+            ironwood_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
         } else {
             // Set skipHash to the most recent block that has a finalState.
             const CBlockIndex* pindex_skip = pindex->pprev;
-            auto orchardActive = [&](const CBlockIndex* pindex_cur) -> bool {
-                return pindex_cur && pindex_cur->nHeight >= orchard_activation_height;
+            auto ironwoodActive = [&](const CBlockIndex* pindex_cur) -> bool {
+                return pindex_cur && pindex_cur->nHeight >= ironwood_activation_height;
             };
-            while (orchardActive(pindex_skip) && !pcoinsTip->GetOrchardFrontierAnchorAt(pindex_skip->hashFinalOrchardRoot, tree)) {
+            while (ironwoodActive(pindex_skip) && !pcoinsTip->GetIronwoodFrontierAnchorAt(pindex_skip->hashFinalIronwoodRoot, tree)) {
                 pindex_skip = pindex_skip->pprev;
             }
-            if (orchardActive(pindex_skip)) {
-                orchard_result.pushKV("skipHash", pindex_skip->GetBlockHash().GetHex());
+            if (ironwoodActive(pindex_skip)) {
+                ironwood_result.pushKV("skipHash", pindex_skip->GetBlockHash().GetHex());
             }
         }
-        orchard_result.pushKV("commitments", orchard_commitments);
-        res.pushKV("orchard", orchard_result);
+        ironwood_result.pushKV("commitments", ironwood_commitments);
+        res.pushKV("ironwood", ironwood_result);
     }
 
     return res;
@@ -2407,10 +2407,10 @@ UniValue z_getsubtreesbyindex(const UniValue& params, bool fHelp, const CPubKey&
 {
     if (fHelp || params.size() < 2 || params.size() > 3)
         throw runtime_error(
-            "z_getsubtreesbyindex \"sapling|orchard\" start_index ( limit )\n"
+            "z_getsubtreesbyindex \"sapling|ironwood\" start_index ( limit )\n"
             "Return roots of completed shielded 2^16 subtrees from the active chain.\n"
             "\nArguments:\n"
-            "1. \"sapling|orchard\"      (string, required) Shielded protocol to query\n"
+            "1. \"sapling|ironwood\"      (string, required) Shielded protocol to query\n"
             "2. start_index              (numeric, required) Subtree index to start from\n"
             "3. limit                    (numeric, optional, default=0) Maximum number of subtrees to return, or 0 for all\n"
             "\nResult:\n"

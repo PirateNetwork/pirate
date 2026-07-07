@@ -26,7 +26,7 @@
  * UTXOs and shielded notes into a single output address.
  * 
  * Purpose: Consolidate fragmented funds from multiple sources
- * Inputs: Transparent UTXOs, Sapling notes, Orchard notes
+ * Inputs: Transparent UTXOs, Sapling notes, Ironwood notes
  * Outputs: Single consolidated output at destination address
  */
 
@@ -77,7 +77,7 @@ using namespace libzcash;
  * @param contextualTx Base transaction context
  * @param utxoInputs Transparent UTXO inputs to merge
  * @param saplingNoteInputs Sapling note inputs to merge
- * @param orchardNoteInputs Orchard note inputs to merge
+ * @param ironwoodNoteInputs Ironwood note inputs to merge
  * @param recipient Destination address and memo
  * @param fee Transaction fee amount
  * @param contextInfo Context information for logging
@@ -89,13 +89,13 @@ AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
     CMutableTransaction contextualTx,
     std::vector<MergeToAddressInputUTXO> utxoInputs,
     std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs,
-    std::vector<MergeToAddressInputOrchardNote> orchardNoteInputs,
+    std::vector<MergeToAddressInputIronwoodNote> ironwoodNoteInputs,
     MergeToAddressRecipient recipient,
     CAmount fee,
     UniValue contextInfo) : tx_(contextualTx), 
                             utxoInputs_(utxoInputs),
                             saplingNoteInputs_(saplingNoteInputs), 
-                            orchardNoteInputs_(orchardNoteInputs), 
+                            ironwoodNoteInputs_(ironwoodNoteInputs), 
                             recipient_(recipient), 
                             fee_(fee), 
                             contextinfo_(contextInfo),
@@ -109,7 +109,7 @@ AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Fee is out of range");
     }
 
-    if (utxoInputs.empty() && saplingNoteInputs.empty() && orchardNoteInputs.empty()) {
+    if (utxoInputs.empty() && saplingNoteInputs.empty() && ironwoodNoteInputs.empty()) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "No inputs");
     }
 
@@ -158,7 +158,7 @@ AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
     // Lock input resources to prevent concurrent operations from using them
     lock_utxos();
     lock_sapling_notes();
-    lock_orchard_notes();
+    lock_ironwood_notes();
 }
 
 //==============================================================================
@@ -192,7 +192,7 @@ void AsyncRPCOperation_mergetoaddress::main()
     if (isCancelled()) {
         unlock_utxos();
         unlock_sapling_notes();
-        unlock_orchard_notes();
+        unlock_ironwood_notes();
         return;
     }
 
@@ -261,7 +261,7 @@ void AsyncRPCOperation_mergetoaddress::main()
     // Clean up locked resources
     unlock_utxos();
     unlock_sapling_notes();
-    unlock_orchard_notes();
+    unlock_ironwood_notes();
 }
 
 // Known issues (TODO items):
@@ -270,7 +270,7 @@ void AsyncRPCOperation_mergetoaddress::main()
 /**
  * @brief Core implementation of multi-protocol merge operation
  * 
- * Consolidates inputs from transparent, Sapling, and Orchard protocols
+ * Consolidates inputs from transparent, Sapling, and Ironwood protocols
  * into a single output destination with proper cryptographic handling.
  * 
  * @return true if transaction built and broadcast successfully
@@ -282,7 +282,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
     assert(isToTaddr_ != isToZaddr_);
 
     // Determine if this is a pure transparent-only transaction (affects logging sensitivity)
-    bool isPureTaddrOnlyTx = (saplingNoteInputs_.empty() && orchardNoteInputs_.empty() && isToTaddr_);
+    bool isPureTaddrOnlyTx = (saplingNoteInputs_.empty() && ironwoodNoteInputs_.empty() && isToTaddr_);
     CAmount minersFee = fee_;
 
     // =================================================================
@@ -315,15 +315,15 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         totalTransparentInputs += std::get<1>(utxo);
     }
 
-    // Calculate total value from shielded inputs (Sapling + Orchard)
+    // Calculate total value from shielded inputs (Sapling + Ironwood)
     CAmount totalShieldedInputs = 0;
 
     for (const MergeToAddressInputSaplingNote& saplingNote : saplingNoteInputs_) {
         totalShieldedInputs += std::get<2>(saplingNote);
     }
 
-    for (const MergeToAddressInputOrchardNote& orchardNote : orchardNoteInputs_) {
-        totalShieldedInputs += std::get<2>(orchardNote);
+    for (const MergeToAddressInputIronwoodNote& ironwoodNote : ironwoodNoteInputs_) {
+        totalShieldedInputs += std::get<2>(ironwoodNote);
     }
 
     // Calculate total input value and validate against fees
@@ -479,112 +479,112 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
     }
 
     // =================================================================
-    // STEP 7: Process Orchard shielded inputs
+    // STEP 7: Process Ironwood shielded inputs
     // =================================================================
     
-    // Collect Orchard note information for batch processing
-    std::vector<OrchardOutPoint> orchardOutPoints;
-    std::vector<OrchardNote> orchardNotes;
-    std::vector<OrchardExtendedSpendingKeyPirate> orchardExtendedKeys;
-    std::set<OrchardExtendedSpendingKeyPirate> uniqueOrchardKeys;
+    // Collect Ironwood note information for batch processing
+    std::vector<IronwoodOutPoint> ironwoodOutPoints;
+    std::vector<IronwoodNote> ironwoodNotes;
+    std::vector<IronwoodExtendedSpendingKeyPirate> ironwoodExtendedKeys;
+    std::set<IronwoodExtendedSpendingKeyPirate> uniqueIronwoodKeys;
     
-    for (const MergeToAddressInputOrchardNote& orchardNoteInput : orchardNoteInputs_) {
-        orchardOutPoints.push_back(std::get<0>(orchardNoteInput));
-        orchardNotes.push_back(std::get<1>(orchardNoteInput));
-        auto extendedSpendingKey = std::get<3>(orchardNoteInput);
-        orchardExtendedKeys.push_back(extendedSpendingKey);
-        uniqueOrchardKeys.insert(extendedSpendingKey);
+    for (const MergeToAddressInputIronwoodNote& ironwoodNoteInput : ironwoodNoteInputs_) {
+        ironwoodOutPoints.push_back(std::get<0>(ironwoodNoteInput));
+        ironwoodNotes.push_back(std::get<1>(ironwoodNoteInput));
+        auto extendedSpendingKey = std::get<3>(ironwoodNoteInput);
+        ironwoodExtendedKeys.push_back(extendedSpendingKey);
+        uniqueIronwoodKeys.insert(extendedSpendingKey);
         
-        // Set outgoing viewing key from first available Orchard extended spending key
+        // Set outgoing viewing key from first available Ironwood extended spending key
         if (!outgoingViewingKey) {
             auto fullViewingKeyOpt = extendedSpendingKey.GetXFVK();
             if (fullViewingKeyOpt == std::nullopt) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
-                                   strprintf("%s: FVK not found for Orchard spending key. Stopping.\n", getId()));
+                                   strprintf("%s: FVK not found for Ironwood spending key. Stopping.\n", getId()));
             }
 
             auto fullViewingKey = fullViewingKeyOpt.value().fvk;
-            OrchardOutgoingViewingKey outgoingViewingKeyObj;
+            IronwoodOutgoingViewingKey outgoingViewingKeyObj;
             if (!fullViewingKey.DeriveOVK(&outgoingViewingKeyObj)) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
-                                   strprintf("%s: OVK not found for Orchard spending key. Stopping.\n", getId()));
+                                   strprintf("%s: OVK not found for Ironwood spending key. Stopping.\n", getId()));
             }
 
             outgoingViewingKey = outgoingViewingKeyObj.ovk;
         }
     }
     
-    // Add Orchard notes to the transaction builder
+    // Add Ironwood notes to the transaction builder
     // Iterate through all the selected notes and add them to the transaction
     {
         LOCK2(cs_main, pwalletMain->cs_wallet);
 
-        bool orchardInitialized = false;
-        uint256 orchardAnchor;
+        bool ironwoodInitialized = false;
+        uint256 ironwoodAnchor;
 
-        for (std::set<OrchardExtendedSpendingKeyPirate>::iterator keyIterator = uniqueOrchardKeys.begin(); 
-             keyIterator != uniqueOrchardKeys.end(); keyIterator++) {
+        for (std::set<IronwoodExtendedSpendingKeyPirate>::iterator keyIterator = uniqueIronwoodKeys.begin(); 
+             keyIterator != uniqueIronwoodKeys.end(); keyIterator++) {
             
             auto currentExtendedKey = *keyIterator;
 
             // Process each note that uses this extended spending key
-            for (int noteIndex = 0; noteIndex < orchardExtendedKeys.size(); noteIndex++) {
-                if (currentExtendedKey == orchardExtendedKeys[noteIndex]) {
+            for (int noteIndex = 0; noteIndex < ironwoodExtendedKeys.size(); noteIndex++) {
+                if (currentExtendedKey == ironwoodExtendedKeys[noteIndex]) {
                     
-                    // Get the Merkle path for this Orchard note
-                    libzcash::MerklePath orchardMerklePath;
-                    if (!pwalletMain->OrchardWalletGetMerklePathOfNote(orchardOutPoints[noteIndex].hash, 
-                                                                       orchardOutPoints[noteIndex].n, 
-                                                                       orchardMerklePath)) {
+                    // Get the Merkle path for this Ironwood note
+                    libzcash::MerklePath ironwoodMerklePath;
+                    if (!pwalletMain->IronwoodWalletGetMerklePathOfNote(ironwoodOutPoints[noteIndex].hash, 
+                                                                       ironwoodOutPoints[noteIndex].n, 
+                                                                       ironwoodMerklePath)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
-                                           strprintf("%s: Merkle Path not found for Orchard note. Stopping.\n", getId()));
+                                           strprintf("%s: Merkle Path not found for Ironwood note. Stopping.\n", getId()));
                     }
 
-                    // Get the anchor for this Orchard note
+                    // Get the anchor for this Ironwood note
                     uint256 pathAnchor;
-                    if (!pwalletMain->OrchardWalletGetPathRootWithCMU(orchardMerklePath, 
-                                                                      orchardNotes[noteIndex].cmx(), 
+                    if (!pwalletMain->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, 
+                                                                      ironwoodNotes[noteIndex].cmx(), 
                                                                       pathAnchor)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
                                            strprintf("%s: Getting Anchor failed. Stopping.\n", getId()));
                     }
 
-                    // Set orchard anchor for transaction (use first anchor found)
-                    if (orchardAnchor.IsNull()) {
-                        orchardAnchor = pathAnchor;
+                    // Set ironwood anchor for transaction (use first anchor found)
+                    if (ironwoodAnchor.IsNull()) {
+                        ironwoodAnchor = pathAnchor;
                     }
 
-                    // Initialize Orchard builder only once when we have the first anchor
-                    if (!orchardInitialized) {
-                        builder_.InitializeIronwood(true, true, orchardAnchor);
-                        orchardInitialized = true;
+                    // Initialize Ironwood builder only once when we have the first anchor
+                    if (!ironwoodInitialized) {
+                        builder_.InitializeIronwood(true, true, ironwoodAnchor);
+                        ironwoodInitialized = true;
                     }
 
-                    // Add the raw Orchard spend to the builder
-                    if (!builder_.AddOrchardSpendRaw(orchardOutPoints[noteIndex], 
-                                                     orchardNotes[noteIndex].address, 
-                                                     orchardNotes[noteIndex].value(), 
-                                                     orchardNotes[noteIndex].rho(), 
-                                                     orchardNotes[noteIndex].rseed(), 
-                                                     orchardMerklePath, 
-                                                     orchardAnchor)) {
+                    // Add the raw Ironwood spend to the builder
+                    if (!builder_.AddIronwoodSpendRaw(ironwoodOutPoints[noteIndex], 
+                                                     ironwoodNotes[noteIndex].address, 
+                                                     ironwoodNotes[noteIndex].value(), 
+                                                     ironwoodNotes[noteIndex].rho(), 
+                                                     ironwoodNotes[noteIndex].rseed(), 
+                                                     ironwoodMerklePath, 
+                                                     ironwoodAnchor)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
-                                           strprintf("%s: Adding Raw Orchard Spend failed. Stopping.\n", getId()));
+                                           strprintf("%s: Adding Raw Ironwood Spend failed. Stopping.\n", getId()));
                     }
                 }
             }
             
-            // Convert the raw Orchard spend using the extended spending key (once per key)
-            if (!builder_.ConvertRawOrchardSpend(currentExtendedKey)) {
+            // Convert the raw Ironwood spend using the extended spending key (once per key)
+            if (!builder_.ConvertRawIronwoodSpend(currentExtendedKey)) {
                 throw JSONRPCError(RPC_WALLET_ERROR, 
-                                   strprintf("%s: Converting Raw Orchard Spends failed.\n", getId()));
+                                   strprintf("%s: Converting Raw Ironwood Spends failed.\n", getId()));
             }
         }
         
-        // If we have any Orchard payment addresses, ensure Orchard is initialized
-        // This is necessary to handle the case where we are sending to an Orchard address
-        if (std::get_if<libzcash::OrchardPaymentAddress>(&toPaymentAddress_) != nullptr) {
-            if (!orchardInitialized) {
+        // If we have any Ironwood payment addresses, ensure Ironwood is initialized
+        // This is necessary to handle the case where we are sending to an Ironwood address
+        if (std::get_if<libzcash::IronwoodPaymentAddress>(&toPaymentAddress_) != nullptr) {
+            if (!ironwoodInitialized) {
                 builder_.InitializeIronwood(false, true, uint256());
             }
         }
@@ -638,18 +638,18 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             }
         }
 
-        // Determine the payment address type (Sapling or Orchard)
+        // Determine the payment address type (Sapling or Ironwood)
         auto saplingPaymentAddress = std::get_if<libzcash::SaplingPaymentAddress>(&toPaymentAddress_);
-        auto orchardPaymentAddress = std::get_if<libzcash::OrchardPaymentAddress>(&toPaymentAddress_);
+        auto ironwoodPaymentAddress = std::get_if<libzcash::IronwoodPaymentAddress>(&toPaymentAddress_);
 
-        if (saplingPaymentAddress == nullptr && orchardPaymentAddress == nullptr) {
+        if (saplingPaymentAddress == nullptr && ironwoodPaymentAddress == nullptr) {
             // This should never happen as we have already determined that the payment is to a shielded address
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, 
-                               "Could not get Sapling or Orchard payment address.");
+                               "Could not get Sapling or Ironwood payment address.");
         }
 
         // Generate outgoing viewing key for transparent-to-shielded transactions
-        if (saplingNoteInputs_.size() == 0 && orchardNoteInputs_.size() == 0 && utxoInputs_.size() > 0) {
+        if (saplingNoteInputs_.size() == 0 && ironwoodNoteInputs_.size() == 0 && utxoInputs_.size() > 0) {
             // Sending from t-addresses, which we don't have ovks for. Instead,
             // generate a common one from the HD seed. This ensures the data is
             // recoverable, while keeping it logically separate from the ZIP 32
@@ -665,7 +665,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         // Validate that we have an outgoing viewing key for shielded outputs
         if (!outgoingViewingKey) {
             throw JSONRPCError(RPC_WALLET_ERROR, 
-                               "Sending to a Sapling or Orchard address requires an ovk.");
+                               "Sending to a Sapling or Ironwood address requires an ovk.");
         }
 
         // Add the appropriate shielded output based on address type
@@ -673,9 +673,9 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         if (saplingPaymentAddress != nullptr) {
             builder_.AddSaplingOutputRaw(*saplingPaymentAddress, sendAmount, memo);
             builder_.ConvertRawSaplingOutput(outgoingViewingKey.value());
-        } else if (orchardPaymentAddress != nullptr) {
-            builder_.AddOrchardOutputRaw(*orchardPaymentAddress, sendAmount, memo);
-            builder_.ConvertRawOrchardOutput(outgoingViewingKey.value());
+        } else if (ironwoodPaymentAddress != nullptr) {
+            builder_.AddIronwoodOutputRaw(*ironwoodPaymentAddress, sendAmount, memo);
+            builder_.ConvertRawIronwoodOutput(outgoingViewingKey.value());
         } else {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, 
                                "Invalid output address, not a valid zaddr.");
@@ -844,29 +844,29 @@ void AsyncRPCOperation_mergetoaddress::unlock_sapling_notes()
 }
 
 /**
- * @brief Lock Orchard notes to prevent double-spending during merge operation
+ * @brief Lock Ironwood notes to prevent double-spending during merge operation
  * 
- * Prevents concurrent operations from using the same Orchard notes by
+ * Prevents concurrent operations from using the same Ironwood notes by
  * locking them in the wallet until the merge operation completes.
  */
-void AsyncRPCOperation_mergetoaddress::lock_orchard_notes()
+void AsyncRPCOperation_mergetoaddress::lock_ironwood_notes()
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (auto orchardNote : orchardNoteInputs_) {
-        pwalletMain->LockNote(std::get<0>(orchardNote));
+    for (auto ironwoodNote : ironwoodNoteInputs_) {
+        pwalletMain->LockNote(std::get<0>(ironwoodNote));
     }
 }
 
 /**
- * @brief Unlock Orchard notes to restore availability for other operations
+ * @brief Unlock Ironwood notes to restore availability for other operations
  * 
- * Releases locks on previously locked Orchard notes, making them available
+ * Releases locks on previously locked Ironwood notes, making them available
  * for other wallet operations. Should be called after operation completion.
  */
-void AsyncRPCOperation_mergetoaddress::unlock_orchard_notes()
+void AsyncRPCOperation_mergetoaddress::unlock_ironwood_notes()
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (auto orchardNote : orchardNoteInputs_) {
-        pwalletMain->UnlockNote(std::get<0>(orchardNote));
+    for (auto ironwoodNote : ironwoodNoteInputs_) {
+        pwalletMain->UnlockNote(std::get<0>(ironwoodNote));
     }
 }

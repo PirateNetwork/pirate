@@ -1027,7 +1027,7 @@ public:
                         continue;
                     }
 
-                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapOrchardNoteData.size() == 0 && !wtx.IsTrusted()) {
+                    if (wtx.mapSaplingNoteData.size() == 0 && wtx.mapIronwoodNoteData.size() == 0 && !wtx.IsTrusted()) {
                         skippedNotTrusted++;
                         continue;
                     }

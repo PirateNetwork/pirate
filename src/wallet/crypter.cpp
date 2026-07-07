@@ -257,16 +257,16 @@ static bool DecryptSaplingSpendingKey(const CKeyingMaterial& vMasterKey,
     return sk.ToXFVK().fvk.GetFingerprint() == extfvkFinger;
 }
 
-static bool DecryptOrchardSpendingKey(const CKeyingMaterial& vMasterKey,
+static bool DecryptIronwoodSpendingKey(const CKeyingMaterial& vMasterKey,
                                       const std::vector<unsigned char>& vchCryptedSecret,
                                       const uint256& fvkFinger,
-                                      libzcash::OrchardExtendedSpendingKeyPirate& extsk)
+                                      libzcash::IronwoodExtendedSpendingKeyPirate& extsk)
 {
     CKeyingMaterial vchSecret;
     if (!DecryptSecret(vMasterKey, vchCryptedSecret, fvkFinger, vchSecret))
         return false;
 
-    if (vchSecret.size() != libzcash::SerializedOrchardExtendedSpendingKeySize)
+    if (vchSecret.size() != libzcash::SerializedIronwoodExtendedSpendingKeySize)
         return false;
 
     CSecureDataStream ss(vchSecret, SER_NETWORK, PROTOCOL_VERSION);
@@ -438,12 +438,12 @@ bool CCryptoKeyStore::Unlock(const CKeyingMaterial& vMasterKeyIn)
             if (fDecryptionThoroughlyChecked)
                 break;
         }
-        CryptedOrchardSpendingKeyMap::const_iterator miOrchard = mapCryptedOrchardSpendingKeys.begin();
-        for (; miOrchard != mapCryptedOrchardSpendingKeys.end(); ++miOrchard) {
-            const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk = (*miOrchard).first;
-            const std::vector<unsigned char>& vchCryptedSecret = (*miOrchard).second;
-            libzcash::OrchardExtendedSpendingKeyPirate extsk;
-            if (!DecryptOrchardSpendingKey(vMasterKeyIn, vchCryptedSecret, extfvk.fvk.GetFingerprint(), extsk)) {
+        CryptedIronwoodSpendingKeyMap::const_iterator miIronwood = mapCryptedIronwoodSpendingKeys.begin();
+        for (; miIronwood != mapCryptedIronwoodSpendingKeys.end(); ++miIronwood) {
+            const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk = (*miIronwood).first;
+            const std::vector<unsigned char>& vchCryptedSecret = (*miIronwood).second;
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (!DecryptIronwoodSpendingKey(vMasterKeyIn, vchCryptedSecret, extfvk.fvk.GetFingerprint(), extsk)) {
                 keyFail = true;
                 break;
             }
@@ -692,18 +692,18 @@ bool CCryptoKeyStore::AddCryptedSaplingSpendingKey(
     return true;
 }
 
-bool CCryptoKeyStore::AddCryptedOrchardSpendingKey(
-    const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk,
+bool CCryptoKeyStore::AddCryptedIronwoodSpendingKey(
+    const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk,
     const std::vector<unsigned char>& vchCryptedSecret)
 {
     {
         LOCK(cs_KeyStore);
         // if SaplingFullViewingKey is not in SaplingFullViewingKeyMap, add it
-        if (!CBasicKeyStore::AddOrchardExtendedFullViewingKey(extfvk)) {
+        if (!CBasicKeyStore::AddIronwoodExtendedFullViewingKey(extfvk)) {
             return false;
         }
 
-        mapCryptedOrchardSpendingKeys[extfvk] = vchCryptedSecret;
+        mapCryptedIronwoodSpendingKeys[extfvk] = vchCryptedSecret;
     }
     return true;
 }
@@ -742,17 +742,17 @@ bool CCryptoKeyStore::GetSaplingSpendingKey(const libzcash::SaplingExtendedFullV
     return false;
 }
 
-bool CCryptoKeyStore::GetOrchardSpendingKey(const libzcash::OrchardExtendedFullViewingKeyPirate& extfvk, libzcash::OrchardExtendedSpendingKeyPirate& extskOut) const
+bool CCryptoKeyStore::GetIronwoodSpendingKey(const libzcash::IronwoodExtendedFullViewingKeyPirate& extfvk, libzcash::IronwoodExtendedSpendingKeyPirate& extskOut) const
 {
     {
         LOCK(cs_KeyStore);
         if (!IsCrypted())
-            return CBasicKeyStore::GetOrchardSpendingKey(extfvk, extskOut);
+            return CBasicKeyStore::GetIronwoodSpendingKey(extfvk, extskOut);
 
-        for (auto entry : mapCryptedOrchardSpendingKeys) {
+        for (auto entry : mapCryptedIronwoodSpendingKeys) {
             if (entry.first == extfvk) {
                 const std::vector<unsigned char>& vchCryptedSecret = entry.second;
-                return DecryptOrchardSpendingKey(vMasterKey, vchCryptedSecret, entry.first.fvk.GetFingerprint(), extskOut);
+                return DecryptIronwoodSpendingKey(vMasterKey, vchCryptedSecret, entry.first.fvk.GetFingerprint(), extskOut);
             }
         }
     }

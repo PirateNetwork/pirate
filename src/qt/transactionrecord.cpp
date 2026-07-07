@@ -62,7 +62,7 @@ bool TransactionRecord::showTransaction(const CWalletTx &wtx)
  * record with aggregated amounts. This prevents UI clutter when consolidating UTXOs
  * or sending to the same address multiple times in one transaction.
  * 
- * @param arcTx Archived transaction from RPC containing all transparent, Sapling, and Orchard data
+ * @param arcTx Archived transaction from RPC containing all transparent, Sapling, and Ironwood data
  * @return List of transaction records (parent + children) for display
  */
 QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTransaction &arcTx)
@@ -78,7 +78,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
      * shows as single input child rather than 100 separate lines.
      */
     struct AddressGroup {
-        std::string address;       ///< Address (transparent, Sapling, or Orchard)
+        std::string address;       ///< Address (transparent, Sapling, or Ironwood)
         CAmount amount = 0;        ///< Aggregated amount for this address
         int count = 0;             ///< Number of UTXOs consolidated
         std::string memo;          ///< Decoded memo (first found if multiple)
@@ -103,7 +103,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
      * addresses that had UTXOs consumed by this transaction. We process:
      * - Transparent (vTSpend): P2PKH/P2SH inputs
      * - Sapling (vZsSpend): Shielded Sapling notes
-     * - Orchard (vZoSpend): Shielded Orchard notes
+     * - Ironwood (vZoSpend): Shielded Ironwood notes
      * 
      * Aggregation: Multiple UTXOs from same address are grouped together.
      * Watch-only detection: Flag is set if any UTXO is from watch-only address.
@@ -145,7 +145,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
             totalInputs += arcTx.vZsSpend[i].amount;
         }
 
-        // Process Orchard shielded inputs
+        // Process Ironwood shielded inputs
         for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
             std::string addr = arcTx.vZoSpend[i].encodedAddress;
             if (inputMap.find(addr) == inputMap.end()) {
@@ -270,7 +270,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         // else: Already counted from vZsSend, skip
     }
 
-    // Process Orchard shielded outputs (all destinations)
+    // Process Ironwood shielded outputs (all destinations)
     for (int i = 0; i < arcTx.vZoSend.size(); i++) {
         std::string addr = arcTx.vZoSend[i].encodedAddress;
         if (outputMap.find(addr) == outputMap.end()) {
@@ -292,7 +292,7 @@ QList<TransactionRecord> TransactionRecord::decomposeTransaction(const RpcArcTra
         totalOutputs += arcTx.vZoSend[i].amount;
     }
 
-    // Process Orchard receives (pure receive transactions without spends)
+    // Process Ironwood receives (pure receive transactions without spends)
     // Only process if not already in outputMap to avoid double-counting
     for (int i = 0; i < arcTx.vZoReceived.size(); i++) {
         std::string addr = arcTx.vZoReceived[i].encodedAddress;

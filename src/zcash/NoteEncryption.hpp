@@ -9,7 +9,7 @@
  *
  * Implements authenticated encryption for Sprout notes with forward secrecy.
  * Uses ephemeral Curve25519 keys, BLAKE2b KDF, and ChaCha20-Poly1305 AEAD.
- * Sprout only - Sapling/Orchard use Rust implementations.
+ * Sprout only - Sapling/Ironwood use Rust implementations.
  */
 
 #ifndef ZC_NOTE_ENCRYPTION_H_

@@ -781,7 +781,7 @@ void UpdateCoins(const CTransaction& tx, CCoinsViewCache& inputs, int nHeight);
  * - The signatures for the transaction's shielded components are valid.
  *
  * This also currently checks the Sapling proofs, due to the way the Rust verification
- * code is written. Sprout and Orchard proofs are currently checked in CheckTransaction().
+ * code is written. Sprout and Ironwood proofs are currently checked in CheckTransaction().
  * Once we have batch proof validation implemented, these will all be accumulated in
  * CheckTransaction().
  *

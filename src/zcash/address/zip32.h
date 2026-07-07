@@ -9,7 +9,7 @@
 #include "support/allocators/secure.h"
 #include "uint256.h"
 #include "zcash/address/sapling.hpp"
-#include "zcash/address/orchard.hpp"
+#include "zcash/address/ironwood.hpp"
 
 #include <optional>
 
@@ -275,12 +275,12 @@ struct SaplingDiversifiedExtendedSpendingKey {
     }
 };
 
-struct OrchardExtendedFullViewingKeyPirate {
+struct IronwoodExtendedFullViewingKeyPirate {
     uint8_t depth;
     uint32_t parentFVKTag;
     uint32_t childIndex;
     uint256 chaincode;
-    libzcash::OrchardFullViewingKey fvk;
+    libzcash::IronwoodFullViewingKey fvk;
 
     ADD_SERIALIZE_METHODS;
 
@@ -293,7 +293,7 @@ struct OrchardExtendedFullViewingKeyPirate {
         READWRITE(fvk);
     }
 
-    friend inline bool operator==(const OrchardExtendedFullViewingKeyPirate& a, const OrchardExtendedFullViewingKeyPirate& b) {
+    friend inline bool operator==(const IronwoodExtendedFullViewingKeyPirate& a, const IronwoodExtendedFullViewingKeyPirate& b) {
         return (
             a.depth == b.depth &&
             a.parentFVKTag == b.parentFVKTag &&
@@ -301,15 +301,15 @@ struct OrchardExtendedFullViewingKeyPirate {
             a.chaincode == b.chaincode &&
             a.fvk == b.fvk);
     }
-    friend inline bool operator<(const OrchardExtendedFullViewingKeyPirate& a, const OrchardExtendedFullViewingKeyPirate& b) {
+    friend inline bool operator<(const IronwoodExtendedFullViewingKeyPirate& a, const IronwoodExtendedFullViewingKeyPirate& b) {
         return (a.depth < b.depth ||
             (a.depth == b.depth && a.childIndex < b.childIndex) ||
             (a.depth == b.depth && a.childIndex == b.childIndex && a.fvk < b.fvk));
     }
 };
 
-struct OrchardDiversifiedExtendedFullViewingKeyPirate{
-    OrchardExtendedFullViewingKeyPirate extfvk;
+struct IronwoodDiversifiedExtendedFullViewingKeyPirate{
+    IronwoodExtendedFullViewingKeyPirate extfvk;
     diversifier_t d;
 
     ADD_SERIALIZE_METHODS;
@@ -321,12 +321,12 @@ struct OrchardDiversifiedExtendedFullViewingKeyPirate{
     }
 };
 
-struct OrchardExtendedSpendingKeyPirate {
+struct IronwoodExtendedSpendingKeyPirate {
     uint8_t depth;
     uint32_t parentFVKTag;
     uint32_t childIndex;
     uint256 chaincode;
-    libzcash::OrchardSpendingKey sk;
+    libzcash::IronwoodSpendingKey sk;
 
     ADD_SERIALIZE_METHODS;
 
@@ -339,11 +339,11 @@ struct OrchardExtendedSpendingKeyPirate {
         READWRITE(sk);
     }
 
-    static OrchardExtendedSpendingKeyPirate Master(const HDSeed& seed, bool bip39Enabled = true);
-    std::optional<OrchardExtendedSpendingKeyPirate> Derive(uint32_t bip44CoinType, uint32_t account) const;
-    std::optional<OrchardExtendedFullViewingKeyPirate> GetXFVK() const;
+    static IronwoodExtendedSpendingKeyPirate Master(const HDSeed& seed, bool bip39Enabled = true);
+    std::optional<IronwoodExtendedSpendingKeyPirate> Derive(uint32_t bip44CoinType, uint32_t account) const;
+    std::optional<IronwoodExtendedFullViewingKeyPirate> GetXFVK() const;
 
-    friend bool operator==(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b)
+    friend bool operator==(const IronwoodExtendedSpendingKeyPirate& a, const IronwoodExtendedSpendingKeyPirate& b)
     {
         return a.depth == b.depth &&
             a.parentFVKTag == b.parentFVKTag &&
@@ -352,15 +352,15 @@ struct OrchardExtendedSpendingKeyPirate {
             a.sk == b.sk;
     }
 
-    friend inline bool operator<(const OrchardExtendedSpendingKeyPirate& a, const OrchardExtendedSpendingKeyPirate& b) {
+    friend inline bool operator<(const IronwoodExtendedSpendingKeyPirate& a, const IronwoodExtendedSpendingKeyPirate& b) {
         return (a.depth < b.depth ||
             (a.depth == b.depth && a.childIndex < b.childIndex) ||
             (a.depth == b.depth && a.childIndex == b.childIndex && a.sk < b.sk));
     }
 };
 
-struct OrchardDiversifiedExtendedSpendingKeyPirate{
-    OrchardExtendedSpendingKeyPirate extsk;
+struct IronwoodDiversifiedExtendedSpendingKeyPirate{
+    IronwoodExtendedSpendingKeyPirate extsk;
     diversifier_t d;
 
     ADD_SERIALIZE_METHODS;

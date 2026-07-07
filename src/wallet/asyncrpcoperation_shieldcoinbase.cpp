@@ -311,15 +311,15 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress& zaddr) c
 }
 
 /**
- * @brief Handle Orchard payment address for shield coinbase operation
+ * @brief Handle Ironwood payment address for shield coinbase operation
  * 
- * Creates a transaction that shields coinbase UTXOs to an Orchard shielded address.
+ * Creates a transaction that shields coinbase UTXOs to an Ironwood shielded address.
  * 
- * @param zaddr Target Orchard payment address
+ * @param zaddr Target Ironwood payment address
  * @return true if transaction was built and sent successfully
  * @throws JSONRPCError if HD seed is not available or transaction fails
  */
-bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddress& zaddr) const
+bool ShieldToAddress::operator()(const libzcash::IronwoodPaymentAddress& zaddr) const
 {
     m_op->builder_.SetFee(m_op->fee_);
 
@@ -345,7 +345,7 @@ bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddress& zaddr) c
         }
     }
 
-    // Initialize Orchard for transaction building
+    // Initialize Ironwood for transaction building
     m_op->builder_.InitializeIronwood(false, true, uint256());
 
     // Send all value to the target z-addr

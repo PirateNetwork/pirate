@@ -456,17 +456,17 @@ libzcash::SaplingPaymentAddress SaplingExtendedSpendingKey::DefaultAddress() con
     return ToXFVK().DefaultAddress();
 }
 
-OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const HDSeed& seed, bool bip39Enabled)
+IronwoodExtendedSpendingKeyPirate IronwoodExtendedSpendingKeyPirate::Master(const HDSeed& seed, bool bip39Enabled)
 {
 
     //Datastreams for serialization
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); //returning stream
 
     //Tranfer Data
-    OrchardExtendedSpendingKey_FFI_t xsk_t_out;
+    IronwoodExtendedSpendingKey_FFI_t xsk_t_out;
 
     //Return Type
-    OrchardExtendedSpendingKeyPirate xsk;
+    IronwoodExtendedSpendingKeyPirate xsk;
 
     //Get raw seed to derive Master Spending key from
     auto rawSeed = seed.RawSeed();
@@ -497,18 +497,18 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
 
 }
 
-std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate::Derive(uint32_t bip44CoinType, uint32_t account) const
+std::optional<IronwoodExtendedSpendingKeyPirate> IronwoodExtendedSpendingKeyPirate::Derive(uint32_t bip44CoinType, uint32_t account) const
 {
     //Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); //sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); //returning stream
 
     //Tranfer Data
-    OrchardExtendedSpendingKey_FFI_t xsk_t_out;
-    OrchardExtendedSpendingKey_FFI_t xsk_t_in;
+    IronwoodExtendedSpendingKey_FFI_t xsk_t_out;
+    IronwoodExtendedSpendingKey_FFI_t xsk_t_in;
 
     //Return Type
-    OrchardExtendedSpendingKeyPirate xsk;
+    IronwoodExtendedSpendingKeyPirate xsk;
 
     //rust result
     bool rustCompleted;
@@ -540,11 +540,11 @@ std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate
     return std::nullopt;
 }
 
-std::optional<OrchardExtendedFullViewingKeyPirate> OrchardExtendedSpendingKeyPirate::GetXFVK() const
+std::optional<IronwoodExtendedFullViewingKeyPirate> IronwoodExtendedSpendingKeyPirate::GetXFVK() const
 {
-    OrchardFullViewingKey fvk;
+    IronwoodFullViewingKey fvk;
     if (sk.DeriveFVK(&fvk)) {
-        OrchardExtendedFullViewingKeyPirate ret;
+        IronwoodExtendedFullViewingKeyPirate ret;
         ret.depth = depth;
         ret.parentFVKTag = parentFVKTag;
         ret.childIndex = childIndex;

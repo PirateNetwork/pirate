@@ -345,7 +345,7 @@ struct CAnchorsSaplingMerkleCacheEntry
     CAnchorsSaplingMerkleCacheEntry() : entered(false), flags(0) {}
 };
 
-struct CAnchorsOrchardFrontierCacheEntry
+struct CAnchorsIronwoodFrontierCacheEntry
 {
     bool entered; // This will be false if the anchor is removed from the cache
     IronwoodMerkleFrontier tree; // The tree itself
@@ -355,7 +355,7 @@ struct CAnchorsOrchardFrontierCacheEntry
         DIRTY = (1 << 0), // This cache entry is potentially different from the version in the parent view.
     };
 
-    CAnchorsOrchardFrontierCacheEntry() : entered(false), flags(0) {}
+    CAnchorsIronwoodFrontierCacheEntry() : entered(false), flags(0) {}
 };
 
 struct CNullifiersCacheEntry
@@ -375,7 +375,7 @@ enum ShieldedType
     SPROUT,
     SAPLING,  // Legacy SaplingMerkleTree
     SAPLINGFRONTIER,
-    ORCHARDFRONTIER,
+    IRONWOODFRONTIER,
 };
 
 enum ProofType
@@ -388,7 +388,7 @@ typedef boost::unordered_map<uint256, CCoinsCacheEntry, CCoinsKeyHasher> CCoinsM
 typedef boost::unordered_map<uint256, CAnchorsSproutCacheEntry, CCoinsKeyHasher> CAnchorsSproutMap;
 typedef boost::unordered_map<uint256, CAnchorsSaplingMerkleCacheEntry, CCoinsKeyHasher> CAnchorsSaplingMap;
 typedef boost::unordered_map<uint256, CAnchorsSaplingFrontierCacheEntry, CCoinsKeyHasher> CAnchorsSaplingFrontierMap;
-typedef boost::unordered_map<uint256, CAnchorsOrchardFrontierCacheEntry, CCoinsKeyHasher> CAnchorsOrchardFrontierMap;
+typedef boost::unordered_map<uint256, CAnchorsIronwoodFrontierCacheEntry, CCoinsKeyHasher> CAnchorsIronwoodFrontierMap;
 typedef boost::unordered_map<uint256, CNullifiersCacheEntry, CCoinsKeyHasher> CNullifiersMap;
 typedef boost::unordered_map<uint32_t, HistoryCache> CHistoryCacheMap;
 
@@ -419,8 +419,8 @@ public:
     //! Retrieve the tree (SaplingFroniter) at a particular anchored root in the chain
     virtual bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
 
-    //! Retrieve the tree (OrchardFroniter) at a particular anchored root in the chain
-    virtual bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
+    //! Retrieve the tree (IronwoodFroniter) at a particular anchored root in the chain
+    virtual bool GetIronwoodFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
 
     //! Determine whether a nullifier is spent or not
     virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
@@ -454,14 +454,14 @@ public:
                             const uint256 &hashSproutAnchor,
                             const uint256 &hashSaplingAnchor,
                             const uint256 &hashSaplingFrontierAnchor,
-                            const uint256 &hashOrchardFrontierAnchor,
+                            const uint256 &hashIronwoodFrontierAnchor,
                             CAnchorsSproutMap &mapSproutAnchors,
                             CAnchorsSaplingMap &mapSaplingAnchors,
                             CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
-                            CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
+                            CAnchorsIronwoodFrontierMap &mapIronwoodFrontierAnchors,
                             CNullifiersMap &mapSproutNullifiers,
                             CNullifiersMap &mapSaplingNullifiers,
-                            CNullifiersMap &mapOrchardNullifiers,
+                            CNullifiersMap &mapIronwoodNullifiers,
                             CHistoryCacheMap &historyCacheMap);
 
     //! Calculate statistics about the unspent transaction output set
@@ -483,7 +483,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
-    bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
+    bool GetIronwoodFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
@@ -498,14 +498,14 @@ public:
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
-                    const uint256 &hashOrchardFrontierAnchor,
+                    const uint256 &hashIronwoodFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
-                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
+                    CAnchorsIronwoodFrontierMap &mapIronwoodFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CNullifiersMap &mapOrchardNullifiers,
+                    CNullifiersMap &mapIronwoodNullifiers,
                     CHistoryCacheMap &historyCacheMap);
     bool GetStats(CCoinsStats &stats) const;
 };
@@ -547,8 +547,8 @@ enum class UnsatisfiedShieldedReq {
     SproutUnknownAnchor,
     SaplingDuplicateNullifier,
     SaplingUnknownAnchor,
-    OrchardDuplicateNullifier,
-    OrchardUnknownAnchor,
+    IronwoodDuplicateNullifier,
+    IronwoodUnknownAnchor,
 };
 
 /**
@@ -569,14 +569,14 @@ protected:
     mutable uint256 hashSproutAnchor;
     mutable uint256 hashSaplingAnchor;
     mutable uint256 hashSaplingFrontierAnchor;
-    mutable uint256 hashOrchardFrontierAnchor;
+    mutable uint256 hashIronwoodFrontierAnchor;
     mutable CAnchorsSproutMap cacheSproutAnchors;
     mutable CAnchorsSaplingMap cacheSaplingAnchors;
     mutable CAnchorsSaplingFrontierMap cacheSaplingFrontierAnchors;
-    mutable CAnchorsOrchardFrontierMap cacheOrchardFrontierAnchors;
+    mutable CAnchorsIronwoodFrontierMap cacheIronwoodFrontierAnchors;
     mutable CNullifiersMap cacheSproutNullifiers;
     mutable CNullifiersMap cacheSaplingNullifiers;
-    mutable CNullifiersMap cacheOrchardNullifiers;
+    mutable CNullifiersMap cacheIronwoodNullifiers;
     mutable CHistoryCacheMap historyCacheMap;
 
     /* Cached dynamic memory usage for the inner CCoins objects. */
@@ -590,7 +590,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
-    bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
+    bool GetIronwoodFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
@@ -605,14 +605,14 @@ public:
                     const uint256 &hashSproutAnchor,
                     const uint256 &hashSaplingAnchor,
                     const uint256 &hashSaplingFrontierAnchor,
-                    const uint256 &hashOrchardFrontierAnchor,
+                    const uint256 &hashIronwoodFrontierAnchor,
                     CAnchorsSproutMap &mapSproutAnchors,
                     CAnchorsSaplingMap &mapSaplingAnchors,
                     CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
-                    CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
+                    CAnchorsIronwoodFrontierMap &mapIronwoodFrontierAnchors,
                     CNullifiersMap &mapSproutNullifiers,
                     CNullifiersMap &mapSaplingNullifiers,
-                    CNullifiersMap &mapOrchardNullifiers,
+                    CNullifiersMap &mapIronwoodNullifiers,
                     CHistoryCacheMap &historyCacheMap);
 
 
@@ -668,7 +668,7 @@ public:
      * @param[out] interestp the interest found
      * @param[in] tx	transaction for which we are checking input total
      * @return	Sum of value of all inputs (scriptSigs), JoinSplit vpub_new, and
-     *          positive values of valueBalanceSapling, and valueBalanceOrchard.
+     *          positive values of valueBalanceSapling, and valueBalanceIronwood.
      */
     CAmount GetValueIn(int32_t nHeight,int64_t &interestp,const CTransaction& tx) const;
 

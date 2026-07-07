@@ -42,18 +42,18 @@ using namespace std;
 static const char DB_SPROUT_ANCHOR = 'A';
 static const char DB_SAPLING_ANCHOR = 'Z';
 static const char DB_SAPLING_FRONTIER_ANCHOR = 'Y';
-static const char DB_ORCHARD_FRONTIER_ANCHOR = 'X';
+static const char DB_IRONWOOD_FRONTIER_ANCHOR = 'X';
 
 //Best Anchors
 static const char DB_BEST_SPROUT_ANCHOR = 'a';
 static const char DB_BEST_SAPLING_ANCHOR = 'z';
 static const char DB_BEST_SAPLING_FRONTIER_ANCHOR = 'y';
-static const char DB_BEST_ORCHARD_FRONTIER_ANCHOR = 'x';
+static const char DB_BEST_IRONWOOD_FRONTIER_ANCHOR = 'x';
 
 //Nullifiers
 static const char DB_SPROUT_NULLIFIER = 's';
 static const char DB_SAPLING_NULLIFIER = 'S';
-static const char DB_ORCHARD_NULLIFIER = 'o';
+static const char DB_IRONWOOD_NULLIFIER = 'o';
 
 //Indexes
 static const char DB_TXINDEX = 't';
@@ -64,9 +64,9 @@ static const char DB_BLOCKHASHINDEX = 'h';
 static const char DB_SPENTINDEX = 'p';
 static const char DB_BLOCK_INDEX = 'b';
 static const char DB_SAPLING_SUBTREE = 'j';
-static const char DB_ORCHARD_SUBTREE = 'J';
+static const char DB_IRONWOOD_SUBTREE = 'J';
 static const char DB_BEST_SAPLING_SUBTREE = 'k';
-static const char DB_BEST_ORCHARD_SUBTREE = 'K';
+static const char DB_BEST_IRONWOOD_SUBTREE = 'K';
 
 //History Node
 static const char DB_MMR_LENGTH = 'M';
@@ -92,8 +92,8 @@ char ShieldedSubtreeEntryKey(ShieldedType type)
     switch (type) {
     case SAPLINGFRONTIER:
         return DB_SAPLING_SUBTREE;
-    case ORCHARDFRONTIER:
-        return DB_ORCHARD_SUBTREE;
+    case IRONWOODFRONTIER:
+        return DB_IRONWOOD_SUBTREE;
     default:
         throw runtime_error("Unknown shielded type for subtree metadata");
     }
@@ -104,8 +104,8 @@ char ShieldedSubtreeBestKey(ShieldedType type)
     switch (type) {
     case SAPLINGFRONTIER:
         return DB_BEST_SAPLING_SUBTREE;
-    case ORCHARDFRONTIER:
-        return DB_BEST_ORCHARD_SUBTREE;
+    case IRONWOODFRONTIER:
+        return DB_BEST_IRONWOOD_SUBTREE;
     default:
         throw runtime_error("Unknown shielded type for subtree metadata");
     }
@@ -157,14 +157,14 @@ bool CCoinsViewDB::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFr
     return read;
 }
 
-bool CCoinsViewDB::GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
+bool CCoinsViewDB::GetIronwoodFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
     if (rt == IronwoodMerkleFrontier::empty_root()) {
         IronwoodMerkleFrontier new_tree;
         tree = new_tree;
         return true;
     }
 
-    bool read = db.Read(make_pair(DB_ORCHARD_FRONTIER_ANCHOR, rt), tree);
+    bool read = db.Read(make_pair(DB_IRONWOOD_FRONTIER_ANCHOR, rt), tree);
 
     return read;
 }
@@ -179,8 +179,8 @@ bool CCoinsViewDB::GetNullifier(const uint256 &nf, ShieldedType type) const {
         case SAPLINGFRONTIER:
             dbChar = DB_SAPLING_NULLIFIER;
             break;
-        case ORCHARDFRONTIER:
-            dbChar = DB_ORCHARD_NULLIFIER;
+        case IRONWOODFRONTIER:
+            dbChar = DB_IRONWOOD_NULLIFIER;
             break;
         default:
             throw runtime_error("Unknown shielded type");
@@ -219,8 +219,8 @@ uint256 CCoinsViewDB::GetBestAnchor(ShieldedType type) const {
             if (!db.Read(DB_BEST_SAPLING_FRONTIER_ANCHOR, hashBestAnchor))
                 return SaplingMerkleFrontier::empty_root();
             break;
-        case ORCHARDFRONTIER:
-            if (!db.Read(DB_BEST_ORCHARD_FRONTIER_ANCHOR, hashBestAnchor))
+        case IRONWOODFRONTIER:
+            if (!db.Read(DB_BEST_IRONWOOD_FRONTIER_ANCHOR, hashBestAnchor))
                 return IronwoodMerkleFrontier::empty_root();
             break;
         default:
@@ -356,14 +356,14 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
                               const uint256 &hashSproutAnchor,
                               const uint256 &hashSaplingAnchor,
                               const uint256 &hashSaplingFrontierAnchor,
-                              const uint256 &hashOrchardFrontierAnchor,
+                              const uint256 &hashIronwoodFrontierAnchor,
                               CAnchorsSproutMap &mapSproutAnchors,
                               CAnchorsSaplingMap &mapSaplingAnchors,
                               CAnchorsSaplingFrontierMap &mapSaplingFrontierAnchors,
-                              CAnchorsOrchardFrontierMap &mapOrchardFrontierAnchors,
+                              CAnchorsIronwoodFrontierMap &mapIronwoodFrontierAnchors,
                               CNullifiersMap &mapSproutNullifiers,
                               CNullifiersMap &mapSaplingNullifiers,
-                              CNullifiersMap &mapOrchardNullifiers,
+                              CNullifiersMap &mapIronwoodNullifiers,
                               CHistoryCacheMap &historyCacheMap) {
     CDBBatch batch(db);
     size_t count = 0;
@@ -384,11 +384,11 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteAnchors<CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry, SproutMerkleTree>(batch, mapSproutAnchors, DB_SPROUT_ANCHOR);
     ::BatchWriteAnchors<CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingMerkleCacheEntry, SaplingMerkleTree>(batch, mapSaplingAnchors, DB_SAPLING_ANCHOR);
     ::BatchWriteAnchors<CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry, SaplingMerkleFrontier>(batch, mapSaplingFrontierAnchors, DB_SAPLING_FRONTIER_ANCHOR);
-    ::BatchWriteAnchors<CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierMap::iterator, CAnchorsOrchardFrontierCacheEntry, IronwoodMerkleFrontier>(batch, mapOrchardFrontierAnchors, DB_ORCHARD_FRONTIER_ANCHOR);
+    ::BatchWriteAnchors<CAnchorsIronwoodFrontierMap, CAnchorsIronwoodFrontierMap::iterator, CAnchorsIronwoodFrontierCacheEntry, IronwoodMerkleFrontier>(batch, mapIronwoodFrontierAnchors, DB_IRONWOOD_FRONTIER_ANCHOR);
 
     ::BatchWriteNullifiers(batch, mapSproutNullifiers, DB_SPROUT_NULLIFIER);
     ::BatchWriteNullifiers(batch, mapSaplingNullifiers, DB_SAPLING_NULLIFIER);
-    ::BatchWriteNullifiers(batch, mapOrchardNullifiers, DB_ORCHARD_NULLIFIER);
+    ::BatchWriteNullifiers(batch, mapIronwoodNullifiers, DB_IRONWOOD_NULLIFIER);
 
     ::BatchWriteHistory(batch, historyCacheMap);
 
@@ -400,8 +400,8 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
         batch.Write(DB_BEST_SAPLING_ANCHOR, hashSaplingAnchor);
     if (!hashSaplingFrontierAnchor.IsNull())
         batch.Write(DB_BEST_SAPLING_FRONTIER_ANCHOR, hashSaplingFrontierAnchor);
-    if (!hashOrchardFrontierAnchor.IsNull())
-        batch.Write(DB_BEST_ORCHARD_FRONTIER_ANCHOR, hashOrchardFrontierAnchor);
+    if (!hashIronwoodFrontierAnchor.IsNull())
+        batch.Write(DB_BEST_IRONWOOD_FRONTIER_ANCHOR, hashIronwoodFrontierAnchor);
 
     LogPrint("coindb", "Committing %u changed transactions (out of %u) to coin database...\n", (unsigned int)changed, (unsigned int)count);
     return db.WriteBatch(batch);
@@ -1106,7 +1106,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nSaplingValue          = diskindex.nSaplingValue;
                 pindexNew->nIronwoodValue          = diskindex.nIronwoodValue;
                 pindexNew->hashFinalSaplingRoot   = diskindex.hashFinalSaplingRoot;
-                pindexNew->hashFinalOrchardRoot   = diskindex.hashFinalOrchardRoot;
+                pindexNew->hashFinalIronwoodRoot   = diskindex.hashFinalIronwoodRoot;
                 pindexNew->hashChainHistoryRoot   = diskindex.hashChainHistoryRoot;
                 pindexNew->hashAuthDataRoot       = diskindex.hashAuthDataRoot;
                 //Komodo Data

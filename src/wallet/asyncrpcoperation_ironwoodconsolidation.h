@@ -3,21 +3,21 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 /**
- * @file asyncrpcoperation_orchardconsolidation.h
- * @brief Asynchronous Orchard note consolidation operation
+ * @file asyncrpcoperation_ironwoodconsolidation.h
+ * @brief Asynchronous Ironwood note consolidation operation
  * 
- * Implements automatic consolidation of Orchard shielded notes to reduce
+ * Implements automatic consolidation of Ironwood shielded notes to reduce
  * wallet fragmentation and improve transaction performance. Combines multiple
  * notes from the same addresses into fewer, larger notes while preserving
- * Orchard protocol privacy properties.
+ * Ironwood protocol privacy properties.
  * 
  * Purpose: Optimize wallet performance by reducing note fragmentation
- * Inputs: Multiple Orchard notes from addresses with excessive fragmentation
- * Outputs: Fewer, consolidated Orchard notes at the same addresses
+ * Inputs: Multiple Ironwood notes from addresses with excessive fragmentation
+ * Outputs: Fewer, consolidated Ironwood notes at the same addresses
  */
 
-#ifndef ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_H
-#define ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_H
+#ifndef ASYNCRPCOPERATION_IRONWOODCONSOLIDATION_H
+#define ASYNCRPCOPERATION_IRONWOODCONSOLIDATION_H
 
 #include "amount.h"
 #include "asyncrpcoperation.h"
@@ -26,63 +26,63 @@
 #include "zcash/address/zip32.h"
 
 // Forward declarations
-struct OrchardNoteEntry;
+struct IronwoodNoteEntry;
 
 /**
- * Default transaction fee for Orchard consolidation operations
+ * Default transaction fee for Ironwood consolidation operations
  * Set to 10,000 zatoshis (0.0001 ARRR)
  */
-static const CAmount DEFAULT_ORCHARD_CONSOLIDATION_FEE = 10000;
+static const CAmount DEFAULT_IRONWOOD_CONSOLIDATION_FEE = 10000;
 
 /**
- * Default interval in minutes between automatic Orchard note consolidation
+ * Default interval in minutes between automatic Ironwood note consolidation
  * Set to 1 week (10080 minutes)
  */
-static const int DEFAULT_ORCHARD_CONSOLIDATION_INTERVAL = 10080; // 1 week in minutes
+static const int DEFAULT_IRONWOOD_CONSOLIDATION_INTERVAL = 10080; // 1 week in minutes
 
 /**
- * Global Orchard consolidation fee setting
+ * Global Ironwood consolidation fee setting
  * Can be modified via configuration parameters
  */
-extern CAmount fOrchardConsolidationTxFee;
+extern CAmount fIronwoodConsolidationTxFee;
 
 /**
- * Flag indicating whether Orchard consolidation address mapping is used
+ * Flag indicating whether Ironwood consolidation address mapping is used
  * When true, only specific addresses from configuration are consolidated
  */
-extern bool fOrchardConsolidationMapUsed;
+extern bool fIronwoodConsolidationMapUsed;
 
 /**
- * @class AsyncRPCOperation_orchardconsolidation
- * @brief Asynchronous RPC operation for consolidating Orchard notes
+ * @class AsyncRPCOperation_ironwoodconsolidation
+ * @brief Asynchronous RPC operation for consolidating Ironwood notes
  * 
- * Consolidates multiple Orchard shielded notes into fewer, larger notes
+ * Consolidates multiple Ironwood shielded notes into fewer, larger notes
  * to improve wallet performance and reduce transaction sizes.
  * 
- * Purpose: Reduce wallet fragmentation by consolidating Orchard notes
- * Inputs: Multiple fragmented Orchard notes from addresses
- * Outputs: Fewer consolidated Orchard notes at same addresses
+ * Purpose: Reduce wallet fragmentation by consolidating Ironwood notes
+ * Inputs: Multiple fragmented Ironwood notes from addresses
+ * Outputs: Fewer consolidated Ironwood notes at same addresses
  */
-class AsyncRPCOperation_orchardconsolidation : public AsyncRPCOperation
+class AsyncRPCOperation_ironwoodconsolidation : public AsyncRPCOperation
 {
 public:
     /**
-     * @brief Constructor for Orchard consolidation operation
+     * @brief Constructor for Ironwood consolidation operation
      * 
      * @param targetHeight Blockchain height for transaction targeting and expiration
      */
-    AsyncRPCOperation_orchardconsolidation(int targetHeight);
+    AsyncRPCOperation_ironwoodconsolidation(int targetHeight);
     
     /**
      * @brief Destructor with automatic resource cleanup
      */
-    virtual ~AsyncRPCOperation_orchardconsolidation();
+    virtual ~AsyncRPCOperation_ironwoodconsolidation();
 
     // Prevent copying and moving to ensure single ownership of resources
-    AsyncRPCOperation_orchardconsolidation(AsyncRPCOperation_orchardconsolidation const&) = delete;            // Copy construct
-    AsyncRPCOperation_orchardconsolidation(AsyncRPCOperation_orchardconsolidation&&) = delete;                 // Move construct
-    AsyncRPCOperation_orchardconsolidation& operator=(AsyncRPCOperation_orchardconsolidation const&) = delete; // Copy assign
-    AsyncRPCOperation_orchardconsolidation& operator=(AsyncRPCOperation_orchardconsolidation&&) = delete;      // Move assign
+    AsyncRPCOperation_ironwoodconsolidation(AsyncRPCOperation_ironwoodconsolidation const&) = delete;            // Copy construct
+    AsyncRPCOperation_ironwoodconsolidation(AsyncRPCOperation_ironwoodconsolidation&&) = delete;                 // Move construct
+    AsyncRPCOperation_ironwoodconsolidation& operator=(AsyncRPCOperation_ironwoodconsolidation const&) = delete; // Copy assign
+    AsyncRPCOperation_ironwoodconsolidation& operator=(AsyncRPCOperation_ironwoodconsolidation&&) = delete;      // Move assign
 
     /**
      * @brief Main execution entry point for the consolidation operation
@@ -114,10 +114,10 @@ private:
     // Core implementation methods
 
     /**
-     * @brief Core implementation of Orchard consolidation logic
+     * @brief Core implementation of Ironwood consolidation logic
      * 
      * Performs note scanning, transaction building, and consolidation
-     * with Orchard protocol support and cleanup mode handling.
+     * with Ironwood protocol support and cleanup mode handling.
      * 
      * @return true if consolidation completed successfully, false otherwise
      * @throws JSONRPCError for various error conditions
@@ -125,7 +125,7 @@ private:
     bool main_impl();
 
     /**
-     * @brief Set the Orchard consolidation operation results
+     * @brief Set the Ironwood consolidation operation results
      * 
      * @param numTxCreated Number of consolidation transactions created
      * @param amountConsolidated Total amount consolidated in zatoshis
@@ -136,4 +136,4 @@ private:
 private:
 };
 
-#endif /* ASYNCRPCOPERATION_ORCHARDCONSOLIDATION_H */
+#endif /* ASYNCRPCOPERATION_IRONWOODCONSOLIDATION_H */

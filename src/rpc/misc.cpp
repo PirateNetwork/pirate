@@ -304,7 +304,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
 #endif
         obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
-        obj.push_back(Pair("orchard", ASSETCHAINS_IRONWOOD));
+        obj.push_back(Pair("ironwood", ASSETCHAINS_IRONWOOD));
     }
     obj.push_back(Pair("timeoffset",    0));
     obj.push_back(Pair("connections",   (int)vNodes.size()));
@@ -608,18 +608,18 @@ public:
         return obj;
     }
 
-    UniValue operator()(const libzcash::OrchardPaymentAddress &zaddr) const {
+    UniValue operator()(const libzcash::IronwoodPaymentAddress &zaddr) const {
         UniValue obj(UniValue::VOBJ);
-        obj.push_back(Pair("type", "orchard"));
+        obj.push_back(Pair("type", "ironwood"));
         obj.push_back(Pair("diversifier", HexStr(zaddr.d)));
         obj.push_back(Pair("diversifiedtransmissionkey", zaddr.pk_d.GetHex()));
 #ifdef ENABLE_WALLET
         if (pwalletMain) {
-            libzcash::OrchardIncomingViewingKey ivk;
-            libzcash::OrchardExtendedFullViewingKeyPirate extfvk;
-            bool isMine = pwalletMain->GetOrchardIncomingViewingKey(zaddr, ivk) &&
-                pwalletMain->GetOrchardFullViewingKey(ivk, extfvk) &&
-                pwalletMain->HaveOrchardSpendingKey(extfvk);
+            libzcash::IronwoodIncomingViewingKey ivk;
+            libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+            bool isMine = pwalletMain->GetIronwoodIncomingViewingKey(zaddr, ivk) &&
+                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk) &&
+                pwalletMain->HaveIronwoodSpendingKey(extfvk);
             obj.push_back(Pair("ismine", isMine));
         }
 #endif
