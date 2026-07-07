@@ -1569,14 +1569,14 @@ SaplingWalletNoteCommitmentTreeLoader CWallet::GetSaplingNoteCommitmentTreeLoade
 
 /**
  * @brief Get a loader for the Orchard note commitment tree
- * @return An OrchardWalletNoteCommitmentTreeLoader instance
+ * @return An IronwoodWalletNoteCommitmentTreeLoader instance
  * 
  * Returns a loader that can be used to read an Orchard note commitment
  * tree from a stream into the Orchard wallet. This is used during
  * wallet synchronization and state restoration.
  */
-OrchardWalletNoteCommitmentTreeLoader CWallet::GetOrchardNoteCommitmentTreeLoader() {
-    return OrchardWalletNoteCommitmentTreeLoader(orchardWallet);
+IronwoodWalletNoteCommitmentTreeLoader CWallet::GetOrchardNoteCommitmentTreeLoader() {
+    return IronwoodWalletNoteCommitmentTreeLoader(orchardWallet);
 }
 
 /**
@@ -3203,7 +3203,7 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
  * consolidation process asynchronously.
  */
 void CWallet::RunOrchardConsolidation(int blockHeight) {
-    if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+    if (!NetworkUpgradeActive(blockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         return;
     }
     AssertLockHeld(cs_wallet);
@@ -3499,7 +3499,7 @@ bool CWallet::IsNoteOrchardChange(const std::set<std::pair<libzcash::PaymentAddr
     }
 
     // Legacy: also mark as change if the receiving address spent notes in the same tx.
-    for (const auto& action : mapWallet[op.hash].GetOrchardActions())  {
+    for (const auto& action : mapWallet[op.hash].GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
         if (nullifierSet.count(std::make_pair(address, nullifier))) {
             return true;
@@ -3661,7 +3661,7 @@ set<uint256> CWallet::GetConflicts(const uint256& txid) const
 
     std::pair<TxNullifiers::const_iterator, TxNullifiers::const_iterator> range_o;
 
-    for (const auto& action : wtx.GetOrchardActions())  {
+    for (const auto& action : wtx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
         if (mapTxOrchardNullifiers.count(nullifier) <= 1) {
             continue;  // No conflict if zero or one spends
@@ -4492,7 +4492,7 @@ void CWallet::AddToSpends(const uint256& wtxid)
         AddToSaplingSpends(nullifier, wtxid);
     }
 
-    for (const auto& action : thisTx.GetOrchardActions())  {
+    for (const auto& action : thisTx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
         AddToOrchardSpends(nullifier, wtxid);
     }
@@ -4598,7 +4598,7 @@ void CWallet::ProcessOrchardBlockTransactions(const CBlockIndex* pblockindex, co
         if (it != mapWallet.end()) {
             orchardWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
             CWalletTx *pwtx = &(*it).second;
-            auto vActions = pblock->vtx[i].GetOrchardActions();
+            auto vActions = pblock->vtx[i].GetIronwoodActions();
             for (int j = 0; j < vActions.size(); j++) {
                 OrchardOutPoint op = OrchardOutPoint(txid, j);
                 auto opit = pwtx->mapOrchardNoteData.find(op);
@@ -4788,10 +4788,10 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
 /**
  * @brief Validate Orchard wallet tracked positions against Rust wallet state
  * @param pindex The current block index for validation context
- * @return false if the OrchardWallet needs to be rebuilt, true if valid
+ * @return false if the IronwoodWallet needs to be rebuilt, true if valid
  * 
  * Validates the positions of all Orchard notes tracked in the C++ wallet
- * against the corresponding positions in the Rust OrchardWallet. This ensures
+ * against the corresponding positions in the Rust IronwoodWallet. This ensures
  * consistency between the two wallet implementations and detects any drift
  * or corruption in note position tracking.
  * 
@@ -4867,9 +4867,9 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
                 CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
 
                 //Create a new wallet to validate tracked merkle path
-                OrchardMerkleFrontier orchardCheckFrontierTree;
+                IronwoodMerkleFrontier orchardCheckFrontierTree;
                 pcoinsTip->GetOrchardFrontierAnchorAt(pCheckIndex->pprev->hashFinalOrchardRoot, orchardCheckFrontierTree);
-                OrchardWallet orchardWalletCheck;
+                IronwoodWallet orchardWalletCheck;
                 orchardWalletCheck.InitNoteCommitmentTree(orchardCheckFrontierTree);
 
                 MerklePath orchardCheckMerklePath;
@@ -4888,7 +4888,7 @@ bool CWallet::ValidateOrchardWalletTrackedPositions(const CBlockIndex* pindex) {
                     if (pwtx->GetHash() == txid) {
                         orchardWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
 
-                        auto vActions = pCheckBlock->vtx[i].GetOrchardActions();
+                        auto vActions = pCheckBlock->vtx[i].GetIronwoodActions();
                         for (int j = 0; j < vActions.size(); j++) {
                             auto opit = pwtx->mapOrchardNoteData.find(op);
                             if (opit != pwtx->mapOrchardNoteData.end() && j == op.n) {
@@ -5139,7 +5139,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
     int lastCheckpoint = orchardWallet.GetLastCheckpointHeight();
     LogPrint("orchardwallet","Orchard Wallet - Last Checkpoint %i, Block Height %i\n", lastCheckpoint, nMinimumHeight);
 
-    if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+    if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
 
         if (lastCheckpoint > pindex->nHeight - 1 ) {
             orchardWalletValidated = false;
@@ -5210,7 +5210,7 @@ void CWallet::IncrementOrchardWallet(const CBlockIndex* pindex, const CBlock* pb
             CBlockIndex* pblockindex = chainActive[nMinimumHeight];
 
             //Create a new wallet
-            OrchardMerkleFrontier orchardFrontierTree;
+            IronwoodMerkleFrontier orchardFrontierTree;
             pcoinsTip->GetOrchardFrontierAnchorAt(pblockindex->pprev->hashFinalOrchardRoot, orchardFrontierTree);
             OrchardWalletReset();
             orchardWallet.InitNoteCommitmentTree(orchardFrontierTree);
@@ -5765,7 +5765,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
         //Encrypt Orchard wallet frontier tree
         {
             CDataStream ss(SER_DISK, CLIENT_VERSION);
-            ss << OrchardWalletNoteCommitmentTreeWriter(orchardWallet);
+            ss << IronwoodWalletNoteCommitmentTreeWriter(orchardWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
@@ -6419,7 +6419,7 @@ void CWallet::UpdateSaplingNullifierNoteMapWithTx(CWalletTx* wtx) {
 void CWallet::UpdateOrchardNullifierNoteMapWithTx(CWalletTx* wtx) {
    LOCK(cs_wallet);
 
-   auto vActions = wtx->GetOrchardActions();
+   auto vActions = wtx->GetIronwoodActions();
 
    for (mapOrchardNoteData_t::value_type &item : wtx->mapOrchardNoteData) {
        OrchardOutPoint op = item.first;
@@ -6880,7 +6880,7 @@ void CWallet::MarkAffectedTransactionsDirty(const CTransaction& tx)
         }
     }
 
-    for (const auto& action : tx.GetOrchardActions())  {
+    for (const auto& action : tx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
         if (mapOrchardNullifiersToNotes.count(nullifier) &&
             mapWallet.count(mapOrchardNullifiersToNotes[nullifier].hash)) {
@@ -7071,7 +7071,7 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
 static void DecryptOrchardNoteWorker(
     const CWallet *wallet,
     const std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>> vIvkWithScope,
-    const std::vector<orchard_bundle::Action*> vOrchardEncryptedAction,
+    const std::vector<ironwood_bundle::Action*> vOrchardEncryptedAction,
     const std::vector<uint32_t> vPosition,
     const std::vector<uint256> vHash,
     const int &height,
@@ -7142,8 +7142,8 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
     std::vector<std::vector<std::pair<const OrchardIncomingViewingKey*, KeyScope>>> vvIvkWithScope;
 
     //Create Output thread buckets
-    std::vector<orchard_bundle::Action*> vOrchardEncryptedAction;
-    std::vector<std::vector<orchard_bundle::Action*>> vvOrchardEncryptedAction;
+    std::vector<ironwood_bundle::Action*> vOrchardEncryptedAction;
+    std::vector<std::vector<ironwood_bundle::Action*>> vvOrchardEncryptedAction;
 
     //Create transaction position thread buckets
     std::vector<uint32_t> vPosition;
@@ -7165,7 +7165,7 @@ std::pair<mapOrchardNoteData_t, OrchardIncomingViewingKeyMap> CWallet::FindMyOrc
     for (uint32_t j = 0; j < vtx.size(); j++) {
         //Transaction being processed
         uint256 hash = vtx[j].GetHash();
-        auto vActions = vtx[j].GetOrchardActions();
+        auto vActions = vtx[j].GetIronwoodActions();
 
         for (uint32_t i = 0; i < vActions.size(); i++) {
             auto action = &vActions[i];
@@ -7615,7 +7615,7 @@ bool CWallet::GetOrchardNoteMerklePaths(std::vector<OrchardOutPoint> notes,
 
             //Calculate the anchor
             uint256 anchor;
-            auto vActions = wtx->GetOrchardActions();
+            auto vActions = wtx->GetIronwoodActions();
             auto cmu = uint256::FromRawBytes(vActions[op.n].cmx());
             if (!orchardWallet.GetPathRootWithCMU(orchardMerklePaths[i], cmu, anchor)) {
                 return false;
@@ -7989,7 +7989,7 @@ bool CWallet::IsFromMe(const CTransaction& tx) const
             return true;
         }
     }
-    for (const auto& action : tx.GetOrchardActions())  {
+    for (const auto& action : tx.GetIronwoodActions())  {
         uint256 nullifier = uint256::FromRawBytes(action.nullifier());
         if (IsOrchardNullifierFromMe(nullifier)) {
             return true;
@@ -8500,7 +8500,7 @@ void CWalletTx::SetOrchardNoteData(mapOrchardNoteData_t &noteData)
 {
     mapOrchardNoteData.clear();
     for (const std::pair<OrchardOutPoint, OrchardNoteData> nd : noteData) {
-        if (nd.first.n < GetOrchardActionsCount()) {
+        if (nd.first.n < GetIronwoodActionsCount()) {
             mapOrchardNoteData[nd.first] = nd.second;
         } else {
             throw std::logic_error("CWalletTx::SetOrchardNoteData(): Invalid note");
@@ -8779,7 +8779,7 @@ std::optional<std::pair<
         return std::nullopt;
     }
 
-    auto vActions = this->GetOrchardActions();
+    auto vActions = this->GetIronwoodActions();
     auto nd = this->mapOrchardNoteData.at(op);
 
     auto maybe_pt = OrchardNotePlaintext::AttemptDecryptOrchardAction(&vActions[op.n], nd.ivk);
@@ -8896,7 +8896,7 @@ void CWalletTx::GetAmounts(list<COutputEntry>& listReceived,
     // If we sent utxos from this transaction, create output for value taken from (negative valueBalance)
     // or added (positive valueBalance) to the transparent value pool by Sapling shielding and unshielding.
     if (isFromMyTaddr) {
-        CAmount valueBalance = GetValueBalanceSapling() + GetValueBalanceOrchard();
+        CAmount valueBalance = GetValueBalanceSapling() + GetValueBalanceIronwood();
         if (valueBalance < 0) {
             COutputEntry output = {CNoDestination(), -valueBalance, (int) vout.size()};
             listSent.push_back(output);
@@ -9377,7 +9377,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             }
 
             //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Orchard)
-            for (const auto& action: pwtx->GetOrchardActions()) {
+            for (const auto& action: pwtx->GetIronwoodActions()) {
               uint256 orchardNullifier = uint256::FromRawBytes(action.nullifier());
               if (pwalletMain->IsOrchardNullifierFromMe(orchardNullifier)) {
                 const uint256& parentHash = pwalletMain->mapOrchardNullifiersToNotes[orchardNullifier].hash;
@@ -9594,13 +9594,13 @@ bool CWallet::initalizeArcTx() {
 
         //Initalize in memory orchardnotedata
         LogPrint("deletetx","initalizeArcTx - tx %s: %u orchard actions, %u in mapOrchardNoteData\n",
-            wtxid.ToString(), wtx.GetOrchardActionsCount(), wtx.mapOrchardNoteData.size());
-        for (uint32_t i = 0; i < wtx.GetOrchardActionsCount(); ++i) {
+            wtxid.ToString(), wtx.GetIronwoodActionsCount(), wtx.mapOrchardNoteData.size());
+        for (uint32_t i = 0; i < wtx.GetIronwoodActionsCount(); ++i) {
             auto op = OrchardOutPoint(wtxid, i);
 
             if (wtx.mapOrchardNoteData.count(op) != 0) {
                 auto nd = wtx.mapOrchardNoteData.at(op);
-                auto vActions = wtx.GetOrchardActions();
+                auto vActions = wtx.GetIronwoodActions();
                 bool decryptSuccess = false;
                 // nd.ivk is in-memory only and empty after DB load; try all wallet IVKs
                 for (auto ivkIt = setOrchardIncomingViewingKeys.begin(); ivkIt != setOrchardIncomingViewingKeys.end(); ++ivkIt) {
@@ -9766,7 +9766,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
             SproutMerkleTree sproutTree;
             SaplingMerkleFrontier saplingFrontierTree;
-            OrchardMerkleFrontier orchardFrontierTree;
+            IronwoodMerkleFrontier orchardFrontierTree;
             // This should never fail: we should always be able to get the tree
             // state on the path to the tip of our chain
             assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, sproutTree));
@@ -9774,7 +9774,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
                     assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
                 }
-                if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+                if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
                     assert(pcoinsTip->GetOrchardFrontierAnchorAt(pindex->pprev->hashFinalOrchardRoot, orchardFrontierTree));
                 }
             }
@@ -13632,7 +13632,7 @@ void CWallet::GetFilteredNotes(
 
         // ── Orchard notes ────────────────────────────────────────────────────
         if (searchOrchard) {
-            auto vActions = wtx.GetOrchardActions();
+            auto vActions = wtx.GetIronwoodActions();
 
             for (auto & pair : wtx.mapOrchardNoteData) {
                 if (earlyExit) break;
@@ -14308,7 +14308,7 @@ KeyAddResult AddSpendingKeyToWallet::operator()(const libzcash::OrchardExtendedS
             }
 
             // Orchard addresses can't have been used in transactions prior to activation.
-            if (params.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight == Consensus::NetworkUpgrade::ALWAYS_ACTIVE) {
+            if (params.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight == Consensus::NetworkUpgrade::ALWAYS_ACTIVE) {
                 m_wallet->mapOrchardSpendingKeyMetadata[ivk].nCreateTime = nTime;
             } else {
                 // 154051200 seconds from epoch is Friday, 26 October 2018 00:00:00 GMT - definitely before Orchard activates

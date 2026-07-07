@@ -45,14 +45,11 @@ const struct NUInfo NetworkUpgradeInfo[Consensus::MAX_NETWORK_UPGRADES] = {
         /*.strInfo =*/ "Activate Sapling.",
     },
     {
-        /*.nBranchId =*/ 0xc2d6d0b4,
-        /*.strName =*/ "Orchard",
-        /*.strInfo =*/ "Activate Orchard.",
-    },
-    {
-        // Matches upstream Zcash's Nu6_3 branch ID (zcash_protocol::consensus::BranchId::Nu6_2
-        // -> Nu6_3), so that Rust-side code deriving a BundleVersion from this branch ID via
-        // upstream's bundle_version_for_branch resolves to BundleVersion::ironwood_v3().
+        // Matches upstream Zcash's Nu6_3 branch ID, so that Rust-side code deriving a
+        // BundleVersion from this branch ID via upstream's bundle_version_for_branch
+        // resolves to BundleVersion::ironwood_v3(). Pirate's Orchard-circuit pool never
+        // activated on mainnet, so this upgrade goes straight to the Ironwood/PostNu6_3
+        // circuit rather than an intermediate Orchard/FixedPostNu6_2 stage.
         /*.nBranchId =*/ 0x37a5165b,
         /*.strName =*/ "Ironwood",
         /*.strInfo =*/ "Activate the Ironwood shielded pool.",

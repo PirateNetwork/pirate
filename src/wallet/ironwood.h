@@ -2,34 +2,29 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#ifndef ZCASH_WALLET_ORCHARD_H
-#define ZCASH_WALLET_ORCHARD_H
+#ifndef ZCASH_WALLET_IRONWOOD_H
+#define ZCASH_WALLET_IRONWOOD_H
 
 #include <array>
 
 #include "primitives/transaction.h"
 #include "transaction_builder.h"
 
-#include "rust/orchard/wallet.h"
+#include "rust/ironwood/wallet.h"
 #include "zcash/address/orchard.hpp"
 #include "zcash/IncrementalMerkleTree.hpp"
 
-// class OrchardWallet;
-// class OrchardWalletNoteCommitmentTreeWriter;
-// class OrchardWalletNoteCommitmentTreeLoader;
-
-class OrchardWallet
+class IronwoodWallet
 {
 private:
-    std::unique_ptr<OrchardWalletPtr, decltype(&orchard_wallet_free)> inner;
+    std::unique_ptr<IronwoodWalletPtr, decltype(&ironwood_wallet_free)> inner;
 
-    // friend class ::orchard::UnauthorizedBundle;
-    friend class OrchardWalletNoteCommitmentTreeWriter;
-    friend class OrchardWalletNoteCommitmentTreeLoader;
+    friend class IronwoodWalletNoteCommitmentTreeWriter;
+    friend class IronwoodWalletNoteCommitmentTreeLoader;
 public:
-    OrchardWallet() : inner(orchard_wallet_new(), orchard_wallet_free) {}
-    OrchardWallet(OrchardWallet&& wallet_data) : inner(std::move(wallet_data.inner)) {}
-    OrchardWallet& operator=(OrchardWallet&& wallet)
+    IronwoodWallet() : inner(ironwood_wallet_new(), ironwood_wallet_free) {}
+    IronwoodWallet(IronwoodWallet&& wallet_data) : inner(std::move(wallet_data.inner)) {}
+    IronwoodWallet& operator=(IronwoodWallet&& wallet)
     {
         if (this != &wallet) {
             inner = std::move(wallet.inner);
@@ -37,9 +32,9 @@ public:
         return *this;
     }
 
-    // OrchardWallet should never be copied
-    OrchardWallet(const OrchardWallet&) = delete;
-    OrchardWallet& operator=(const OrchardWallet&) = delete;
+    // IronwoodWallet should never be copied
+    IronwoodWallet(const IronwoodWallet&) = delete;
+    IronwoodWallet& operator=(const IronwoodWallet&) = delete;
 
     /**
      * Reset the state of the wallet to be suitable for rescan from the NU5 activation
@@ -49,20 +44,20 @@ public:
      * rescan process.
      */
     void Reset() {
-        orchard_wallet_reset(inner.get());
+        ironwood_wallet_reset(inner.get());
     }
 
     /**
-     * Overwrite the first bridge of the Orchard note commitment tree to have the
+     * Overwrite the first bridge of the Ironwood note commitment tree to have the
      * provided frontier as its latest state. This will fail with an assertion error
      * if any checkpoints exist in the tree.
      */
-    void InitNoteCommitmentTree(const OrchardMerkleFrontier& frontier) {
+    void InitNoteCommitmentTree(const IronwoodMerkleFrontier& frontier) {
         assert(!(GetLastCheckpointHeight() >= 0));
         assert(frontier.inner->init_wallet(
-            reinterpret_cast<merkle_frontier::OrchardWallet*>(inner.get())));
+            reinterpret_cast<merkle_frontier::IronwoodWallet*>(inner.get())));
 
-        LogPrint("orchardwallet","Initialized Orchard Commitment Tree with LastCheckpointHeight %i\n", GetLastCheckpointHeight());
+        LogPrint("ironwoodwallet","Initialized Ironwood Commitment Tree with LastCheckpointHeight %i\n", GetLastCheckpointHeight());
     }
 
     /**
@@ -72,15 +67,15 @@ public:
      */
     bool CheckpointNoteCommitmentTree(int nBlockHeight) {
         assert(nBlockHeight >= 0);
-        return orchard_wallet_checkpoint(inner.get(), (uint32_t) nBlockHeight);
+        return ironwood_wallet_checkpoint(inner.get(), (uint32_t) nBlockHeight);
     }
 
     /**
-     * Return whether the orchard note commitment tree contains any checkpoints.
+     * Return whether the ironwood note commitment tree contains any checkpoints.
      */
     int GetLastCheckpointHeight() const {
         uint32_t lastHeight{0};
-        if (orchard_wallet_get_last_checkpoint(inner.get(), &lastHeight)) {
+        if (ironwood_wallet_get_last_checkpoint(inner.get(), &lastHeight)) {
             return (int) lastHeight;
         }
 
@@ -94,14 +89,14 @@ public:
      */
     bool Rewind(int nBlockHeight, uint32_t& uResultHeight) {
         assert(nBlockHeight >= 0);
-        return orchard_wallet_rewind(inner.get(), (uint32_t) nBlockHeight, &uResultHeight);
+        return ironwood_wallet_rewind(inner.get(), (uint32_t) nBlockHeight, &uResultHeight);
     }
 
     /**
     Clear the postions for a given Txid
     */
     bool ClearPositionsForTxid(const uint256 txid) {
-        if (!clear_orchard_note_positions_for_txid(inner.get(), txid.begin())) {
+        if (!clear_ironwood_note_positions_for_txid(inner.get(), txid.begin())) {
             return false;
         }
 
@@ -117,15 +112,15 @@ public:
     bool AppendNoteCommitments(const int nBlockHeight, const CTransaction tx, const int txidx) {
         assert(nBlockHeight >= 0);
 
-        if(tx.GetOrchardActionsCount()>0) {
+        if(tx.GetIronwoodActionsCount()>0) {
 
-            OrchardBundle orchardBundle = tx.GetOrchardBundle();
+            IronwoodBundle ironwoodBundle = tx.GetIronwoodBundle();
 
-            if (!orchard_wallet_append_bundle_commitments(
+            if (!ironwood_wallet_append_bundle_commitments(
                     inner.get(),
                     (uint32_t) nBlockHeight,
                     txidx,
-                    orchardBundle.GetDetails().as_ptr()
+                    ironwoodBundle.GetDetails().as_ptr()
                     )) {
                 return false;
             }
@@ -138,7 +133,7 @@ public:
     Create an empty postions map for a given txid, to be populated by calling AppendNotCommitment
     */
     bool CreateEmptyPositionsForTxid(const int nBlockHeight, const uint256 txid) {
-        if (!create_orchard_single_txid_positions(inner.get(), (uint32_t) nBlockHeight, txid.begin())) {
+        if (!create_ironwood_single_txid_positions(inner.get(), (uint32_t) nBlockHeight, txid.begin())) {
             return false;
         }
 
@@ -153,10 +148,10 @@ public:
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
-    bool AppendNoteCommitment(const int nBlockHeight, const uint256 txid, int txidx, int outidx, const orchard_bundle::Action* action, bool isMine) {
+    bool AppendNoteCommitment(const int nBlockHeight, const uint256 txid, int txidx, int outidx, const ironwood_bundle::Action* action, bool isMine) {
         assert(nBlockHeight >= 0);
 
-        if (!orchard_wallet_append_single_commitment(
+        if (!ironwood_wallet_append_single_commitment(
                 inner.get(),
                 (uint32_t) nBlockHeight,
                 txid.begin(),
@@ -173,22 +168,22 @@ public:
     uint256 GetLatestAnchor() const {
         uint256 value;
         // there is always a valid note commitment tree root at depth 0
-        assert(orchard_wallet_commitment_tree_root(inner.get(), 0, value.begin()));
+        assert(ironwood_wallet_commitment_tree_root(inner.get(), 0, value.begin()));
         return value;
     }
 
     bool UnMarkNoteForTransaction(const uint256 txid) {
-        return orchard_wallet_unmark_transaction_notes(inner.get(),txid.begin());
+        return ironwood_wallet_unmark_transaction_notes(inner.get(),txid.begin());
     }
 
     bool IsNoteTracked(const uint256 txid, int outidx, uint64_t &position) {
-        return orchard_is_note_tracked(inner.get(), txid.begin(), outidx, &position);
+        return ironwood_is_note_tracked(inner.get(), txid.begin(), outidx, &position);
     }
 
     bool GetMerklePathOfNote(const uint256 txid, int outidx, libzcash::MerklePath &merklePath) {
 
         unsigned char serializedPath[1065] = {};
-        if(!orchard_wallet_get_path_for_note(
+        if(!ironwood_wallet_get_path_for_note(
               inner.get(),
               txid.begin(),
               outidx,
@@ -210,7 +205,7 @@ public:
         ss << merklePath;
         ss >> serializedPath;
 
-        if (!get_orchard_path_root_with_cm(serializedPath, cmu.begin(), serializedAnchor)) {
+        if (!get_ironwood_path_root_with_cm(serializedPath, cmu.begin(), serializedAnchor)) {
             return false;
         }
 
@@ -222,17 +217,17 @@ public:
     }
 
     void GarbageCollect() {
-        orchard_wallet_gc_note_commitment_tree(inner.get());
+        ironwood_wallet_gc_note_commitment_tree(inner.get());
     }
 
 };
 
-class OrchardWalletNoteCommitmentTreeWriter
+class IronwoodWalletNoteCommitmentTreeWriter
 {
 private:
-    const OrchardWallet& wallet;
+    const IronwoodWallet& wallet;
 public:
-    OrchardWalletNoteCommitmentTreeWriter(const OrchardWallet& wallet): wallet(wallet) {}
+    IronwoodWalletNoteCommitmentTreeWriter(const IronwoodWallet& wallet): wallet(wallet) {}
 
     template<typename Stream>
     void Serialize(Stream& s) const {
@@ -241,20 +236,20 @@ public:
             ::Serialize(s, nVersion);
         }
         RustStream rs(s);
-        if (!orchard_wallet_write_note_commitment_tree(
+        if (!ironwood_wallet_write_note_commitment_tree(
                     wallet.inner.get(),
                     &rs, RustStream<Stream>::write_callback)) {
-            throw std::ios_base::failure("Failed to serialize Orchard note commitment tree.");
+            throw std::ios_base::failure("Failed to serialize Ironwood note commitment tree.");
         }
     }
 };
 
-class OrchardWalletNoteCommitmentTreeLoader
+class IronwoodWalletNoteCommitmentTreeLoader
 {
 private:
-    OrchardWallet& wallet;
+    IronwoodWallet& wallet;
 public:
-    OrchardWalletNoteCommitmentTreeLoader(OrchardWallet& wallet): wallet(wallet) {}
+    IronwoodWalletNoteCommitmentTreeLoader(IronwoodWallet& wallet): wallet(wallet) {}
 
     template<typename Stream>
     void Unserialize(Stream& s) {
@@ -263,12 +258,12 @@ public:
             ::Unserialize(s, nVersion);
         }
         RustStream rs(s);
-        if (!orchard_wallet_load_note_commitment_tree(
+        if (!ironwood_wallet_load_note_commitment_tree(
                     wallet.inner.get(),
                     &rs, RustStream<Stream>::read_callback)) {
-            throw std::ios_base::failure("Failed to load Orchard note commitment tree.");
+            throw std::ios_base::failure("Failed to load Ironwood note commitment tree.");
         }
     }
 };
 
-#endif // ZCASH_ORCHARD_WALLET_H
+#endif // ZCASH_WALLET_IRONWOOD_H

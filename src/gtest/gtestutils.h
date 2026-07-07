@@ -162,7 +162,7 @@ public:
     MOCK_METHOD3(WriteCryptedOrchardPaymentAddress, bool(libzcash::OrchardPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecre));
     
     MOCK_METHOD1(WriteSaplingWitnesses, bool(const SaplingWallet& wallet));
-    MOCK_METHOD1(WriteOrchardWitnesses, bool(const OrchardWallet& wallet));
+    MOCK_METHOD1(WriteOrchardWitnesses, bool(const IronwoodWallet& wallet));
 
 };
 
@@ -311,7 +311,7 @@ public:
         return false;
     }
     
-    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
         return false;
     }
 

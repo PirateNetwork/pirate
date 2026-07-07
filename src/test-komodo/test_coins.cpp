@@ -35,7 +35,7 @@ class CCoinsViewTest : public CCoinsView
     std::map<uint256, SproutMerkleTree> mapSproutAnchors_;
     std::map<uint256, SaplingMerkleTree> mapSaplingAnchors_;
     std::map<uint256, SaplingMerkleFrontier> mapSaplingFrontierAnchors_;
-    std::map<uint256, OrchardMerkleFrontier> mapOrchardFrontierAnchors_;
+    std::map<uint256, IronwoodMerkleFrontier> mapOrchardFrontierAnchors_;
     std::map<uint256, bool> mapSproutNullifiers_;
     std::map<uint256, bool> mapSaplingNullifiers_;
     std::map<uint256, bool> mapOrchardNullifiers_;
@@ -48,7 +48,7 @@ public:
         hashBestSproutAnchor_ = SproutMerkleTree::empty_root();
         hashBestSaplingAnchor_ = SaplingMerkleTree::empty_root();
         hashBestSaplingFrontierAnchor_ = SaplingMerkleFrontier::empty_root();
-        hashBestOrchardFrontierAnchor_ = OrchardMerkleFrontier::empty_root();
+        hashBestOrchardFrontierAnchor_ = IronwoodMerkleFrontier::empty_root();
     }
 
     bool GetSproutAnchorAt(const uint256& rt, SproutMerkleTree& tree) const
@@ -85,15 +85,15 @@ public:
         }
     }
 
-    bool GetOrchardFrontierAnchorAt(const uint256& rt, OrchardMerkleFrontier& tree) const
+    bool GetOrchardFrontierAnchorAt(const uint256& rt, IronwoodMerkleFrontier& tree) const
     {
-        if (rt == OrchardMerkleFrontier::empty_root()) {
-            OrchardMerkleFrontier new_tree;
+        if (rt == IronwoodMerkleFrontier::empty_root()) {
+            IronwoodMerkleFrontier new_tree;
             tree = new_tree;
             return true;
         }
 
-        std::map<uint256, OrchardMerkleFrontier>::const_iterator it = mapOrchardFrontierAnchors_.find(rt);
+        std::map<uint256, IronwoodMerkleFrontier>::const_iterator it = mapOrchardFrontierAnchors_.find(rt);
         if (it == mapOrchardFrontierAnchors_.end()) {
             return false;
         } else {
@@ -221,7 +221,7 @@ public:
 
         BatchWriteAnchors<SproutMerkleTree, CAnchorsSproutMap>(mapSproutAnchors, mapSproutAnchors_);
         BatchWriteAnchors<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap>(mapSaplingFrontierAnchors, mapSaplingFrontierAnchors_);
-        BatchWriteAnchors<OrchardMerkleFrontier, CAnchorsOrchardFrontierMap>(mapOrchardFrontierAnchors, mapOrchardFrontierAnchors_);
+        BatchWriteAnchors<IronwoodMerkleFrontier, CAnchorsOrchardFrontierMap>(mapOrchardFrontierAnchors, mapOrchardFrontierAnchors_);
 
         BatchWriteNullifiers(mapSproutNullifiers, mapSproutNullifiers_);
         BatchWriteNullifiers(mapSaplingNullifiers, mapSaplingNullifiers_);
@@ -276,8 +276,8 @@ public:
         
         // Set the transaction version to Orchard
         mutableTx.fOverwintered = true;
-        mutableTx.nVersionGroupId = ORCHARD_VERSION_GROUP_ID;
-        mutableTx.nVersion = ORCHARD_TX_VERSION;
+        mutableTx.nVersionGroupId = IRONWOOD_VERSION_GROUP_ID;
+        mutableTx.nVersion = IRONWOOD_TX_VERSION;
         mutableTx.nConsensusBranchId = 0x00000000;
 
         sproutNullifier = GetRandHash();
@@ -324,11 +324,11 @@ template<> void AppendRandomLeaf(SaplingMerkleFrontier &tree) {
     tree.append(saplingCMU); 
 }
 
-template<> void AppendRandomLeaf(OrchardMerkleFrontier &tree) {
-    // OrchardMerkleFrontier only has APIs to append entire bundles, but
+template<> void AppendRandomLeaf(IronwoodMerkleFrontier &tree) {
+    // IronwoodMerkleFrontier only has APIs to append entire bundles, but
     // fortunately the tests only require that the tree root change.
     // TODO: Remove the need to create proofs by having a testing-only way to
-    // append a random leaf to OrchardMerkleFrontier.
+    // append a random leaf to IronwoodMerkleFrontier.
     uint256 orchardAnchor;
     uint256 dataToBeSigned;
     auto builder = orchard::Builder(true, true, orchardAnchor);
@@ -349,7 +349,7 @@ bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SaplingMer
     return cache.GetSaplingFrontierAnchorAt(rt, tree);
 }
 template <>
-bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, OrchardMerkleFrontier& tree)
+bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, IronwoodMerkleFrontier& tree)
 {
     return cache.GetOrchardFrontierAnchorAt(rt, tree);
 }
@@ -540,7 +540,7 @@ TEST(TestCoins, anchor_pop_regression_test)
 {
     anchorPopRegressionTestImpl<SproutMerkleTree>(SPROUT);
     anchorPopRegressionTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorPopRegressionTestImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
+    anchorPopRegressionTestImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
 }
 
 template <typename Tree>
@@ -630,7 +630,7 @@ TEST(TestCoins, anchor_regression_test)
 {
     anchorRegressionTestImpl<SproutMerkleTree>(SPROUT);
     anchorRegressionTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorRegressionTestImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
+    anchorRegressionTestImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
 }
 
 TEST(TestCoins, nullifiers_test)
@@ -691,7 +691,7 @@ TEST(TestCoins, anchors_flush_test)
 {
     anchorsFlushImpl<SproutMerkleTree>(SPROUT);
     anchorsFlushImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorsFlushImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
+    anchorsFlushImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
 }
 
 TEST(TestCoins, chained_joinsplits)
@@ -848,7 +848,7 @@ TEST(TestCoins, anchors_test)
 {
     anchorsTestImpl<SproutMerkleTree>(SPROUT);
     anchorsTestImpl<SaplingMerkleFrontier>(SAPLINGFRONTIER);
-    anchorsTestImpl<OrchardMerkleFrontier>(ORCHARDFRONTIER);
+    anchorsTestImpl<IronwoodMerkleFrontier>(ORCHARDFRONTIER);
 }
 
 static const unsigned int NUM_SIMULATION_ITERATIONS = 40000;

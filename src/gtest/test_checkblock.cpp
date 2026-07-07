@@ -100,7 +100,7 @@ protected:
         // Revert to test default. No-op on mainnet params.
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     }
 
     // Returns a valid but empty mutable transaction at block height 1.
@@ -290,7 +290,7 @@ TEST_F(ContextualCheckBlockTest, BlockBlossomRulesAcceptBlossomTx) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, 1);
 
     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
@@ -324,7 +324,7 @@ TEST_F(ContextualCheckBlockTest, BlockBlossomRulesAcceptBlossomTx) {
 TEST_F(ContextualCheckBlockTest, BlockSproutRulesRejectOtherTx) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 
     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 
@@ -413,7 +413,7 @@ TEST_F(ContextualCheckBlockTest, BlockOrchardRulesRejectOtherTx) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 1);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 1);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 1);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, 1);
 
     CMutableTransaction mtx = GetFirstBlockCoinbaseTx();
 

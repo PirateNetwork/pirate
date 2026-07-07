@@ -9,7 +9,7 @@
 #include "zcash/NoteEncryption.hpp"
 #include <algorithm>
 #include <rust/bridge.h>
-#include <rust/orchard_keys_bridge.h>
+#include <rust/ironwood_keys_bridge.h>
 
 namespace libzcash
 {
@@ -56,7 +56,7 @@ bool OrchardIncomingViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diver
     ss >> ivk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::ivk_to_address(ivk_t, d, address_t);
+    bool rustCompleted = ironwood_keys::ivk_to_address(ivk_t, d, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -92,7 +92,7 @@ bool OrchardIncomingViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* ad
     di_ss >> di_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::ivk_to_address_from_index(ivk_t, di_t, address_t);
+    bool rustCompleted = ironwood_keys::ivk_to_address_from_index(ivk_t, di_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -133,7 +133,7 @@ bool OrchardFullViewingKey::DeriveOVK(OrchardOutgoingViewingKey* ovk) const
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::fvk_to_ovk(fvk_t, ovk_t);
+    bool rustCompleted = ironwood_keys::fvk_to_ovk(fvk_t, ovk_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -165,7 +165,7 @@ bool OrchardFullViewingKey::DeriveOVKinternal(OrchardOutgoingViewingKey* ovk) co
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::fvk_to_ovk_internal(fvk_t, ovk_t);
+    bool rustCompleted = ironwood_keys::fvk_to_ovk_internal(fvk_t, ovk_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -197,7 +197,7 @@ bool OrchardFullViewingKey::DeriveIVK(OrchardIncomingViewingKey* ivk) const
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::fvk_to_ivk(fvk_t, ivk_t);
+    bool rustCompleted = ironwood_keys::fvk_to_ivk(fvk_t, ivk_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -229,7 +229,7 @@ bool OrchardFullViewingKey::DeriveIVKinternal(OrchardIncomingViewingKey* ivk) co
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::fvk_to_ivk_internal(fvk_t, ivk_t);
+    bool rustCompleted = ironwood_keys::fvk_to_ivk_internal(fvk_t, ivk_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -261,7 +261,7 @@ bool OrchardFullViewingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) co
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::fvk_to_default_address(fvk_t, address_t);
+    bool rustCompleted = ironwood_keys::fvk_to_default_address(fvk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -293,7 +293,7 @@ bool OrchardFullViewingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* 
     ss >> fvk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::fvk_to_default_address_internal(fvk_t, address_t);
+    bool rustCompleted = ironwood_keys::fvk_to_default_address_internal(fvk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -328,7 +328,7 @@ bool OrchardFullViewingKey::DeriveAddress(OrchardPaymentAddress* addr, diversifi
     ss >> fvk_t;
 
     // Call rust FFI
-    rustCompleted = orchard_keys::fvk_to_address(fvk_t, diversifier, address_t);
+    rustCompleted = ironwood_keys::fvk_to_address(fvk_t, diversifier, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -363,7 +363,7 @@ bool OrchardFullViewingKey::DeriveAddressInternal(OrchardPaymentAddress* addr, d
     ss >> fvk_t;
 
     // Call rust FFI
-    rustCompleted = orchard_keys::fvk_to_address_internal(fvk_t, diversifier, address_t);
+    rustCompleted = ironwood_keys::fvk_to_address_internal(fvk_t, diversifier, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -402,7 +402,7 @@ bool OrchardFullViewingKey::DeriveAddressFromIndex(OrchardPaymentAddress* addr, 
     di_ss >> di_t;
 
     // Call rust FFI
-    rustCompleted = orchard_keys::fvk_to_address_from_index(fvk_t, di_t, address_t);
+    rustCompleted = ironwood_keys::fvk_to_address_from_index(fvk_t, di_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -443,7 +443,7 @@ bool OrchardFullViewingKey::DeriveAddressFromIndexInternal(OrchardPaymentAddress
     di_ss >> di_t;
 
     // Call rust FFI
-    rustCompleted = orchard_keys::fvk_to_address_from_index_internal(fvk_t, di_t, address_t);
+    rustCompleted = ironwood_keys::fvk_to_address_from_index_internal(fvk_t, di_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -468,7 +468,7 @@ std::optional<OrchardSpendingKey> OrchardSpendingKey::random()
         auto bytes = random_uint256();
         uint256_t sk_bytes;
         std::copy(bytes.begin(), bytes.end(), sk_bytes.begin());
-        if (orchard_keys::sk_is_valid(sk_bytes)) {
+        if (ironwood_keys::sk_is_valid(sk_bytes)) {
             return OrchardSpendingKey(bytes);
         }
     }
@@ -490,7 +490,7 @@ bool OrchardSpendingKey::IsValid()
     bool rustCompleted;
 
     // Call rust FFI
-    rustCompleted = orchard_keys::sk_is_valid(sk_t);
+    rustCompleted = ironwood_keys::sk_is_valid(sk_t);
 
     // Cleanse the memory of the transfer and serialization objects
     memory_cleanse(ss.data(), ss.size());
@@ -518,11 +518,11 @@ bool OrchardSpendingKey::DeriveFVK(OrchardFullViewingKey* fvk) const
     ss >> sk_t;
 
     // Call rust FFI
-    rustCompleted = orchard_keys::sk_to_fvk(sk_t, fvk_t);
+    rustCompleted = ironwood_keys::sk_to_fvk(sk_t, fvk_t);
 
     // Validate: the derived IVK must be non-null (guards against degenerate scalar combinations).
     if (rustCompleted) {
-        rustCompleted = orchard_keys::fvk_to_ivk(fvk_t, ivk_t);
+        rustCompleted = ironwood_keys::fvk_to_ivk(fvk_t, ivk_t);
         if (rustCompleted) {
             uint256 ivk;
             std::copy(ivk_t.begin(), ivk_t.end(), ivk.begin());
@@ -562,7 +562,7 @@ bool OrchardSpendingKey::DeriveDefaultAddress(OrchardPaymentAddress* addr) const
     ss >> sk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::sk_to_default_address(sk_t, address_t);
+    bool rustCompleted = ironwood_keys::sk_to_default_address(sk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {
@@ -594,7 +594,7 @@ bool OrchardSpendingKey::DeriveDefaultAddressInternal(OrchardPaymentAddress* add
     ss >> sk_t;
 
     // Call rust FFI
-    bool rustCompleted = orchard_keys::sk_to_default_address_internal(sk_t, address_t);
+    bool rustCompleted = ironwood_keys::sk_to_default_address_internal(sk_t, address_t);
 
     // Deserialize rust result on success
     if (rustCompleted) {

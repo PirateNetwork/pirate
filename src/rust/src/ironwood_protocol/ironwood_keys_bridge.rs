@@ -1,9 +1,9 @@
-use crate::orchard_protocol::orchard_keys::{
-    ivk_to_address as orchard_keys_ivk_to_address,
-    ivk_to_address_from_index as orchard_keys_ivk_to_address_from_index,
+use crate::ironwood_protocol::ironwood_keys::{
+    ivk_to_address as ironwood_keys_ivk_to_address,
+    ivk_to_address_from_index as ironwood_keys_ivk_to_address_from_index,
     fvk_to_ovk, fvk_to_ovk_internal,
-    fvk_to_ivk as orchard_keys_fvk_to_ivk,
-    fvk_to_ivk_internal as orchard_keys_fvk_to_ivk_internal,
+    fvk_to_ivk as ironwood_keys_fvk_to_ivk,
+    fvk_to_ivk_internal as ironwood_keys_fvk_to_ivk_internal,
     fvk_to_default_address, fvk_to_default_address_internal,
     fvk_to_address, fvk_to_address_internal,
     fvk_to_address_from_index, fvk_to_address_from_index_internal,
@@ -14,18 +14,18 @@ use crate::orchard_protocol::orchard_keys::{
 
 #[cxx::bridge]
 pub(crate) mod ffi {
-    #[namespace = "orchard_keys"]
+    #[namespace = "ironwood_keys"]
     extern "Rust" {
         #[cxx_name = "ivk_to_address"]
-        fn orchard_keys_ivk_to_address(ivk: &[u8; 64], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn ironwood_keys_ivk_to_address(ivk: &[u8; 64], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;
         #[cxx_name = "ivk_to_address_from_index"]
-        fn orchard_keys_ivk_to_address_from_index(ivk: &[u8; 64], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
+        fn ironwood_keys_ivk_to_address_from_index(ivk: &[u8; 64], diversifier_index: &[u8; 11], out: &mut [u8; 43]) -> bool;
         fn fvk_to_ovk(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
         fn fvk_to_ovk_internal(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool;
         #[cxx_name = "fvk_to_ivk"]
-        fn orchard_keys_fvk_to_ivk(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
+        fn ironwood_keys_fvk_to_ivk(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
         #[cxx_name = "fvk_to_ivk_internal"]
-        fn orchard_keys_fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
+        fn ironwood_keys_fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 64]) -> bool;
         fn fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
         fn fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool;
         fn fvk_to_address(fvk: &[u8; 96], diversifier: &[u8; 11], out: &mut [u8; 43]) -> bool;

@@ -12,17 +12,12 @@
 
 #include <rust/bridge.h>
 
-// SCAFFOLDING ONLY: this type is not yet a member of any transaction. There is no v6
-// transaction format in this tree, so nothing constructs, serializes, or validates an
-// IronwoodBundle today. It mirrors primitives/orchard.h's OrchardBundle so that a future
-// v6 CTransaction can add an Ironwood-pool bundle slot alongside the Orchard slot without
-// having to design this wrapper from scratch. There is deliberately no batch-validator
-// integration yet (no ironwood::BatchValidator exists), and no wallet/merkle-frontier
-// friend classes (none exist yet either) - both should be added when their respective
-// consumers are built, not speculatively here.
+class IronwoodMerkleFrontier;
+class IronwoodWallet;
+namespace ironwood { class UnauthorizedBundle; }
 
 /**
- * The Ironwood component of a (future, v6) authorized transaction.
+ * The Ironwood component of an authorized transaction.
  */
 class IronwoodBundle
 {
@@ -31,6 +26,11 @@ private:
     /// Memory is allocated by Rust.
     rust::Box<ironwood_bundle::IronwoodBundle> inner;
 
+    IronwoodBundle(IronwoodBundlePtr* bundle) : inner(ironwood_bundle::from_raw_box(bundle)) {}
+
+    friend class IronwoodMerkleFrontier;
+    friend class IronwoodWallet;
+    friend class ironwood::UnauthorizedBundle;
 public:
     IronwoodBundle() : inner(ironwood_bundle::none()) {}
 
@@ -89,6 +89,15 @@ public:
     /// bundle.
     CAmount GetValueBalance() const {
         return inner->value_balance_zat();
+    }
+
+    /// Queues this bundle's authorization for validation.
+    ///
+    /// `sighash` must be for the transaction this bundle is within.
+    void QueueAuthValidation(
+        ironwood::BatchValidator& batch, const uint256& sighash) const
+    {
+        batch.add_bundle(inner->box_clone(), sighash.GetRawBytes());
     }
 
     const size_t GetNumActions() const {

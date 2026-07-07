@@ -399,7 +399,7 @@ UniValue blockToDeltasJSON(const CBlock& block, const CBlockIndex* blockindex)
 UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool txDetails = false)
 {
     AssertLockHeld(cs_main);
-    bool orchardActive = NetworkUpgradeActive(blockindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
+    bool orchardActive = NetworkUpgradeActive(blockindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     UniValue result(UniValue::VOBJ);
     result.pushKV("hash", block.GetHash().GetHex());
@@ -448,7 +448,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
     valuePools.push_back(ValuePoolDesc("transparent", blockindex->nChainTransparentValue, blockindex->nTransparentValue));
     valuePools.push_back(ValuePoolDesc("sprout", blockindex->nChainSproutValue, blockindex->nSproutValue));
     valuePools.push_back(ValuePoolDesc("sapling", blockindex->nChainSaplingValue, blockindex->nSaplingValue));
-    valuePools.push_back(ValuePoolDesc("orchard", blockindex->nChainOrchardValue, blockindex->nOrchardValue));
+    valuePools.push_back(ValuePoolDesc("orchard", blockindex->nChainIronwoodValue, blockindex->nIronwoodValue));
     result.pushKV("valuePools", valuePools);
 
     {
@@ -461,7 +461,7 @@ UniValue blockToJSON(const CBlock& block, const CBlockIndex* blockindex, bool tx
             trees.pushKV("sapling", sapling);
         }
 
-        OrchardMerkleFrontier orchardTree;
+        IronwoodMerkleFrontier orchardTree;
         if (pcoinsTip != nullptr && pcoinsTip->GetOrchardFrontierAnchorAt(blockindex->hashFinalOrchardRoot, orchardTree)) {
             UniValue orchard(UniValue::VOBJ);
             orchard.pushKV("size", (uint64_t)orchardTree.size());
@@ -1950,7 +1950,7 @@ UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& my
     valuePools.push_back(ValuePoolDesc(std::string("transparent"), tip->nChainTransparentValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc(std::string("sprout"), tip->nChainSproutValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc(std::string("sapling"), tip->nChainSaplingValue, std::nullopt));
-    valuePools.push_back(ValuePoolDesc(std::string("orchard"), tip->nChainOrchardValue, std::nullopt));
+    valuePools.push_back(ValuePoolDesc(std::string("orchard"), tip->nChainIronwoodValue, std::nullopt));
     valuePools.push_back(ValuePoolDesc(std::string("burned"), tip->nChainTotalBurned, std::nullopt));
     obj.push_back(Pair("valuePools",            valuePools));
 
@@ -2197,7 +2197,7 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     res.pushKV("time", int64_t(pindex->nTime));
 
     bool saplingActive = NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
+    bool orchardActive = NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     // sprout
     {
@@ -2256,7 +2256,7 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     //Orchard Frontier
-    int orchard_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight;
+    int orchard_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight;
     //if (orchard_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
     {
         UniValue orchard_result(UniValue::VOBJ);
@@ -2264,10 +2264,10 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         orchard_result.pushKV("active", orchardActive);
         orchard_commitments.pushKV("finalRoot", HexStr(pindex->hashFinalOrchardRoot.begin(), pindex->hashFinalOrchardRoot.end()));
         bool need_skiphash = false;
-        OrchardMerkleFrontier tree;
+        IronwoodMerkleFrontier tree;
         if (pcoinsTip->GetOrchardFrontierAnchorAt(pindex->hashFinalOrchardRoot, tree)) {
             CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
-            s << OrchardMerkleFrontierLegacySer(tree);
+            s << IronwoodMerkleFrontierLegacySer(tree);
             orchard_commitments.pushKV("finalState", HexStr(s.begin(), s.end()));
         } else {
             // Set skipHash to the most recent block that has a finalState.

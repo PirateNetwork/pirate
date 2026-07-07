@@ -45,7 +45,6 @@
 #include "zcash/Zcash.h"
 
 #include <primitives/sapling.h>
-#include <primitives/orchard.h>
 #include <primitives/ironwood.h>
 #include "zcash/address/sapling.hpp"
 
@@ -78,19 +77,9 @@ static_assert(SAPLING_TX_VERSION <= SAPLING_MAX_TX_VERSION,"Sapling tx version m
 static constexpr uint32_t SAPLING_VERSION_GROUP_ID = 0x892F2085;
 static_assert(SAPLING_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
 
-// Orchard transaction version
-static const int32_t ORCHARD_TX_VERSION = 5;
-static_assert(ORCHARD_TX_VERSION >= ORCHARD_MIN_TX_VERSION,"Orchard tx version must not be lower than minimum");
-static_assert(ORCHARD_TX_VERSION <= ORCHARD_MAX_TX_VERSION,"Orchard tx version must not be higher than maximum");
-
-// Orchard transaction version group id
-// (defined in section 7.1 of the protocol spec)
-static constexpr uint32_t ORCHARD_VERSION_GROUP_ID = 0x26A7270A;
-static_assert(ORCHARD_VERSION_GROUP_ID != 0, "version group id must be non-zero as specified in ZIP 202");
-
-// Ironwood (v6, ZIP 229) transaction version. SCAFFOLDING ONLY: not yet reachable -
-// CurrentTxVersionInfo does not select it, and there is no NetworkUpgradeActive gate
-// wired up for Consensus::UPGRADE_IRONWOOD yet.
+// Ironwood (v6, ZIP 229) transaction version. This is the only shielded-Orchard-circuit
+// pool format Pirate supports - the pre-Ironwood v5/Orchard format never activated on
+// any live Pirate network, so it was retired rather than kept as a legacy format.
 static const int32_t IRONWOOD_TX_VERSION = 6;
 static_assert(IRONWOOD_TX_VERSION >= IRONWOOD_MIN_TX_VERSION,"Ironwood tx version must not be lower than minimum");
 static_assert(IRONWOOD_TX_VERSION <= IRONWOOD_MAX_TX_VERSION,"Ironwood tx version must not be higher than maximum");
@@ -602,10 +591,6 @@ private:
     /// The consensus branch ID that this transaction commits to.
     /// Serialized from v5 onwards.
     std::optional<uint32_t> nConsensusBranchId;
-    OrchardBundle orchardBundle;
-    // SCAFFOLDING ONLY: only ever populated by a v6 transaction, which nothing in this
-    // tree can construct or deserialize from the network yet (isIronwoodV6 is defined
-    // but CurrentTxVersionInfo never selects it).
     IronwoodBundle ironwoodBundle;
     SaplingBundle saplingBundle;
 
@@ -630,8 +615,8 @@ public:
     static const int32_t OVERWINTER_MAX_CURRENT_VERSION = 3;
     static const int32_t SAPLING_MIN_CURRENT_VERSION = 4;
     static const int32_t SAPLING_MAX_CURRENT_VERSION = 4;
-    static const int32_t ORCHARD_MIN_CURRENT_VERSION = 5;
-    static const int32_t ORCHARD_MAX_CURRENT_VERSION = 5;
+    static const int32_t IRONWOOD_MIN_CURRENT_VERSION = 6;
+    static const int32_t IRONWOOD_MAX_CURRENT_VERSION = 6;
 
     static_assert(SPROUT_MIN_CURRENT_VERSION >= SPROUT_MIN_TX_VERSION,
                   "standard rule for tx version should be consistent with network rule");
@@ -650,11 +635,11 @@ public:
                    SAPLING_MAX_CURRENT_VERSION >= SAPLING_MIN_CURRENT_VERSION),
                   "standard rule for tx version should be consistent with network rule");
 
-    static_assert(ORCHARD_MIN_CURRENT_VERSION >= ORCHARD_MIN_TX_VERSION,
+    static_assert(IRONWOOD_MIN_CURRENT_VERSION >= IRONWOOD_MIN_TX_VERSION,
                   "standard rule for tx version should be consistent with network rule");
 
-    static_assert((ORCHARD_MAX_CURRENT_VERSION <= ORCHARD_MAX_TX_VERSION &&
-                   ORCHARD_MAX_CURRENT_VERSION >= ORCHARD_MIN_CURRENT_VERSION),
+    static_assert((IRONWOOD_MAX_CURRENT_VERSION <= IRONWOOD_MAX_TX_VERSION &&
+                   IRONWOOD_MAX_CURRENT_VERSION >= IRONWOOD_MIN_CURRENT_VERSION),
                   "standard rule for tx version should be consistent with network rule");
 
     // The local variables are made const to prevent unintended modification
@@ -711,16 +696,10 @@ public:
             nVersionGroupId == SAPLING_VERSION_GROUP_ID &&
             nVersion == SAPLING_TX_VERSION;
 
-        bool isOrchardV5 =
-            fOverwintered &&
-            nVersionGroupId == ORCHARD_VERSION_GROUP_ID &&
-            nVersion == ORCHARD_TX_VERSION;
-
-        // SCAFFOLDING ONLY: CurrentTxVersionInfo never selects this, and no
-        // NetworkUpgradeActive gate exists for Consensus::UPGRADE_IRONWOOD yet, so no
-        // in-tree code produces an isIronwoodV6 transaction. The wire format mirrors
-        // upstream zcash_primitives' read_v6/write_v6 (same header/transparent/sapling
-        // layout as v5, followed by the Orchard slot then the Ironwood slot).
+        // The only shielded-Orchard-circuit-pool transaction format Pirate supports.
+        // The pre-Ironwood v5 format never activated on any live Pirate network, so a
+        // transaction claiming that version/group now falls through to "Unknown
+        // transaction format" below and is rejected.
         bool isIronwoodV6 =
             fOverwintered &&
             nVersionGroupId == IRONWOOD_VERSION_GROUP_ID &&
@@ -736,11 +715,11 @@ public:
             nVersionGroupId == ZFUTURE_VERSION_GROUP_ID &&
             nVersion == ZFUTURE_TX_VERSION;
 
-        if (fOverwintered && !(isOverwinterV3 || isSaplingV4 || isOrchardV5 || isIronwoodV6 || isFuture)) {
+        if (fOverwintered && !(isOverwinterV3 || isSaplingV4 || isIronwoodV6 || isFuture)) {
             throw std::ios_base::failure("Unknown transaction format");
         }
 
-        if (isOrchardV5 || isIronwoodV6) {
+        if (isIronwoodV6) {
             // Common Transaction Fields (plus version bytes above)
             uint32_t consensusBranchId;
             if (ser_action.ForRead()) {
@@ -760,21 +739,22 @@ public:
             // Sapling Transaction Fields
             READWRITE(saplingBundle);
 
-            // Orchard Transaction Fields
-            if (isIronwoodV6) {
-                if (ser_action.ForRead()) {
-                    orchardBundle.UnserializeV6(s, consensusBranchId);
-                    ironwoodBundle.Unserialize(s, consensusBranchId);
-                } else {
-                    orchardBundle.SerializeV6(s);
-                    ironwoodBundle.Serialize(s);
-                }
+            // The upstream v6 wire format (ZIP 229) carries two shielded-Orchard-circuit
+            // slots: Orchard, then Ironwood. Pirate's Orchard pool never activated on any
+            // live Pirate network, so this slot is always empty; we still have to read
+            // and write its zero-actions placeholder (a single compact-size 0 byte) to
+            // stay wire-compatible with the upstream v6 parser, which always expects it.
+            uint64_t nOrchardSlotActions = 0;
+            READWRITE(COMPACTSIZE(nOrchardSlotActions));
+            if (ser_action.ForRead() && nOrchardSlotActions != 0) {
+                throw std::ios_base::failure("Orchard-pool slot of v6 transaction must be empty");
+            }
+
+            // Ironwood Transaction Fields
+            if (ser_action.ForRead()) {
+                ironwoodBundle.Unserialize(s, consensusBranchId);
             } else {
-                if (ser_action.ForRead()) {
-                    orchardBundle.Unserialize(s, consensusBranchId);
-                } else {
-                    orchardBundle.Serialize(s);
-                }
+                ironwoodBundle.Serialize(s);
             }
         } else {
             // Legacy transaction formats
@@ -932,8 +912,8 @@ public:
     const rust::Vec<sapling::Spend> GetSaplingSpends() const;
     const rust::Vec<sapling::Output> GetSaplingOutputs() const;
 
-    size_t GetOrchardActionsCount() const;
-    const rust::Vec<orchard_bundle::Action> GetOrchardActions() const;
+    size_t GetIronwoodActionsCount() const;
+    const rust::Vec<ironwood_bundle::Action> GetIronwoodActions() const;
 
     /**
      * Returns the Sapling value balance for the transaction.
@@ -941,22 +921,16 @@ public:
     CAmount GetValueBalanceSapling() const;
 
     /**
-     * Returns the Sapling value balance for the transaction.
+     * Returns the Ironwood value balance for the transaction.
      */
-    CAmount GetValueBalanceOrchard() const;
+    CAmount GetValueBalanceIronwood() const;
 
     /**
      * Returns the Sapling bundle for the transaction.
      */
     const SaplingBundle& GetSaplingBundle() const;
     /**
-     * Returns the Orchard bundle for the transaction.
-     */
-    const OrchardBundle& GetOrchardBundle() const;
-    /**
-     * Returns the Ironwood bundle for the transaction. SCAFFOLDING ONLY: always
-     * IsPresent() == false today, since nothing can construct or deserialize a v6
-     * transaction in this tree yet.
+     * Returns the Ironwood bundle for the transaction.
      */
     const IronwoodBundle& GetIronwoodBundle() const;
 
@@ -983,8 +957,6 @@ struct CMutableTransaction {
     int32_t nLockTime{0};
     uint32_t nExpiryHeight{0};
     SaplingBundle saplingBundle;
-    OrchardBundle orchardBundle;
-    // SCAFFOLDING ONLY: see CTransaction::ironwoodBundle.
     IronwoodBundle ironwoodBundle;
     std::vector<JSDescription> vjoinsplit;
     uint256 joinSplitPubKey;
@@ -1025,11 +997,8 @@ struct CMutableTransaction {
             fOverwintered &&
             nVersionGroupId == SAPLING_VERSION_GROUP_ID &&
             nVersion == SAPLING_TX_VERSION;
-        bool isOrchardV5 =
-            fOverwintered &&
-            nVersionGroupId == ORCHARD_VERSION_GROUP_ID &&
-            nVersion == ORCHARD_TX_VERSION;
-        // SCAFFOLDING ONLY: see the matching comment in CTransaction::SerializationOp.
+        // The only shielded-Orchard-circuit-pool transaction format Pirate supports;
+        // see the matching comment in CTransaction::SerializationOp.
         bool isIronwoodV6 =
             fOverwintered &&
             nVersionGroupId == IRONWOOD_VERSION_GROUP_ID &&
@@ -1039,11 +1008,11 @@ struct CMutableTransaction {
             nVersionGroupId == ZFUTURE_VERSION_GROUP_ID &&
             nVersion == ZFUTURE_TX_VERSION;
 
-        if (fOverwintered && !(isOverwinterV3 || isSaplingV4 || isOrchardV5 || isIronwoodV6 || isFuture)) {
+        if (fOverwintered && !(isOverwinterV3 || isSaplingV4 || isIronwoodV6 || isFuture)) {
             throw std::ios_base::failure("Unknown transaction format");
         }
 
-        if (isOrchardV5 || isIronwoodV6) {
+        if (isIronwoodV6) {
             // Common Transaction Fields (plus version bytes above)
             uint32_t consensusBranchId;
             if (ser_action.ForRead()) {
@@ -1063,21 +1032,20 @@ struct CMutableTransaction {
             // Sapling Transaction Fields
             READWRITE(saplingBundle);
 
-            // Orchard Transaction Fields
-            if (isIronwoodV6) {
-                if (ser_action.ForRead()) {
-                    orchardBundle.UnserializeV6(s, consensusBranchId);
-                    ironwoodBundle.Unserialize(s, consensusBranchId);
-                } else {
-                    orchardBundle.SerializeV6(s);
-                    ironwoodBundle.Serialize(s);
-                }
+            // See the matching comment in CTransaction::SerializationOp: the upstream v6
+            // wire format has an Orchard-pool slot before the Ironwood one, which Pirate
+            // never populates but must still read/write as an empty placeholder.
+            uint64_t nOrchardSlotActions = 0;
+            READWRITE(COMPACTSIZE(nOrchardSlotActions));
+            if (ser_action.ForRead() && nOrchardSlotActions != 0) {
+                throw std::ios_base::failure("Orchard-pool slot of v6 transaction must be empty");
+            }
+
+            // Ironwood Transaction Fields
+            if (ser_action.ForRead()) {
+                ironwoodBundle.Unserialize(s, consensusBranchId);
             } else {
-                if (ser_action.ForRead()) {
-                    orchardBundle.Unserialize(s, consensusBranchId);
-                } else {
-                    orchardBundle.Serialize(s);
-                }
+                ironwoodBundle.Serialize(s);
             }
         } else {
             READWRITE(vin);

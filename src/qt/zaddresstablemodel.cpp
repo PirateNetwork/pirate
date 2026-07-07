@@ -919,7 +919,7 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
                 const Consensus::Params& consensusParams = Params().GetConsensus();
                 
                 saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-                orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_ORCHARD);
+                orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
             }
         }
         

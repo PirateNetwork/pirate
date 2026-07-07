@@ -1241,7 +1241,7 @@ void PrecomputedTransactionData::SetPrecomputed(
 SigVersion SignatureHashVersion(const CTransaction& txTo)
 {
     if (txTo.fOverwintered) {
-        if (txTo.nVersionGroupId == ORCHARD_VERSION_GROUP_ID) {
+        if (txTo.nVersionGroupId == IRONWOOD_VERSION_GROUP_ID) {
             return SIGVERSION_ORCHARD;
         } else if (txTo.nVersionGroupId == SAPLING_VERSION_GROUP_ID) {
             return SIGVERSION_SAPLING;

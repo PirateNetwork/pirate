@@ -133,9 +133,7 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
-        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170007;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170008;
         consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
 
         // The best chain should have at least this much work.
@@ -397,10 +395,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 207500;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170007;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 280000;
-        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 280500;
-        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170008;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = 280500;
 
         pchMessageStart[0] = 0x5A;
         pchMessageStart[1] = 0x1F;
@@ -503,10 +499,8 @@ public:
         consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 50;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nProtocolVersion = 170006;
         consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 100;
-        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = 200;
-        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170007;
-        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = 250;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nProtocolVersion = 170008;
+        consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = 200;
 
         // The best chain should have at least this much work.
         consensus.nMinimumChainWork = uint256S("0x00");
@@ -697,10 +691,10 @@ void komodo_setactivation(int32_t height)
     fprintf(stdout,"SET SAPLING ACTIVATION height.%d\n",height);
 }
 
-void komodo_setorchard(int32_t height)
+void komodo_setironwood(int32_t height)
 {
-    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = height;
-    ASSETCHAINS_ORCHARD = height;
+    pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = height;
+    ASSETCHAINS_IRONWOOD = height;
     fprintf(stdout,"SET ORCHARD ACTIVATION height.%d\n",height);
 }
 
@@ -1056,7 +1050,7 @@ void *chainparams_commandline()
         if (Params().NetworkIDString() != "regtest") {
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
             pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_ORCHARD].nActivationHeight = ASSETCHAINS_ORCHARD;
+            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = ASSETCHAINS_IRONWOOD;
 
             if (chainName.isSymbol("PIRATE"))
             {

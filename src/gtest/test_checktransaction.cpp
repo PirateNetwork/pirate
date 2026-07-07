@@ -67,10 +67,10 @@ CMutableTransaction GetValidTransaction(uint32_t consensusBranchId=SPROUT_BRANCH
         mtx.fOverwintered = true;
         mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
         mtx.nVersion = SAPLING_TX_VERSION;
-    } else if (consensusBranchId == NetworkUpgradeInfo[Consensus::UPGRADE_ORCHARD].nBranchId) {
+    } else if (consensusBranchId == NetworkUpgradeInfo[Consensus::UPGRADE_IRONWOOD].nBranchId) {
         mtx.fOverwintered = true;
-        mtx.nVersionGroupId = ORCHARD_VERSION_GROUP_ID;
-        mtx.nVersion = ORCHARD_TX_VERSION;
+        mtx.nVersionGroupId = IRONWOOD_VERSION_GROUP_ID;
+        mtx.nVersion = IRONWOOD_TX_VERSION;
     } else if (consensusBranchId != SPROUT_BRANCH_ID) {
         // Unsupported consensus branch ID
         assert(false);
@@ -232,7 +232,7 @@ TEST(ChecktransactionTests, BadTxnsOversize) {
         // Revert to default
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     }
 }
 
@@ -294,7 +294,7 @@ TEST(ChecktransactionTests, OversizeSaplingTxns) {
     // Revert to default
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST(ChecktransactionTests, BadTxnsVoutNegative) {
@@ -829,14 +829,14 @@ TEST(ChecktransactionTests, OrchardExpiryHeight) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, 100);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, 100);
 
     CMutableTransaction preOrchardMtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 99);
     EXPECT_EQ(preOrchardMtx.nExpiryHeight, 100 - 1);
     CMutableTransaction orchardMtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 100);
     EXPECT_EQ(orchardMtx.nExpiryHeight, 100 + expiryDelta);
 
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_ORCHARD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }

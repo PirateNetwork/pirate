@@ -138,7 +138,7 @@ bool CTxMemPool::addUnchecked(const uint256& hash, const CTxMemPoolEntry &entry,
     for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
         mapSaplingNullifiers[nf] = &tx;
     }
-    for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+    for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
         mapOrchardNullifiers[nf] = &tx;
     }
     for (const auto& spend : tx.GetSaplingSpends()) {
@@ -394,7 +394,7 @@ void CTxMemPool::remove(const CTransaction &origTx, std::list<CTransaction>& rem
             for (const uint256& nf : tx.GetSaplingBundle().GetNullifiers()) {
                 mapSaplingNullifiers.erase(nf);
             }
-            for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+            for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
                 mapOrchardNullifiers.erase(nf);
             }
             for (const auto& spend : tx.GetSaplingSpends()) {
@@ -481,8 +481,8 @@ void CTxMemPool::removeWithAnchor(const uint256 &invalidRoot, ShieldedType type)
                 }
             break;
             case ORCHARDFRONTIER:
-                if (tx.GetOrchardBundle().IsPresent()) {
-                    if (tx.GetOrchardBundle().GetAnchor().value() == invalidRoot) {
+                if (tx.GetIronwoodBundle().IsPresent()) {
+                    if (tx.GetIronwoodBundle().GetAnchor().value() == invalidRoot) {
                         transactionsToRemove.push_back(tx);
                     }
                 }
@@ -535,7 +535,7 @@ void CTxMemPool::removeConflicts(const CTransaction &tx, std::list<CTransaction>
             }
         }
     }
-    for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+    for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
         std::map<uint256, const CTransaction*>::iterator it = mapOrchardNullifiers.find(nf);
         if (it != mapOrchardNullifiers.end()) {
             const CTransaction &txConflict = *it->second;
@@ -777,14 +777,14 @@ void CTxMemPool::check(const CCoinsViewCache *pcoins) const
         }
 
         // Check Orchard
-        for (const uint256& nf : tx.GetOrchardBundle().GetNullifiers()) {
+        for (const uint256& nf : tx.GetIronwoodBundle().GetNullifiers()) {
             assert(!pcoins->GetNullifier(nf, ORCHARDFRONTIER));
         }
 
-        if (tx.GetOrchardBundle().IsPresent()) {
-            std::optional<uint256> root = tx.GetOrchardBundle().GetAnchor();
+        if (tx.GetIronwoodBundle().IsPresent()) {
+            std::optional<uint256> root = tx.GetIronwoodBundle().GetAnchor();
             if (root) {
-                OrchardMerkleFrontier tree;
+                IronwoodMerkleFrontier tree;
                 assert(pcoins->GetOrchardFrontierAnchorAt(root.value(), tree));
             }
         }

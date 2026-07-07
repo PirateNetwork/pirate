@@ -281,7 +281,7 @@ bool AsyncRPCOperation_orchardconsolidation::main_impl() {
                 break;
             }
 
-            builder.InitializeOrchard(true, true, anchor);
+            builder.InitializeIronwood(true, true, anchor);
 
             if (!builder.ConvertRawOrchardSpend(extsk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to convert raw Orchard spends. Stopping.\n", getId());

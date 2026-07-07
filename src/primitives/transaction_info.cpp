@@ -14,11 +14,11 @@ TxVersionInfo CurrentTxVersionInfo(
     const Consensus::Params& consensus,
     int nHeight)
 {
-    if (NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_ORCHARD)) {
+    if (NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_IRONWOOD)) {
         return {
             .fOverwintered =   true,
-            .nVersionGroupId = ORCHARD_VERSION_GROUP_ID,
-            .nVersion =        ORCHARD_TX_VERSION
+            .nVersionGroupId = IRONWOOD_VERSION_GROUP_ID,
+            .nVersion =        IRONWOOD_TX_VERSION
         };
     } else if (NetworkUpgradeActive(nHeight, consensus, Consensus::UPGRADE_SAPLING)) {
         return {

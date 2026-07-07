@@ -501,7 +501,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
             }
         }
 
-        builder_.InitializeOrchard(true, true, anchor);
+        builder_.InitializeIronwood(true, true, anchor);
 
         if (!builder_.ConvertRawOrchardSpend(extsk)) {
             set_error_code(RPC_WALLET_ERROR);
@@ -513,7 +513,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
     } else {
         // Initialize Orchard builder without spending (outputs only)
         if (!orchardOutputs_.empty()) {
-            builder_.InitializeOrchard(false, true, uint256());
+            builder_.InitializeIronwood(false, true, uint256());
         }
     }
 

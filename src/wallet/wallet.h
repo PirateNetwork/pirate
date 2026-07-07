@@ -36,7 +36,7 @@
 #include "util/strencodings.h"
 #include "validationinterface.h"
 #include "wallet/crypter.h"
-#include "wallet/orchard.h"
+#include "wallet/ironwood.h"
 #include "wallet/sapling.h"
 #include "wallet/wallet_ismine.h"
 #include "wallet/walletdb.h"
@@ -790,7 +790,7 @@ public:
             READWRITE(mapSaplingNoteData);
         }
 
-        if (nVersion >= ORCHARD_TX_VERSION) {
+        if (nVersion >= IRONWOOD_TX_VERSION) {
             READWRITE(mapOrchardNoteData);
         }
 
@@ -1523,7 +1523,7 @@ protected:
         if (IsCrypted() && !IsLocked()) {
             // Wallet is encrypted - write encrypted witness trees
             CDataStream ss(SER_DISK, CLIENT_VERSION);
-            ss << OrchardWalletNoteCommitmentTreeWriter(orchardWallet);
+            ss << IronwoodWalletNoteCommitmentTreeWriter(orchardWallet);
             
             std::vector<unsigned char> vchCryptedSecret;
             CKeyingMaterial vchSecret(ss.begin(), ss.end());
@@ -1592,7 +1592,7 @@ protected:
     SaplingWallet saplingWallet;
     bool saplingWalletValidated = false;
 
-    OrchardWallet orchardWallet;
+    IronwoodWallet orchardWallet;
     bool orchardWalletValidated = false;
 
     /* the hd chain data model (chain counters) */
@@ -2064,7 +2064,7 @@ public:
      * tree from a stream into the Orchard wallet.
      */
     SaplingWalletNoteCommitmentTreeLoader GetSaplingNoteCommitmentTreeLoader();
-    OrchardWalletNoteCommitmentTreeLoader GetOrchardNoteCommitmentTreeLoader();
+    IronwoodWalletNoteCommitmentTreeLoader GetOrchardNoteCommitmentTreeLoader();
 
 
 

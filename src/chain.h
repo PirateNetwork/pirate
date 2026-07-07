@@ -263,12 +263,12 @@ public:
 
     //! Change in value held by the Orchard circuit over this block.
     //! Not a std::optional because this was added before Orchard activated, so we can
-    //! rely on the invariant that every block before this was added had nOrchardValue = 0.
-    CAmount nOrchardValue;
+    //! rely on the invariant that every block before this was added had nIronwoodValue = 0.
+    CAmount nIronwoodValue;
 
     //! (memory only) Total value held by the Orchard circuit up to and including this block.
     //! Will be std::nullopt if and only if nChainTx is zero.
-    std::optional<CAmount> nChainOrchardValue;
+    std::optional<CAmount> nChainIronwoodValue;
 
     //! Root of the Sapling commitment tree as of the end of this block.
     //!
@@ -354,8 +354,8 @@ public:
         nChainSproutValue = std::nullopt;;
         nSaplingValue = 0;
         nChainSaplingValue = std::nullopt;
-        nOrchardValue = 0;
-        nChainOrchardValue = std::nullopt;
+        nIronwoodValue = 0;
+        nChainIronwoodValue = std::nullopt;
 
         nVersion       = 0;
         hashMerkleRoot = uint256();
@@ -594,7 +594,7 @@ public:
         if ((s.GetType() & SER_DISK) && (nVersion >= ORCHARD_VALUE_VERSION)) {
             READWRITE(hashAuthDataRoot);
             READWRITE(hashFinalOrchardRoot);
-            READWRITE(nOrchardValue);
+            READWRITE(nIronwoodValue);
         }
 
         // leave the existing LABS exemption here for segid and notary pay, but also add a timestamp activated segid for non LABS PoS64 chains.

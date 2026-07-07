@@ -8,17 +8,9 @@ use crate::{
     ironwood_protocol::ironwood_bundle::Bundle,
 };
 
-// SCAFFOLDING ONLY: this batch validator is not yet reachable from any C++ code - there is
-// no v6 transaction support in this tree, so nothing ever constructs an
-// ironwood::BatchValidator or calls add_bundle/validate on it. It mirrors
-// orchard_protocol::orchard_validator exactly, using IRONWOOD_VK (built for
-// OrchardCircuitVersion::PostNu6_3, the circuit version the Ironwood pool requires)
-// instead of ORCHARD_VK.
-
 struct BatchValidatorInner {
     validator: orchard::bundle::BatchValidator<'static>,
     queued_entries: CacheEntries,
-    /// See the matching field in orchard_protocol::orchard_validator::BatchValidatorInner.
     poisoned: bool,
 }
 
@@ -86,9 +78,7 @@ impl BatchValidator {
         }
     }
 
-    /// Validates this batch. See
-    /// orchard_protocol::orchard_validator::BatchValidator::validate for the consensus-rule
-    /// documentation this mirrors.
+    /// Validates this batch.
     pub(crate) fn validate(&mut self) -> bool {
         if let Some(inner) = self.0.take() {
             // `vk` was already validated (PostNu6_3) and bound into `inner.validator` at

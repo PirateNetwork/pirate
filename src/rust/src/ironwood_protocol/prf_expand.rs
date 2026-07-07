@@ -4,16 +4,21 @@ use blake2b_simd::Params;
 const PRF_EXPAND_PERSONALIZATION: &[u8; 16] = b"Zcash_ExpandSeed";
 
 /// The set of domains in which $PRF^\mathsf{expand}$ is defined.
+///
+/// The `Ironwood*` variant names reflect this pool's naming; the underlying protocol-spec
+/// domain-separator byte tags are the same ones the Orchard Action circuit already used
+/// (see the rename-exception note in this session's plan - these are cryptographic
+/// constants, not cosmetic names, and there is no spec basis to invent different ones).
 pub(crate) enum PrfExpand {
     Esk,
     Rcm,
-    OrchardAsk,
-    OrchardNk,
-    OrchardRivk,
+    IronwoodAsk,
+    IronwoodNk,
+    IronwoodRivk,
     Psi,
-    OrchardZip32Child,
-    OrchardDkOvk,
-    OrchardRivkInternal,
+    IronwoodZip32Child,
+    IronwoodDkOvk,
+    IronwoodRivkInternal,
 }
 
 impl PrfExpand {
@@ -21,13 +26,13 @@ impl PrfExpand {
         match self {
             Self::Esk => 0x04,
             Self::Rcm => 0x05,
-            Self::OrchardAsk => 0x06,
-            Self::OrchardNk => 0x07,
-            Self::OrchardRivk => 0x08,
+            Self::IronwoodAsk => 0x06,
+            Self::IronwoodNk => 0x07,
+            Self::IronwoodRivk => 0x08,
             Self::Psi => 0x09,
-            Self::OrchardZip32Child => 0x81,
-            Self::OrchardDkOvk => 0x82,
-            Self::OrchardRivkInternal => 0x83,
+            Self::IronwoodZip32Child => 0x81,
+            Self::IronwoodDkOvk => 0x82,
+            Self::IronwoodRivkInternal => 0x83,
         }
     }
 

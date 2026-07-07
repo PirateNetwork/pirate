@@ -49,10 +49,6 @@ static const int32_t OVERWINTER_MAX_TX_VERSION = 3;
 static const int32_t SAPLING_MIN_TX_VERSION = 4;
 /** The maximum allowed Sapling transaction version (network rule) */
 static const int32_t SAPLING_MAX_TX_VERSION = 4;
-/** The minimum allowed Orchard transaction version (network rule) */
-static const int32_t ORCHARD_MIN_TX_VERSION = 5;
-/** The maximum allowed Orchard transaction version (network rule) */
-static const int32_t ORCHARD_MAX_TX_VERSION = 5;
 /** The minimum allowed Ironwood transaction version (network rule) */
 static const int32_t IRONWOOD_MIN_TX_VERSION = 6;
 /** The maximum allowed Ironwood transaction version (network rule) */

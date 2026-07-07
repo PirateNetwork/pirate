@@ -9,7 +9,7 @@ use orchard::{
 
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
 
-use crate::orchard_protocol::orchard_bundle::Action;
+use crate::ironwood_protocol::ironwood_bundle::Action;
 use subtle::CtOption;
 
 /// Converts CtOption<t> into Option<T>
@@ -22,8 +22,8 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
 }
 
 #[no_mangle]
-pub extern "C" fn try_orchard_decrypt_action_ovk(
-    orchard_action: *const Action,
+pub extern "C" fn try_ironwood_decrypt_action_ovk(
+    ironwood_action: *const Action,
     ovk_bytes: *const [c_uchar; 32],
     value_out: *mut u64,
     address_out: *mut [u8; 43],
@@ -35,9 +35,9 @@ pub extern "C" fn try_orchard_decrypt_action_ovk(
     let ovk_bytes = unsafe { *ovk_bytes };
     let ovk = OutgoingViewingKey::from(ovk_bytes);
 
-    if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+    if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
 
-        let action = &orchard_action.inner();
+        let action = &ironwood_action.inner();
         let domain = OrchardDomain::for_action(action);
         let decrypted = match try_output_recovery_with_ovk(&domain, &ovk, action, action.cv_net(), &action.encrypted_note().out_ciphertext) {
             Some(r) => r,
@@ -66,8 +66,8 @@ pub extern "C" fn try_orchard_decrypt_action_ovk(
 }
 
 #[no_mangle]
-pub extern "C" fn try_orchard_decrypt_action_ivk(
-    orchard_action: *const Action,
+pub extern "C" fn try_ironwood_decrypt_action_ivk(
+    ironwood_action: *const Action,
     ivk_bytes: *const [c_uchar; 64],
     value_out: *mut u64,
     address_out: *mut [u8; 43],
@@ -80,10 +80,10 @@ pub extern "C" fn try_orchard_decrypt_action_ivk(
     let ivk = IncomingViewingKey::from_bytes(&ivk_bytes);
     if ivk.is_some().into() {
 
-        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+        if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
 
             let prepared_ivk = PreparedIncomingViewingKey::new(&ivk.unwrap());
-            let action = &orchard_action.inner();
+            let action = &ironwood_action.inner();
             let domain = OrchardDomain::for_action(action);
             let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
                 Some(r) => r,
@@ -112,8 +112,8 @@ pub extern "C" fn try_orchard_decrypt_action_ivk(
 }
 
 #[no_mangle]
-pub extern "C" fn try_orchard_decrypt_action_fvk(
-    orchard_action: *const Action,
+pub extern "C" fn try_ironwood_decrypt_action_fvk(
+    ironwood_action: *const Action,
     fvk_bytes: *const [c_uchar; 96],
     value_out: *mut u64,
     address_out: *mut [u8; 43],
@@ -129,8 +129,8 @@ pub extern "C" fn try_orchard_decrypt_action_fvk(
 
         let fvk = fvkopt.unwrap();
 
-        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
-            let action = &orchard_action.inner();
+        if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
+            let action = &ironwood_action.inner();
             let domain = OrchardDomain::for_action(action);
 
             // Try external scope first, then internal (change addresses).
@@ -169,8 +169,8 @@ pub extern "C" fn try_orchard_decrypt_action_fvk(
 }
 
 #[no_mangle]
-/// Compute nullifier for an Orchard note from its constituent parts
-/// 
+/// Compute nullifier for an Ironwood note from its constituent parts
+///
 /// This is the standalone version that takes note components directly.
 /// For computing from an encrypted action, use action_compute_nullifier instead.
 pub(crate) fn compute_nullifier(
@@ -208,7 +208,8 @@ pub(crate) fn compute_nullifier(
         None => return false
     };
 
-    let note = match de_ct(Note::from_parts(address, note_value, rho, rseed, NoteVersion::V2)) {
+    // Ironwood notes use NoteVersion::V3 (the "quantum-recoverable" plaintext format).
+    let note = match de_ct(Note::from_parts(address, note_value, rho, rseed, NoteVersion::V3)) {
         Some(n) => n,
         None => return false,
     };
@@ -219,29 +220,32 @@ pub(crate) fn compute_nullifier(
     return true
 }
 
-/// Derives the Orchard Outgoing Cipher Key (OCK) for a specific output.
+/// Derives the Ironwood Outgoing Cipher Key (OCK) for a specific output.
 ///
 /// The OCK can decrypt the outgoing ciphertext of a shielded output, allowing recovery
 /// of the note plaintext without access to the full viewing key. This is used for
 /// proof-of-payment disclosures.
-pub(crate) fn derive_orchard_ock(
-    orchard_action: &Action,
+pub(crate) fn derive_ironwood_ock(
+    ironwood_action: &Action,
     ovk_bytes: &[u8; 32],
     ock_out: &mut [u8; 32],
 ) -> bool {
     let ovk = OutgoingViewingKey::from(*ovk_bytes);
-    let action = &orchard_action.inner();
+    let action = &ironwood_action.inner();
 
     let cv = action.cv_net();
     let cmx_bytes = action.cmx().to_bytes();
     let epk_bytes = action.encrypted_note().epk_bytes;
 
     use blake2b_simd::Params;
-    const PRF_OCK_ORCHARD_PERSONALIZATION: &[u8; 16] = b"Zcash_Orchardock";
+    // Protocol-spec PRF^ock domain separator for the Orchard Action circuit, which Ironwood
+    // reuses unchanged - see the rename-exception note in this session's plan (no spec basis
+    // to invent a different "Ironwood" domain separator here).
+    const PRF_OCK_IRONWOOD_PERSONALIZATION: &[u8; 16] = b"Zcash_Orchardock";
 
     let ock = Params::new()
         .hash_length(32)
-        .personal(PRF_OCK_ORCHARD_PERSONALIZATION)
+        .personal(PRF_OCK_IRONWOOD_PERSONALIZATION)
         .to_state()
         .update(ovk.as_ref())
         .update(&cv.to_bytes())
@@ -253,13 +257,13 @@ pub(crate) fn derive_orchard_ock(
     true
 }
 
-/// Attempts to decrypt an Orchard action output using an Outgoing Cipher Key (OCK).
+/// Attempts to decrypt an Ironwood action output using an Outgoing Cipher Key (OCK).
 ///
-/// This function uses the OCK (derived from derive_orchard_ock) to decrypt the outgoing
+/// This function uses the OCK (derived from derive_ironwood_ock) to decrypt the outgoing
 /// ciphertext and then uses that information to decrypt the note plaintext. Returns true
 /// if decryption succeeds and populates the output parameters with note details.
-pub(crate) fn try_orchard_decrypt_action_ock(
-    orchard_action: &Action,
+pub(crate) fn try_ironwood_decrypt_action_ock(
+    ironwood_action: &Action,
     ock_bytes: &[u8; 32],
     value_out: &mut u64,
     address_out: &mut [u8; 43],
@@ -270,7 +274,7 @@ pub(crate) fn try_orchard_decrypt_action_ock(
     use zcash_note_encryption::{OutgoingCipherKey, try_output_recovery_with_ock};
 
     let ock = OutgoingCipherKey::from(*ock_bytes);
-    let action = &orchard_action.inner();
+    let action = &ironwood_action.inner();
     let domain = OrchardDomain::for_action(action);
 
     let decrypted = match try_output_recovery_with_ock(

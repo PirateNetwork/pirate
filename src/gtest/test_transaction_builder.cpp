@@ -63,11 +63,11 @@ TEST(TransactionBuilder, Invoke)
 
     // Create wallets for Sapling and Orchard
     SaplingWallet saplingWallet;
-    OrchardWallet orchardWallet;
+    IronwoodWallet orchardWallet;
 
     // Create Frontier Trees
     SaplingMerkleFrontier saplingFrontier;
-    OrchardMerkleFrontier orchardFrontier;
+    IronwoodMerkleFrontier orchardFrontier;
 
     // Initialize the Sapling and Orchard wallets with the frontiers
     saplingWallet.InitNoteCommitmentTree(saplingFrontier);
@@ -143,9 +143,9 @@ TEST(TransactionBuilder, Invoke)
             saplingWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vOutputs[j], true);
         }
     }
-    if (tx1.GetOrchardBundle().IsPresent()) {
+    if (tx1.GetIronwoodBundle().IsPresent()) {
         orchardWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
-        auto vActions = tx1.GetOrchardBundle().GetDetails().actions();
+        auto vActions = tx1.GetIronwoodBundle().GetDetails().actions();
         for (int j = 0; j < vActions.size(); j++) {
             orchardWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vActions[j], true);
         }
@@ -393,11 +393,11 @@ TEST(TransactionBuilder, ChangeOutput)
 
     // Create wallets for Sapling and Orchard
     SaplingWallet saplingWallet;
-    OrchardWallet orchardWallet;
+    IronwoodWallet orchardWallet;
 
     // Create Frontier Trees
     SaplingMerkleFrontier saplingFrontier;
-    OrchardMerkleFrontier orchardFrontier;
+    IronwoodMerkleFrontier orchardFrontier;
 
     // Initialize the Sapling and Orchard wallets with the frontiers
     saplingWallet.InitNoteCommitmentTree(saplingFrontier);
@@ -487,9 +487,9 @@ TEST(TransactionBuilder, ChangeOutput)
             saplingWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vOutputs[j], true);
         }
     }
-    if (tx1.GetOrchardBundle().IsPresent()) {
+    if (tx1.GetIronwoodBundle().IsPresent()) {
         orchardWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
-        auto vActions = tx1.GetOrchardBundle().GetDetails().actions();
+        auto vActions = tx1.GetIronwoodBundle().GetDetails().actions();
         for (int j = 0; j < vActions.size(); j++) {
             orchardWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vActions[j], true);
         }
@@ -649,11 +649,11 @@ TEST(TransactionBuilder, SetFee)
 
     // Create wallets for Sapling and Orchard
     SaplingWallet saplingWallet;
-    OrchardWallet orchardWallet;
+    IronwoodWallet orchardWallet;
 
     // Create Frontier Trees
     SaplingMerkleFrontier saplingFrontier;
-    OrchardMerkleFrontier orchardFrontier;
+    IronwoodMerkleFrontier orchardFrontier;
 
     // Initialize the Sapling and Orchard wallets with the frontiers
     saplingWallet.InitNoteCommitmentTree(saplingFrontier);
@@ -736,9 +736,9 @@ TEST(TransactionBuilder, SetFee)
             saplingWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vOutputs[j], true);
         }
     }
-    if (tx1.GetOrchardBundle().IsPresent()) {
+    if (tx1.GetIronwoodBundle().IsPresent()) {
         orchardWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
-        auto vActions = tx1.GetOrchardBundle().GetDetails().actions();
+        auto vActions = tx1.GetIronwoodBundle().GetDetails().actions();
         for (int j = 0; j < vActions.size(); j++) {
             orchardWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vActions[j], true);
         }

@@ -24,13 +24,13 @@ use orchard::{
 };
 
 use crate::{
-    orchard_protocol::orchard_bundle::Action,
+    ironwood_protocol::ironwood_bundle::Action,
     streams_ffi::{CppStreamReader, CppStreamWriter, ReadCb, StreamObj, WriteCb},
 };
 
-pub const ORCHARD_TREE_DEPTH: usize = 32;
+pub const IRONWOOD_TREE_DEPTH: usize = 32;
 const NOTE_STATE_V1: u8 = 1;
-pub type OrchardPath = MerklePath<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>;
+pub type IronwoodPath = MerklePath<MerkleHashOrchard, NOTE_COMMITMENT_TREE_DEPTH>;
 
 /// Converts CtOption<t> into Option<T>
 fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
@@ -105,7 +105,7 @@ pub enum RewindError {
 struct NotePositions {
     /// The height of the block containing the transaction.
     tx_height: BlockHeight,
-    /// A map from the index of an Orchard action tracked by this wallet, to the position
+    /// A map from the index of an Ironwood action tracked by this wallet, to the position
     /// of the output note's commitment within the global Merkle tree.
     note_positions: BTreeMap<usize, Position>,
 }
@@ -231,7 +231,7 @@ impl Wallet {
         }
     }
 
-    /// Add note commitments for the Orchard components of a transaction to the note
+    /// Add note commitments for the Ironwood components of a transaction to the note
     /// commitment tree, and mark the tree at the notes decryptable by this wallet so that
     /// in the future we can produce authentication paths to those notes.
     ///
@@ -239,9 +239,9 @@ impl Wallet {
     ///   this bundle.
     /// * `block_tx_idx` - Index of the transaction within the block
     /// * `txid` - Identifier of the transaction.
-    /// * `bundle` - Orchard component of the transaction.
+    /// * `bundle` - Ironwood component of the transaction.
     /// #[tracing::instrument(level = "trace", skip(self))]
-    pub fn orchard_append_commitments(
+    pub fn ironwood_append_commitments(
         &mut self,
         block_height: BlockHeight,
         block_tx_idx: usize,
@@ -337,13 +337,13 @@ impl Wallet {
         true
     }
 
-    pub fn orchard_append_single_commitment(
+    pub fn ironwood_append_single_commitment(
         &mut self,
         block_height: BlockHeight,
         txid: &TxId,
         block_tx_idx: usize,
         tx_action_idx: usize,
-        orchard_action: &Action,
+        ironwood_action: &Action,
         is_mine: bool,
     ) -> Result<(), WalletError> {
         if let Some(last) = &self.last_observed {
@@ -371,7 +371,7 @@ impl Wallet {
         });
 
         let leaf = MerkleHashOrchard::from_cmx(
-            &ExtractedNoteCommitment::from_bytes(&orchard_action.cmx()).unwrap(),
+            &ExtractedNoteCommitment::from_bytes(&ironwood_action.cmx()).unwrap(),
         );
         if !self.commitment_tree.append(leaf) {
             return Err(WalletError::NoteCommitmentTreeFull);
@@ -396,7 +396,7 @@ impl Wallet {
 
     }
 
-    /// Returns the root of the Orchard note commitment tree, as of the specified checkpoint
+    /// Returns the root of the Ironwood note commitment tree, as of the specified checkpoint
     /// depth. A depth of 0 corresponds to the chain tip.
     pub fn note_commitment_tree_root(&self, checkpoint_depth: usize) -> Option<MerkleHashOrchard> {
         self.commitment_tree.root(checkpoint_depth)
@@ -405,26 +405,26 @@ impl Wallet {
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_new() -> *mut Wallet {
+pub extern "C" fn ironwood_wallet_new() -> *mut Wallet {
     let empty_wallet = Wallet::empty();
     Box::into_raw(Box::new(empty_wallet))
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_free(wallet: *mut Wallet) {
+pub extern "C" fn ironwood_wallet_free(wallet: *mut Wallet) {
     if !wallet.is_null() {
         drop(unsafe { Box::from_raw(wallet) });
     }
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_reset(wallet: *mut Wallet) {
+pub extern "C" fn ironwood_wallet_reset(wallet: *mut Wallet) {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     wallet.reset();
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_checkpoint(
+pub extern "C" fn ironwood_wallet_checkpoint(
     wallet: *mut Wallet,
     block_height: BlockHeight,
 ) -> bool {
@@ -433,7 +433,7 @@ pub extern "C" fn orchard_wallet_checkpoint(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_get_last_checkpoint(
+pub extern "C" fn ironwood_wallet_get_last_checkpoint(
     wallet: *const Wallet,
     block_height_ret: *mut u32,
 ) -> bool {
@@ -449,7 +449,7 @@ pub extern "C" fn orchard_wallet_get_last_checkpoint(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_rewind(
+pub extern "C" fn ironwood_wallet_rewind(
     wallet: *mut Wallet,
     to_height: BlockHeight,
     result_height: *mut BlockHeight,
@@ -473,7 +473,7 @@ pub extern "C" fn orchard_wallet_rewind(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_append_bundle_commitments(
+pub extern "C" fn ironwood_wallet_append_bundle_commitments(
     wallet: *mut Wallet,
     block_height: u32,
     block_tx_idx: usize,
@@ -483,9 +483,9 @@ pub extern "C" fn orchard_wallet_append_bundle_commitments(
     // let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
     if let Some(bundle) = unsafe { bundle.as_ref() } {
         if let Err(e) =
-            wallet.orchard_append_commitments(block_height.into(), block_tx_idx, bundle)
+            wallet.ironwood_append_commitments(block_height.into(), block_tx_idx, bundle)
         {
-            error!("An error occurred adding the Orchard bundle's notes to the note commitment tree: {:?}", e);
+            error!("An error occurred adding the Ironwood bundle's notes to the note commitment tree: {:?}", e);
             return false;
         }
     }
@@ -494,7 +494,7 @@ pub extern "C" fn orchard_wallet_append_bundle_commitments(
 }
 
 #[no_mangle]
-pub extern "C" fn clear_orchard_note_positions_for_txid(
+pub extern "C" fn clear_ironwood_note_positions_for_txid(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
 ) -> bool {
@@ -511,7 +511,7 @@ pub extern "C" fn clear_orchard_note_positions_for_txid(
 }
 
 #[no_mangle]
-pub extern "C" fn create_orchard_single_txid_positions(
+pub extern "C" fn create_ironwood_single_txid_positions(
     wallet: *mut Wallet,
     block_height: u32,
     txid: *const [c_uchar; 32],
@@ -529,22 +529,22 @@ pub extern "C" fn create_orchard_single_txid_positions(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_append_single_commitment(
+pub extern "C" fn ironwood_wallet_append_single_commitment(
     wallet: *mut Wallet,
     block_height: u32,
     txid: *const [c_uchar; 32],
     block_tx_idx: usize,
     tx_action_idx: usize,
-    orchard_action: *const Action,
+    ironwood_action: *const Action,
     is_mine: bool,
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
-    if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+    if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
         if let Err(e) =
-            wallet.orchard_append_single_commitment(block_height.into(), &txid, block_tx_idx, tx_action_idx, orchard_action, is_mine)
+            wallet.ironwood_append_single_commitment(block_height.into(), &txid, block_tx_idx, tx_action_idx, ironwood_action, is_mine)
         {
-            error!("An error occurred adding this Orchard action to the note commitment tree: {:?}", e);
+            error!("An error occurred adding this Ironwood action to the note commitment tree: {:?}", e);
             return false;
         }
     }
@@ -553,7 +553,7 @@ pub extern "C" fn orchard_wallet_append_single_commitment(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_commitment_tree_root(
+pub extern "C" fn ironwood_wallet_commitment_tree_root(
     wallet: *const Wallet,
     checkpoint_depth: usize,
     root_ret: *mut [u8; 32],
@@ -572,13 +572,13 @@ pub extern "C" fn orchard_wallet_commitment_tree_root(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_gc_note_commitment_tree(wallet: *mut Wallet) {
+pub extern "C" fn ironwood_wallet_gc_note_commitment_tree(wallet: *mut Wallet) {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
     wallet.commitment_tree.garbage_collect();
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_write_note_commitment_tree(
+pub extern "C" fn ironwood_wallet_write_note_commitment_tree(
     wallet: *const Wallet,
     stream: Option<StreamObj>,
     write_cb: Option<WriteCb>,
@@ -619,14 +619,14 @@ pub extern "C" fn orchard_wallet_write_note_commitment_tree(
     {
         Ok(()) => true,
         Err(e) => {
-            error!("Failure in writing Orchard note commitment tree: {}", e);
+            error!("Failure in writing Ironwood note commitment tree: {}", e);
             false
         }
     }
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_load_note_commitment_tree(
+pub extern "C" fn ironwood_wallet_load_note_commitment_tree(
     wallet: *mut Wallet,
     stream: Option<StreamObj>,
     read_cb: Option<ReadCb>,
@@ -671,7 +671,7 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
                 .any(|n| !n.note_positions.is_empty())
         {
             tracing::warn!(
-                "Orchard note commitment tree is empty but wallet has {} tracked note positions. \
+                "Ironwood note commitment tree is empty but wallet has {} tracked note positions. \
                  Clearing last_checkpoint to trigger a rescan and rebuild witness data.",
                 wallet.wallet_note_positions.len()
             );
@@ -684,7 +684,7 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
     match reader.read_u8() {
         Err(e) => {
             error!(
-                "Failed to read Orchard note position serialization flag: {}",
+                "Failed to read Ironwood note position serialization flag: {}",
                 e
             );
             false
@@ -693,7 +693,7 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
             Ok(_) => true,
             Err(e) if e.to_string().contains("rescan required") => {
                 tracing::warn!(
-                    "Orchard note commitment tree wallet data requires rescan ({}). \
+                    "Ironwood note commitment tree wallet data requires rescan ({}). \
                      Tree will be rebuilt.",
                     e
                 );
@@ -705,7 +705,7 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
             }
             Err(e) => {
                 error!(
-                    "Failed to read Orchard note commitment or last checkpoint height: {}",
+                    "Failed to read Ironwood note commitment or last checkpoint height: {}",
                     e
                 );
                 false
@@ -713,7 +713,7 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
         },
         Ok(flag) => {
             error!(
-                "Unrecognized Orchard note position serialization version: {}",
+                "Unrecognized Ironwood note position serialization version: {}",
                 flag
             );
             false
@@ -722,9 +722,9 @@ pub extern "C" fn orchard_wallet_load_note_commitment_tree(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_init_from_frontier(
+pub extern "C" fn ironwood_wallet_init_from_frontier(
     wallet: *mut Wallet,
-    frontier: *const crate::merkle_frontier::OrchardFrontier,
+    frontier: *const crate::merkle_frontier::IronwoodFrontier,
 ) -> bool {
     let wallet = unsafe { wallet.as_mut() }.expect("Wallet pointer may not be null.");
     let frontier = unsafe { frontier.as_ref() }.expect("Frontier pointer may not be null.");
@@ -747,7 +747,7 @@ pub extern "C" fn orchard_wallet_init_from_frontier(
 
 
 #[no_mangle]
-pub extern "C" fn orchard_is_note_tracked(
+pub extern "C" fn ironwood_is_note_tracked(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
     tx_action_idx: usize,
@@ -767,18 +767,18 @@ pub extern "C" fn orchard_is_note_tracked(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_get_path_for_note(
+pub extern "C" fn ironwood_wallet_get_path_for_note(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
     tx_action_idx: usize,
-    path_ret: *mut [u8; 1 + 33 * ORCHARD_TREE_DEPTH + 8],
+    path_ret: *mut [u8; 1 + 33 * IRONWOOD_TREE_DEPTH + 8],
 ) -> bool {
     let wallet = unsafe { wallet.as_ref() }.expect("Wallet pointer may not be null");
     let txid = TxId::from_bytes(*unsafe { txid.as_ref() }.expect("txid may not be null."));
 
     if let Some(position) = wallet.get_position_of_note(&txid, &tx_action_idx) {
         if let Ok(path_vec) = wallet.commitment_tree.witness(position, 0) {
-            if let Ok(path) = OrchardPath::from_parts(path_vec, position) {
+            if let Ok(path) = IronwoodPath::from_parts(path_vec, position) {
                 let mut buffer = vec![];
                 if write_merkle_path(&mut buffer, &path).is_ok() {
                     if let Ok(rust_path_ret) = buffer.try_into() {
@@ -795,7 +795,7 @@ pub extern "C" fn orchard_wallet_get_path_for_note(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_wallet_unmark_transaction_notes(
+pub extern "C" fn ironwood_wallet_unmark_transaction_notes(
     wallet: *mut Wallet,
     txid: *const [c_uchar; 32],
 ) -> bool {
@@ -806,14 +806,14 @@ pub extern "C" fn orchard_wallet_unmark_transaction_notes(
 }
 
 #[no_mangle]
-pub extern "C" fn get_orchard_path_root_with_cm(
-    merkle_path: *const [c_uchar; 1 + 33 * ORCHARD_TREE_DEPTH + 8],
+pub extern "C" fn get_ironwood_path_root_with_cm(
+    merkle_path: *const [c_uchar; 1 + 33 * IRONWOOD_TREE_DEPTH + 8],
     cm: *const [c_uchar; 32],
     anchor_out: *mut [c_uchar; 32],
 ) -> bool {
 
     // Parse the Merkle path from the caller
-    let merkle_path: OrchardPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+    let merkle_path: IronwoodPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
         Ok(w) => w,
         Err(_) => return false,
     };

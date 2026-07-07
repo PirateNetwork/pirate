@@ -6,7 +6,7 @@ use incrementalmerkletree::{
 };
 use orchard::{
     tree::MerkleHashOrchard,
-    note::ExtractedNoteCommitment as OrchardExtractedNoteCommitment,
+    note::ExtractedNoteCommitment as IronwoodExtractedNoteCommitment,
 };
 
 use zcash_primitives::{
@@ -14,8 +14,7 @@ use zcash_primitives::{
 };
 use sapling_crypto::{NOTE_COMMITMENT_TREE_DEPTH, Node, note::ExtractedNoteCommitment as SaplingExtractedNoteCommitment};
 
-// use crate::{bridge::ffi, orchard_bundle, streams::CppStream, wallet::Wallet};
-use crate::{bridge::ffi, sapling_protocol::Bundle as SaplingBundle, orchard_protocol::orchard_bundle, streams::CppStream, orchard_protocol::orchard_wallet::Wallet as OrchardWalletInternal, sapling_protocol::sapling_wallet::Wallet as SaplingWalletInternal};
+use crate::{bridge::ffi, sapling_protocol::Bundle as SaplingBundle, ironwood_protocol::ironwood_bundle, streams::CppStream, ironwood_protocol::ironwood_wallet::Wallet as IronwoodWalletInternal, sapling_protocol::sapling_wallet::Wallet as SaplingWalletInternal};
 
 use crate::de_ct;
 
@@ -88,34 +87,34 @@ impl<H: Copy + Hashable + HashSer> MerkleFrontier<H> {
     }
 }
 
-/// Returns the root of an empty Orchard Merkle tree.
-pub(crate) fn orchard_empty_root() -> [u8; 32] {
+/// Returns the root of an empty Ironwood Merkle tree.
+pub(crate) fn ironwood_empty_root() -> [u8; 32] {
     let level = Level::from(NOTE_COMMITMENT_TREE_DEPTH);
     MerkleHashOrchard::empty_root(level).to_bytes()
 }
 
-/// An Orchard incremental Merkle frontier.
-pub(crate) type OrchardFrontier = MerkleFrontier<MerkleHashOrchard>;
+/// An Ironwood incremental Merkle frontier.
+pub(crate) type IronwoodFrontier = MerkleFrontier<MerkleHashOrchard>;
 
 
-/// Constructs a new empty Orchard Merkle frontier.
-pub(crate) fn new_orchard() -> Box<OrchardFrontier> {
+/// Constructs a new empty Ironwood Merkle frontier.
+pub(crate) fn new_ironwood() -> Box<IronwoodFrontier> {
     Box::new(MerkleFrontier(Inner::empty()))
 }
 
-/// Attempts to parse an Orchard Merkle frontier from the given C++ stream.
-pub(crate) fn parse_orchard(reader: &mut CppStream<'_>) -> Result<Box<OrchardFrontier>, String> {
-    OrchardFrontier::parse(reader)
+/// Attempts to parse an Ironwood Merkle frontier from the given C++ stream.
+pub(crate) fn parse_ironwood(reader: &mut CppStream<'_>) -> Result<Box<IronwoodFrontier>, String> {
+    IronwoodFrontier::parse(reader)
 }
 
-pub(crate) struct OrchardWallet;
+pub(crate) struct IronwoodWallet;
 
-impl OrchardFrontier {
+impl IronwoodFrontier {
     /// Appends the note commitments in the given bundle to this frontier.
     pub(crate) fn append_bundle(
         &mut self,
-        bundle: &orchard_bundle::Bundle,
-    ) -> Result<ffi::OrchardAppendResult, &'static str> {
+        bundle: &ironwood_bundle::Bundle,
+    ) -> Result<ffi::IronwoodAppendResult, &'static str> {
         if let Some(bundle) = bundle.inner() {
             // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
             // more than one subtree boundary while processing that bundle. This means we only need
@@ -124,7 +123,7 @@ impl OrchardFrontier {
             let mut tracked_root: Option<MerkleHashOrchard> = None;
             for action in bundle.actions().iter() {
                 if !self.0.append(MerkleHashOrchard::from_cmx(action.cmx())) {
-                    return Err("Orchard note commitment tree is full.");
+                    return Err("Ironwood note commitment tree is full.");
                 }
 
                 if let Some(non_empty_frontier) = self.0.value() {
@@ -138,26 +137,26 @@ impl OrchardFrontier {
             }
 
             Ok(if let Some(root_hash) = tracked_root {
-                ffi::OrchardAppendResult {
+                ffi::IronwoodAppendResult {
                     has_subtree_boundary: true,
                     completed_subtree_root: root_hash.to_bytes(),
                 }
             } else {
-                ffi::OrchardAppendResult {
+                ffi::IronwoodAppendResult {
                     has_subtree_boundary: false,
                     completed_subtree_root: [0u8; 32],
                 }
             })
         } else {
-            Err("null Orchard bundle pointer")
+            Err("null Ironwood bundle pointer")
         }
     }
 
         /// Appends a single cmx this frontier.
         pub(crate) fn append(
             &mut self,
-            orchard_cmx: [u8; 32],
-        ) -> Result<ffi::OrchardAppendResult, &'static str> {
+            ironwood_cmx: [u8; 32],
+        ) -> Result<ffi::IronwoodAppendResult, &'static str> {
             // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
             // more than one subtree boundary while processing that bundle. This means we only need
             // to find a single subtree root while processing an individual bundle, so `Option` is
@@ -165,14 +164,14 @@ impl OrchardFrontier {
             let mut tracked_root: Option<MerkleHashOrchard> = None;
 
             // Deserialize the extracted note commitment.
-            let cmx = match de_ct(OrchardExtractedNoteCommitment::from_bytes(&orchard_cmx)) {
+            let cmx = match de_ct(IronwoodExtractedNoteCommitment::from_bytes(&ironwood_cmx)) {
                 Some(a) => a,
-                None => return Err("Orchard CMX is invalid."),
+                None => return Err("Ironwood CMX is invalid."),
             };
 
             //Append the note commitment to the frontier.
             if !self.0.append(MerkleHashOrchard::from_cmx(&cmx)) {
-                return Err("Orchard note commitment tree is full.");
+                return Err("Ironwood note commitment tree is full.");
             }
 
             // Check if the frontier has a complete subtree.
@@ -186,26 +185,26 @@ impl OrchardFrontier {
 
             // Return the result.
             Ok(if let Some(root_hash) = tracked_root {
-                ffi::OrchardAppendResult {
+                ffi::IronwoodAppendResult {
                     has_subtree_boundary: true,
                     completed_subtree_root: root_hash.to_bytes(),
                 }
             } else {
-                ffi::OrchardAppendResult {
+                ffi::IronwoodAppendResult {
                     has_subtree_boundary: false,
                     completed_subtree_root: [0u8; 32],
                 }
             })
         }
 
-    /// Overwrites the first bridge of the Orchard wallet's note commitment tree to have
+    /// Overwrites the first bridge of the Ironwood wallet's note commitment tree to have
     /// `self` as its latest state.
     ///
     /// This will fail with an assertion error if any checkpoints exist in the tree.
     ///
     /// TODO: Remove once `crate::wallet` is migrated to `cxx`.
-    pub(crate) fn init_wallet(&self, wallet: *mut OrchardWallet) -> bool {
-        crate::orchard_protocol::orchard_wallet::orchard_wallet_init_from_frontier(wallet as *mut OrchardWalletInternal, self as *const _)
+    pub(crate) fn init_wallet(&self, wallet: *mut IronwoodWallet) -> bool {
+        crate::ironwood_protocol::ironwood_wallet::ironwood_wallet_init_from_frontier(wallet as *mut IronwoodWalletInternal, self as *const _)
     }
 }
 

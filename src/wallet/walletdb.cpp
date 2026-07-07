@@ -882,13 +882,13 @@ bool CWalletDB::WriteCryptedPrimaryOrchardSpendingKey(
     return true;
 }
 
-bool CWalletDB::WriteOrchardWitnesses(const OrchardWallet& wallet)
+bool CWalletDB::WriteOrchardWitnesses(const IronwoodWallet& wallet)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(
             std::string("orchard_note_commitment_tree"),
-            OrchardWalletNoteCommitmentTreeWriter(wallet));
+            IronwoodWalletNoteCommitmentTreeWriter(wallet));
 }
 
 bool CWalletDB::WriteCryptedOrchardWitnesses(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret,

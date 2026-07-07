@@ -348,7 +348,7 @@ struct CAnchorsSaplingMerkleCacheEntry
 struct CAnchorsOrchardFrontierCacheEntry
 {
     bool entered; // This will be false if the anchor is removed from the cache
-    OrchardMerkleFrontier tree; // The tree itself
+    IronwoodMerkleFrontier tree; // The tree itself
     unsigned char flags;
 
     enum Flags {
@@ -420,7 +420,7 @@ public:
     virtual bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
 
     //! Retrieve the tree (OrchardFroniter) at a particular anchored root in the chain
-    virtual bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
+    virtual bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
 
     //! Determine whether a nullifier is spent or not
     virtual bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
@@ -483,7 +483,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
-    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;
@@ -590,7 +590,7 @@ public:
     bool GetSproutAnchorAt(const uint256 &rt, SproutMerkleTree &tree) const;
     bool GetSaplingAnchorAt(const uint256 &rt, SaplingMerkleTree &tree) const;
     bool GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFrontier &tree) const;
-    bool GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const;
+    bool GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const;
     bool GetNullifier(const uint256 &nullifier, ShieldedType type) const;
     bool GetCoins(const uint256 &txid, CCoins &coins) const;
     bool HaveCoins(const uint256 &txid) const;

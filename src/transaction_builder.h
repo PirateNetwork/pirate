@@ -27,9 +27,9 @@ uint256 ProduceShieldedSignatureHash(
     const CTransaction& tx,
     const std::vector<CTxOut>& allPrevOutputs,
     const sapling::UnauthorizedBundle& saplingBundle,
-    const std::optional<orchard::UnauthorizedBundle>& orchardBundle);
+    const std::optional<ironwood::UnauthorizedBundle>& orchardBundle);
 
-namespace orchard
+namespace ironwood
 {
 
 /// A builder that constructs an `UnauthorizedBundle` from a set of notes to be spent,
@@ -37,13 +37,13 @@ namespace orchard
 class Builder
 {
 private:
-    /// The Orchard builder. Memory is allocated by Rust. If this is `nullptr` then
+    /// The Ironwood builder. Memory is allocated by Rust. If this is `nullptr` then
     /// `Builder::Build` has been called, and all subsequent operations will throw an
     /// exception.
-    std::unique_ptr<OrchardBuilderPtr, decltype(&orchard_builder_free)> inner;
+    std::unique_ptr<IronwoodBuilderPtr, decltype(&ironwood_builder_free)> inner;
     bool hasActions{false};
 
-    Builder() : inner(nullptr, orchard_builder_free), hasActions(false) {}
+    Builder() : inner(nullptr, ironwood_builder_free), hasActions(false) {}
 
 public:
     Builder(bool spendsEnabled, bool outputsEnabled, uint256 anchor);
@@ -82,7 +82,7 @@ public:
         const std::optional<libzcash::Memo>& memo = std::nullopt);
 
     /// Returns `true` if any spends or outputs have been added to this builder. This can
-    /// be used to avoid calling `Build()` and creating a dummy Orchard bundle.
+    /// be used to avoid calling `Build()` and creating a dummy Ironwood bundle.
     bool HasActions()
     {
         return hasActions;
@@ -99,17 +99,17 @@ public:
     std::optional<UnauthorizedBundle> Build();
 };
 
-/// An unauthorized Orchard bundle, ready for its proof to be created and signatures
+/// An unauthorized Ironwood bundle, ready for its proof to be created and signatures
 /// applied.
 class UnauthorizedBundle
 {
 private:
-    /// An optional Orchard bundle (with `nullptr` corresponding to `None`).
+    /// An optional Ironwood bundle (with `nullptr` corresponding to `None`).
     /// Memory is allocated by Rust.
-    std::unique_ptr<OrchardUnauthorizedBundlePtr, decltype(&orchard_unauthorized_bundle_free)> inner;
+    std::unique_ptr<IronwoodUnauthorizedBundlePtr, decltype(&ironwood_unauthorized_bundle_free)> inner;
 
-    UnauthorizedBundle() : inner(nullptr, orchard_unauthorized_bundle_free) {}
-    UnauthorizedBundle(OrchardUnauthorizedBundlePtr* bundle) : inner(bundle, orchard_unauthorized_bundle_free) {}
+    UnauthorizedBundle() : inner(nullptr, ironwood_unauthorized_bundle_free) {}
+    UnauthorizedBundle(IronwoodUnauthorizedBundlePtr* bundle) : inner(bundle, ironwood_unauthorized_bundle_free) {}
     friend class Builder;
     // The parentheses here are necessary to avoid the following compilation error:
     //     error: C++ requires a type specifier for all declarations
@@ -120,7 +120,7 @@ private:
         const CTransaction& tx,
         const std::vector<CTxOut>& allPrevOutputs,
         const sapling::UnauthorizedBundle& saplingBundle,
-        const std::optional<orchard::UnauthorizedBundle>& orchardBundle));
+        const std::optional<ironwood::UnauthorizedBundle>& orchardBundle));
 
 public:
     // UnauthorizedBundle should never be copied
@@ -143,12 +143,12 @@ public:
     /// this bundle must be discarded and a new bundle built. Subsequent usage of this
     /// object in any way will cause an exception. This emulates Rust's compile-time
     /// move semantics at runtime.
-    std::optional<OrchardBundle> ProveAndSign(
+    std::optional<IronwoodBundle> ProveAndSign(
         std::vector<libzcash::OrchardSpendingKey> keys,
         uint256 sighash);
 };
 
-} // namespace orchard
+} // namespace ironwood
 
 class SaplingSpendDescriptionInfo
 {
@@ -317,9 +317,9 @@ private:
     std::vector<CTxOut> tIns;
 
     std::optional<SaplingBundle> saplingBundle;
-    std::optional<OrchardBundle> orchardBundle;
+    std::optional<IronwoodBundle> orchardBundle;
 
-    std::optional<orchard::Builder> orchardBuilder;
+    std::optional<ironwood::Builder> orchardBuilder;
     CAmount valueBalanceSapling = 0;
     std::optional<rust::Box<sapling::Builder>> saplingBuilder;
     CAmount valueBalanceOrchard = 0;
@@ -403,8 +403,8 @@ public:
     bool ConvertRawSaplingOutput(uint256 ovk);
 
 
-    // Orchard
-    void InitializeOrchard(
+    // Ironwood
+    void InitializeIronwood(
         bool spendsEnabled,
         bool outputsEnabled,
         uint256 anchor);

@@ -157,9 +157,9 @@ bool CCoinsViewDB::GetSaplingFrontierAnchorAt(const uint256 &rt, SaplingMerkleFr
     return read;
 }
 
-bool CCoinsViewDB::GetOrchardFrontierAnchorAt(const uint256 &rt, OrchardMerkleFrontier &tree) const {
-    if (rt == OrchardMerkleFrontier::empty_root()) {
-        OrchardMerkleFrontier new_tree;
+bool CCoinsViewDB::GetOrchardFrontierAnchorAt(const uint256 &rt, IronwoodMerkleFrontier &tree) const {
+    if (rt == IronwoodMerkleFrontier::empty_root()) {
+        IronwoodMerkleFrontier new_tree;
         tree = new_tree;
         return true;
     }
@@ -221,7 +221,7 @@ uint256 CCoinsViewDB::GetBestAnchor(ShieldedType type) const {
             break;
         case ORCHARDFRONTIER:
             if (!db.Read(DB_BEST_ORCHARD_FRONTIER_ANCHOR, hashBestAnchor))
-                return OrchardMerkleFrontier::empty_root();
+                return IronwoodMerkleFrontier::empty_root();
             break;
         default:
             throw runtime_error("Unknown shielded type");
@@ -384,7 +384,7 @@ bool CCoinsViewDB::BatchWrite(CCoinsMap &mapCoins,
     ::BatchWriteAnchors<CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry, SproutMerkleTree>(batch, mapSproutAnchors, DB_SPROUT_ANCHOR);
     ::BatchWriteAnchors<CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingMerkleCacheEntry, SaplingMerkleTree>(batch, mapSaplingAnchors, DB_SAPLING_ANCHOR);
     ::BatchWriteAnchors<CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry, SaplingMerkleFrontier>(batch, mapSaplingFrontierAnchors, DB_SAPLING_FRONTIER_ANCHOR);
-    ::BatchWriteAnchors<CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierMap::iterator, CAnchorsOrchardFrontierCacheEntry, OrchardMerkleFrontier>(batch, mapOrchardFrontierAnchors, DB_ORCHARD_FRONTIER_ANCHOR);
+    ::BatchWriteAnchors<CAnchorsOrchardFrontierMap, CAnchorsOrchardFrontierMap::iterator, CAnchorsOrchardFrontierCacheEntry, IronwoodMerkleFrontier>(batch, mapOrchardFrontierAnchors, DB_ORCHARD_FRONTIER_ANCHOR);
 
     ::BatchWriteNullifiers(batch, mapSproutNullifiers, DB_SPROUT_NULLIFIER);
     ::BatchWriteNullifiers(batch, mapSaplingNullifiers, DB_SAPLING_NULLIFIER);
@@ -1104,7 +1104,7 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 pindexNew->nBurnedAmountDelta     = diskindex.nBurnedAmountDelta;
                 pindexNew->nSproutValue           = diskindex.nSproutValue;
                 pindexNew->nSaplingValue          = diskindex.nSaplingValue;
-                pindexNew->nOrchardValue          = diskindex.nOrchardValue;
+                pindexNew->nIronwoodValue          = diskindex.nIronwoodValue;
                 pindexNew->hashFinalSaplingRoot   = diskindex.hashFinalSaplingRoot;
                 pindexNew->hashFinalOrchardRoot   = diskindex.hashFinalOrchardRoot;
                 pindexNew->hashChainHistoryRoot   = diskindex.hashChainHistoryRoot;

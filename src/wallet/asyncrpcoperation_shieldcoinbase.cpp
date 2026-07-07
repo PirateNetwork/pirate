@@ -158,18 +158,23 @@ void AsyncRPCOperation_shieldcoinbase::main()
         std::string message = find_value(objError, "message").get_str();
         set_error_code(code);
         set_error_message(message);
+        set_state(OperationStatus::FAILED);
     } catch (const std::runtime_error& e) {
         set_error_code(-1);
         set_error_message("Runtime error: " + std::string(e.what()));
+        set_state(OperationStatus::FAILED);
     } catch (const std::logic_error& e) {
         set_error_code(-1);
         set_error_message("Logic error: " + std::string(e.what()));
+        set_state(OperationStatus::FAILED);
     } catch (const std::exception& e) {
         set_error_code(-2);
         set_error_message("General exception: " + std::string(e.what()));
+        set_state(OperationStatus::FAILED);
     } catch (...) {
         set_error_code(-2);
         set_error_message("Unknown error occurred during shield coinbase operation");
+        set_state(OperationStatus::FAILED);
     }
 }
 
@@ -341,7 +346,7 @@ bool ShieldToAddress::operator()(const libzcash::OrchardPaymentAddress& zaddr) c
     }
 
     // Initialize Orchard for transaction building
-    m_op->builder_.InitializeOrchard(false, true, uint256());
+    m_op->builder_.InitializeIronwood(false, true, uint256());
 
     // Send all value to the target z-addr
     m_op->builder_.SendChangeTo(zaddr, ovk);

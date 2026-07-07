@@ -372,7 +372,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                     LogPrint("zrpcunsafe", "%s: Adding Raw Orchard Output failed. Stopping.\n", getId());
                     break;
                 }
-                builder.InitializeOrchard(false, true, uint256());
+                builder.InitializeIronwood(false, true, uint256());
                 if (!builder.ConvertRawOrchardOutput(work.extsk.expsk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Output failed. Stopping.\n", getId());
                     break;
@@ -477,7 +477,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 break;
             }
 
-            builder.InitializeOrchard(true, true, anchor);
+            builder.InitializeIronwood(true, true, anchor);
 
             if (!builder.ConvertRawOrchardSpend(work.extsk)) {
                 LogPrint("zrpcunsafe", "%s: Converting Raw Orchard Spends failed. Stopping.\n", getId());

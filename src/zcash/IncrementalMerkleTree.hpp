@@ -16,7 +16,7 @@
 #include "rust/bridge.h"
 #include "rust/sapling/wallet.h"
 #include "primitives/sapling.h"
-#include "primitives/orchard.h"
+#include "primitives/ironwood.h"
 
 namespace libzcash {
 
@@ -444,33 +444,33 @@ public:
     }
 };
 
-class OrchardWallet;
-class OrchardMerkleFrontierLegacySer;
+class IronwoodWallet;
+class IronwoodMerkleFrontierLegacySer;
 
-class OrchardMerkleFrontier
+class IronwoodMerkleFrontier
 {
 private:
     /// An incremental Sinsemilla tree. Memory is allocated by Rust.
-    rust::Box<merkle_frontier::OrchardFrontier> inner;
+    rust::Box<merkle_frontier::IronwoodFrontier> inner;
 
-    friend class OrchardWallet;
-    friend class OrchardMerkleFrontierLegacySer;
+    friend class IronwoodWallet;
+    friend class IronwoodMerkleFrontierLegacySer;
 public:
-    OrchardMerkleFrontier() : inner(merkle_frontier::new_orchard()) {}
+    IronwoodMerkleFrontier() : inner(merkle_frontier::new_ironwood()) {}
 
-    OrchardMerkleFrontier(OrchardMerkleFrontier&& frontier) : inner(std::move(frontier.inner)) {}
+    IronwoodMerkleFrontier(IronwoodMerkleFrontier&& frontier) : inner(std::move(frontier.inner)) {}
 
-    OrchardMerkleFrontier(const OrchardMerkleFrontier& frontier) :
+    IronwoodMerkleFrontier(const IronwoodMerkleFrontier& frontier) :
         inner(frontier.inner->box_clone()) {}
 
-    OrchardMerkleFrontier& operator=(OrchardMerkleFrontier&& frontier)
+    IronwoodMerkleFrontier& operator=(IronwoodMerkleFrontier&& frontier)
     {
         if (this != &frontier) {
             inner = std::move(frontier.inner);
         }
         return *this;
     }
-    OrchardMerkleFrontier& operator=(const OrchardMerkleFrontier& frontier)
+    IronwoodMerkleFrontier& operator=(const IronwoodMerkleFrontier& frontier)
     {
         if (this != &frontier) {
             inner = frontier.inner->box_clone();
@@ -490,7 +490,7 @@ public:
     template<typename Stream>
     void Unserialize(Stream& s) {
         try {
-            inner = merkle_frontier::parse_orchard(*ToRustStream(s));
+            inner = merkle_frontier::parse_ironwood(*ToRustStream(s));
         } catch (const std::exception& e) {
             throw std::ios_base::failure(e.what());
         }
@@ -500,12 +500,12 @@ public:
         return inner->dynamic_memory_usage();
     }
 
-    merkle_frontier::OrchardAppendResult AppendBundle(const OrchardBundle& bundle) {
+    merkle_frontier::IronwoodAppendResult AppendBundle(const IronwoodBundle& bundle) {
         return inner->append_bundle(bundle.GetDetails());
     }
 
     // Append a note commitment to the frontier (for testing)
-    merkle_frontier::OrchardAppendResult append(uint256 cmx) {
+    merkle_frontier::IronwoodAppendResult append(uint256 cmx) {
         std::array<uint8_t, 32> cmx_bytes;
         std::copy(cmx.begin(), cmx.end(), cmx_bytes.begin());
         return inner->append(cmx_bytes);
@@ -516,7 +516,7 @@ public:
     }
 
     static uint256 empty_root() {
-        return uint256::FromRawBytes(merkle_frontier::orchard_empty_root());
+        return uint256::FromRawBytes(merkle_frontier::ironwood_empty_root());
     }
 
     size_t size() const {
@@ -528,11 +528,11 @@ public:
     }
 };
 
-class OrchardMerkleFrontierLegacySer {
+class IronwoodMerkleFrontierLegacySer {
 private:
-    const OrchardMerkleFrontier& frontier;
+    const IronwoodMerkleFrontier& frontier;
 public:
-    OrchardMerkleFrontierLegacySer(const OrchardMerkleFrontier& frontier): frontier(frontier) {}
+    IronwoodMerkleFrontierLegacySer(const IronwoodMerkleFrontier& frontier): frontier(frontier) {}
 
     template<typename Stream>
     void Serialize(Stream& s) const {

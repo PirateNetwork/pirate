@@ -388,7 +388,7 @@ void getOrchardSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
 {
     // Outgoing Sapling Spends
     int shieldedActionIndex = 0;
-    for (const auto& rustAction : tx.GetOrchardActions()) {
+    for (const auto& rustAction : tx.GetIronwoodActions()) {
         for (std::set<libzcash::OrchardOutgoingViewingKey>::iterator it = ovks.begin(); it != ovks.end(); it++) {
             auto ovk = *it;
             TransactionSendZO send;
@@ -445,7 +445,7 @@ template <typename RpcTx>
 void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
 {
     // Sapling Inputs belonging to the wallet
-    for (const auto& rustSpend : tx.GetOrchardActions()) {
+    for (const auto& rustSpend : tx.GetIronwoodActions()) {
         uint256 nullifier = uint256::FromRawBytes(rustSpend.nullifier());
 
         TransactionSpendZO spend;
@@ -460,7 +460,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
         // Get parent transaction and check action validity
         const CWalletTx* parentwtx = pwalletMain->GetWalletTx(op.hash);
         if (parentwtx != NULL) {
-            auto vActions = parentwtx->GetOrchardActions();
+            auto vActions = parentwtx->GetIronwoodActions();
             
             // Check if the action index is valid
             if (op.n >= vActions.size()) {
@@ -468,7 +468,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
             }
             
             // Access the action directly from the returned const reference
-            const orchard_bundle::Action& rustAction = vActions[op.n];
+            const ironwood_bundle::Action& rustAction = vActions[op.n];
 
             for (std::set<OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                 auto ivk = *it;
@@ -523,7 +523,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 }
 
                 // Get Action and use immediately
-                auto vActions = parentctx.GetOrchardActions();
+                auto vActions = parentctx.GetIronwoodActions();
                 
                 // Check if the action index is valid
                 if (op.n >= vActions.size()) {
@@ -531,7 +531,7 @@ void getOrchardSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 }
                 
                 // Access the action directly from the returned const reference
-                const orchard_bundle::Action& rustAction = vActions[op.n];
+                const ironwood_bundle::Action& rustAction = vActions[op.n];
 
                 for (std::set<OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
                     auto ivk = *it;
@@ -566,7 +566,7 @@ template <typename RpcTx>
 void getOrchardReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::OrchardIncomingViewingKey>& ivks, std::set<libzcash::OrchardIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
 {
     int shieldedActionIndex = 0;
-    for (const auto& rustAction : tx.GetOrchardActions()) {
+    for (const auto& rustAction : tx.GetIronwoodActions()) {
         TransactionReceivedZO received;
 
         for (std::set<libzcash::OrchardIncomingViewingKey>::iterator it = ivks.begin(); it != ivks.end(); it++) {
@@ -988,7 +988,7 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     getOrchardReceives(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
-    arcTx.orchardValue = -tx.GetValueBalanceOrchard();
+    arcTx.orchardValue = -tx.GetValueBalanceIronwood();
 
     // Create Sets of wallet address the belong to the wallet for this tx
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
@@ -1130,7 +1130,7 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     getOrchardReceives(params, txHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
-    arcTx.orchardValue = -tx.GetValueBalanceOrchard();
+    arcTx.orchardValue = -tx.GetValueBalanceIronwood();
 
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
         arcTx.addresses.insert(arcTx.vTSpend[i].encodedAddress);
@@ -2819,7 +2819,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
 
         // Get Actions to decrypt
-        auto vActions = wtx.GetOrchardActions();
+        auto vActions = wtx.GetIronwoodActions();
 
         for (auto& pair : wtx.mapOrchardNoteData) {
             OrchardOutPoint op = pair.first;
@@ -3070,7 +3070,7 @@ void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight)
     getOrchardReceives(params, nHeight, tx, orchardIvks, arcTx.orchardIvks, arcTx.vZoReceived, true);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
-    arcTx.orchardValue = -tx.GetValueBalanceOrchard();
+    arcTx.orchardValue = -tx.GetValueBalanceIronwood();
 
     for (int i = 0; i < arcTx.vTSpend.size(); i++) {
         arcTx.spentFrom.insert(arcTx.vTSpend[i].encodedAddress);

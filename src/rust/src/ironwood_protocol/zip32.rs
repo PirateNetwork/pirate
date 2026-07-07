@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-// Key structures for Orchard.
+// Key structures for the Ironwood pool (shares the Orchard Action circuit's key hierarchy).
 
 use core::fmt;
 use std::convert::{TryInto,TryFrom};
@@ -11,10 +11,13 @@ use orchard::{
     keys::{FullViewingKey, SpendingKey},
 };
 
-use crate::orchard_protocol::orchard_keys::prf_expand::PrfExpand;
+use crate::ironwood_protocol::ironwood_keys::prf_expand::PrfExpand;
 
-const ZIP32_ORCHARD_PERSONALIZATION: &[u8; 16] = b"ZcashIP32Orchard";
-const ZIP32_ORCHARD_FVFP_PERSONALIZATION: &[u8; 16] = b"ZcashOrchardFVFP";
+// Protocol-spec ZIP-32 domain separators for the Orchard Action circuit's key hierarchy,
+// which Ironwood reuses unchanged - see the rename-exception note in this session's plan
+// (no spec basis to invent different "Ironwood" domain separators here).
+const ZIP32_IRONWOOD_PERSONALIZATION: &[u8; 16] = b"ZcashIP32Orchard";
+const ZIP32_IRONWOOD_FVFP_PERSONALIZATION: &[u8; 16] = b"ZcashOrchardFVFP";
 pub const ZIP32_PURPOSE: u32 = 32;
 
 /// Errors produced in derivation of extended spending keys
@@ -34,14 +37,14 @@ impl fmt::Display for Error {
 
 //impl std::error::Error for Error {}
 
-/// An Orchard full viewing key fingerprint
+/// An Ironwood full viewing key fingerprint
 struct FvkFingerprint([u8; 32]);
 
 impl From<&FullViewingKey> for FvkFingerprint {
     fn from(fvk: &FullViewingKey) -> Self {
         let mut h = Blake2bParams::new()
             .hash_length(32)
-            .personal(ZIP32_ORCHARD_FVFP_PERSONALIZATION)
+            .personal(ZIP32_IRONWOOD_FVFP_PERSONALIZATION)
             .to_state();
         h.update(&fvk.to_bytes());
         let mut fvfp = [0u8; 32];
@@ -50,7 +53,7 @@ impl From<&FullViewingKey> for FvkFingerprint {
     }
 }
 
-/// An Orchard full viewing key tag
+/// An Ironwood full viewing key tag
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct FvkTag([u8; 4]);
 
@@ -85,13 +88,14 @@ impl TryFrom<u32> for ChildIndex {
     }
 }
 
-/// The chain code forming the second half of an Orchard extended key.
+/// The chain code forming the second half of an Ironwood extended key.
 #[derive(Debug, Copy, Clone, PartialEq)]
 struct ChainCode([u8; 32]);
 
-/// An Orchard extended spending key.
+/// An Ironwood extended spending key.
 ///
-/// Defined in [ZIP32: Orchard extended keys][orchardextendedkeys].
+/// Derived using the same ZIP32 hierarchy as Orchard extended keys (see
+/// [ZIP32: Orchard extended keys][orchardextendedkeys]).
 ///
 /// [orchardextendedkeys]: https://zips.z.cash/zip-0032#orchard-extended-keys
 #[derive(Debug, Clone)]
@@ -129,7 +133,7 @@ impl ExtendedSpendingKey {
         Ok(xsk)
     }
 
-    /// Generates the master key of an Orchard extended spending key.
+    /// Generates the master key of an Ironwood extended spending key.
     ///
     /// Defined in [ZIP32: Orchard master key generation][orchardmasterkey].
     ///
@@ -144,7 +148,7 @@ impl ExtendedSpendingKey {
         let I: [u8; 64] = {
             let mut I = Blake2bParams::new()
                 .hash_length(64)
-                .personal(ZIP32_ORCHARD_PERSONALIZATION)
+                .personal(ZIP32_IRONWOOD_PERSONALIZATION)
                 .to_state();
             I.update(seed);
             I.finalize().as_bytes().try_into().unwrap()
@@ -178,7 +182,7 @@ impl ExtendedSpendingKey {
     /// Discards index if it results in an invalid sk
     pub fn derive_child(&self, index: ChildIndex) -> Result<Self, Error> {
         // I := PRF^Expand(c_par, [0x81] || sk_par || I2LEOSP(i))
-        let I: [u8; 64] = PrfExpand::OrchardZip32Child.with_ad_slices(
+        let I: [u8; 64] = PrfExpand::IronwoodZip32Child.with_ad_slices(
             &self.chain_code.0,
             &[self.sk.to_bytes(), &{let mut b = [0u8; 32]; b[..4].copy_from_slice(&index.0.to_le_bytes()); b}],
         );

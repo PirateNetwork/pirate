@@ -2,16 +2,16 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
-#ifndef PIRATE_RUST_INCLUDE_RUST_ORCHARD_ACTIONS_H
-#define PIRATE_RUST_INCLUDE_RUST_ORCHARD_ACTIONS_H
+#ifndef PIRATE_RUST_INCLUDE_RUST_IRONWOOD_ACTIONS_H
+#define PIRATE_RUST_INCLUDE_RUST_IRONWOOD_ACTIONS_H
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-bool try_orchard_decrypt_action_ovk(
-    const ActionPtr* orchard_action,
+bool try_ironwood_decrypt_action_ovk(
+    const ActionPtr* ironwood_action,
     const unsigned char* ovk_bytes,
     uint64_t *value_out,
     unsigned char *address_out,
@@ -20,8 +20,8 @@ bool try_orchard_decrypt_action_ovk(
     unsigned char *rseed_out
 );
 
-bool try_orchard_decrypt_action_ivk(
-    const ActionPtr* orchard_action,
+bool try_ironwood_decrypt_action_ivk(
+    const ActionPtr* ironwood_action,
     const unsigned char* ivk_bytes,
     uint64_t *value_out,
     unsigned char *address_out,
@@ -30,8 +30,8 @@ bool try_orchard_decrypt_action_ivk(
     unsigned char *rseed_out
 );
 
-bool try_orchard_decrypt_action_fvk(
-    const ActionPtr* orchard_action,
+bool try_ironwood_decrypt_action_fvk(
+    const ActionPtr* ironwood_action,
     const unsigned char* fvk_bytes,
     uint64_t *value_out,
     unsigned char *address_out,
@@ -41,17 +41,8 @@ bool try_orchard_decrypt_action_fvk(
     unsigned char *nullifier_out
 );
 
-bool get_nullifer_from_parts(
-    const unsigned char* fvk_bytes,
-    const unsigned char* address_bytes,
-    const uint64_t u64,
-    const unsigned char* rho_bytes,
-    const unsigned char* rseed_bytes,
-    unsigned char *nullifier_out
-);
-
 #ifdef __cplusplus
 }
 #endif
 
-#endif // PIRATE_RUST_INCLUDE_RUST_ORCHARD_ACTIONS_H
+#endif // PIRATE_RUST_INCLUDE_RUST_IRONWOOD_ACTIONS_H

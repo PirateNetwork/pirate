@@ -20,9 +20,9 @@
 #include "NoteEncryption.hpp"
 #include "consensus/params.h"
 #include "consensus/consensus.h"
-#include "primitives/orchard.h"
+#include "primitives/ironwood.h"
 
-#include "rust/orchard/orchard_actions.h"
+#include "rust/ironwood/ironwood_actions.h"
 
 #include <array>
 #include <optional>
@@ -410,19 +410,19 @@ public:
 
     // Rust-based decryption methods
     static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
-        const orchard_bundle::Action* action,
+        const ironwood_bundle::Action* action,
         const libzcash::OrchardIncomingViewingKey ivk
     );
 
     static std::optional<OrchardNotePlaintext> AttemptDecryptOrchardAction(
-        const orchard_bundle::Action* action,
+        const ironwood_bundle::Action* action,
         const libzcash::OrchardOutgoingViewingKey ovk
     );
 
     // Compute nullifier directly from an encrypted action.
     // IVK is derived internally from the FVK — only fvk is needed.
     static std::optional<uint256> ComputeNullifierFromAction(
-        const orchard_bundle::Action& action,
+        const ironwood_bundle::Action& action,
         const libzcash::OrchardFullViewingKey& fvk
     );
 

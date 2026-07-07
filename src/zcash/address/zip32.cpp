@@ -10,7 +10,7 @@
 #include "version.h"
 #include <rust/bridge.h>
 #include <rust/sapling_keys_bridge.h>
-#include <rust/orchard_keys_bridge.h>
+#include <rust/ironwood_keys_bridge.h>
 #include <rust/seed_bridge.h>
 
 #include <librustzcash.h>
@@ -477,9 +477,9 @@ OrchardExtendedSpendingKeyPirate OrchardExtendedSpendingKeyPirate::Master(const 
         hd_seed::entropy_to_bip39_seed(
             rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()},
             bip39_seed);
-        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed.data(), 64}, xsk_t_out);
+        ironwood_keys::derive_master_key(rust::Slice<const uint8_t>{bip39_seed.data(), 64}, xsk_t_out);
     } else {
-        orchard_keys::derive_master_key(rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()}, xsk_t_out);
+        ironwood_keys::derive_master_key(rust::Slice<const uint8_t>{rawSeed.data(), rawSeed.size()}, xsk_t_out);
     }
 
     //Deserialize rust result
@@ -518,7 +518,7 @@ std::optional<OrchardExtendedSpendingKeyPirate> OrchardExtendedSpendingKeyPirate
     ss >> xsk_t_in;
 
     //Call rust FFI
-    rustCompleted = orchard_keys::derive_child_key(xsk_t_in, bip44CoinType, account, xsk_t_out);
+    rustCompleted = ironwood_keys::derive_child_key(xsk_t_in, bip44CoinType, account, xsk_t_out);
 
     //Deserialize rust result on success
     if (rustCompleted) {

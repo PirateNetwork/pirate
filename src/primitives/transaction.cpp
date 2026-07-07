@@ -147,7 +147,7 @@ CMutableTransaction::CMutableTransaction(const CTransaction& tx) : nVersion(tx.n
                                                                    nConsensusBranchId(tx.GetConsensusBranchId()),
                                                                    vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                                    vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                                   saplingBundle(tx.GetSaplingBundle()), orchardBundle(tx.GetOrchardBundle()),
+                                                                   saplingBundle(tx.GetSaplingBundle()),
                                                                    ironwoodBundle(tx.GetIronwoodBundle())
 {
 
@@ -204,13 +204,13 @@ CTransaction::CTransaction() : nVersion(CTransaction::SPROUT_MIN_CURRENT_VERSION
                               nConsensusBranchId(std::nullopt),
                               vin(), vout(), nLockTime(0),
                               vjoinsplit(), joinSplitPubKey(), joinSplitSig(),
-                              saplingBundle(), orchardBundle(), ironwoodBundle() {}
+                              saplingBundle(), ironwoodBundle() {}
 
 CTransaction::CTransaction(const CMutableTransaction& tx) : nVersion(tx.nVersion), fOverwintered(tx.fOverwintered), nVersionGroupId(tx.nVersionGroupId), nExpiryHeight(tx.nExpiryHeight),
                                                             nConsensusBranchId(tx.nConsensusBranchId),
                                                             vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                                                             vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                                                            saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle),
+                                                            saplingBundle(tx.saplingBundle),
                                                             ironwoodBundle(tx.ironwoodBundle)
 {
     UpdateHash();
@@ -224,7 +224,7 @@ CTransaction::CTransaction(
                               nConsensusBranchId(tx.nConsensusBranchId),
                               vin(tx.vin), vout(tx.vout), nLockTime(tx.nLockTime),
                               vjoinsplit(tx.vjoinsplit), joinSplitPubKey(tx.joinSplitPubKey), joinSplitSig(tx.joinSplitSig),
-                              saplingBundle(tx.saplingBundle), orchardBundle(tx.orchardBundle),
+                              saplingBundle(tx.saplingBundle),
                               ironwoodBundle(tx.ironwoodBundle)
 {
     assert(evilDeveloperFlag);
@@ -234,7 +234,7 @@ CTransaction::CTransaction(CMutableTransaction&& tx) : nVersion(tx.nVersion), fO
                                                        nConsensusBranchId(tx.nConsensusBranchId),
                                                        vin(std::move(tx.vin)), vout(std::move(tx.vout)), nLockTime(tx.nLockTime), nExpiryHeight(tx.nExpiryHeight),
                                                        vjoinsplit(std::move(tx.vjoinsplit)), joinSplitPubKey(std::move(tx.joinSplitPubKey)), joinSplitSig(std::move(tx.joinSplitSig)),
-                                                       saplingBundle(std::move(tx.saplingBundle)), orchardBundle(std::move(tx.orchardBundle)),
+                                                       saplingBundle(std::move(tx.saplingBundle)),
                                                        ironwoodBundle(std::move(tx.ironwoodBundle))
 {
     UpdateHash();
@@ -251,7 +251,6 @@ CTransaction& CTransaction::operator=(const CTransaction& tx)
     *const_cast<unsigned int*>(&nLockTime) = tx.nLockTime;
     *const_cast<uint32_t*>(&nExpiryHeight) = tx.nExpiryHeight;
     saplingBundle = tx.saplingBundle;
-    orchardBundle = tx.orchardBundle;
     ironwoodBundle = tx.ironwoodBundle;
     *const_cast<std::vector<JSDescription>*>(&vjoinsplit) = tx.vjoinsplit;
     *const_cast<uint256*>(&joinSplitPubKey) = tx.joinSplitPubKey;
@@ -287,13 +286,13 @@ CAmount CTransaction::GetValueOut() const
         }
     }
 
-    auto valueBalanceOrchard = orchardBundle.GetValueBalance();
-    if (valueBalanceOrchard <= 0) {
-        // NB: negative valueBalanceOrchard "takes" money from the transparent value pool just as outputs do
-        if (valueBalanceOrchard < -MAX_MONEY) {
-            throw std::runtime_error("CTransaction::GetValueOut(): valueBalanceOrchard out of range");
+    auto valueBalanceIronwood = ironwoodBundle.GetValueBalance();
+    if (valueBalanceIronwood <= 0) {
+        // NB: negative valueBalanceIronwood "takes" money from the transparent value pool just as outputs do
+        if (valueBalanceIronwood < -MAX_MONEY) {
+            throw std::runtime_error("CTransaction::GetValueOut(): valueBalanceIronwood out of range");
         }
-        nValueOut += -valueBalanceOrchard;
+        nValueOut += -valueBalanceIronwood;
 
         if (!MoneyRange(nValueOut)) {
             throw std::runtime_error("CTransaction::GetValueOut(): value out of range");
@@ -330,13 +329,13 @@ CAmount CTransaction::GetShieldedValueIn() const
         }
     }
 
-    auto valueBalanceOrchard = orchardBundle.GetValueBalance();
-    if (valueBalanceOrchard >= 0) {
-        // NB: positive valueBalanceOrchard "gives" money to the transparent value pool just as inputs do
-        if (valueBalanceOrchard > MAX_MONEY) {
-            throw std::runtime_error("CTransaction::GetShieldedValueIn(): valueBalanceOrchard out of range");
+    auto valueBalanceIronwood = ironwoodBundle.GetValueBalance();
+    if (valueBalanceIronwood >= 0) {
+        // NB: positive valueBalanceIronwood "gives" money to the transparent value pool just as inputs do
+        if (valueBalanceIronwood > MAX_MONEY) {
+            throw std::runtime_error("CTransaction::GetShieldedValueIn(): valueBalanceIronwood out of range");
         }
-        nValue += valueBalanceOrchard;
+        nValue += valueBalanceIronwood;
         if (!MoneyRange(nValue)) {
             throw std::runtime_error("CTransaction::GetShieldedValueIn(): nValue out of range");
         }
@@ -478,14 +477,14 @@ const rust::Vec<sapling::Output> CTransaction::GetSaplingOutputs() const
     return saplingBundle.GetDetails().outputs();
 }
 
-const rust::Vec<orchard_bundle::Action> CTransaction::GetOrchardActions() const
+const rust::Vec<ironwood_bundle::Action> CTransaction::GetIronwoodActions() const
 {
-    return orchardBundle.GetDetails().actions();
+    return ironwoodBundle.GetDetails().actions();
 }
 
-size_t CTransaction::GetOrchardActionsCount() const
+size_t CTransaction::GetIronwoodActionsCount() const
 {
-    return orchardBundle.GetNumActions();
+    return ironwoodBundle.GetNumActions();
 }
 
 /**
@@ -497,11 +496,11 @@ CAmount CTransaction::GetValueBalanceSapling() const
 }
 
 /**
- * Returns the Orchard value balance for the transaction.
+ * Returns the Ironwood value balance for the transaction.
  */
-CAmount CTransaction::GetValueBalanceOrchard() const
+CAmount CTransaction::GetValueBalanceIronwood() const
 {
-    return orchardBundle.GetValueBalance();
+    return ironwoodBundle.GetValueBalance();
 }
 
 /**
@@ -510,14 +509,6 @@ CAmount CTransaction::GetValueBalanceOrchard() const
 const SaplingBundle& CTransaction::GetSaplingBundle() const
 {
     return saplingBundle;
-}
-
-/**
- * Returns the Orchard bundle for the transaction.
- */
-const OrchardBundle& CTransaction::GetOrchardBundle() const
-{
-    return orchardBundle;
 }
 
 /**

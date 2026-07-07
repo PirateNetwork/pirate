@@ -13,10 +13,6 @@
 extern "C" {
 #endif
 
-/// Typesafe pointer to a Rust-allocated orchard::bundle::Bundle value
-struct OrchardBundlePtr;
-typedef struct OrchardBundlePtr OrchardBundlePtr;
-
 struct SaplingBundlePtr;
 typedef struct SaplingBundlePtr SaplingBundlePtr;
 
@@ -27,8 +23,7 @@ struct ActionPtr;
 typedef struct ActionPtr ActionPtr;
 
 /// Typesafe pointer to a Rust-allocated orchard::bundle::Bundle value for the Ironwood pool
-/// slot. SCAFFOLDING ONLY: not yet used by any C++ code (no v6 transaction format exists
-/// in this tree).
+/// slot.
 struct IronwoodBundlePtr;
 typedef struct IronwoodBundlePtr IronwoodBundlePtr;
 

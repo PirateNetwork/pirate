@@ -49,7 +49,7 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
                 const Consensus::Params& consensusParams = Params().GetConsensus();
                 
                 bool saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-                bool orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_ORCHARD);
+                bool orchardActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
                 
                 ui->addressTypeCombo->clear();
                 

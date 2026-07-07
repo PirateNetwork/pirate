@@ -467,7 +467,7 @@ std::optional<uint256> SaplingNotePlaintext::ComputeNullifierFromOutput(
  * @return The unique nullifier, or std::nullopt on failure
  *
  * Uses CDataStream to serialize the viewing key and address for the
- * Rust bridge, then calls orchard::compute_nullifier to compute the nullifier.
+ * Rust bridge, then calls ironwood::compute_nullifier to compute the nullifier.
  */
 std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewingKey& fvk) const
 {
@@ -488,7 +488,7 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
     as << address;
     as >> address_t;
 
-    if (!orchard::compute_nullifier(
+    if (!ironwood::compute_nullifier(
           fvk_t,
           address_t,
           value_,
@@ -511,11 +511,11 @@ std::optional<uint256> OrchardNote::nullifier(const libzcash::OrchardFullViewing
  * @param ivk The incoming viewing key to use for decryption
  * @return Decrypted plaintext, or std::nullopt on failure
  *
- * All cryptographic operations delegated to Rust try_orchard_decrypt_action_ivk.
+ * All cryptographic operations delegated to Rust try_ironwood_decrypt_action_ivk.
  * Payment address is deserialized from array format after decryption.
  */
 std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
-    const orchard_bundle::Action* action,
+    const ironwood_bundle::Action* action,
     const libzcash::OrchardIncomingViewingKey ivk
 )
 {
@@ -535,7 +535,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     ss << ivk;
     ss >> ivk_t;
 
-    if(!try_orchard_decrypt_action_ivk(
+    if(!try_ironwood_decrypt_action_ivk(
         action->as_ptr(),
         ivk_t.begin(),
         &value_t,
@@ -568,7 +568,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
  * Allows sender to decrypt their own sent notes.
  */
 std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardAction(
-    const orchard_bundle::Action* action,
+    const ironwood_bundle::Action* action,
     const libzcash::OrchardOutgoingViewingKey ovk
 )
 {
@@ -582,7 +582,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
     uint256 rho_t;
     uint256 rseed_t;
 
-    if(!try_orchard_decrypt_action_ovk(
+    if(!try_ironwood_decrypt_action_ovk(
         action->as_ptr(),
         ovk.ovk.begin(),
         &value_t,
@@ -616,7 +616,7 @@ std::optional<OrchardNotePlaintext> OrchardNotePlaintext::AttemptDecryptOrchardA
  * Unlike Sapling, Orchard does not require a position parameter.
  */
 std::optional<uint256> OrchardNotePlaintext::ComputeNullifierFromAction(
-    const orchard_bundle::Action& action,
+    const ironwood_bundle::Action& action,
     const libzcash::OrchardFullViewingKey& fvk
 )
 {

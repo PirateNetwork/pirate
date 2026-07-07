@@ -1,25 +1,17 @@
 use crate::{
     bundlecache::init as bundlecache_init,
     merkle_frontier::{
-        new_orchard, new_sapling, orchard_empty_root, parse_orchard, parse_sapling,
-        sapling_empty_root, OrchardFrontier, OrchardWallet, SaplingFrontier, SaplingWallet,
-    },
-    orchard_protocol::{
-        orchard_bundle::{
-            none_orchard_bundle, orchard_bundle_from_raw_box, parse_orchard_bundle,
-            parse_orchard_bundle_v6, Action,
-            Bundle as OrchardBundle,
-        },
-        orchard_actions::{
-            compute_nullifier as compute_nullifier_orchard,
-            derive_orchard_ock, try_orchard_decrypt_action_ock,
-        },
-        orchard_validator::{orchard_batch_validation_init, BatchValidator as OrchardBatchValidator},
+        new_ironwood, new_sapling, ironwood_empty_root, parse_ironwood, parse_sapling,
+        sapling_empty_root, IronwoodFrontier, IronwoodWallet, SaplingFrontier, SaplingWallet,
     },
     ironwood_protocol::{
         ironwood_bundle::{
             none_ironwood_bundle, ironwood_bundle_from_raw_box, parse_ironwood_bundle,
-            Bundle as IronwoodBundle,
+            Action, Bundle as IronwoodBundle,
+        },
+        ironwood_actions::{
+            compute_nullifier as compute_nullifier_ironwood,
+            derive_ironwood_ock, try_ironwood_decrypt_action_ock,
         },
         ironwood_validator::{
             ironwood_batch_validation_init, BatchValidator as IronwoodBatchValidator,
@@ -95,7 +87,6 @@ pub(crate) mod ffi {
 
     unsafe extern "C++" {
         include!("rust/pointers.h");
-        type OrchardBundlePtr;
         type SaplingBundlePtr;
         type OutputPtr;
         type ActionPtr;
@@ -337,10 +328,10 @@ pub(crate) mod ffi {
         fn validate(self: &mut SaplingBatchValidator) -> bool;
     }
 
-    #[namespace = "orchard_bundle"]
+    #[namespace = "ironwood_bundle"]
     extern "Rust" {
         type Action;
-        type OrchardBundle;
+        type IronwoodBundle;
 
         fn cv(self: &Action) -> [u8; 32];
         fn nullifier(self: &Action) -> [u8; 32];
@@ -351,7 +342,7 @@ pub(crate) mod ffi {
         fn out_ciphertext(self: &Action) -> [u8; 80];
         fn spend_auth_sig(self: &Action) -> [u8; 64];
         fn as_ptr(self: &Action) -> *const ActionPtr;
-        
+
         // Compute nullifier directly from encrypted action (decrypts first).
         // FVK is the single source of truth — IVK is derived internally from the FVK.
         fn compute_nullifier(
@@ -359,41 +350,6 @@ pub(crate) mod ffi {
             fvk_bytes: &[u8; 96],
             result: &mut [u8; 32],
         ) -> bool;
-
-        #[rust_name = "none_orchard_bundle"]
-        fn none() -> Box<OrchardBundle>;
-        #[rust_name = "orchard_bundle_from_raw_box"]
-        unsafe fn from_raw_box(bundle: *mut OrchardBundlePtr) -> Box<OrchardBundle>;
-        fn box_clone(self: &OrchardBundle) -> Box<OrchardBundle>;
-        #[rust_name = "parse_orchard_bundle"]
-        fn parse(stream: &mut CppStream<'_>, consensus_branch_id: u32) -> Result<Box<OrchardBundle>>;
-        fn serialize(self: &OrchardBundle, stream: &mut CppStream<'_>) -> Result<()>;
-        // v6 (Ironwood-era) Orchard slot. SCAFFOLDING ONLY: unused until v6 exists.
-        #[rust_name = "parse_orchard_bundle_v6"]
-        fn parse_v6(stream: &mut CppStream<'_>, consensus_branch_id: u32) -> Result<Box<OrchardBundle>>;
-        fn serialize_v6(self: &OrchardBundle, stream: &mut CppStream<'_>) -> Result<()>;
-        fn as_ptr(self: &OrchardBundle) -> *const OrchardBundlePtr;
-        fn recursive_dynamic_usage(self: &OrchardBundle) -> usize;
-        fn is_present(self: &OrchardBundle) -> bool;
-        fn actions(self: &OrchardBundle) -> Vec<Action>;
-        fn num_actions(self: &OrchardBundle) -> usize;
-        fn get_action(self: &OrchardBundle, action_index: usize) -> Result<Box<Action>>;
-        fn enable_spends(self: &OrchardBundle) -> bool;
-        fn enable_outputs(self: &OrchardBundle) -> bool;
-        fn value_balance_zat(self: &OrchardBundle) -> i64;
-        fn anchor(self: &OrchardBundle) -> [u8; 32];
-        fn proof(self: &OrchardBundle) -> Vec<u8>;
-        fn binding_sig(self: &OrchardBundle) -> [u8; 64];
-        fn coinbase_outputs_are_valid(self: &OrchardBundle) -> bool;
-    }
-
-    // SCAFFOLDING ONLY: IronwoodBundle is not yet used by any C++ code (no v6 transaction
-    // format exists in this tree). It reuses the `Action` type declared above in
-    // `orchard_bundle` — Ironwood shares the Orchard Action circuit and note format,
-    // distinguished only by BundleVersion.
-    #[namespace = "ironwood_bundle"]
-    extern "Rust" {
-        type IronwoodBundle;
 
         #[rust_name = "none_ironwood_bundle"]
         fn none() -> Box<IronwoodBundle>;
@@ -418,52 +374,6 @@ pub(crate) mod ffi {
         fn coinbase_outputs_are_valid(self: &IronwoodBundle) -> bool;
     }
 
-    #[namespace = "orchard"]
-    extern "Rust" {
-        #[cxx_name = "BatchValidator"]
-        type OrchardBatchValidator;
-        #[cxx_name = "init_batch_validator"]
-        fn orchard_batch_validation_init(cache_store: bool) -> Box<OrchardBatchValidator>;
-        fn add_bundle(
-            self: &mut OrchardBatchValidator,
-            bundle: Box<OrchardBundle>,
-            sighash: [u8; 32],
-        );
-        fn validate(self: &mut OrchardBatchValidator) -> bool;
-
-        // Compute nullifier from note parts (already decrypted)
-        // Similar to sapling::compute_nullifier
-        #[rust_name = "compute_nullifier_orchard"]
-        fn compute_nullifier(
-            fvk_bytes: &[u8; 96],
-            address_bytes: &[u8; 43],
-            value: u64,
-            rho_bytes: &[u8; 32],
-            rseed_bytes: &[u8; 32],
-            result: &mut [u8; 32],
-        ) -> bool;
-
-        // Derive Orchard Outgoing Cipher Key for a specific action
-        fn derive_orchard_ock(
-            orchard_action: &Action,
-            ovk_bytes: &[u8; 32],
-            ock_out: &mut [u8; 32],
-        ) -> bool;
-
-        // Decrypt Orchard action output using OCK
-        fn try_orchard_decrypt_action_ock(
-            orchard_action: &Action,
-            ock_bytes: &[u8; 32],
-            value_out: &mut u64,
-            address_out: &mut [u8; 43],
-            memo_out: &mut [u8; 512],
-            rho_out: &mut [u8; 32],
-            rseed_out: &mut [u8; 32],
-        ) -> bool;
-    }
-
-    // SCAFFOLDING ONLY: not yet called by any C++ code (no v6 transaction support exists
-    // in this tree).
     #[namespace = "ironwood"]
     extern "Rust" {
         #[cxx_name = "BatchValidator"]
@@ -476,6 +386,36 @@ pub(crate) mod ffi {
             sighash: [u8; 32],
         );
         fn validate(self: &mut IronwoodBatchValidator) -> bool;
+
+        // Compute nullifier from note parts (already decrypted)
+        // Similar to sapling::compute_nullifier
+        #[rust_name = "compute_nullifier_ironwood"]
+        fn compute_nullifier(
+            fvk_bytes: &[u8; 96],
+            address_bytes: &[u8; 43],
+            value: u64,
+            rho_bytes: &[u8; 32],
+            rseed_bytes: &[u8; 32],
+            result: &mut [u8; 32],
+        ) -> bool;
+
+        // Derive Ironwood Outgoing Cipher Key for a specific action
+        fn derive_ironwood_ock(
+            ironwood_action: &Action,
+            ovk_bytes: &[u8; 32],
+            ock_out: &mut [u8; 32],
+        ) -> bool;
+
+        // Decrypt Ironwood action output using OCK
+        fn try_ironwood_decrypt_action_ock(
+            ironwood_action: &Action,
+            ock_bytes: &[u8; 32],
+            value_out: &mut u64,
+            address_out: &mut [u8; 43],
+            memo_out: &mut [u8; 512],
+            rho_out: &mut [u8; 32],
+            rseed_out: &mut [u8; 32],
+        ) -> bool;
     }
 
     #[namespace = "merkle_frontier"]
@@ -485,7 +425,7 @@ pub(crate) mod ffi {
     }
 
     #[namespace = "merkle_frontier"]
-    struct OrchardAppendResult {
+    struct IronwoodAppendResult {
         has_subtree_boundary: bool,
         completed_subtree_root: [u8; 32],
     }
@@ -518,32 +458,32 @@ pub(crate) mod ffi {
 
     #[namespace = "merkle_frontier"]
     extern "Rust" {
-        type OrchardFrontier;
-        type OrchardWallet;
+        type IronwoodFrontier;
+        type IronwoodWallet;
 
-        fn orchard_empty_root() -> [u8; 32];
-        fn new_orchard() -> Box<OrchardFrontier>;
-        fn box_clone(self: &OrchardFrontier) -> Box<OrchardFrontier>;
-        fn parse_orchard(reader: &mut CppStream<'_>) -> Result<Box<OrchardFrontier>>;
-        fn serialize(self: &OrchardFrontier, writer: &mut CppStream<'_>) -> Result<()>;
-        fn serialize_legacy(self: &OrchardFrontier, writer: &mut CppStream<'_>) -> Result<()>;
-        fn dynamic_memory_usage(self: &OrchardFrontier) -> usize;
-        fn root(self: &OrchardFrontier) -> [u8; 32];
-        fn size(self: &OrchardFrontier) -> u64;
+        fn ironwood_empty_root() -> [u8; 32];
+        fn new_ironwood() -> Box<IronwoodFrontier>;
+        fn box_clone(self: &IronwoodFrontier) -> Box<IronwoodFrontier>;
+        fn parse_ironwood(reader: &mut CppStream<'_>) -> Result<Box<IronwoodFrontier>>;
+        fn serialize(self: &IronwoodFrontier, writer: &mut CppStream<'_>) -> Result<()>;
+        fn serialize_legacy(self: &IronwoodFrontier, writer: &mut CppStream<'_>) -> Result<()>;
+        fn dynamic_memory_usage(self: &IronwoodFrontier) -> usize;
+        fn root(self: &IronwoodFrontier) -> [u8; 32];
+        fn size(self: &IronwoodFrontier) -> u64;
         fn append_bundle(
-            self: &mut OrchardFrontier,
-            bundle: &OrchardBundle,
-        ) -> Result<OrchardAppendResult>;
+            self: &mut IronwoodFrontier,
+            bundle: &IronwoodBundle,
+        ) -> Result<IronwoodAppendResult>;
         fn append(
-            self: &mut OrchardFrontier,
-            orchard_cmx: [u8; 32],
-        ) -> Result<OrchardAppendResult>;
-        unsafe fn init_wallet(self: &OrchardFrontier, wallet: *mut OrchardWallet) -> bool;
+            self: &mut IronwoodFrontier,
+            ironwood_cmx: [u8; 32],
+        ) -> Result<IronwoodAppendResult>;
+        unsafe fn init_wallet(self: &IronwoodFrontier, wallet: *mut IronwoodWallet) -> bool;
     }
 
     unsafe extern "C++" {
         include!("rust/builder.h");
-        type OrchardUnauthorizedBundlePtr;
+        type IronwoodUnauthorizedBundlePtr;
     }
     #[namespace = "builder"]
     extern "Rust" {
@@ -552,7 +492,7 @@ pub(crate) mod ffi {
             tx_bytes: &[u8],
             all_prev_outputs: &[u8],
             sapling_bundle: &SaplingUnauthorizedBundle,
-            orchard_bundle: *const OrchardUnauthorizedBundlePtr,
+            ironwood_bundle: *const IronwoodUnauthorizedBundlePtr,
         ) -> Result<[u8; 32]>;
     }
 }

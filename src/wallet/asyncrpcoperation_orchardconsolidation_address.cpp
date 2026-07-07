@@ -275,7 +275,7 @@ bool AsyncRPCOperation_orchardconsolidation_address::main_impl() {
             break;
         }
 
-        builder.InitializeOrchard(true, true, anchor);
+        builder.InitializeIronwood(true, true, anchor);
 
         // Step 2: Convert raw spends using spending key
         if (!builder.ConvertRawOrchardSpend(spendingKey_)) {

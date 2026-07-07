@@ -1303,7 +1303,7 @@ void komodo_args(char *argv0)
             ASSETCHAINS_STAKED = 100;
 
 
-		ASSETCHAINS_ORCHARD = GetArg("-ac_orchard", -1);
+		ASSETCHAINS_IRONWOOD = GetArg("-ac_orchard", -1);
         ASSETCHAINS_SAPLING = GetArg("-ac_sapling", -1);
         if (ASSETCHAINS_SAPLING == -1)
         {

@@ -71,7 +71,7 @@ CXXBRIDGE_RS = \
 	rust/src/history.rs \
   rust/src/bridge.rs \
   rust/src/sapling_protocol/sapling_keys_bridge.rs \
-  rust/src/orchard_protocol/orchard_keys_bridge.rs \
+  rust/src/ironwood_protocol/ironwood_keys_bridge.rs \
   rust/src/seed_bridge.rs
 
 CXXBRIDGE_H = \
@@ -88,7 +88,7 @@ CXXBRIDGE_CPP = \
 	rust/gen/src/history.cpp \
   rust/gen/src/bridge.cpp \
   rust/gen/src/sapling_keys_bridge.cpp \
-  rust/gen/src/orchard_keys_bridge.cpp \
+  rust/gen/src/ironwood_keys_bridge.cpp \
   rust/gen/src/seed_bridge.cpp
 
 # We add a rust/cxx.h include to indicate that we provide this (via the rustcxx depends
@@ -111,9 +111,9 @@ rust/gen/include/rust/sapling/zip32.h rust/gen/src/sapling/zip32.cpp: rust/src/s
 rust/gen/include/rust/sapling_keys_bridge.h rust/gen/src/sapling_keys_bridge.cpp: rust/src/sapling_protocol/sapling_keys_bridge.rs
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/sapling_protocol/sapling_keys_bridge.rs -o $@
-rust/gen/include/rust/orchard_keys_bridge.h rust/gen/src/orchard_keys_bridge.cpp: rust/src/orchard_protocol/orchard_keys_bridge.rs
+rust/gen/include/rust/ironwood_keys_bridge.h rust/gen/src/ironwood_keys_bridge.cpp: rust/src/ironwood_protocol/ironwood_keys_bridge.rs
 	@$(MKDIR_P) $(@D)
-	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/orchard_protocol/orchard_keys_bridge.rs -o $@
+	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/ironwood_protocol/ironwood_keys_bridge.rs -o $@
 rust/gen/include/rust/seed_bridge.h rust/gen/src/seed_bridge.cpp: rust/src/seed_bridge.rs
 	@$(MKDIR_P) $(@D)
 	$(AM_V_GEN)$(CXXBRIDGE) $(CXXBRIDGE_OPTS) rust/src/seed_bridge.rs -o $@
@@ -348,7 +348,7 @@ BITCOIN_CORE_H = \
 	span.h \
   primitives/block.h \
 	primitives/sapling.h \
-	primitives/orchard.h \
+	primitives/ironwood.h \
   primitives/transaction.h \
   protocol.h \
   pubkey.h \
@@ -409,7 +409,7 @@ BITCOIN_CORE_H = \
   wallet/db.h \
   wallet/rpcwallet.h \
 	wallet/rpcpiratewallet.h \
-	wallet/orchard.h \
+	wallet/ironwood.h \
 	wallet/sapling.h \
   wallet/wallet.h \
 	wallet/wallet_fees.h \
@@ -930,7 +930,7 @@ libtls_a_CPPFLAGS += -DMONTGOMERY_OUTPUT
 
 BUILT_SOURCES = $(CXXBRIDGE_H) \
   rust/gen/include/rust/sapling_keys_bridge.h \
-  rust/gen/include/rust/orchard_keys_bridge.h \
+  rust/gen/include/rust/ironwood_keys_bridge.h \
   rust/gen/include/rust/seed_bridge.h \
   rust/gen/include/rust/blake2b.h \
   rust/gen/include/rust/sprout.h \

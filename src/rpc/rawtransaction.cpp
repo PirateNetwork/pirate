@@ -224,7 +224,7 @@ UniValue TxShieldedOutputsToJSON(const rust::Vec<sapling::Output>& saplingOutput
  * @param actions Vector of Orchard actions from the transaction bundle
  * @return UniValue JSON array of action objects with unified spend/output data
  */
-UniValue TxActionsToJSON(const rust::Vec<orchard_bundle::Action>& actions)
+UniValue TxActionsToJSON(const rust::Vec<ironwood_bundle::Action>& actions)
 {
     UniValue arr(UniValue::VARR);
     for (const auto& action : actions) {
@@ -266,12 +266,12 @@ UniValue TxOrchardBundleToJSON(const CTransaction& tx, UniValue& entry)
     UniValue obj(UniValue::VOBJ);
     
     // Check if the transaction has an Orchard bundle
-    if (!tx.GetOrchardBundle().IsPresent()) {
+    if (!tx.GetIronwoodBundle().IsPresent()) {
         return obj; // Return empty object if no Orchard bundle
     }
     
     try {
-        const auto& bundle = tx.GetOrchardBundle().GetDetails();
+        const auto& bundle = tx.GetIronwoodBundle().GetDetails();
 
         auto actions = bundle.actions();
         obj.pushKV("actions", TxActionsToJSON(actions));
@@ -497,7 +497,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, 
                 entry.pushKV("bindingSig", HexStr(bindingSig.begin(), bindingSig.end()));
             }
         }
-        if (tx.nVersion >= ORCHARD_TX_VERSION && tx.GetOrchardBundle().IsPresent()) {
+        if (tx.nVersion >= IRONWOOD_TX_VERSION && tx.GetIronwoodBundle().IsPresent()) {
             UniValue orchard = TxOrchardBundleToJSON(tx, entry);
             if (!orchard.empty()) {
                 entry.pushKV("orchard", orchard);
@@ -2010,7 +2010,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       }
 
       //Create a new orchard bulider before converting the store orchard actions, Enable both Spend and Outputs
-      tb.InitializeOrchard(true, true, primaryAnchor);
+      tb.InitializeIronwood(true, true, primaryAnchor);
       orchardInitialized = true;
 
       //Add the stored orchard action to the orchard builder
@@ -2052,7 +2052,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   //Initialize the orchard builder if there are orchard outputs and the orchard builder has not already been initialized
   //This can happen when there are no orchard spends but there are orchard outputs
   if(orchardInitialized == false && tb.vOrchardOutputs.size() > 0) {
-      tb.InitializeOrchard(false, true, uint256());
+      tb.InitializeIronwood(false, true, uint256());
   }
 
   //Add the stored outputs to the orchard builder

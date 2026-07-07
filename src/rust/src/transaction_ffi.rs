@@ -15,8 +15,7 @@ use zcash_transparent::{
 use sapling_crypto::bundle::Authorized as SaplingSigAuth;
 use zcash_primitives::{
     transaction::{
-        sighash::{SignableInput},
-        sighash_v5::v5_signature_hash,
+        sighash::{signature_hash, SignableInput},
         txid::TxIdDigester,
         Authorization, Transaction, TransactionData, TxDigests, TxVersion,
     },
@@ -290,13 +289,16 @@ pub extern "C" fn zcash_transaction_zip244_signature_digest(
         )
     };
 
-    let sighash = v5_signature_hash(
+    // Dispatches to the version-appropriate sighash function (v4/v5/v6); using a
+    // hardcoded v5_signature_hash here would silently ignore the Ironwood bundle for
+    // v6 transactions, since v5 has no concept of it.
+    let sighash = signature_hash(
         &precomputed_tx.tx,
         &signable_input,
         &precomputed_tx.txid_parts,
     );
 
-    // `v5_signature_hash` output is always 32 bytes.
-    *unsafe { &mut *sighash_ret } = sighash.as_ref().try_into().unwrap();
+    // `signature_hash` output is always 32 bytes.
+    *unsafe { &mut *sighash_ret } = *sighash.as_ref();
     true
 }

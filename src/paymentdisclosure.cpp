@@ -182,7 +182,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
     }
 
     // Check if this is an Orchard transaction with actions
-    const auto& orchardBundle = tx.GetOrchardBundle();
+    const auto& orchardBundle = tx.GetIronwoodBundle();
     if (!orchardBundle.IsPresent()) {
         return "";
     }
@@ -226,7 +226,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
             
             // Derive the OCK for this OVK
-            if (!orchard::derive_orchard_ock(action, ovkBytes, ock)) {
+            if (!ironwood::derive_ironwood_ock(action, ovkBytes, ock)) {
                 continue; // Try next OVK
             }
             
@@ -237,7 +237,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             uint256_t test_rho;
             uint256_t test_rseed;
             
-            if (orchard::try_orchard_decrypt_action_ock(
+            if (ironwood::try_ironwood_decrypt_action_ock(
                     action, ock, test_value, test_address, test_memo,
                     test_rho, test_rseed)) {
                 // Successfully decrypted, this is the right OVK
@@ -261,7 +261,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
                 
                 // Derive the OCK for this OVK
-                if (!orchard::derive_orchard_ock(action, ovkBytes, ock)) {
+                if (!ironwood::derive_ironwood_ock(action, ovkBytes, ock)) {
                     continue; // Try next OVK
                 }
                 
@@ -272,7 +272,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 uint256_t test_rho;
                 uint256_t test_rseed;
                 
-                if (orchard::try_orchard_decrypt_action_ock(
+                if (ironwood::try_ironwood_decrypt_action_ock(
                         action, ock, test_value, test_address, test_memo,
                         test_rho, test_rseed)) {
                     // Successfully decrypted, this is the right OVK
@@ -292,7 +292,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
             std::copy(ovk.begin(), ovk.end(), ovkBytes.begin());
             
             // Derive the OCK for this OVK
-            if (orchard::derive_orchard_ock(action, ovkBytes, ock)) {
+            if (ironwood::derive_ironwood_ock(action, ovkBytes, ock)) {
                 // Test if this OCK can decrypt the action
                 uint64_t test_value;
                 std::array<uint8_t, 43> test_address;
@@ -300,7 +300,7 @@ std::string GenerateOrchardDisclosure(CWallet* wallet, const uint256& txid, int 
                 uint256_t test_rho;
                 uint256_t test_rseed;
                 
-                if (orchard::try_orchard_decrypt_action_ock(
+                if (ironwood::try_ironwood_decrypt_action_ock(
                         action, ock, test_value, test_address, test_memo,
                         test_rho, test_rseed)) {
                     // Successfully decrypted, this is the right OVK
@@ -427,7 +427,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     }
 
     // Check if this is an Orchard transaction with actions
-    const auto& orchardBundle = tx.GetOrchardBundle();
+    const auto& orchardBundle = tx.GetIronwoodBundle();
     if (!orchardBundle.IsPresent()) {
         result.error = "Transaction has no Orchard actions";
         return result;
@@ -454,7 +454,7 @@ OrchardDisclosureVerificationResult VerifyOrchardDisclosure(const std::string& d
     uint256_t rho;
     uint256_t rseed;
 
-    if (!orchard::try_orchard_decrypt_action_ock(
+    if (!ironwood::try_ironwood_decrypt_action_ock(
             *action, disclosureStruct.ock, value, address, memo,
             rho, rseed)) {
         result.error = "Failed to decrypt action with provided disclosure key";

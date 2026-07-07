@@ -3,7 +3,7 @@
 
 // Re-export all modules with FFI functions
 pub use crate::rustzcash::*;
-pub use crate::orchard_protocol::*;
+pub use crate::ironwood_protocol::*;
 pub use crate::transaction_ffi::*;
 pub use crate::builder_ffi::*;
 pub use crate::bundlecache::*;
@@ -39,8 +39,6 @@ mod history;
 mod incremental_merkle_tree;
 #[path = "merkle_frontier.rs"]
 mod merkle_frontier;
-#[path = "orchard_protocol/orchard_protocol.rs"]
-mod orchard_protocol;
 #[path = "ironwood_protocol/ironwood_protocol.rs"]
 mod ironwood_protocol;
 #[path = "sapling_protocol/sapling_protocol.rs"]

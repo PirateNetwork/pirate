@@ -155,7 +155,7 @@ BOOST_AUTO_TEST_CASE(tx_valid)
             BOOST_CHECK_MESSAGE(state.IsValid(), comment);
 
             // None of these test vectors use ZIP 244.
-            assert(tx.nVersion < ORCHARD_TX_VERSION);
+            assert(tx.nVersion < IRONWOOD_TX_VERSION);
             PrecomputedTransactionData txdata(tx, {});
             for (unsigned int i = 0; i < tx.vin.size(); i++)
             {
@@ -243,7 +243,7 @@ BOOST_AUTO_TEST_CASE(tx_invalid)
             CValidationState state;
             fValid = CheckTransaction(tx, state, verifier) && state.IsValid();
 
-            assert(tx.nVersion < ORCHARD_TX_VERSION);
+            assert(tx.nVersion < IRONWOOD_TX_VERSION);
             PrecomputedTransactionData txdata(tx, {});
             for (unsigned int i = 0; i < tx.vin.size() && fValid; i++)
             {

@@ -2134,7 +2134,7 @@ int64_t komodo_newcoins(int64_t *zfundsp,int64_t *sproutfundsp,int32_t nHeight,C
             sproutfunds += joinsplit.vpub_old;
         }
         zfunds -= tx.GetValueBalanceSapling();
-        zfunds -= tx.GetValueBalanceOrchard();
+        zfunds -= tx.GetValueBalanceIronwood();
     }
     *zfundsp = zfunds;
     *sproutfundsp = sproutfunds;

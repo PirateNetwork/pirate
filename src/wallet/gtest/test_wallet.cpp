@@ -56,7 +56,7 @@ libzcash::OrchardPaymentAddress orchardAddress;
 SaplingWallet saplingWallet;
 
 // Create a Orchard Wallet
-OrchardWallet orchardWallet;
+IronwoodWallet orchardWallet;
 
 CTransaction CreateCoinBaseTransaction(int nHeight) {
 
@@ -119,7 +119,7 @@ TEST (WalletTests, IntializeSaplingOrchardWalletsRunAsThirdTest) {
     SaplingMerkleFrontier saplingFrontierTree;
     EXPECT_NO_THROW(saplingWallet.InitNoteCommitmentTree(saplingFrontierTree));
 
-    OrchardMerkleFrontier orchardFrontierTree;
+    IronwoodMerkleFrontier orchardFrontierTree;
     EXPECT_NO_THROW(orchardWallet.InitNoteCommitmentTree(orchardFrontierTree));
 }
 

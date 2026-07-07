@@ -60,8 +60,6 @@ mod bundlecache;
 mod history;
 mod incremental_merkle_tree;
 mod merkle_frontier;
-#[path = "orchard_protocol/orchard_protocol.rs"]
-mod orchard_protocol;
 #[path = "ironwood_protocol/ironwood_protocol.rs"]
 mod ironwood_protocol;
 #[path = "sapling_protocol/sapling_protocol.rs"]
@@ -87,14 +85,9 @@ static mut SAPLING_SPEND_PARAMS: Option<SpendParameters> = None;
 static mut SAPLING_OUTPUT_PARAMS: Option<OutputParameters> = None;
 static mut SPROUT_GROTH16_PARAMS_PATH: Option<PathBuf> = None;
 
-static mut ORCHARD_PK: Option<orchard::circuit::ProvingKey> = None;
-static mut ORCHARD_VK: Option<orchard::circuit::VerifyingKey> = None;
-
-// SCAFFOLDING ONLY: loaded eagerly alongside ORCHARD_PK/VK for consistency, but nothing
-// in this tree can construct or validate an Ironwood bundle yet (no v6 transaction
-// support). The Ironwood pool requires PostNu6_3, a distinct circuit from Orchard's
-// current FixedPostNu6_2 (see OrchardCircuitVersion::supports_cross_address_restriction),
-// so it needs its own key pair rather than reusing ORCHARD_PK/VK.
+// Ironwood (PostNu6_3) is Pirate's only shielded-Orchard-circuit pool; the pre-Ironwood
+// Orchard circuit (FixedPostNu6_2) never activated on any live Pirate network, so there
+// is no separate key pair for it.
 static mut IRONWOOD_PK: Option<orchard::circuit::ProvingKey> = None;
 static mut IRONWOOD_VK: Option<orchard::circuit::VerifyingKey> = None;
 
@@ -162,15 +155,7 @@ pub extern "C" fn librustzcash_init_zksnark_params(
         let sapling_spend_vk = sapling_spend_params.verifying_key();
         let sapling_output_vk = sapling_output_params.verifying_key();
 
-        // Generate Orchard parameters.
-        info!(target: "main", "Loading Orchard parameters");
-        let orchard_pk = load_proving_keys.then(|| {
-            orchard::circuit::ProvingKey::build(orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2)
-        });
-        let orchard_vk =
-            orchard::circuit::VerifyingKey::build(orchard::circuit::OrchardCircuitVersion::FixedPostNu6_2);
-
-        // Generate Ironwood parameters. SCAFFOLDING ONLY: see IRONWOOD_PK/VK above.
+        // Generate Ironwood parameters.
         info!(target: "main", "Loading Ironwood parameters");
         let ironwood_pk = load_proving_keys.then(|| {
             orchard::circuit::ProvingKey::build(orchard::circuit::OrchardCircuitVersion::PostNu6_3)
@@ -188,9 +173,6 @@ pub extern "C" fn librustzcash_init_zksnark_params(
             SAPLING_SPEND_VK = Some(sapling_spend_vk);
             SAPLING_OUTPUT_VK = Some(sapling_output_vk);
             SPROUT_GROTH16_VK = Some(sprout_vk);
-
-            ORCHARD_PK = orchard_pk;
-            ORCHARD_VK = Some(orchard_vk);
 
             IRONWOOD_PK = ironwood_pk;
             IRONWOOD_VK = Some(ironwood_vk);

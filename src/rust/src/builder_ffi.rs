@@ -31,24 +31,24 @@ use zcash_protocol::{consensus::BranchId, value::ZatBalance as Amount};
 use zcash_note_encryption::try_note_decryption;
 
 use crate::{
-    bridge::ffi::OrchardUnauthorizedBundlePtr,
-    orchard_protocol::orchard_bundle::Action,
-    orchard_protocol::orchard_wallet::{ORCHARD_TREE_DEPTH,OrchardPath},
+    bridge::ffi::IronwoodUnauthorizedBundlePtr,
+    ironwood_protocol::ironwood_bundle::Action,
+    ironwood_protocol::ironwood_wallet::{IRONWOOD_TREE_DEPTH,IronwoodPath},
     transaction_ffi::{MapTransparent, TransparentAuth},
-    ORCHARD_PK,
+    IRONWOOD_PK,
 };
 
 #[allow(dead_code)]
-pub struct OrchardSpendInfo {
+pub struct IronwoodSpendInfo {
     fvk: FullViewingKey,
     note: Note,
     merkle_path: MerklePath,
 }
 
-impl OrchardSpendInfo {
+impl IronwoodSpendInfo {
     #[allow(dead_code)]
     pub fn from_parts(fvk: FullViewingKey, note: Note, merkle_path: MerklePath) -> Self {
-        OrchardSpendInfo {
+        IronwoodSpendInfo {
             fvk,
             note,
             merkle_path,
@@ -65,15 +65,8 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     }
 }
 
-// #[no_mangle]
-// pub extern "C" fn orchard_spend_info_free(spend_info: *mut OrchardSpendInfo) {
-//     if !spend_info.is_null() {
-//         drop(unsafe { Box::from_raw(spend_info) });
-//     }
-// }
-
 #[no_mangle]
-pub extern "C" fn orchard_builder_new(
+pub extern "C" fn ironwood_builder_new(
     spends_enabled: bool,
     outputs_enabled: bool,
     anchor: *const [u8; 32],
@@ -88,25 +81,24 @@ pub extern "C" fn orchard_builder_new(
     } else {
         Flags::OUTPUTS_DISABLED
     };
-    // Pirate's currently-active circuit/pool: NU6.2-era Orchard. Not yet PostNu6_3/Ironwood.
-    let bundle_version = orchard::bundle::BundleVersion::orchard_v2();
+    let bundle_version = orchard::bundle::BundleVersion::ironwood_v3();
     Box::into_raw(Box::new(
         Builder::new(BundleType::DEFAULT, bundle_version, flags, anchor)
-            .expect("flags are representable under orchard_v2 and bundle_type is not Coinbase"),
+            .expect("flags are representable under ironwood_v3 and bundle_type is not Coinbase"),
     ))
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_builder_add_spend(
+pub extern "C" fn ironwood_builder_add_spend(
     builder: *mut Builder,
     fvk_bytes: *const [c_uchar; 96],
-    orchard_action: *const Action,
-    merkle_path: *const [c_uchar; 1 + 33 * ORCHARD_TREE_DEPTH + 8]
+    ironwood_action: *const Action,
+    merkle_path: *const [c_uchar; 1 + 33 * IRONWOOD_TREE_DEPTH + 8]
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
 
     // Parse the Merkle path from the caller
-    let merkle_path: OrchardPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+    let merkle_path: IronwoodPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
         Ok(w) => w,
         Err(_) => return false,
     };
@@ -118,10 +110,10 @@ pub extern "C" fn orchard_builder_add_spend(
 
         let fvk = fvkopt.unwrap();
 
-        if let Some(orchard_action) = unsafe { orchard_action.as_ref() } {
+        if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
             let ivk = fvk.to_ivk(Scope::External);
             let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
-            let action = &orchard_action.inner();
+            let action = &ironwood_action.inner();
             let domain = OrchardDomain::for_action(action);
             let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
                 Some(r) => r,
@@ -135,7 +127,7 @@ pub extern "C" fn orchard_builder_add_spend(
             ) {
                 Ok(()) => return true,
                 Err(e) => {
-                    error!("Failed to add Orchard spend: {}", e);
+                    error!("Failed to add Ironwood spend: {}", e);
                     return false
                 }
             }
@@ -146,14 +138,14 @@ pub extern "C" fn orchard_builder_add_spend(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_builder_add_spend_from_parts(
+pub extern "C" fn ironwood_builder_add_spend_from_parts(
     builder: *mut Builder,
     fvk_bytes: *const [c_uchar; 96],
     note_address_bytes: *const[c_uchar; 43],
     value_raw: u64,
     rho_bytes: *const[c_uchar; 32],
     rseed_bytes: *const[c_uchar; 32],
-    merkle_path: *const [c_uchar; 1 + 33 * ORCHARD_TREE_DEPTH + 8]
+    merkle_path: *const [c_uchar; 1 + 33 * IRONWOOD_TREE_DEPTH + 8]
 ) -> bool {
     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
 
@@ -187,14 +179,14 @@ pub extern "C" fn orchard_builder_add_spend_from_parts(
         note_value,
         rho,
         rseed,
-        orchard::note::NoteVersion::V2,
+        orchard::note::NoteVersion::V3,
     )) {
         Some(r) => r,
         None => return false,
     };
 
     // Parse the Merkle path from the caller
-    let merkle_path: OrchardPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
+    let merkle_path: IronwoodPath = match merkle_path_from_slice(unsafe { &(&*merkle_path)[..] }) {
         Ok(r) => r,
         Err(_) => return false,
     };
@@ -210,14 +202,14 @@ pub extern "C" fn orchard_builder_add_spend_from_parts(
     return match builder.add_spend(fvk, note, merkle_path.into()) {
         Ok(()) => true,
         Err(e) => {
-            error!("Failed to add Orchard spend: {}", e);
+            error!("Failed to add Ironwood spend: {}", e);
             false
         }
     }
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_builder_add_recipient(
+pub extern "C" fn ironwood_builder_add_recipient(
     builder: *mut Builder,
     ovk: *const [u8; 32],
     recipient: *const [u8; 43],
@@ -238,46 +230,21 @@ pub extern "C" fn orchard_builder_add_recipient(
     match builder.add_output(ovk, recipient, value, memo.unwrap_or([0u8; 512])) {
         Ok(()) => true,
         Err(e) => {
-            error!("Failed to add Orchard recipient: {}", e);
+            error!("Failed to add Ironwood recipient: {}", e);
             false
         }
     }
 }
 
-// #[no_mangle]
-// pub extern "C" fn orchard_builder_add_recipient(
-//     builder: *mut Builder,
-//     ovk: *const [u8; 32],
-//     recipient: *const orchard::Address,
-//     value: u64,
-//     memo: *const [u8; 512],
-// ) -> bool {
-//     let builder = unsafe { builder.as_mut() }.expect("Builder may not be null.");
-//     let ovk = unsafe { ovk.as_ref() }
-//         .copied()
-//         .map(OutgoingViewingKey::from);
-//     let recipient = unsafe { recipient.as_ref() }.expect("Recipient may not be null.");
-//     let value = NoteValue::from_raw(value);
-//     let memo = unsafe { memo.as_ref() }.copied();
-//
-//     match builder.add_recipient(ovk, *recipient, value, memo) {
-//         Ok(()) => true,
-//         Err(e) => {
-//             error!("Failed to add Orchard recipient: {}", e);
-//             false
-//         }
-//     }
-// }
-
 #[no_mangle]
-pub extern "C" fn orchard_builder_free(builder: *mut Builder) {
+pub extern "C" fn ironwood_builder_free(builder: *mut Builder) {
     if !builder.is_null() {
         drop(unsafe { Box::from_raw(builder) });
     }
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_builder_build(
+pub extern "C" fn ironwood_builder_build(
     builder: *mut Builder,
 ) -> *mut Bundle<InProgress<Unproven, Unauthorized>, Amount> {
     if builder.is_null() {
@@ -289,18 +256,18 @@ pub extern "C" fn orchard_builder_build(
     match builder.build(OsRng) {
         Ok(Some((bundle, _))) => Box::into_raw(Box::new(bundle)),
         Ok(None) => {
-            error!("Orchard builder produced no bundle");
+            error!("Ironwood builder produced no bundle");
             ptr::null_mut()
         }
         Err(e) => {
-            error!("Failed to build Orchard bundle: {:?}", e);
+            error!("Failed to build Ironwood bundle: {:?}", e);
             ptr::null_mut()
         }
     }
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_unauthorized_bundle_free(
+pub extern "C" fn ironwood_unauthorized_bundle_free(
     bundle: *mut Bundle<InProgress<Unproven, Unauthorized>, Amount>,
 ) {
     if !bundle.is_null() {
@@ -309,7 +276,7 @@ pub extern "C" fn orchard_unauthorized_bundle_free(
 }
 
 #[no_mangle]
-pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
+pub extern "C" fn ironwood_unauthorized_bundle_prove_and_sign(
     bundle: *mut Bundle<InProgress<Unproven, Unauthorized>, Amount>,
     skbytes: *const u8,
     keycount: size_t,
@@ -317,8 +284,8 @@ pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
 ) -> *mut Bundle<Authorized, Amount> {
     let bundle = unsafe { Box::from_raw(bundle) };
     let sighash = unsafe { sighash.as_ref() }.expect("sighash pointer may not be null.");
-    let pk = unsafe { ORCHARD_PK.as_ref() }
-        .expect("Parameters not loaded: ORCHARD_PK should have been initialized");
+    let pk = unsafe { IRONWOOD_PK.as_ref() }
+        .expect("Parameters not loaded: IRONWOOD_PK should have been initialized");
 
 
     //let skbytes = unsafe { skbytes.as_ref() }
@@ -368,7 +335,7 @@ pub extern "C" fn orchard_unauthorized_bundle_prove_and_sign(
         Err(e) => {
 
             println!(
-                "An error occurred while authorizing the orchard bundle: {:?}",
+                "An error occurred while authorizing the ironwood bundle: {:?}",
                 e
             );
             std::ptr::null_mut()
@@ -385,7 +352,7 @@ pub(crate) fn shielded_signature_digest(
     tx_bytes: &[u8],
     all_prev_outputs: &[u8],
     sapling_bundle: &crate::sapling_protocol::SaplingUnauthorizedBundle,
-    orchard_bundle: *const OrchardUnauthorizedBundlePtr,
+    ironwood_bundle: *const IronwoodUnauthorizedBundlePtr,
 ) -> Result<[u8; 32], String> {
     // TODO: This is also parsing a transaction that may have partially-filled fields.
     // This doesn't matter for transparent components (the only such field would be the
@@ -395,8 +362,8 @@ pub(crate) fn shielded_signature_digest(
     // refactor the transaction builder (which is the only source of partially-created
     // shielded components) to use a different FFI for obtaining the sighash, that passes
     // across the transaction components and then constructs the TransactionData. This is
-    // already being done as part of the Orchard changes to the transaction builder, since
-    // the Orchard bundle will already be built on the Rust side, and we can avoid passing
+    // already being done as part of the Ironwood changes to the transaction builder, since
+    // the Ironwood bundle will already be built on the Rust side, and we can avoid passing
     // it back and forward across the FFI with this change. We should similarly refactor
     // the Sapling code to do the same.
     let consensus_branch_id = BranchId::try_from(consensus_branch_id)
@@ -404,13 +371,15 @@ pub(crate) fn shielded_signature_digest(
     let tx = Transaction::read(tx_bytes, consensus_branch_id)
         .map_err(|e| format!("Failed to parse transaction: {}", e))?;
     // This method should only be called with an in-progress transaction that contains no
-    // Sapling or Orchard component.
+    // Sapling or Ironwood component. The Orchard slot is always empty in Pirate's
+    // collapsed single-pool design, but we check it too for good measure.
     assert!(tx.sapling_bundle().is_none());
     assert!(tx.orchard_bundle().is_none());
+    assert!(tx.ironwood_bundle().is_none());
 
     let f_transparent = MapTransparent::parse(all_prev_outputs, &tx)?;
-    let orchard_bundle = unsafe {
-        orchard_bundle
+    let ironwood_bundle = unsafe {
+        ironwood_bundle
             .cast::<Bundle<InProgress<Unproven, Unauthorized>, Amount>>()
             .as_ref()
     };
@@ -423,10 +392,18 @@ pub(crate) fn shielded_signature_digest(
         type OrchardAuth = InProgress<Unproven, Unauthorized>;
     }
 
+    // `TransactionData::map_bundles` calls its `f_orchard` closure twice: once for the
+    // (always-empty, Pirate never populates it) `orchard_bundle` slot, then once for the
+    // `ironwood_bundle` slot - passing the same closure both times, since Ironwood is
+    // represented with the Orchard bundle type. `map_bundles` evaluates the two struct
+    // fields in declaration order (orchard_bundle, then ironwood_bundle), so this array
+    // is consumed in that same order: the Orchard slot always gets `None`, and our
+    // in-progress bundle lands only in the Ironwood slot.
+    let mut bundle_slots = vec![None, ironwood_bundle.cloned()].into_iter();
     let txdata: TransactionData<Signable> = tx.into_data().map_bundles(
         |b| b.map(|b| b.map_authorization(f_transparent)),
         |_| sapling_bundle.bundle.clone(),
-        |_| orchard_bundle.cloned(),
+        |_| bundle_slots.next().unwrap(),
     );
     let txid_parts = txdata.digest(TxIdDigester);
 

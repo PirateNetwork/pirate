@@ -556,7 +556,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
 
                     // Initialize Orchard builder only once when we have the first anchor
                     if (!orchardInitialized) {
-                        builder_.InitializeOrchard(true, true, orchardAnchor);
+                        builder_.InitializeIronwood(true, true, orchardAnchor);
                         orchardInitialized = true;
                     }
 
@@ -585,7 +585,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
         // This is necessary to handle the case where we are sending to an Orchard address
         if (std::get_if<libzcash::OrchardPaymentAddress>(&toPaymentAddress_) != nullptr) {
             if (!orchardInitialized) {
-                builder_.InitializeOrchard(false, true, uint256());
+                builder_.InitializeIronwood(false, true, uint256());
             }
         }
 

@@ -797,7 +797,7 @@ bool ContextualCheckShieldedInputs(
         CValidationState &state,
         const CCoinsViewCache &view,
         std::optional<rust::Box<sapling::BatchValidator>>& saplingAuth,
-        std::optional<rust::Box<orchard::BatchValidator>>& orchardAuth,
+        std::optional<rust::Box<ironwood::BatchValidator>>& ironwoodAuth,
         const Consensus::Params& consensus,
         uint32_t consensusBranchId,
         bool isMined,

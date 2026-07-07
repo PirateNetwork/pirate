@@ -3599,7 +3599,7 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
     // Check protocol activation status
     int nextBlockHeight = chainActive.Height() + 1;
     bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
+    bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     std::string defaultType;
     if (!saplingActive) {
@@ -3664,7 +3664,7 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     // Check protocol activation status
     int nextBlockHeight = chainActive.Height() + 1;
     bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
+    bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     std::string defaultType;
     if (!saplingActive) {
@@ -5632,7 +5632,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     // If Orchard is not active, do not allow sending from or sending to Orchard addresses.
-    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+    if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         if (fromOrchard || containsOrchardOutput) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Orchard has not activated");
         }
@@ -7032,7 +7032,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         );
     } else {
         // Orchard consolidation
-        if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        if (!NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Orchard is not yet active");
         }
 
@@ -7250,7 +7250,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     const int nextBlockHeight = chainActive.Height() + 1;
     const bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
     const bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    const bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD);
+    const bool orchardActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
 
     // Validate the destination address
     auto destaddress = params[1].get_str();
@@ -10183,7 +10183,7 @@ UniValue z_exportorcharddisclosure(const UniValue& params, bool fHelp, const CPu
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Transaction not found");
         }
 
-        const auto& orchardBundle = tx.GetOrchardBundle();
+        const auto& orchardBundle = tx.GetIronwoodBundle();
         if (!orchardBundle.IsPresent()) {
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Transaction has no Orchard actions");
         }

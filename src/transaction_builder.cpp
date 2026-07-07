@@ -23,7 +23,7 @@ uint256 ProduceShieldedSignatureHash(
     const CTransaction& tx,
     const std::vector<CTxOut>& allPrevOutputs,
     const sapling::UnauthorizedBundle& saplingBundle,
-    const std::optional<orchard::UnauthorizedBundle>& orchardBundle)
+    const std::optional<ironwood::UnauthorizedBundle>& orchardBundle)
 {
     CDataStream sTx(SER_NETWORK, PROTOCOL_VERSION);
     sTx << tx;
@@ -31,7 +31,7 @@ uint256 ProduceShieldedSignatureHash(
     CDataStream sAllPrevOutputs(SER_NETWORK, PROTOCOL_VERSION);
     sAllPrevOutputs << allPrevOutputs;
 
-    const OrchardUnauthorizedBundlePtr* orchardBundlePtr;
+    const IronwoodUnauthorizedBundlePtr* orchardBundlePtr;
     if (orchardBundle.has_value()) {
         orchardBundlePtr = orchardBundle->inner.get();
     } else {
@@ -47,15 +47,15 @@ uint256 ProduceShieldedSignatureHash(
     return uint256::FromRawBytes(dataToBeSigned);
 }
 
-namespace orchard
+namespace ironwood
 {
 
 Builder::Builder(
     bool spendsEnabled,
     bool outputsEnabled,
-    uint256 anchor) : inner(nullptr, orchard_builder_free)
+    uint256 anchor) : inner(nullptr, ironwood_builder_free)
 {
-    inner.reset(orchard_builder_new(spendsEnabled, outputsEnabled, anchor.IsNull() ? nullptr : anchor.begin()));
+    inner.reset(ironwood_builder_new(spendsEnabled, outputsEnabled, anchor.IsNull() ? nullptr : anchor.begin()));
 }
 
 bool Builder::AddSpendFromParts(
@@ -67,7 +67,7 @@ bool Builder::AddSpendFromParts(
     const libzcash::MerklePath orchardMerklePath)
 {
     if (!inner) {
-        throw std::logic_error("orchard::Builder has already been used");
+        throw std::logic_error("ironwood::Builder has already been used");
     }
 
     // Serialize Fullviewing key to pass to Rust
@@ -88,7 +88,7 @@ bool Builder::AddSpendFromParts(
     std::array<unsigned char, 1065> merklepath_t;
     std::move(ssMerklePath.begin(), ssMerklePath.end(), merklepath_t.begin());
 
-    if (orchard_builder_add_spend_from_parts(
+    if (ironwood_builder_add_spend_from_parts(
             inner.get(),
             fvk_t.begin(),
             addr_t.begin(),
@@ -109,10 +109,10 @@ bool Builder::AddOutput(
     const std::optional<libzcash::Memo>& memo)
 {
     if (!inner) {
-        throw std::logic_error("orchard::Builder has already been used");
+        throw std::logic_error("ironwood::Builder has already been used");
     }
 
-    if (!orchard_builder_add_recipient(
+    if (!ironwood_builder_add_recipient(
             inner.get(),
             ovk.has_value() ? ovk->begin() : nullptr,
             to.ToBytes().data(),
@@ -128,10 +128,10 @@ bool Builder::AddOutput(
 std::optional<UnauthorizedBundle> Builder::Build()
 {
     if (!inner) {
-        throw std::logic_error("orchard::Builder has already been used");
+        throw std::logic_error("ironwood::Builder has already been used");
     }
 
-    auto bundle = orchard_builder_build(inner.release());
+    auto bundle = ironwood_builder_build(inner.release());
     if (bundle == nullptr) {
         return std::nullopt;
     } else {
@@ -139,12 +139,12 @@ std::optional<UnauthorizedBundle> Builder::Build()
     }
 }
 
-std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
+std::optional<IronwoodBundle> UnauthorizedBundle::ProveAndSign(
     std::vector<libzcash::OrchardSpendingKey> keys,
     uint256 sighash)
 {
     if (!inner) {
-        throw std::logic_error("orchard::UnauthorizedBundle has already been used");
+        throw std::logic_error("ironwood::UnauthorizedBundle has already been used");
     }
 
     //Convert the vector of keys to a flat byte array
@@ -166,7 +166,7 @@ std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
     }
 
     // Call the Rust function to prove and sign the bundle
-    auto authorizedBundle = orchard_unauthorized_bundle_prove_and_sign(
+    auto authorizedBundle = ironwood_unauthorized_bundle_prove_and_sign(
         inner.release(),
         sks.data(),
         keys.size(),
@@ -174,11 +174,11 @@ std::optional<OrchardBundle> UnauthorizedBundle::ProveAndSign(
     if (authorizedBundle == nullptr) {
         return std::nullopt;
     } else {
-        return OrchardBundle(authorizedBundle);
+        return IronwoodBundle(authorizedBundle);
     }
 }
 
-} // namespace orchard
+} // namespace ironwood
 
 
 TransactionBuilderResult::TransactionBuilderResult(const CTransaction& tx) : maybeTx(tx) {}
@@ -505,16 +505,16 @@ bool TransactionBuilder::ConvertRawSaplingOutput(uint256 ovk)
     return true;
 }
 
-void TransactionBuilder::InitializeOrchard(
+void TransactionBuilder::InitializeIronwood(
     bool spendsEnabled,
     bool outputsEnabled,
     uint256 anchor)
 {
-    if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
-        throw std::runtime_error("TransactionBuilder cannot initialize Orchard before Orchard activation");
+    if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
+        throw std::runtime_error("TransactionBuilder cannot initialize Ironwood before Ironwood activation");
     }
 
-    orchardBuilder = orchard::Builder(spendsEnabled, outputsEnabled, anchor);
+    orchardBuilder = ironwood::Builder(spendsEnabled, outputsEnabled, anchor);
 }
 
 bool TransactionBuilder::AddOrchardSpendRaw(
@@ -526,7 +526,7 @@ bool TransactionBuilder::AddOrchardSpendRaw(
     libzcash::MerklePath orchardMerklePath,
     uint256 anchor)
 {
-    if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
+    if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
         throw std::runtime_error("TransactionBuilder cannot add Orchard Spend before Orchard activation");
     }
 
@@ -554,7 +554,7 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
     // Sanity check: cannot add Orchard Spend to pre-Orchard transaction
     if (!orchardBuilder.has_value()) {
         // Try to give a useful error.
-        if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
+        if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
             throw std::runtime_error("TransactionBuilder cannot add Orchard Spend before Orchard activation");
         } else {
             throw std::runtime_error("TransactionBuilder cannot add Orchard Spend without Orchard Builder");
@@ -607,7 +607,7 @@ bool TransactionBuilder::ConvertRawOrchardSpend(libzcash::OrchardExtendedSpendin
                 vOrchardSpends[i].rho,
                 vOrchardSpends[i].rseed,
                 vOrchardSpends[i].orchardMerklePath)) {
-            throw std::runtime_error("TransactionBuilder: orchard_builder_add_spend_from_parts failed");
+            throw std::runtime_error("TransactionBuilder: ironwood_builder_add_spend_from_parts failed");
         }
 
         valueBalanceOrchard += vOrchardSpends[i].value;
@@ -633,7 +633,7 @@ bool TransactionBuilder::AddOrchardOutputRaw(
     const std::optional<libzcash::Memo>& memo)
 {
     // Try to give a useful error.
-    if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
+    if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
         throw std::runtime_error("TransactionBuilder cannot add Orchard Output before Orchard activation");
     }
 
@@ -652,7 +652,7 @@ bool TransactionBuilder::ConvertRawOrchardOutput(uint256 ovk)
     // Sanity check: cannot add Orchard output to pre-Orchard transaction
     if (!orchardBuilder.has_value()) {
         // Try to give a useful error.
-        if (mtx.nVersion < ORCHARD_MIN_TX_VERSION) {
+        if (mtx.nVersion < IRONWOOD_MIN_TX_VERSION) {
             throw std::runtime_error("TransactionBuilder cannot add Orchard Output before Orchard activation");
         } else {
             throw std::runtime_error("TransactionBuilder cannot add Orchard Output without Orchard Builder");
@@ -906,7 +906,7 @@ TransactionBuilderResult TransactionBuilder::Build()
     //
     // Orchard
     //
-    std::optional<orchard::UnauthorizedBundle> orchardBundle;
+    std::optional<ironwood::UnauthorizedBundle> orchardBundle;
     if (orchardBuilder.has_value() && orchardBuilder->HasActions()) {
         auto bundle = orchardBuilder->Build();
         if (bundle.has_value()) {
@@ -960,7 +960,7 @@ TransactionBuilderResult TransactionBuilder::Build()
             orchardSpendingKeys,
             dataToBeSigned);
         if (authorizedBundle.has_value()) {
-            mtx.orchardBundle = std::move(authorizedBundle.value());
+            mtx.ironwoodBundle = std::move(authorizedBundle.value());
         } else {
             return TransactionBuilderResult("Failed to create Orchard proof or signatures");
         }

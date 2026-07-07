@@ -293,7 +293,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
         SaplingMerkleFrontier sapling_frontier_tree;
         assert(view.GetSaplingFrontierAnchorAt(view.GetBestAnchor(SAPLINGFRONTIER), sapling_frontier_tree));
 
-        OrchardMerkleFrontier orchard_frontier_tree;
+        IronwoodMerkleFrontier orchard_frontier_tree;
         assert(view.GetOrchardFrontierAnchorAt(view.GetBestAnchor(ORCHARDFRONTIER), orchard_frontier_tree));
 
         // Priority order to process transactions
@@ -622,8 +622,8 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             }
 
             //Append Orchard Actions to orchardFrontierTree
-            if (tx.GetOrchardBundle().IsPresent()) {
-                orchard_frontier_tree.AppendBundle(tx.GetOrchardBundle());
+            if (tx.GetIronwoodBundle().IsPresent()) {
+                orchard_frontier_tree.AppendBundle(tx.GetIronwoodBundle());
             }
 
             // Added
@@ -859,7 +859,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
 
         // Fill in header
         pblock->hashPrevBlock  = pindexPrev->GetBlockHash();
-        if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+        if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
             // hashBlockCommitments depends on the block transactions, so we have to
             // update it whenever the coinbase transaction changes.
             //
@@ -988,7 +988,7 @@ void IncrementExtraNonce(CBlock* pblock, CBlockIndex* pindexPrev, unsigned int& 
 
     // For Orchard blocks, we also need to update hashBlockCommitments since
     // changing the coinbase transaction changes the auth data root
-    if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_ORCHARD)) {
+    if (NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         // Get the chain history root from the current view
         LOCK(cs_main);
         CCoinsViewCache view(pcoinsTip);

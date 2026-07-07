@@ -13,33 +13,33 @@ extern "C" {
 #endif
 
 /// A type-safe pointer to a Rust-allocated struct containing the information
-/// needed to spend an Orchard note.
-struct OrchardSpendInfoPtr;
-typedef struct OrchardSpendInfoPtr OrchardSpendInfoPtr;
+/// needed to spend an Ironwood note.
+struct IronwoodSpendInfoPtr;
+typedef struct IronwoodSpendInfoPtr IronwoodSpendInfoPtr;
 
-/// Pointer to Rust-allocated Orchard bundle builder.
-struct OrchardBuilderPtr;
-typedef struct OrchardBuilderPtr OrchardBuilderPtr;
+/// Pointer to Rust-allocated Ironwood bundle builder.
+struct IronwoodBuilderPtr;
+typedef struct IronwoodBuilderPtr IronwoodBuilderPtr;
 
-/// Pointer to Rust-allocated Orchard bundle without proofs
+/// Pointer to Rust-allocated Ironwood bundle without proofs
 /// or authorizing data.
-struct OrchardUnauthorizedBundlePtr;
-typedef struct OrchardUnauthorizedBundlePtr OrchardUnauthorizedBundlePtr;
+struct IronwoodUnauthorizedBundlePtr;
+typedef struct IronwoodUnauthorizedBundlePtr IronwoodUnauthorizedBundlePtr;
 
-/// Frees the memory associated with an Orchard spend info struct that was
+/// Frees the memory associated with an Ironwood spend info struct that was
 /// allocated by Rust.
-void orchard_spend_info_free(OrchardSpendInfoPtr* ptr);
+void ironwood_spend_info_free(IronwoodSpendInfoPtr* ptr);
 
-/// Construct a new Orchard transaction builder.
+/// Construct a new Ironwood transaction builder.
 ///
-/// If `anchor` is `null`, the root of the empty Orchard commitment tree is used.
-OrchardBuilderPtr* orchard_builder_new(
+/// If `anchor` is `null`, the root of the empty Ironwood commitment tree is used.
+IronwoodBuilderPtr* ironwood_builder_new(
     bool spends_enabled,
     bool outputs_enabled,
     const unsigned char* anchor);
 
-/// Frees an Orchard builder returned from `orchard_builder_new`.
-void orchard_builder_free(OrchardBuilderPtr* ptr);
+/// Frees an Ironwood builder returned from `ironwood_builder_new`.
+void ironwood_builder_free(IronwoodBuilderPtr* ptr);
 
 /// Adds a note to be spent in this bundle.
 ///
@@ -47,10 +47,10 @@ void orchard_builder_free(OrchardBuilderPtr* ptr);
 /// required anchor.
 ///
 /// `spend_info` is always freed by this method, whether or not it succeeds.
-bool orchard_builder_add_spend(
-    OrchardBuilderPtr* ptr,
+bool ironwood_builder_add_spend(
+    IronwoodBuilderPtr* ptr,
     const unsigned char* fvk_bytes,
-    const ActionPtr* orchard_action,
+    const ActionPtr* ironwood_action,
     const unsigned char *merkle_path);
 
 /// Adds a note to be spent in this bundle, building the note from parts.
@@ -59,8 +59,8 @@ bool orchard_builder_add_spend(
 /// required anchor.
 ///
 /// `spend_info` is always freed by this method, whether or not it succeeds.
-bool orchard_builder_add_spend_from_parts(
-    OrchardBuilderPtr* ptr,
+bool ironwood_builder_add_spend_from_parts(
+    IronwoodBuilderPtr* ptr,
     const unsigned char* fvk_bytes,
     const unsigned char* note_address_bytes,
     uint64_t value,
@@ -74,8 +74,8 @@ bool orchard_builder_add_spend_from_parts(
 /// or `null` to make the recipient unrecoverable by the sender.
 ///
 /// `memo` is a pointer to the 512-byte memo field encoding, or `null` for "no memo".
-bool orchard_builder_add_recipient(
-    OrchardBuilderPtr* ptr,
+bool ironwood_builder_add_recipient(
+    IronwoodBuilderPtr* ptr,
     const unsigned char* ovk,
     const unsigned char* recipient,
     uint64_t value,
@@ -86,18 +86,18 @@ bool orchard_builder_add_recipient(
 /// Returns `null` if an error occurs.
 ///
 /// `builder` is always freed by this method.
-OrchardUnauthorizedBundlePtr* orchard_builder_build(OrchardBuilderPtr* builder);
+IronwoodUnauthorizedBundlePtr* ironwood_builder_build(IronwoodBuilderPtr* builder);
 
-/// Frees an Orchard bundle returned from `orchard_bundle_build`.
-void orchard_unauthorized_bundle_free(OrchardUnauthorizedBundlePtr* bundle);
+/// Frees an Ironwood bundle returned from `ironwood_bundle_build`.
+void ironwood_unauthorized_bundle_free(IronwoodUnauthorizedBundlePtr* bundle);
 
 /// Adds proofs and signatures to the bundle.
 ///
 /// Returns `null` if an error occurs.
 ///
 /// `bundle` is always freed by this method.
-OrchardBundlePtr* orchard_unauthorized_bundle_prove_and_sign(
-    OrchardUnauthorizedBundlePtr* bundle,
+IronwoodBundlePtr* ironwood_unauthorized_bundle_prove_and_sign(
+    IronwoodUnauthorizedBundlePtr* bundle,
     const unsigned char* skbytes,
     size_t keycount,
     const unsigned char* sighash);
