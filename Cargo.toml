@@ -73,18 +73,18 @@ funty = "=1.1.0"
 [patch.crates-io]
 sapling-crypto        = { git = "https://github.com/piratenetwork/sapling-crypto.git",        rev = "62fcf59a4d933244ee6280182c6cd3e5290e8a90" }
 zcash_note_encryption = { git = "https://github.com/PirateNetwork/zcash_note_encryption.git", rev = "ede44ea608e667c78309c598fbf4d70f69c15c29" }
-orchard               = { path = "../orchard" } # SPIKE: local feat-ironwood branch (rebased on zcash/feat/ironwood), not yet pushed
+orchard               = { git = "https://github.com/PirateNetwork/orchard.git",                rev = "a997c1d9cdabdf9c973c9c12152d9291708162b5" } # feat-ironwood
 halo2_gadgets         = { git = "https://github.com/PirateNetwork/halo2.git",                 rev = "261faaccd5a30c19bb8468600841a0dac305adf5" }
 halo2_proofs          = { git = "https://github.com/PirateNetwork/halo2.git",                 rev = "261faaccd5a30c19bb8468600841a0dac305adf5" }
 halo2_poseidon        = { git = "https://github.com/PirateNetwork/halo2.git",                 rev = "261faaccd5a30c19bb8468600841a0dac305adf5" }
-# SPIKE: local feat-ironwood branches (rebased on zcash/main), not yet pushed
-zcash_address         = { path = "../librustzcash/components/zcash_address" }
-zcash_encoding        = { path = "../librustzcash/components/zcash_encoding" }
-zcash_protocol        = { path = "../librustzcash/components/zcash_protocol" }
-zcash_primitives      = { path = "../librustzcash/zcash_primitives" }
-zcash_proofs          = { path = "../librustzcash/zcash_proofs" }
-zcash_history         = { path = "../librustzcash/zcash_history" }
-zcash_transparent     = { path = "../librustzcash/zcash_transparent" }
+# feat-ironwood
+zcash_address         = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_encoding        = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_protocol        = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_primitives      = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_proofs          = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_history         = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_transparent     = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
 
 [dependencies.tracing-subscriber]
 version = "0.2.12"
