@@ -5,7 +5,7 @@ use memuse::DynamicUsage;
 use orchard::{
     bundle::Authorized,
     keys::{FullViewingKey, PreparedIncomingViewingKey},
-    note_encryption::OrchardDomain,
+    note_encryption::IronwoodDomain,
     primitives::redpallas::{Signature, SpendAuth},
     ValuePool,
 };
@@ -71,7 +71,7 @@ impl Action {
         let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
 
         // Create the domain for decryption
-        let domain = OrchardDomain::for_action(&self.0);
+        let domain = IronwoodDomain::for_action(&self.0);
 
         // Try external scope decryption
         let decrypted = if let Some(r) = try_note_decryption(&domain, &prepared_ivk, &self.0) {
@@ -290,7 +290,7 @@ impl Bundle {
         if let Some(bundle) = self.inner() {
             for act in bundle.actions() {
                 if try_output_recovery_with_ovk(
-                    &OrchardDomain::for_action(act),
+                    &IronwoodDomain::for_action(act),
                     &orchard::keys::OutgoingViewingKey::from([0u8; 32]),
                     act,
                     act.cv_net(),

@@ -11,7 +11,7 @@ use orchard::{
     bundle::{Authorized, Flags},
     keys::{FullViewingKey, OutgoingViewingKey, Scope},
     note::{Nullifier, Rho, RandomSeed},
-    note_encryption::OrchardDomain,
+    note_encryption::IronwoodDomain,
     tree::{MerkleHashOrchard, MerklePath},
     value::NoteValue,
     Bundle, Note, Address
@@ -114,7 +114,7 @@ pub extern "C" fn ironwood_builder_add_spend(
             let ivk = fvk.to_ivk(Scope::External);
             let prepared_ivk = PreparedIncomingViewingKey::new(&ivk);
             let action = &ironwood_action.inner();
-            let domain = OrchardDomain::for_action(action);
+            let domain = IronwoodDomain::for_action(action);
             let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
                 Some(r) => r,
                 None => return false,

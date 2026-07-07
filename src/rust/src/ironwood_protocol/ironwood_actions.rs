@@ -4,7 +4,7 @@ use orchard::{
     Address, Note,
     keys::{OutgoingViewingKey, IncomingViewingKey, PreparedIncomingViewingKey, FullViewingKey, Scope},
     note::{NoteVersion, Rho, RandomSeed},
-    note_encryption::OrchardDomain,
+    note_encryption::IronwoodDomain,
     value::NoteValue};
 
 use zcash_note_encryption::{try_note_decryption, try_output_recovery_with_ovk};
@@ -38,7 +38,7 @@ pub extern "C" fn try_ironwood_decrypt_action_ovk(
     if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
 
         let action = &ironwood_action.inner();
-        let domain = OrchardDomain::for_action(action);
+        let domain = IronwoodDomain::for_action(action);
         let decrypted = match try_output_recovery_with_ovk(&domain, &ovk, action, action.cv_net(), &action.encrypted_note().out_ciphertext) {
             Some(r) => r,
             None => return false,
@@ -84,7 +84,7 @@ pub extern "C" fn try_ironwood_decrypt_action_ivk(
 
             let prepared_ivk = PreparedIncomingViewingKey::new(&ivk.unwrap());
             let action = &ironwood_action.inner();
-            let domain = OrchardDomain::for_action(action);
+            let domain = IronwoodDomain::for_action(action);
             let decrypted = match try_note_decryption(&domain, &prepared_ivk, action) {
                 Some(r) => r,
                 None => return false,
@@ -131,7 +131,7 @@ pub extern "C" fn try_ironwood_decrypt_action_fvk(
 
         if let Some(ironwood_action) = unsafe { ironwood_action.as_ref() } {
             let action = &ironwood_action.inner();
-            let domain = OrchardDomain::for_action(action);
+            let domain = IronwoodDomain::for_action(action);
 
             // Try external scope first, then internal (change addresses).
             let prepared_ivk_ext = PreparedIncomingViewingKey::new(&fvk.to_ivk(Scope::External));
@@ -275,7 +275,7 @@ pub(crate) fn try_ironwood_decrypt_action_ock(
 
     let ock = OutgoingCipherKey::from(*ock_bytes);
     let action = &ironwood_action.inner();
-    let domain = OrchardDomain::for_action(action);
+    let domain = IronwoodDomain::for_action(action);
 
     let decrypted = match try_output_recovery_with_ock(
         &domain,
