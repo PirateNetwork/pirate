@@ -494,18 +494,18 @@ libzcash::PaymentAddress DecodePaymentAddress(const std::string& str)
         }
     }
     data.clear();
-    auto bechOrchAddr = bech32::Decode(str);
-    if (bechOrchAddr.first == Params().Bech32HRP(CChainParams::IRONWOOD_PAYMENT_ADDRESS) &&
-        bechOrchAddr.second.size() == ConvertedIronwoodPaymentAddressSize) {
+    auto bechIronAddr = bech32::Decode(str);
+    if (bechIronAddr.first == Params().Bech32HRP(CChainParams::IRONWOOD_PAYMENT_ADDRESS) &&
+        bechIronAddr.second.size() == ConvertedIronwoodPaymentAddressSize) {
         // Bech32 decoding
-        data.reserve((bechOrchAddr.second.size() * 5) / 8);
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchAddr.second.begin(), bechOrchAddr.second.end())) {
+        data.reserve((bechIronAddr.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechIronAddr.second.begin(), bechIronAddr.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::IronwoodPaymentAddress ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
-            memory_cleanse(bechOrchAddr.second.data(), bechOrchAddr.second.size());
+            memory_cleanse(bechIronAddr.second.data(), bechIronAddr.second.size());
             return ret;
         }
     }
@@ -554,18 +554,18 @@ libzcash::ViewingKey DecodeViewingKey(const std::string& str)
         }
     }
     data.clear();
-    auto bechOrchFvk = bech32::Decode(str);
-    if(bechOrchFvk.first == Params().Bech32HRP(CChainParams::IRONWOOD_EXTENDED_FVK) &&
-       bechOrchFvk.second.size() == ConvertedIronwoodExtendedFullViewingKeySize) {
+    auto bechIronFvk = bech32::Decode(str);
+    if(bechIronFvk.first == Params().Bech32HRP(CChainParams::IRONWOOD_EXTENDED_FVK) &&
+       bechIronFvk.second.size() == ConvertedIronwoodExtendedFullViewingKeySize) {
         // Bech32 decoding
-        data.reserve((bechOrchFvk.second.size() * 5) / 8);
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchFvk.second.begin(), bechOrchFvk.second.end())) {
+        data.reserve((bechIronFvk.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechIronFvk.second.begin(), bechIronFvk.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::IronwoodExtendedFullViewingKeyPirate ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
-            memory_cleanse(bechOrchFvk.second.data(), bechOrchFvk.second.size());
+            memory_cleanse(bechIronFvk.second.data(), bechIronFvk.second.size());
             return ret;
         }
     }
@@ -610,18 +610,18 @@ libzcash::SpendingKey DecodeSpendingKey(const std::string& str)
         }
     }
     data.clear();
-    auto bechOrchSK = bech32::Decode(str);
-    if (bechOrchSK.first == Params().Bech32HRP(CChainParams::IRONWOOD_EXTENDED_SPEND_KEY) &&
-        bechOrchSK.second.size() == ConvertedIronwoodExtendedSpendingKeySize) {
+    auto bechIronSK = bech32::Decode(str);
+    if (bechIronSK.first == Params().Bech32HRP(CChainParams::IRONWOOD_EXTENDED_SPEND_KEY) &&
+        bechIronSK.second.size() == ConvertedIronwoodExtendedSpendingKeySize) {
         // Bech32 decoding
-        data.reserve((bechOrchSK.second.size() * 5) / 8);
-        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechOrchSK.second.begin(), bechOrchSK.second.end())) {
+        data.reserve((bechIronSK.second.size() * 5) / 8);
+        if (ConvertBits<5, 8, false>([&](unsigned char c) { data.push_back(c); }, bechIronSK.second.begin(), bechIronSK.second.end())) {
             CDataStream ss(data, SER_NETWORK, PROTOCOL_VERSION);
             libzcash::IronwoodExtendedSpendingKeyPirate ret;
             ss >> ret;
             memory_cleanse(ss.data(), ss.size());
             memory_cleanse(data.data(), data.size());
-            memory_cleanse(bechOrchSK.second.data(), bechOrchSK.second.size());
+            memory_cleanse(bechIronSK.second.data(), bechIronSK.second.size());
             return ret;
         }
     }

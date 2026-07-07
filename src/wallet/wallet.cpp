@@ -13509,18 +13509,18 @@ void CWallet::GetFilteredNotes(
                         decltype(sapCmpMin)> sapLargestHeap(sapCmpMin);
 
     // ── Ironwood heaps ────────────────────────────────────────────────────────
-    auto orchCmpMax = [](const IronwoodNoteEntry& a, const IronwoodNoteEntry& b) {
+    auto ironCmpMax = [](const IronwoodNoteEntry& a, const IronwoodNoteEntry& b) {
         return a.note.value() < b.note.value();
     };
-    auto orchCmpMin = [](const IronwoodNoteEntry& a, const IronwoodNoteEntry& b) {
+    auto ironCmpMin = [](const IronwoodNoteEntry& a, const IronwoodNoteEntry& b) {
         return a.note.value() > b.note.value();
     };
     std::priority_queue<IronwoodNoteEntry,
                         std::vector<IronwoodNoteEntry>,
-                        decltype(orchCmpMax)> orchSmallestHeap(orchCmpMax);
+                        decltype(ironCmpMax)> ironSmallestHeap(ironCmpMax);
     std::priority_queue<IronwoodNoteEntry,
                         std::vector<IronwoodNoteEntry>,
-                        decltype(orchCmpMin)> orchLargestHeap(orchCmpMin);
+                        decltype(ironCmpMin)> ironLargestHeap(ironCmpMin);
 
     // Single aggregate tracks the combined total across all four heaps.
     CAmount aggregateValue = 0;
@@ -13671,41 +13671,41 @@ void CWallet::GetFilteredNotes(
                 // === Streaming bounded selection (disjoint heaps) ===
                 CAmount v = CAmount(note.value());
 
-                if ((int)orchSmallestHeap.size() < halfNotes) {
-                    orchSmallestHeap.push(entry);
+                if ((int)ironSmallestHeap.size() < halfNotes) {
+                    ironSmallestHeap.push(entry);
                     aggregateValue += v;
-                } else if (v < CAmount(orchSmallestHeap.top().note.value())) {
-                    IronwoodNoteEntry evicted = orchSmallestHeap.top();
+                } else if (v < CAmount(ironSmallestHeap.top().note.value())) {
+                    IronwoodNoteEntry evicted = ironSmallestHeap.top();
                     CAmount evictedVal = CAmount(evicted.note.value());
                     aggregateValue -= evictedVal;
-                    orchSmallestHeap.pop();
-                    orchSmallestHeap.push(entry);
+                    ironSmallestHeap.pop();
+                    ironSmallestHeap.push(entry);
                     aggregateValue += v;
-                    if ((int)orchLargestHeap.size() < halfNotes) {
-                        orchLargestHeap.push(evicted);
+                    if ((int)ironLargestHeap.size() < halfNotes) {
+                        ironLargestHeap.push(evicted);
                         aggregateValue += evictedVal;
-                    } else if (evictedVal > CAmount(orchLargestHeap.top().note.value())) {
-                        aggregateValue -= CAmount(orchLargestHeap.top().note.value());
-                        orchLargestHeap.pop();
-                        orchLargestHeap.push(evicted);
+                    } else if (evictedVal > CAmount(ironLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(ironLargestHeap.top().note.value());
+                        ironLargestHeap.pop();
+                        ironLargestHeap.push(evicted);
                         aggregateValue += evictedVal;
                     }
                 } else {
-                    if ((int)orchLargestHeap.size() < halfNotes) {
-                        orchLargestHeap.push(entry);
+                    if ((int)ironLargestHeap.size() < halfNotes) {
+                        ironLargestHeap.push(entry);
                         aggregateValue += v;
-                    } else if (v > CAmount(orchLargestHeap.top().note.value())) {
-                        aggregateValue -= CAmount(orchLargestHeap.top().note.value());
-                        orchLargestHeap.pop();
-                        orchLargestHeap.push(entry);
+                    } else if (v > CAmount(ironLargestHeap.top().note.value())) {
+                        aggregateValue -= CAmount(ironLargestHeap.top().note.value());
+                        ironLargestHeap.pop();
+                        ironLargestHeap.push(entry);
                         aggregateValue += v;
                     }
                 }
 
                 // Early exit: Ironwood heaps full AND combined aggregate satisfies requirement.
                 if (minAggregateValue > 0 &&
-                    (int)orchSmallestHeap.size() >= halfNotes &&
-                    (int)orchLargestHeap.size() >= halfNotes &&
+                    (int)ironSmallestHeap.size() >= halfNotes &&
+                    (int)ironLargestHeap.size() >= halfNotes &&
                     aggregateValue >= minAggregateValue) {
                     earlyExit = true;
                     break;
@@ -13718,8 +13718,8 @@ void CWallet::GetFilteredNotes(
     if (bounded) {
         while (!sapSmallestHeap.empty()) { saplingEntries.push_back(sapSmallestHeap.top()); sapSmallestHeap.pop(); }
         while (!sapLargestHeap.empty())  { saplingEntries.push_back(sapLargestHeap.top());  sapLargestHeap.pop();  }
-        while (!orchSmallestHeap.empty()) { ironwoodEntries.push_back(orchSmallestHeap.top()); orchSmallestHeap.pop(); }
-        while (!orchLargestHeap.empty())  { ironwoodEntries.push_back(orchLargestHeap.top());  orchLargestHeap.pop();  }
+        while (!ironSmallestHeap.empty()) { ironwoodEntries.push_back(ironSmallestHeap.top()); ironSmallestHeap.pop(); }
+        while (!ironLargestHeap.empty())  { ironwoodEntries.push_back(ironLargestHeap.top());  ironLargestHeap.pop();  }
     }
 }
 

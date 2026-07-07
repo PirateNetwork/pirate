@@ -278,11 +278,11 @@ bool CWalletDB::WriteArcIronwoodOp(uint256 nullifier, IronwoodOutPoint op, bool 
 {
     nWalletDBUpdated++;
     if (txnProtected) {
-        if (!WriteTxn(std::make_pair(std::string("arcorchop"), nullifier), op, __FUNCTION__)) {
+        if (!WriteTxn(std::make_pair(std::string("arcironop"), nullifier), op, __FUNCTION__)) {
             return false;
         }
     } else {
-        if (!Write(std::make_pair(std::string("arcorchop"), nullifier), op)) {
+        if (!Write(std::make_pair(std::string("arcironop"), nullifier), op)) {
             return false;
         }
     }
@@ -293,29 +293,29 @@ bool CWalletDB::WriteCryptedArcIronwoodOp(uint256 nullifier, uint256 chash, cons
 {
     nWalletDBUpdated++;
     if (txnProtected) {
-        if (!WriteTxn(std::make_pair(std::string("carcorchop"), chash), vchCryptedSecret, __FUNCTION__)) {
+        if (!WriteTxn(std::make_pair(std::string("carcironop"), chash), vchCryptedSecret, __FUNCTION__)) {
             return false;
         }
     } else {
-        if (!Write(std::make_pair(std::string("carcorchop"), chash), vchCryptedSecret)) {
+        if (!Write(std::make_pair(std::string("carcironop"), chash), vchCryptedSecret)) {
             return false;
         }
     }
 
-    Erase(std::make_pair(std::string("arcorchop"), nullifier));
+    Erase(std::make_pair(std::string("arcironop"), nullifier));
     return true;
 }
 
 bool CWalletDB::EraseArcIronwoodOp(uint256 nullifier)
 {
     nWalletDBUpdated++;
-    return Erase(std::make_pair(std::string("arcorchop"), nullifier));
+    return Erase(std::make_pair(std::string("arcironop"), nullifier));
 }
 
 bool CWalletDB::EraseCryptedArcIronwoodOp(uint256 chash)
 {
     nWalletDBUpdated++;
-    return Erase(std::make_pair(std::string("carcorchop"), chash));
+    return Erase(std::make_pair(std::string("carcironop"), chash));
 }
 //End Historical Wallet Tx
 
@@ -682,15 +682,15 @@ bool CWalletDB::WriteIronwoodZKey(const libzcash::IronwoodIncomingViewingKey &iv
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("orchzkeymeta"), ivk), keyMeta))
+    if (!Write(std::make_pair(std::string("ironzkeymeta"), ivk), keyMeta))
         return false;
 
-    return Write(std::make_pair(std::string("orchzkey"), ivk), extsk, false);
+    return Write(std::make_pair(std::string("ironzkey"), ivk), extsk, false);
 
     //Erase the extended full viewing key record when it's corresponding spending key is added
     auto extfvkOpt = extsk.GetXFVK();
     if (extfvkOpt != std::nullopt) {
-        Erase(std::make_pair(std::string("orchextfvk"), extfvkOpt.value()));
+        Erase(std::make_pair(std::string("ironextfvk"), extfvkOpt.value()));
     }
 }
 
@@ -710,24 +710,24 @@ bool CWalletDB::WriteCryptedIronwoodZKey(
 
     uint256 fvkFinger = extfvk.fvk.GetFingerprint();
 
-    if (!WriteTxn(std::make_pair(std::string("corchzkeymeta"), fvkFinger), vchCryptedMetaDataSecret, __FUNCTION__))
+    if (!WriteTxn(std::make_pair(std::string("cironzkeymeta"), fvkFinger), vchCryptedMetaDataSecret, __FUNCTION__))
         return false;
 
-    if (!WriteTxn(std::make_pair(std::string("corchzkey"), fvkFinger), vchCryptedSecret, __FUNCTION__, false))
+    if (!WriteTxn(std::make_pair(std::string("cironzkey"), fvkFinger), vchCryptedSecret, __FUNCTION__, false))
         return false;
 
     if (fEraseUnencryptedKey)
     {
       //Update the key to something invalid before deleting it, so any if the record ends up in the slack space it contains an invalid key
-        if (!WriteTxn(std::make_pair(std::string("orchzkey"), ivk), 0, __FUNCTION__))
+        if (!WriteTxn(std::make_pair(std::string("ironzkey"), ivk), 0, __FUNCTION__))
             return false;
 
-        Erase(std::make_pair(std::string("orchzkey"), ivk));
-        Erase(std::make_pair(std::string("orchzkeymeta"), ivk));
+        Erase(std::make_pair(std::string("ironzkey"), ivk));
+        Erase(std::make_pair(std::string("ironzkeymeta"), ivk));
 
         //Erase the extended fullviewing key record when it's corresponding spending key is added
-        Erase(std::make_pair(std::string("orchextfvk"), extfvk));
-        Erase(std::make_pair(std::string("corchextfvk"), fvkFinger));
+        Erase(std::make_pair(std::string("ironextfvk"), extfvk));
+        Erase(std::make_pair(std::string("cironextfvk"), fvkFinger));
     }
     return true;
 }
@@ -739,7 +739,7 @@ bool CWalletDB::WriteIronwoodFullViewingKey(
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
-    return Write(std::make_pair(std::string("orchextfvk"), extfvk), '1');
+    return Write(std::make_pair(std::string("ironextfvk"), extfvk), '1');
 }
 
 bool CWalletDB::EraseIronwoodFullViewingKey(
@@ -747,7 +747,7 @@ bool CWalletDB::EraseIronwoodFullViewingKey(
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
-    return Erase(std::make_pair(std::string("orchextfvk"), extfvk));
+    return Erase(std::make_pair(std::string("ironextfvk"), extfvk));
 }
 
 bool CWalletDB::WriteCryptedIronwoodFullViewingKey(
@@ -759,12 +759,12 @@ bool CWalletDB::WriteCryptedIronwoodFullViewingKey(
     nWalletDBUpdated++;
     uint256 fvkFinger = extfvk.fvk.GetFingerprint();
 
-    if (!WriteTxn(std::make_pair(std::string("corchextfvk"), fvkFinger), vchCryptedSecret, __FUNCTION__))
+    if (!WriteTxn(std::make_pair(std::string("cironextfvk"), fvkFinger), vchCryptedSecret, __FUNCTION__))
       return false;
 
     if (fEraseUnencryptedKey)
     {
-        Erase(std::make_pair(std::string("orchextfvk"), extfvk));
+        Erase(std::make_pair(std::string("ironextfvk"), extfvk));
     }
     return true;
 }
@@ -778,7 +778,7 @@ bool CWalletDB::WriteIronwoodPaymentAddress(
     nWalletDBUpdated++;
 
     // Write both IVK and scope to database
-    return Write(std::make_pair(std::string("orchzaddr"), addr), std::make_pair(ivk, static_cast<uint8_t>(scope)));
+    return Write(std::make_pair(std::string("ironzaddr"), addr), std::make_pair(ivk, static_cast<uint8_t>(scope)));
 }
 
 bool CWalletDB::WriteCryptedIronwoodPaymentAddress(
@@ -789,11 +789,11 @@ bool CWalletDB::WriteCryptedIronwoodPaymentAddress(
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("corchzaddr"), chash), vchCryptedSecret)) {
+    if (!Write(std::make_pair(std::string("cironzaddr"), chash), vchCryptedSecret)) {
         return false;
     }
 
-    Erase(std::make_pair(std::string("orchzaddr"), addr));
+    Erase(std::make_pair(std::string("ironzaddr"), addr));
     return true;
 }
 
@@ -805,7 +805,7 @@ bool CWalletDB::WriteIronwoodDiversifiedAddress(
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    return Write(std::make_pair(std::string("orchzdivaddr"), addr), std::make_pair(ivk, path));
+    return Write(std::make_pair(std::string("ironzdivaddr"), addr), std::make_pair(ivk, path));
 }
 
 bool CWalletDB::WriteCryptedIronwoodDiversifiedAddress(
@@ -816,11 +816,11 @@ bool CWalletDB::WriteCryptedIronwoodDiversifiedAddress(
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("corchzdivaddr"), chash), vchCryptedSecret, false)) {
+    if (!Write(std::make_pair(std::string("cironzdivaddr"), chash), vchCryptedSecret, false)) {
         return false;
     }
 
-    Erase(std::make_pair(std::string("orchzdivaddr"), addr));
+    Erase(std::make_pair(std::string("ironzdivaddr"), addr));
     return true;
 }
 
@@ -832,7 +832,7 @@ bool CWalletDB::WriteLastIronwoodDiversifierUsed(
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    return Write(std::make_pair(std::string("orchzlastdiv"), ivk), path);
+    return Write(std::make_pair(std::string("ironzlastdiv"), ivk), path);
 }
 
 bool CWalletDB::WriteLastCryptedIronwoodDiversifierUsed(
@@ -843,11 +843,11 @@ bool CWalletDB::WriteLastCryptedIronwoodDiversifierUsed(
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
 
-    if (!Write(std::make_pair(std::string("corchzlastdiv"), chash), vchCryptedSecret)) {
+    if (!Write(std::make_pair(std::string("cironzlastdiv"), chash), vchCryptedSecret)) {
         return false;
     }
 
-    Erase(std::make_pair(std::string("orchzlastdiv"), ivk));
+    Erase(std::make_pair(std::string("ironzlastdiv"), ivk));
     return true;
 }
 
@@ -856,7 +856,7 @@ bool CWalletDB::WritePrimaryIronwoodSpendingKey(
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
-    return Write(std::string("porchspendkey"), key);
+    return Write(std::string("pironspendkey"), key);
 }
 
 bool CWalletDB::WriteCryptedPrimaryIronwoodSpendingKey(
@@ -873,11 +873,11 @@ bool CWalletDB::WriteCryptedPrimaryIronwoodSpendingKey(
     nWalletDBUpdated++;
     uint256 extfvkFinger = extfvk.fvk.GetFingerprint();
 
-    if (!WriteTxn(std::string("cporchspendkey"), std::make_pair(extfvkFinger, vchCryptedSecret), __FUNCTION__, true)) {
+    if (!WriteTxn(std::string("cpironspendkey"), std::make_pair(extfvkFinger, vchCryptedSecret), __FUNCTION__, true)) {
         return false;
     }
 
-    Erase(std::string("porchspendkey"));
+    Erase(std::string("pironspendkey"));
 
     return true;
 }
@@ -1411,14 +1411,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 }
             }
         }
-        else if (strType == "arcorchop" || strType == "carcorchop") //carcorchop is encrypted arcorchop
+        else if (strType == "arcironop" || strType == "carcironop") //carcironop is encrypted arcironop
         {
             if (nMaxConnections > 0) {
                 try
                 {
                     uint256 nullifier;
                     IronwoodOutPoint op;
-                    if (strType == "arcorchop") {
+                    if (strType == "arcironop") {
                         ssKey >> nullifier;
                         ssValue >> op;
                     } else {
@@ -2087,7 +2087,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             }
         }
 
-        else if (strType == "orchzkey")
+        else if (strType == "ironzkey")
         {
             libzcash::IronwoodIncomingViewingKey ivk;
             ssKey >> ivk;
@@ -2139,7 +2139,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //add checks for integrity
             wss.nIronwoodKeys++;
         }
-        else if (strType == "corchzkey")
+        else if (strType == "cironzkey")
         {
             uint256 extfvkFinger;
             ssKey >> extfvkFinger;
@@ -2181,7 +2181,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             wss.fIsEncrypted = true;
         }
-        else if (strType == "orchextfvk")
+        else if (strType == "ironextfvk")
         {
             libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
             ssKey >> extfvk;
@@ -2230,7 +2230,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
         }
-        else if (strType == "corchextfvk")
+        else if (strType == "cironextfvk")
         {
             uint256 extfvkFinger;
             ssKey >> extfvkFinger;
@@ -2274,7 +2274,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             // so set the wallet birthday to the beginning of time.
             pwallet->nTimeFirstKey = 1;
         }
-        else if (strType == "orchzkeymeta")
+        else if (strType == "ironzkeymeta")
         {
             libzcash::IronwoodIncomingViewingKey ivk;
             ssKey >> ivk;
@@ -2285,7 +2285,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             pwallet->LoadIronwoodZKeyMetadata(ivk, keyMeta);
         }
-        else if (strType == "corchzkeymeta")
+        else if (strType == "cironzkeymeta")
         {
             uint256 extfvkFinger;
             ssKey >> extfvkFinger;
@@ -2296,7 +2296,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
 
             pwallet->mapTempHoldCryptedIronwoodMetadata[extfvkFinger] = vchCryptedSecret;
         }
-        else if (strType == "orchzaddr")
+        else if (strType == "ironzaddr")
         {
             libzcash::IronwoodPaymentAddress addr;
             ssKey >> addr;
@@ -2343,7 +2343,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
-        else if (strType == "corchzaddr")
+        else if (strType == "cironzaddr")
         {
             uint256 chash;
             ssKey >> chash;
@@ -2367,7 +2367,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
-        else if (strType == "orchzdivaddr")
+        else if (strType == "ironzdivaddr")
         {
             libzcash::IronwoodPaymentAddress addr;
             ssKey >> addr;
@@ -2381,7 +2381,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "corchzdivaddr")
+        else if (strType == "cironzdivaddr")
         {
             uint256 chash;
             ssKey >> chash;
@@ -2395,14 +2395,14 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "porchspendkey")
+        else if (strType == "pironspendkey")
         {
             libzcash::IronwoodExtendedSpendingKeyPirate key;
             ssValue >> key;
 
             pwallet->primaryIronwoodSpendingKey = key;
         }
-        else if (strType == "cporchspendkey")
+        else if (strType == "cpironspendkey")
         {
             uint256 extfvkFinger;
             ssValue >> extfvkFinger;
@@ -2417,7 +2417,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             }
         }
 
-        else if (strType == "orchzlastdiv")
+        else if (strType == "ironzlastdiv")
         {
             libzcash::IronwoodIncomingViewingKey ivk;
             ssKey >> ivk;
@@ -2431,7 +2431,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 return false;
             }
         }
-        else if (strType == "corchzlastdiv")
+        else if (strType == "cironzlastdiv")
         {
             uint256 chash;
             ssKey >> chash;
@@ -2513,9 +2513,9 @@ static bool IsKeyType(string strType)
             strType == "sapextfvk" || strType == "csapextfvk" ||
             strType == "sapzkey" || strType == "csapzkey" ||
             strType == "pspendkey" || strType == "cpspendkey" ||
-            strType == "orchextfvk" || strType == "corchextfvk" ||
-            strType == "orchzkey" || strType == "corchzkey" ||
-            strType == "porchspendkey" || strType == "cporchspendkey" ||
+            strType == "ironextfvk" || strType == "cironextfvk" ||
+            strType == "ironzkey" || strType == "cironzkey" ||
+            strType == "pironspendkey" || strType == "cpironspendkey" ||
             strType == "vkey" ||
             strType == "mkey" || strType == "ckey");
 }
@@ -2687,7 +2687,7 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
                     // On tx/ctx/outpoint deserialization failure, zap all tx records and rescan.
                     if ( deadTxns.empty() && (strType == "tx" || strType == "ctx" ||
                          strType == "arczsop" || strType == "carczsop" ||
-                         strType == "arcorchop" || strType == "carcorchop")) {
+                         strType == "arcironop" || strType == "carcironop")) {
                         LogPrintf("Error deserializing %s record - will zap all transactions and rescan\n", strType);
                         wss.fNeedZapAndRescan = true;
                     }
@@ -2876,11 +2876,11 @@ DBErrors CWalletDB::FindWalletTxToZap(
                 uint256 hash;
                 ssKey >> hash;
                 vCArcSaplingNullifier.push_back(hash);
-            } if (strType == "arcorchop") {
+            } if (strType == "arcironop") {
                 uint256 nullifier;
                 ssKey >> nullifier;
                 vArcIronwoodNullifier.push_back(nullifier);
-            } if (strType == "carcorchop") {
+            } if (strType == "carcironop") {
                 uint256 hash;
                 ssKey >> hash;
                 vCArcIronwoodNullifier.push_back(hash);

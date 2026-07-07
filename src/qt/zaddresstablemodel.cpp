@@ -139,9 +139,9 @@ public:
                 balances[addr] = 0;
         }
 
-        std::set<libzcash::IronwoodPaymentAddress> orchAddresses;
-        wallet->GetIronwoodPaymentAddresses(orchAddresses);
-        for (auto addr : orchAddresses) {
+        std::set<libzcash::IronwoodPaymentAddress> ironAddresses;
+        wallet->GetIronwoodPaymentAddresses(ironAddresses);
+        for (auto addr : ironAddresses) {
             if (balances.count(addr) == 0)
                 balances[addr] = 0;
         }
@@ -245,7 +245,7 @@ public:
                         wallet->GetIronwoodFullViewingKey(ivk, extfvk)) {
                             // Group by FVK regardless of whether we have the spending key
                             if (ironwoodFvkToGroup.find(extfvk) == ironwoodFvkToGroup.end()) {
-                                ironwoodFvkToGroup[extfvk] = QString("orch_%1").arg(ironwoodGroupCounter++);
+                                ironwoodFvkToGroup[extfvk] = QString("iron_%1").arg(ironwoodGroupCounter++);
                             }
                             groupKey = ironwoodFvkToGroup[extfvk];
                             if (wallet->HaveIronwoodSpendingKey(extfvk)) {
@@ -254,9 +254,9 @@ public:
                     }
 
                     // Get scope for Ironwood addresses
-                    KeyScope orchScope;
-                    if (wallet->GetIronwoodKeyScope(*ironwoodAddr, orchScope)) {
-                        scope = (orchScope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
+                    KeyScope ironScope;
+                    if (wallet->GetIronwoodKeyScope(*ironwoodAddr, ironScope)) {
+                        scope = (ironScope == KeyScope::External) ? QObject::tr("Normal") : QObject::tr("Change");
                     } else {
                         scope = QString("");
                     }
@@ -321,7 +321,7 @@ public:
                 QString displayName;
                 if (key.startsWith("sapl_"))
                     displayName = QObject::tr("Sapling Key Group ") + key.mid(5);
-                else if (key.startsWith("orch_"))
+                else if (key.startsWith("iron_"))
                     displayName = QObject::tr("Ironwood Key Group ") + key.mid(5);
                 else
                     displayName = key;

@@ -589,9 +589,9 @@ void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx
 
                 // Mark as internal scope (ZIP-32 change address)
                 {
-                    auto orchAddr = note.GetAddress();
+                    auto ironAddr = note.GetAddress();
                     KeyScope scope;
-                    if (pwalletMain->GetIronwoodKeyScope(orchAddr, scope) && scope == KeyScope::Internal)
+                    if (pwalletMain->GetIronwoodKeyScope(ironAddr, scope) && scope == KeyScope::Internal)
                         received.isInternalScope = true;
                 }
 
