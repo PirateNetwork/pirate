@@ -265,10 +265,15 @@ TEST(TestNotary, DPoWLitecoinSignatureChecksSwitchAtActivation)
     EXPECT_TRUE(DPoWVoutSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,DPOW_LITECOIN_NOTARY_COUNT,100));
     EXPECT_FALSE(DPoWVoutSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,DPOW_LITECOIN_NOTARY_COUNT - 1,100));
 
-    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99,10,1,64,false,100));
-    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99,11,1,64,false,100));
-    EXPECT_FALSE(DPoWVoutSigsMetAtHeight(99,10,64,100));
-    EXPECT_TRUE(DPoWVoutSigsMetAtHeight(99,11,64,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99,6,1,64,false,100));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99,7,1,64,false,100));
+    EXPECT_FALSE(DPoWVoutSigsMetAtHeight(99,6,64,100));
+    EXPECT_TRUE(DPoWVoutSigsMetAtHeight(99,7,64,100));
+
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99999,10,1,64,false,100000));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99999,11,1,64,false,100000));
+    EXPECT_FALSE(DPoWVoutSigsMetAtHeight(99999,10,64,100000));
+    EXPECT_TRUE(DPoWVoutSigsMetAtHeight(99999,11,64,100000));
 }
 
 } // namespace TestNotary
