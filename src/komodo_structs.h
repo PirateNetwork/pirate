@@ -317,6 +317,7 @@ public:
     void SetLastNotarizedHeight(const int32_t in);
     const int32_t &LastNotarizedMoMDepth() const;
     void SetLastNotarizedMoMDepth(const int32_t in);
+    int32_t LastNotarizedTxHeight() const;
 
     /*****
      * @brief add a checkpoint to the collection and update member values

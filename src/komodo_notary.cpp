@@ -136,6 +136,13 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
     else if ( timestamp == 0 )
         timestamp = komodo_heightstamp(height); // derive the timestamp from the passed-in height
 
+    if ( !chainName.isKMD() )
+    {
+        int32_t litecoin_notaries = DPoWLitecoinNotaries(pubkeys,height);
+        if ( litecoin_notaries != 0 )
+            return(litecoin_notaries);
+    }
+
     // If this chain is not a staked chain, use the normal Komodo logic to determine notaries. 
     // This allows KMD to still sync and use its proper pubkeys for dPoW.
     if ( is_STAKED(chainName.symbol()) == 0 )
@@ -380,6 +387,19 @@ int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *
     if ( sp != nullptr )
     {
         return sp->NotarizedHeight(prevMoMheightp, hashp, txidp);
+    }
+    return 0;
+}
+
+int32_t komodo_notarized_tx_height()
+{
+    char symbol[KOMODO_ASSETCHAIN_MAXLEN];
+    char dest[KOMODO_ASSETCHAIN_MAXLEN];
+
+    komodo_state *sp = komodo_stateptr(symbol, dest);
+    if ( sp != nullptr )
+    {
+        return sp->LastNotarizedTxHeight();
     }
     return 0;
 }

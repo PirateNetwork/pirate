@@ -1706,7 +1706,7 @@ void komodo_nameset(char *symbol,char *dest,const char *source)
     else
     {
         strcpy(symbol,source);          // this chain an asset chain
-        strcpy(dest,(char *)"KMD");     // dest is KMD
+        strcpy(dest,(char *)"KMD");     // legacy default; notarization events can switch destinations by hardfork height.
     }
 }
 

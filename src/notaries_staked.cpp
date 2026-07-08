@@ -12,6 +12,111 @@ pthread_mutex_t staked_mutex; // todo remove
 
 //static bool doneinit_STAKED = false;
 
+namespace
+{
+    static const int32_t DPOW_UNREACHABLE_SIGS = 65; // one more than the maximum notary set size
+
+    bool DPoWLitecoinQuorumActiveAtHeight(int32_t height,int32_t numnotaries,int32_t activationHeight)
+    {
+        return(DPoWLitecoinUpgradeActiveAtHeight(height,activationHeight) &&
+               numnotaries == DPOW_LITECOIN_NOTARY_COUNT);
+    }
+
+    int32_t DPoWLegacyMinRatify(int32_t height)
+    {
+        return((height < 90000) ? 7 : 11);
+    }
+
+    bool DPoWLitecoinPubkeyConfigured(const char *pubkeystr)
+    {
+        return(pubkeystr != 0 && strlen(pubkeystr) == 66 &&
+               pubkeystr[0] == '0' && (pubkeystr[1] == '2' || pubkeystr[1] == '3'));
+    }
+}
+
+bool DPoWLitecoinUpgradeActive(int32_t height)
+{
+    return(DPoWLitecoinUpgradeActiveAtHeight(height,DPOW_LITECOIN_ACTIVATION_HEIGHT));
+}
+
+bool DPoWLitecoinUpgradeActiveAtHeight(int32_t height,int32_t activationHeight)
+{
+    return(!chainName.isKMD() &&
+           chainName.isSymbol(DPOW_LITECOIN_CHAIN_SYMBOL) &&
+           activationHeight > 0 &&
+           height >= activationHeight);
+}
+
+int32_t DPoWLitecoinNotaries(uint8_t pubkeys[64][33],int32_t height)
+{
+    if ( !DPoWLitecoinUpgradeActive(height) )
+        return(0);
+
+    memset(pubkeys,0,64 * 33);
+    for (int32_t i=0; i<DPOW_LITECOIN_NOTARY_COUNT; i++)
+    {
+        const char *pubkeystr = notaries_LITECOIN[i][1];
+        if ( !DPoWLitecoinPubkeyConfigured(pubkeystr) )
+        {
+            fprintf(stderr,"%s dPoW Litecoin notary key %d is not configured; refusing activated authority set\n",
+                    chainName.symbol().c_str(),i);
+            return(-1);
+        }
+        decode_hex(pubkeys[i],33,(char *)pubkeystr);
+    }
+    return(DPOW_LITECOIN_NOTARY_COUNT);
+}
+
+int32_t DPoWRequiredSigs(int32_t height,int32_t numnotaries)
+{
+    return(DPoWRequiredSigsAtHeight(height,numnotaries,DPOW_LITECOIN_ACTIVATION_HEIGHT));
+}
+
+int32_t DPoWRequiredSigsAtHeight(int32_t height,int32_t numnotaries,int32_t activationHeight)
+{
+    if ( DPoWLitecoinUpgradeActiveAtHeight(height,activationHeight) )
+        return(DPoWLitecoinQuorumActiveAtHeight(height,numnotaries,activationHeight) ? DPOW_LITECOIN_REQUIRED_SIGS : DPOW_UNREACHABLE_SIGS);
+    return(11);
+}
+
+bool DPoWNotarizationSigsMet(int32_t height,int32_t numvalid,uint64_t signedmask,int32_t numnotaries,bool isKMD)
+{
+    return(DPoWNotarizationSigsMetAtHeight(height,numvalid,signedmask,numnotaries,isKMD,DPOW_LITECOIN_ACTIVATION_HEIGHT));
+}
+
+bool DPoWNotarizationSigsMetAtHeight(int32_t height,int32_t numvalid,uint64_t signedmask,int32_t numnotaries,bool isKMD,int32_t activationHeight)
+{
+    if ( DPoWLitecoinUpgradeActiveAtHeight(height,activationHeight) )
+        return(DPoWLitecoinQuorumActiveAtHeight(height,numnotaries,activationHeight) && numvalid >= DPOW_LITECOIN_REQUIRED_SIGS);
+
+    int32_t minsigs = DPoWLegacyMinRatify(height);
+    return(((height < 90000 || (signedmask & 1) != 0) && numvalid >= minsigs) ||
+           (numvalid >= minsigs && !isKMD) ||
+           numvalid > (numnotaries / 5));
+}
+
+bool DPoWVoutSigsMet(int32_t height,int32_t numvalid,int32_t numnotaries)
+{
+    return(DPoWVoutSigsMetAtHeight(height,numvalid,numnotaries,DPOW_LITECOIN_ACTIVATION_HEIGHT));
+}
+
+bool DPoWVoutSigsMetAtHeight(int32_t height,int32_t numvalid,int32_t numnotaries,int32_t activationHeight)
+{
+    if ( DPoWLitecoinUpgradeActiveAtHeight(height,activationHeight) )
+        return(DPoWLitecoinQuorumActiveAtHeight(height,numnotaries,activationHeight) && numvalid >= DPOW_LITECOIN_REQUIRED_SIGS);
+    return(numvalid >= DPoWLegacyMinRatify(height));
+}
+
+const char *DPoWAssetChainDest(int32_t height)
+{
+    return(DPoWAssetChainDestAtHeight(height,DPOW_LITECOIN_ACTIVATION_HEIGHT));
+}
+
+const char *DPoWAssetChainDestAtHeight(int32_t height,int32_t activationHeight)
+{
+    return(DPoWLitecoinUpgradeActiveAtHeight(height,activationHeight) ? DPOW_LITECOIN_DEST : DPOW_ASSETCHAIN_LEGACY_DEST);
+}
+
 /*****
  * Reset the doneinit static (for unit testing)
  */

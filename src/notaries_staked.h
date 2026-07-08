@@ -5,9 +5,19 @@
 #include "crosschain.h"
 #include "cc/CCinclude.h"
 
+#include <stdint.h>
+
 static const int32_t iguanaPort = 9333;
 static const int8_t BTCminsigs = 13;
 static const int8_t overrideMinSigs = 7;
+static const int32_t DPOW_LITECOIN_ACTIVATION_HEIGHT = 0; // disabled until the dPoW hardfork height is chosen
+static const char *DPOW_LITECOIN_CHAIN_SYMBOL = "PIRATE";
+static const int8_t DPOW_LITECOIN_NOTARY_COUNT = 6;
+static const int8_t DPOW_LITECOIN_REQUIRED_SIGS = 3;
+static const char *DPOW_KMD_DEST = "BTC";
+static const char *DPOW_ASSETCHAIN_LEGACY_DEST = "KMD";
+// "LTC" is routed through the existing external notary RPC settings: DEST_PORT and BTCUSERPASS.
+static const char *DPOW_LITECOIN_DEST = "LTC";
 static const char *iguanaSeeds[8][1] =
 {
   {"94.23.1.95"},
@@ -89,6 +99,17 @@ static const char *notaries_STAKED[NUM_STAKED_ERAS][64][2] =
     }
 };
 
+// Fill these six pubkeys before setting DPOW_LITECOIN_ACTIVATION_HEIGHT.
+static const char *notaries_LITECOIN[DPOW_LITECOIN_NOTARY_COUNT][2] =
+{
+    {"pending_0", 0},
+    {"pending_1", 0},
+    {"pending_2", 0},
+    {"pending_3", 0},
+    {"pending_4", 0},
+    {"pending_5", 0},
+};
+
 //void undo_init_STAKED();
 
 uint8_t is_STAKED(const std::string& symbol);
@@ -98,5 +119,16 @@ int8_t StakedNotaryID(std::string &notaryname, char *Raddress);
 void UpdateNotaryAddrs(uint8_t pubkeys[64][33],int8_t numNotaries);
 
 CrosschainAuthority Choose_auth_STAKED(int32_t chosen_era);
+bool DPoWLitecoinUpgradeActive(int32_t height);
+bool DPoWLitecoinUpgradeActiveAtHeight(int32_t height,int32_t activationHeight);
+int32_t DPoWLitecoinNotaries(uint8_t pubkeys[64][33],int32_t height);
+int32_t DPoWRequiredSigs(int32_t height,int32_t numnotaries);
+int32_t DPoWRequiredSigsAtHeight(int32_t height,int32_t numnotaries,int32_t activationHeight);
+bool DPoWNotarizationSigsMet(int32_t height,int32_t numvalid,uint64_t signedmask,int32_t numnotaries,bool isKMD);
+bool DPoWNotarizationSigsMetAtHeight(int32_t height,int32_t numvalid,uint64_t signedmask,int32_t numnotaries,bool isKMD,int32_t activationHeight);
+bool DPoWVoutSigsMet(int32_t height,int32_t numvalid,int32_t numnotaries);
+bool DPoWVoutSigsMetAtHeight(int32_t height,int32_t numvalid,int32_t numnotaries,int32_t activationHeight);
+const char *DPoWAssetChainDest(int32_t height);
+const char *DPoWAssetChainDestAtHeight(int32_t height,int32_t activationHeight);
 
 #endif

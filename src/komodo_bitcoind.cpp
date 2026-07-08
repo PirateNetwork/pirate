@@ -17,6 +17,7 @@
 #include "komodo.h" // komodo_voutupdate()
 #include "komodo_utils.h" // OS_milliseconds
 #include "komodo_notary.h"
+#include "notaries_staked.h"
 #include "komodo.h"
 #include "rpc/net.h"
 #include "init.h"
@@ -369,7 +370,7 @@ int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heig
         port = KMD_PORT;
         userpass = KMDUSERPASS;
     }
-    else if ( strcmp(dest,"BTC") == 0 ) // this is no longer strictly BTC; depends on -notary= path
+    else if ( strcmp(dest,"BTC") == 0 || strcmp(dest,"LTC") == 0 )
     {
         port = DEST_PORT;
         userpass = BTCUSERPASS;
@@ -377,7 +378,7 @@ int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heig
     else return(0);
     if ( userpass[0] != 0 )
     {
-        if ( strcmp("BTC",dest) != 0 )
+        if ( strcmp(dest,"KMD") == 0 )
         {
             if ( (jsonstr= komodo_issuemethod(userpass,(char *)"getinfo",params,port)) != 0 )
             {
@@ -387,23 +388,21 @@ int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heig
                     if ( (item= jobj(json,(char *)"result")) != 0 )
                     {
                         height = jint(item,(char *)"blocks");
-                        *kmdnotarized_heightp = height;
+                        *kmdnotarized_heightp = jint(item,(char *)"notarized");
                     }
                     free_json(json);
                 }
                 free(jsonstr);
             }
-        } else {
-            if ( (jsonstr= komodo_issuemethod(userpass,(char *)"getblockchaininfo",params,port)) != 0 )
+        }
+        else
+        {
+            if ( (jsonstr= komodo_issuemethod(userpass,(char *)"getblockcount",params,port)) != 0 )
             {
-                //printf("(%s)\n",jsonstr);
                 if ( (json= cJSON_Parse(jsonstr)) != 0 )
                 {
-                    if ( (item= jobj(json,(char *)"result")) != 0 )
-                    {
-                        height = jint(item,(char *)"blocks");
-                        *kmdnotarized_heightp = strcmp(dest,"KMD") == 0 ? jint(item,(char *)"notarized") : height;
-                    }
+                    height = jint(json,(char *)"result");
+                    *kmdnotarized_heightp = height;
                     free_json(json);
                 }
                 free(jsonstr);
@@ -418,6 +417,8 @@ int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heig
                 if ( (item= jobj(json,(char *)"result")) != 0 )
                 {
                     txid_confirmations = jint(item,(char *)"rawconfirmations");
+                    if ( txid_confirmations <= 0 )
+                        txid_confirmations = jint(item,(char *)"confirmations");
                     if ( txid_confirmations > 0 && height > txid_confirmations )
                         txid_height = height - txid_confirmations;
                     else txid_height = height;
@@ -480,7 +481,7 @@ int32_t komodo_verifynotarization(const char *symbol,const char *dest,int32_t he
         }//else jsonstr = _dex_getrawtransaction();
         else return(0); // need universal way to issue DEX* API, since notaries mine most blocks, this ok
     }
-    else if ( strcmp(dest,"BTC") == 0 )     // Note: this should work for LTC too (BTC is used as an alias for LTC)
+    else if ( strcmp(dest,"BTC") == 0 || strcmp(dest,"LTC") == 0 )
     {
         if ( BTCUSERPASS[0] != 0 )
         {
@@ -1016,6 +1017,7 @@ uint32_t komodo_blocktime(uint256 hash)
  */
 bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash)
 {
+    LOCK(cs_main);
     CBlockIndex *pindex;
     if ( (pindex= chainActive.Tip()) == 0 )
         return false;
@@ -1028,21 +1030,26 @@ bool komodo_checkpoint(int32_t *notarized_heightp, int32_t nHeight, uint256 hash
 
     BlockMap::const_iterator it;
     CBlockIndex *notary;
-    if ( notarized_height >= 0 && notarized_height <= pindex->nHeight
-            && (it = mapBlockIndex.find(notarized_hash)) != mapBlockIndex.end() && (notary = it->second) != nullptr )
+    if ( notarized_height > 0 && notarized_height <= pindex->nHeight )
     {
-        //verify that the block info returned from komodo_notarizeddata matches the actual block
-        if ( notary->nHeight == notarized_height ) // if notarized_hash not in chain, reorg
+        if ( (it = mapBlockIndex.find(notarized_hash)) == mapBlockIndex.end() ||
+                (notary = it->second) == nullptr ||
+                notary->nHeight != notarized_height ||
+                !chainActive.Contains(notary) )
         {
-            if ( nHeight < notarized_height )
-                return false;
-            else if ( nHeight == notarized_height && memcmp(&hash,&notarized_hash,sizeof(hash)) != 0 )
-            {
-                // the height matches, but the hash they passed us does not match the notarized_hash we found
-                fprintf(stderr,"[%s] nHeight.%d == NOTARIZED_HEIGHT.%d, diff hash\n",
-                        chainName.symbol().c_str(),nHeight,notarized_height);
-                return false;
-            }
+            fprintf(stderr,"[%s] notarized.%d %s not in active chain\n",
+                    chainName.symbol().c_str(),notarized_height,notarized_hash.ToString().c_str());
+            return false;
+        }
+        //verify that the block info returned from komodo_notarizeddata matches the actual block
+        if ( nHeight < notarized_height )
+            return false;
+        else if ( nHeight == notarized_height && memcmp(&hash,&notarized_hash,sizeof(hash)) != 0 )
+        {
+            // the height matches, but the hash they passed us does not match the notarized_hash we found
+            fprintf(stderr,"[%s] nHeight.%d == NOTARIZED_HEIGHT.%d, diff hash\n",
+                    chainName.symbol().c_str(),nHeight,notarized_height);
+            return false;
         }
     }
     return true;
@@ -2024,9 +2031,10 @@ int32_t komodo_checkPOW(int64_t stakeTxValue, int32_t slowflag,CBlock *pblock,in
             // Check min sigs.
             int8_t numSN = 0; uint8_t notarypubkeys[64][33] = {0};
             numSN = komodo_notaries(notarypubkeys, height, pblock->nTime);
-            if ( pblock->vtx[1].vin.size() < numSN/5 )
+            int32_t requiredSigs = DPoWRequiredSigs(height,numSN);
+            if ( pblock->vtx[1].vin.size() < requiredSigs )
             {
-                fprintf(stderr, "ht.%i does not meet minsigs.%i sigs.%lld\n",height,numSN/5,(long long)pblock->vtx[1].vin.size());
+                fprintf(stderr, "ht.%i does not meet minsigs.%i sigs.%lld\n",height,requiredSigs,(long long)pblock->vtx[1].vin.size());
                 return(-1);
             }
         }

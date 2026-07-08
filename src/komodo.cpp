@@ -36,6 +36,17 @@ void komodo_currentheight_set(int32_t height)
 
 extern NSPV_inforesp NSPV_inforesult;
 
+namespace
+{
+    const char *komodo_notarization_dest_for_height(const char *defaultDest,int32_t height)
+    {
+        if ( chainName.isKMD() )
+            return(DPOW_KMD_DEST);
+        const char *heightDest = DPoWAssetChainDest(height);
+        return(strcmp(heightDest,DPOW_ASSETCHAIN_LEGACY_DEST) == 0 ? defaultDest : heightDest);
+    }
+}
+
 int32_t komodo_currentheight()
 {
     char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN]; struct komodo_state *sp;
@@ -75,7 +86,7 @@ int32_t komodo_parsestatefile(struct komodo_state *sp,FILE *fp,char *symbol, con
             }
             else if ( func == 'N' || func == 'M' )
             {
-                komodo::event_notarized evt(fp, ht, dest, func == 'M');
+                komodo::event_notarized evt(fp, ht, komodo_notarization_dest_for_height(dest,ht), func == 'M');
                 komodo_eventadd_notarized(sp, symbol, ht, evt);
             }
             else if ( func == 'U' ) // deprecated
@@ -153,7 +164,7 @@ int32_t komodo_parsestatefiledata(struct komodo_state *sp,uint8_t *filedata,long
             }
             else if ( func == 'N' || func == 'M' )
             {
-                komodo::event_notarized ntz(filedata, fpos, datalen, ht, dest, func == 'M');
+                komodo::event_notarized ntz(filedata, fpos, datalen, ht, komodo_notarization_dest_for_height(dest,ht), func == 'M');
                 komodo_eventadd_notarized(sp, symbol, ht, ntz);
             }
             else if ( func == 'U' ) // deprecated
@@ -308,7 +319,7 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
         {
             if ( sp != nullptr )
             {
-                komodo::event_notarized evt(height, dest);
+                komodo::event_notarized evt(height, komodo_notarization_dest_for_height(dest,height));
                 evt.blockhash = sp->LastNotarizedHash();
                 evt.desttxid = sp->LastNotarizedDestTxId();
                 evt.notarizedheight = sp->LastNotarizedHeight();
@@ -327,25 +338,31 @@ int32_t komodo_validate_chain(uint256 srchash,int32_t notarized_height)
     static int32_t last_rewind; int32_t rewindtarget; CBlockIndex *pindex; struct komodo_state *sp; char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
     if ( (sp= komodo_stateptr(symbol,dest)) == 0 )
         return(0);
-    if ( IsInitialBlockDownload() == 0 && ((pindex= komodo_getblockindex(srchash)) == 0 || pindex->nHeight != notarized_height) )
+    if ( IsInitialBlockDownload() == 0 )
     {
-        if ( sp->LastNotarizedHeight() > 0 && sp->LastNotarizedHeight() < notarized_height )
-            rewindtarget = sp->LastNotarizedHeight() - 1;
-        else if ( notarized_height > 101 )
-            rewindtarget = notarized_height - 101;
-        else rewindtarget = 0;
-        if ( rewindtarget != 0 && rewindtarget > KOMODO_REWIND && rewindtarget > last_rewind )
+        LOCK(cs_main);
+        pindex = komodo_getblockindex(srchash);
+        if ( pindex == 0 || pindex->nHeight != notarized_height || !chainActive.Contains(pindex) )
         {
-            if ( last_rewind != 0 )
+            if ( sp->LastNotarizedHeight() > 0 && sp->LastNotarizedHeight() < notarized_height )
+                rewindtarget = sp->LastNotarizedHeight() - 1;
+            else if ( notarized_height > 101 )
+                rewindtarget = notarized_height - 101;
+            else rewindtarget = 0;
+            if ( rewindtarget != 0 && rewindtarget > KOMODO_REWIND && rewindtarget > last_rewind )
             {
-                fprintf(stderr,"%s FORK detected. notarized.%d %s not in this chain! last notarization %d -> rewindtarget.%d\n",
-                        chainName.symbol().c_str(),notarized_height,srchash.ToString().c_str(),
-                        sp->LastNotarizedHeight(),rewindtarget);
+                if ( last_rewind != 0 )
+                {
+                    fprintf(stderr,"%s FORK detected. notarized.%d %s not in this chain! last notarization %d -> rewindtarget.%d\n",
+                            chainName.symbol().c_str(),notarized_height,srchash.ToString().c_str(),
+                            sp->LastNotarizedHeight(),rewindtarget);
+                }
+                last_rewind = rewindtarget;
             }
-            last_rewind = rewindtarget;
+            return(0);
         }
-        return(0);
-    } else return(1);
+    }
+    return(1);
 }
 
 namespace {
@@ -489,8 +506,13 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
         if ( j == 1 && opretlen >= len+offset-opoffset )
         {
             memset(&MoMoMdata,0,sizeof(MoMoMdata));
-            if ( matched == 0 && signedmask != 0 && bitweight(signedmask) >= KOMODO_MINRATIFY )
-                notarized = 1;
+            if ( matched == 0 && signedmask != 0 )
+            {
+                uint8_t pubkeys[64][33];
+                int32_t numnotaries = komodo_notaries(pubkeys,height,timestamp);
+                if ( DPoWVoutSigsMet(height,bitweight(signedmask),numnotaries) )
+                    notarized = 1;
+            }
             if (fromScriptChainName == "PIZZA" || fromScriptChainName == "BEER" || fromScriptChainName.substr(0, 5) == "TXSCL")
                 notarized = 1;
             len += iguana_rwbignum(0,&scriptbuf[len],32,(uint8_t *)&srchash);
@@ -575,11 +597,11 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                         sp->SetLastNotarizedMoM(MoM);
                         sp->SetLastNotarizedMoMDepth(MoMdepth);
                     }
-                    komodo_stateupdate(height,0,0,0,zero,0,0,0,0,0,0,0,0,sp->LastNotarizedMoM(),sp->LastNotarizedMoMDepth());
+                    komodo_stateupdate(height,0,0,0,zero,0,0,0,timestamp,0,0,0,0,sp->LastNotarizedMoM(),sp->LastNotarizedMoMDepth());
                     printf("[%s] ht.%d NOTARIZED.%d %s.%s %sTXID.%s lens.(%d %d) MoM.%s %d\n",
                             chainName.symbol().c_str(),height,sp->LastNotarizedHeight(),
                             chainName.ToString().c_str(),srchash.ToString().c_str(),
-                            chainName.isKMD()?"BTC":"KMD",desttxid.ToString().c_str(),
+                            komodo_notarization_dest_for_height(dest,height),desttxid.ToString().c_str(),
                             opretlen,len,sp->LastNotarizedMoM().ToString().c_str(),sp->LastNotarizedMoMDepth());
                     
                     if ( chainName.isKMD() )
@@ -770,9 +792,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                 } //else printf("cant get scriptPubKey for ht.%d txi.%d vin.%d\n",height,i,j);
             }
             numvalid = bitweight(signedmask);
-            if ( ((height < 90000 || (signedmask & 1) != 0) && numvalid >= KOMODO_MINRATIFY) 
-                    || (numvalid >= KOMODO_MINRATIFY && !chainName.isKMD()) 
-                    || numvalid > (numnotaries/5) )
+            if ( DPoWNotarizationSigsMet(height,numvalid,signedmask,numnotaries,chainName.isKMD()) )
             {
                 if ( !fJustCheck && !chainName.isKMD() )
                 {
@@ -810,7 +830,7 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                 if ( len >= sizeof(uint32_t) && len <= sizeof(scriptbuf) )
                 {
                     memcpy(scriptbuf,(uint8_t *)&block.vtx[i].vout[j].scriptPubKey[0],len);
-                    notaryid = komodo_voutupdate(fJustCheck,&isratification,notaryid,scriptbuf,len,height,txhash,i,j,&voutmask,&specialtx,&notarizedheight,(uint64_t)block.vtx[i].vout[j].nValue,notarized,signedmask,(uint32_t)chainActive.Tip()->GetBlockTime());
+                    notaryid = komodo_voutupdate(fJustCheck,&isratification,notaryid,scriptbuf,len,height,txhash,i,j,&voutmask,&specialtx,&notarizedheight,(uint64_t)block.vtx[i].vout[j].nValue,notarized,signedmask,(uint32_t)pindex->GetBlockTime());
                     if ( fJustCheck && notaryid == -2 )
                     {
                         // We see a valid notarisation here, save its location.

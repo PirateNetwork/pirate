@@ -85,6 +85,8 @@ int32_t komodo_prevMoMheight();
  */
 int32_t komodo_notarized_height(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp);
 
+int32_t komodo_notarized_tx_height();
+
 int32_t komodo_dpowconfs(int32_t txheight,int32_t numconfs);
 
 int32_t komodo_MoMdata(int32_t *notarized_htp,uint256 *MoMp,uint256 *kmdtxidp,int32_t height,uint256 *MoMoMp,int32_t *MoMoMoffsetp,int32_t *MoMoMdepthp,int32_t *kmdstartip,int32_t *kmdendip);

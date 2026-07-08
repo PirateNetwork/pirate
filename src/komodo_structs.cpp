@@ -15,6 +15,7 @@
 #include "komodo_structs.h"
 #include "komodo_globals.h"
 #include "komodo_bitcoind.h"
+#include "main.h"
 #include "mem_read.h"
 
 namespace komodo {
@@ -425,7 +426,8 @@ int32_t komodo_state::NotarizedData(int32_t nHeight,uint256 *notarized_hashp,uin
 int32_t komodo_state::NotarizedHeight(int32_t *prevMoMheightp,uint256 *hashp,uint256 *txidp)
 {
     CBlockIndex *pindex;
-    if ( (pindex= komodo_blockindex(last.notarized_hash)) == 0 || pindex->nHeight < 0 )
+    LOCK(cs_main);
+    if ( (pindex= komodo_blockindex(last.notarized_hash)) == 0 || pindex->nHeight < 0 || !chainActive.Contains(pindex) )
     {
         // found orphaned notarization, adjust the values in the komodo_state object
         last.notarized_hash.SetNull();
@@ -496,6 +498,7 @@ const int32_t& komodo_state::LastNotarizedHeight() const { return last.notarized
 void komodo_state::SetLastNotarizedHeight(const int32_t in) { last.notarized_height = in; }
 const int32_t& komodo_state::LastNotarizedMoMDepth() const { return last.MoMdepth; }
 void komodo_state::SetLastNotarizedMoMDepth(const int32_t in) { last.MoMdepth =in; }
+int32_t komodo_state::LastNotarizedTxHeight() const { return last.nHeight; }
 uint64_t komodo_state::NumCheckpoints() const { return NPOINTS.size(); }
 
 bool operator==(const notarized_checkpoint& lhs, const notarized_checkpoint& rhs)

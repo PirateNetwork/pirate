@@ -50,6 +50,8 @@
 
 #include "zcash/Address.hpp"
 
+#include <cstring>
+
 using namespace std;
 
 /**
@@ -210,7 +212,7 @@ UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& m
  **/
 UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height,longestchain,kmdnotarized_height,txid_height;
+    uint256 notarized_hash,notarized_desttxid; int32_t prevMoMheight,notarized_height,notarized_tx_height,longestchain,kmdnotarized_height,txid_height;
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getinfo\n"
@@ -254,6 +256,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     proxyType proxy;
     GetProxy(NET_IPV4, proxy);
     notarized_height = komodo_notarized_height(&prevMoMheight,&notarized_hash,&notarized_desttxid);
+    notarized_tx_height = komodo_notarized_tx_height();
     //fprintf(stderr,"after notarized_height %u\n",(uint32_t)time(NULL));
 
     UniValue obj(UniValue::VOBJ);
@@ -268,12 +271,20 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("notarizedtxid", notarized_desttxid.ToString()));
     if ( KOMODO_NSPV_FULLNODE )
     {
-        txid_height = notarizedtxid_height(!chainName.isKMD() ? (char *)"KMD" : (char *)"BTC",(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
+        const char *notarizationDest = chainName.isKMD() ? DPOW_KMD_DEST : DPoWAssetChainDest(notarized_tx_height);
+        txid_height = notarizedtxid_height((char *)notarizationDest,(char *)notarized_desttxid.ToString().c_str(),&kmdnotarized_height);
         if ( txid_height > 0 )
             obj.push_back(Pair("notarizedtxid_height", txid_height));
         else obj.push_back(Pair("notarizedtxid_height", "mempool"));
         if ( !chainName.isKMD() )
+        {
             obj.push_back(Pair("KMDnotarized_height", kmdnotarized_height));
+            if ( strcmp(notarizationDest,DPOW_ASSETCHAIN_LEGACY_DEST) != 0 )
+            {
+                obj.push_back(Pair("notarization_dest", notarizationDest));
+                obj.push_back(Pair("destnotarized_height", kmdnotarized_height));
+            }
+        }
         obj.push_back(Pair("notarized_confirms", txid_height < kmdnotarized_height ? (kmdnotarized_height - txid_height + 1) : 0));
         //fprintf(stderr,"after notarized_confirms %u\n",(uint32_t)time(NULL));
 #ifdef ENABLE_WALLET

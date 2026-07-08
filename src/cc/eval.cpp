@@ -29,6 +29,7 @@
 #include "komodo_structs.h"
 #include "komodo_notary.h"
 #include "komodo_globals.h"
+#include "notaries_staked.h"
 
 bool CClib_Dispatch(const CC *cond,Eval *eval,std::vector<uint8_t> paramsNull,const CTransaction &txTo,unsigned int nIn);
 char *CClib_name();
@@ -170,11 +171,11 @@ int32_t Eval::GetNotaries(uint8_t pubkeys[64][33], int32_t height, uint32_t time
 
 bool Eval::CheckNotaryInputs(const CTransaction &tx, uint32_t height, uint32_t timestamp) const
 {
-    if (tx.vin.size() < 11) return false;
-
     CrosschainAuthority auth;
-    auth.requiredSigs = 11;
     auth.size = GetNotaries(auth.notaries, height, timestamp);
+    if (auth.size <= 0) return false;
+    auth.requiredSigs = DPoWRequiredSigs(height, auth.size);
+    if (tx.vin.size() < auth.requiredSigs) return false;
 
     return CrossChain::CheckTxAuthority(tx, auth);
 }
