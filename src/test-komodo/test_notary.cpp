@@ -1,6 +1,7 @@
 #include "testutils.h"
 #include "chainparams.h"
 #include "komodo_notary.h"
+#include "notaries_staked.h"
 
 #include <gtest/gtest.h>
 
@@ -224,6 +225,50 @@ TEST(TestNotary, KomodoNotaries_S7_AS)
 
     // cleanup
     komodo_notaries_uninit();
+}
+
+TEST(TestNotary, DPoWLitecoinActivationIsHeightGated)
+{
+    chainName = assetchain("PIRATE");
+    EXPECT_FALSE(DPoWLitecoinUpgradeActiveAtHeight(99,100));
+    EXPECT_TRUE(DPoWLitecoinUpgradeActiveAtHeight(100,100));
+    EXPECT_TRUE(DPoWLitecoinUpgradeActiveAtHeight(101,100));
+
+    chainName = assetchain("LABS");
+    EXPECT_FALSE(DPoWLitecoinUpgradeActiveAtHeight(100,100));
+
+    chainName = assetchain("");
+    EXPECT_FALSE(DPoWLitecoinUpgradeActiveAtHeight(100,100));
+}
+
+TEST(TestNotary, DPoWLitecoinQuorumAndDestinationSwitchAreHeightGated)
+{
+    chainName = assetchain("PIRATE");
+
+    EXPECT_EQ(DPoWRequiredSigsAtHeight(99,64,100),11);
+    EXPECT_EQ(DPoWRequiredSigsAtHeight(100,DPOW_LITECOIN_NOTARY_COUNT,100),DPOW_LITECOIN_REQUIRED_SIGS);
+    EXPECT_GT(DPoWRequiredSigsAtHeight(100,DPOW_LITECOIN_NOTARY_COUNT - 1,100),64);
+
+    EXPECT_STREQ(DPoWAssetChainDestAtHeight(99,100),DPOW_ASSETCHAIN_LEGACY_DEST);
+    EXPECT_STREQ(DPoWAssetChainDestAtHeight(100,100),DPOW_LITECOIN_DEST);
+}
+
+TEST(TestNotary, DPoWLitecoinSignatureChecksSwitchAtActivation)
+{
+    chainName = assetchain("PIRATE");
+
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,2,0,DPOW_LITECOIN_NOTARY_COUNT,false,100));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0,DPOW_LITECOIN_NOTARY_COUNT,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0,DPOW_LITECOIN_NOTARY_COUNT - 1,false,100));
+
+    EXPECT_FALSE(DPoWVoutSigsMetAtHeight(100,2,DPOW_LITECOIN_NOTARY_COUNT,100));
+    EXPECT_TRUE(DPoWVoutSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,DPOW_LITECOIN_NOTARY_COUNT,100));
+    EXPECT_FALSE(DPoWVoutSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,DPOW_LITECOIN_NOTARY_COUNT - 1,100));
+
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99,10,1,64,false,100));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99,11,1,64,false,100));
+    EXPECT_FALSE(DPoWVoutSigsMetAtHeight(99,10,64,100));
+    EXPECT_TRUE(DPoWVoutSigsMetAtHeight(99,11,64,100));
 }
 
 } // namespace TestNotary

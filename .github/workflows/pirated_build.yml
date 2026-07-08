@@ -20,4 +20,7 @@ jobs:
     - name: Build Pirated
       run: |
         cd zcutil
-        ./build-ubuntu24.sh -j$(nproc) 
+        ./build-ubuntu24.sh -j$(nproc)
+
+    - name: Run dPoW notary unit tests
+      run: ./src/pirate-test --gtest_filter='TestNotary.DPoWLitecoin*'
