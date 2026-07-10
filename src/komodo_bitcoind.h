@@ -87,6 +87,7 @@ char *curl_post(CURL **cHandlep,char *url,char *userpass,char *postfields,char *
 
 char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port);
 
+int32_t komodo_txheight_from_confirmations(int32_t chain_height,int32_t confirmations);
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp);
 
 int32_t komodo_verifynotarizedscript(int32_t height,uint8_t *script,int32_t len,uint256 NOTARIZED_HASH);

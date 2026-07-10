@@ -35,7 +35,7 @@ int32_t NSPV_validatehdrs(struct NSPV_ntzsproofresp *ptr)
         return(-3);
     else if ( tx.GetHash() != ptr->nexttxid )
         return(-4);
-    else if ( NSPV_notarizationextract(1,&height,&blockhash,&desttxid,tx) < 0 )
+    else if ( NSPV_notarizationextract(1,ptr->nexttxidht,&height,&blockhash,&desttxid,tx) < 0 )
         return(-5);
     else if ( height != ptr->common.nextht )
         return(-6);
@@ -52,7 +52,7 @@ int32_t NSPV_validatehdrs(struct NSPV_ntzsproofresp *ptr)
         return(-8);
     else if ( tx.GetHash() != ptr->prevtxid )
         return(-9);
-    else if ( NSPV_notarizationextract(1,&height,&blockhash,&desttxid,tx) < 0 )
+    else if ( NSPV_notarizationextract(1,ptr->prevtxidht,&height,&blockhash,&desttxid,tx) < 0 )
         return(-10);
     else if ( height != ptr->common.prevht )
         return(-11);

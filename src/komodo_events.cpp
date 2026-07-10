@@ -13,6 +13,7 @@
  *                                                                            *
  ******************************************************************************/
 #include "komodo_events.h"
+#include "komodo.h"
 #include "komodo_globals.h"
 #include "komodo_bitcoind.h" // komodo_verifynotarization
 #include "komodo_notary.h" // komodo_notarized_update
@@ -32,8 +33,15 @@
  * @param height
  * @param ntz the event
  */
-void komodo_eventadd_notarized( komodo_state *sp, const char *symbol, int32_t height, komodo::event_notarized& ntz)
+bool komodo_eventadd_notarized( komodo_state *sp, const char *symbol, int32_t height, komodo::event_notarized& ntz)
 {
+    if ( !komodo_notarization_target_is_active(ntz.blockhash,ntz.notarizedheight) )
+    {
+        LogPrintf("ignoring notarisation at height %d: target %d (%s) is not on the active chain\n",
+                height,ntz.notarizedheight,ntz.blockhash.ToString());
+        return false;
+    }
+
     if (IS_KOMODO_NOTARY)   {
         int32_t ntz_verify = komodo_verifynotarization(symbol, ntz.dest, height, ntz.notarizedheight, ntz.blockhash, ntz.desttxid);
         LogPrint("notarisation", "komodo_verifynotarization result %d\n", ntz_verify);
@@ -43,7 +51,6 @@ void komodo_eventadd_notarized( komodo_state *sp, const char *symbol, int32_t he
             if ( counter++ < 100 )
                 printf("[%s] error validating notarization ht.%d notarized_height.%d, if on a pruned %s node this can be ignored\n",
                         chainName.symbol().c_str(), height, ntz.notarizedheight, ntz.dest);
-            return;
         }
     }
     
@@ -53,12 +60,14 @@ void komodo_eventadd_notarized( komodo_state *sp, const char *symbol, int32_t he
         {
             sp->add_event(symbol, height, ntz);
             komodo_notarized_update(sp, height, ntz.notarizedheight, ntz.blockhash, ntz.desttxid, ntz.MoM, ntz.MoMdepth);
+            return true;
         } else {
             LogPrintf("could not update notarisation event: komodo_state is null");
         }
     } else {
         LogPrintf("could not update notarisation event: invalid symbol %s", symbol);
     }
+    return false;
 }
 
 /*****

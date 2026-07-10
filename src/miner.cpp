@@ -357,7 +357,7 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
             } else {
                 TMP_NotarisationNotaries.clear();
                 bool fToCryptoAddress = false;
-                if ( numSN != 0 && notarypubkeys[0][0] != 0 && komodo_is_notarytx(tx) == 1 )
+                if ( numSN > 0 && notarypubkeys[0][0] != 0 && komodo_is_notarytx(tx) == 1 )
                     fToCryptoAddress = true;
 
                 BOOST_FOREACH(const CTxIn& txin, tx.vin)
@@ -415,14 +415,21 @@ CBlockTemplate* CreateNewBlock(const CPubKey _pk, const CScript& _scriptPubKeyIn
                     }
                     dPriority += (double)nValueIn * nConf;
                 }
-                if ( numSN != 0 && notarypubkeys[0][0] != 0 && TMP_NotarisationNotaries.size() >= numSN / 5 )
+                if ( numSN > 0 && notarypubkeys[0][0] != 0 )
                 {
                     // check a notary didnt sign twice (this would be an invalid notarisation later on and cause problems)
                     std::set<int> checkdupes( TMP_NotarisationNotaries.begin(), TMP_NotarisationNotaries.end() );
                     if ( checkdupes.size() != TMP_NotarisationNotaries.size() )
                     {
                         fprintf(stderr, "possible notarisation is signed multiple times by same notary, passed as normal transaction.\n");
-                    } else fNotarisation = true;
+                    }
+                    else
+                    {
+                        uint64_t signedmask = 0;
+                        for (const int notaryIndex : checkdupes)
+                            signedmask |= (1ULL << notaryIndex);
+                        fNotarisation = DPoWNotarizationSigsMet(nHeight,checkdupes.size(),signedmask,numSN,chainName.isKMD());
+                    }
                 }
                 nTotalIn += tx.GetShieldedValueIn();
             }

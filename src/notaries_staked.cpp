@@ -27,9 +27,21 @@ namespace
         return((height < 90000) ? 7 : 11);
     }
 
+    int32_t DPoWSignatureCount(uint64_t signedmask)
+    {
+        int32_t count = 0;
+        while ( signedmask != 0 )
+        {
+            count += signedmask & 1;
+            signedmask >>= 1;
+        }
+        return(count);
+    }
+
     bool DPoWLitecoinPubkeyConfigured(const char *pubkeystr)
     {
         return(pubkeystr != 0 && strlen(pubkeystr) == 66 &&
+               is_hexstr(pubkeystr,0) == 66 &&
                pubkeystr[0] == '0' && (pubkeystr[1] == '2' || pubkeystr[1] == '3'));
     }
 }
@@ -41,6 +53,7 @@ bool DPoWLitecoinUpgradeActive(int32_t height)
 
 bool DPoWLitecoinUpgradeActiveAtHeight(int32_t height,int32_t activationHeight)
 {
+    // Activation is deliberately fail-closed: zero never means "active from genesis".
     return(!chainName.isKMD() &&
            chainName.isSymbol(DPOW_LITECOIN_CHAIN_SYMBOL) &&
            activationHeight > 0 &&
@@ -51,6 +64,8 @@ int32_t DPoWLitecoinNotaries(uint8_t pubkeys[64][33],int32_t height)
 {
     if ( !DPoWLitecoinUpgradeActive(height) )
         return(0);
+    if ( pubkeys == nullptr )
+        return(-1);
 
     memset(pubkeys,0,64 * 33);
     for (int32_t i=0; i<DPOW_LITECOIN_NOTARY_COUNT; i++)
@@ -63,6 +78,15 @@ int32_t DPoWLitecoinNotaries(uint8_t pubkeys[64][33],int32_t height)
             return(-1);
         }
         decode_hex(pubkeys[i],33,(char *)pubkeystr);
+        for (int32_t j=0; j<i; j++)
+        {
+            if ( memcmp(pubkeys[i],pubkeys[j],33) == 0 )
+            {
+                fprintf(stderr,"%s dPoW Litecoin notary key %d duplicates key %d; refusing activated authority set\n",
+                        chainName.symbol().c_str(),i,j);
+                return(-1);
+            }
+        }
     }
     return(DPOW_LITECOIN_NOTARY_COUNT);
 }
@@ -86,6 +110,9 @@ bool DPoWNotarizationSigsMet(int32_t height,int32_t numvalid,uint64_t signedmask
 
 bool DPoWNotarizationSigsMetAtHeight(int32_t height,int32_t numvalid,uint64_t signedmask,int32_t numnotaries,bool isKMD,int32_t activationHeight)
 {
+    if ( numvalid != DPoWSignatureCount(signedmask) )
+        return(false);
+
     if ( DPoWLitecoinUpgradeActiveAtHeight(height,activationHeight) )
         return(DPoWLitecoinQuorumActiveAtHeight(height,numnotaries,activationHeight) && numvalid >= DPOW_LITECOIN_REQUIRED_SIGS);
 

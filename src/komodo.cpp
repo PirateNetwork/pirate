@@ -333,36 +333,50 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
     }
 }
 
+bool komodo_notarization_target_is_active(const uint256& srchash,int32_t notarized_height)
+{
+    LOCK(cs_main);
+    CBlockIndex *pindex = notarized_height >= 0 ? chainActive[notarized_height] : nullptr;
+    return(pindex != nullptr && pindex->GetBlockHash() == srchash);
+}
+
 int32_t komodo_validate_chain(uint256 srchash,int32_t notarized_height)
 {
-    static int32_t last_rewind; int32_t rewindtarget; CBlockIndex *pindex; struct komodo_state *sp; char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
+    static int32_t last_rewind; int32_t rewindtarget; struct komodo_state *sp; char symbol[KOMODO_ASSETCHAIN_MAXLEN],dest[KOMODO_ASSETCHAIN_MAXLEN];
     if ( (sp= komodo_stateptr(symbol,dest)) == 0 )
         return(0);
-    if ( IsInitialBlockDownload() == 0 )
+    if ( !komodo_notarization_target_is_active(srchash,notarized_height) )
     {
-        LOCK(cs_main);
-        pindex = komodo_getblockindex(srchash);
-        if ( pindex == 0 || pindex->nHeight != notarized_height || !chainActive.Contains(pindex) )
+        if ( sp->LastNotarizedHeight() > 0 && sp->LastNotarizedHeight() < notarized_height )
+            rewindtarget = sp->LastNotarizedHeight() - 1;
+        else if ( notarized_height > 101 )
+            rewindtarget = notarized_height - 101;
+        else rewindtarget = 0;
+        if ( rewindtarget != 0 && rewindtarget > KOMODO_REWIND && rewindtarget > last_rewind )
         {
-            if ( sp->LastNotarizedHeight() > 0 && sp->LastNotarizedHeight() < notarized_height )
-                rewindtarget = sp->LastNotarizedHeight() - 1;
-            else if ( notarized_height > 101 )
-                rewindtarget = notarized_height - 101;
-            else rewindtarget = 0;
-            if ( rewindtarget != 0 && rewindtarget > KOMODO_REWIND && rewindtarget > last_rewind )
+            if ( last_rewind != 0 )
             {
-                if ( last_rewind != 0 )
-                {
-                    fprintf(stderr,"%s FORK detected. notarized.%d %s not in this chain! last notarization %d -> rewindtarget.%d\n",
-                            chainName.symbol().c_str(),notarized_height,srchash.ToString().c_str(),
-                            sp->LastNotarizedHeight(),rewindtarget);
-                }
-                last_rewind = rewindtarget;
+                fprintf(stderr,"%s FORK detected. notarized.%d %s not in this chain! last notarization %d -> rewindtarget.%d\n",
+                        chainName.symbol().c_str(),notarized_height,srchash.ToString().c_str(),
+                        sp->LastNotarizedHeight(),rewindtarget);
             }
-            return(0);
+            last_rewind = rewindtarget;
         }
+        return(0);
     }
     return(1);
+}
+
+void komodo_apply_notarization_state(struct komodo_state *sp,int32_t notarized_height,
+        const uint256& srchash,const uint256& desttxid,const uint256& MoM,int32_t MoMdepth)
+{
+    if ( sp == nullptr )
+        return;
+    sp->SetLastNotarizedHeight(notarized_height);
+    sp->SetLastNotarizedHash(srchash);
+    sp->SetLastNotarizedDestTxId(desttxid);
+    sp->SetLastNotarizedMoM(MoM);
+    sp->SetLastNotarizedMoMDepth(MoMdepth);
 }
 
 namespace {
@@ -522,9 +536,9 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
             if ( matched != 0 )
                 validated = komodo_validate_chain(srchash,*notarizedheightp);
             else validated = 1;
-            // Any notarization that is matched and has a decodable op_return is enough to pay notaries. Otherwise bugs! 
+            // Template/notary-pay callers must see the same target validation as block connection.
             if ( fJustCheck && matched != 0 )
-                return(-2);
+                return(notarized != 0 && validated != 0 ? -2 : notaryid);
             if ( notarized != 0 && validated != 0 )
             {
                 //sp->NOTARIZED_HEIGHT = *notarizedheightp;
@@ -589,14 +603,7 @@ int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notar
                 
                 if ( matched != 0 && *notarizedheightp > sp->LastNotarizedHeight() && *notarizedheightp < height )
                 {
-                    sp->SetLastNotarizedHeight(*notarizedheightp);
-                    sp->SetLastNotarizedHash(srchash);
-                    sp->SetLastNotarizedDestTxId(desttxid);
-                    if ( MoM != zero && (MoMdepth&0xffff) > 0 )
-                    {
-                        sp->SetLastNotarizedMoM(MoM);
-                        sp->SetLastNotarizedMoMDepth(MoMdepth);
-                    }
+                    komodo_apply_notarization_state(sp,*notarizedheightp,srchash,desttxid,MoM,MoMdepth);
                     komodo_stateupdate(height,0,0,0,zero,0,0,0,timestamp,0,0,0,0,sp->LastNotarizedMoM(),sp->LastNotarizedMoMDepth());
                     printf("[%s] ht.%d NOTARIZED.%d %s.%s %sTXID.%s lens.(%d %d) MoM.%s %d\n",
                             chainName.symbol().c_str(),height,sp->LastNotarizedHeight(),

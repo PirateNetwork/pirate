@@ -360,6 +360,13 @@ char *komodo_issuemethod(char *userpass,char *method,char *params,uint16_t port)
     return(retstr2);
 }
 
+int32_t komodo_txheight_from_confirmations(int32_t chain_height,int32_t confirmations)
+{
+    if ( chain_height < 0 || confirmations <= 0 || confirmations > chain_height + 1 )
+        return(0);
+    return(chain_height - confirmations + 1);
+}
+
 int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heightp)
 {
     char *jsonstr,params[256],*userpass; uint16_t port; cJSON *json,*item; int32_t height = 0,txid_height = 0,txid_confirmations = 0;
@@ -388,7 +395,8 @@ int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heig
                     if ( (item= jobj(json,(char *)"result")) != 0 )
                     {
                         height = jint(item,(char *)"blocks");
-                        *kmdnotarized_heightp = jint(item,(char *)"notarized");
+                        // Preserve the legacy getinfo contract: this field is the KMD chain height.
+                        *kmdnotarized_heightp = height;
                     }
                     free_json(json);
                 }
@@ -419,9 +427,7 @@ int32_t notarizedtxid_height(char *dest,char *txidstr,int32_t *kmdnotarized_heig
                     txid_confirmations = jint(item,(char *)"rawconfirmations");
                     if ( txid_confirmations <= 0 )
                         txid_confirmations = jint(item,(char *)"confirmations");
-                    if ( txid_confirmations > 0 && height > txid_confirmations )
-                        txid_height = height - txid_confirmations;
-                    else txid_height = height;
+                    txid_height = komodo_txheight_from_confirmations(height,txid_confirmations);
                     //printf("height.%d tconfs.%d txid_height.%d\n",height,txid_confirmations,txid_height);
                 }
                 free_json(json);

@@ -26,6 +26,8 @@
 #ifndef KOMODO_NSPV_H
 #define KOMODO_NSPV_H
 
+#include "notaries_staked.h"
+
 int32_t iguana_rwbuf(int32_t rwflag,uint8_t *serialized,int32_t len,uint8_t *buf)
 {
     if ( rwflag != 0 )
@@ -488,10 +490,14 @@ int32_t NSPV_txextract(CTransaction &tx,uint8_t *data,int32_t datalen)
 
 bool NSPV_SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,uint32_t nTime);
 
-int32_t NSPV_fastnotariescount(CTransaction tx,uint8_t elected[64][33],uint32_t nTime)
+int32_t NSPV_fastnotariescount(CTransaction tx,uint8_t elected[64][33],int32_t numnotaries,uint32_t nTime,uint64_t *signedmaskp)
 {
-    CPubKey pubkeys[64]; uint8_t sig[512]; CScript scriptPubKeys[64]; CMutableTransaction mtx(tx); int32_t vini,j,siglen,retval; uint64_t mask = 0; char *str; std::vector<std::vector<unsigned char>> vData;
-    for (j=0; j<64; j++)
+    CPubKey pubkeys[64]; CScript scriptPubKeys[64]; CMutableTransaction mtx(tx); int32_t vini,j,retval; uint64_t mask = 0; std::vector<std::vector<unsigned char>> vData;
+    if ( signedmaskp != nullptr )
+        *signedmaskp = 0;
+    if ( numnotaries <= 0 || numnotaries > 64 )
+        return(0);
+    for (j=0; j<numnotaries; j++)
     {
         pubkeys[j] = buf2pk(elected[j]);
         scriptPubKeys[j] = (CScript() << ParseHex(HexStr(pubkeys[j])) << OP_CHECKSIG);
@@ -502,27 +508,29 @@ int32_t NSPV_fastnotariescount(CTransaction tx,uint8_t elected[64][33],uint32_t 
     //    mtx.vin[vini].scriptSig.resize(0);
     for (vini=0; vini<tx.vin.size(); vini++)
     {
+        vData.clear();
         CScript::const_iterator pc = tx.vin[vini].scriptSig.begin();
-        if ( tx.vin[vini].scriptSig.GetPushedData(pc,vData) != 0 )
+        if ( tx.vin[vini].scriptSig.GetPushedData(pc,vData) != 0 && !vData.empty() && !vData[0].empty() )
         {
             vData[0].pop_back();
-            for (j=0; j<64; j++)
+            for (j=0; j<numnotaries; j++)
             {
-                if ( ((1LL << j) & mask) != 0 )
+                if ( ((1ULL << j) & mask) != 0 )
                     continue;
-                char coinaddr[64]; Getscriptaddress(coinaddr,scriptPubKeys[j]);
                 NSPV_SignTx(mtx,vini,10000,scriptPubKeys[j],nTime); // sets SIG_TXHASH
                 //fprintf(stderr,"%s ",SIG_TXHASH.GetHex().c_str());
                 if ( (retval= pubkeys[j].Verify(SIG_TXHASH,vData[0])) != 0 )
                 {
                     //fprintf(stderr,"(vini.%d %s.%d) ",vini,coinaddr,retval);
-                    mask |= (1LL << j);
+                    mask |= (1ULL << j);
                     break;
                 }
             }
             //fprintf(stderr," vini.%d verified %llx\n",vini,(long long)mask);
         }
     }
+    if ( signedmaskp != nullptr )
+        *signedmaskp = mask;
     return(bitweight(mask));
 }
 
@@ -574,9 +582,9 @@ uint256 NSPV_opretextract(int32_t *heightp,uint256 *blockhashp,const char *symbo
     return(desttxid);
 }
 
-int32_t NSPV_notarizationextract(int32_t verifyntz,int32_t *ntzheightp,uint256 *blockhashp,uint256 *desttxidp,CTransaction tx)
+int32_t NSPV_notarizationextract(int32_t verifyntz,int32_t txheight,int32_t *ntzheightp,uint256 *blockhashp,uint256 *desttxidp,CTransaction tx)
 {
-    int32_t numsigs=0; uint8_t elected[64][33]; std::vector<uint8_t> opret; uint32_t nTime;
+    int32_t numsigs=0,numnotaries; uint64_t signedmask=0; uint8_t elected[64][33]; std::vector<uint8_t> opret; uint32_t nTime;
     if ( tx.vout.size() >= 2 )
     {
         GetOpReturnData(tx.vout[1].scriptPubKey,opret);
@@ -584,13 +592,19 @@ int32_t NSPV_notarizationextract(int32_t verifyntz,int32_t *ntzheightp,uint256 *
         {
             //sleep(1); // needed to avoid no pnodes error
             *desttxidp = NSPV_opretextract(ntzheightp,blockhashp,chainName.ToString().c_str(),opret,tx.GetHash());
-            nTime = NSPV_blocktime(*ntzheightp);
-            komodo_notaries(elected,*ntzheightp,nTime);
-            if ( verifyntz != 0 && (numsigs= NSPV_fastnotariescount(tx,elected,nTime)) < 12 )
+            if ( verifyntz != 0 )
             {
-                fprintf(stderr,"numsigs.%d error\n",numsigs);
-                return(-3);
-            } 
+                nTime = NSPV_blocktime(txheight);
+                numnotaries = komodo_notaries(elected,txheight,nTime);
+                if ( numnotaries <= 0 )
+                    return(-3);
+                numsigs = NSPV_fastnotariescount(tx,elected,numnotaries,nTime,&signedmask);
+                if ( !DPoWNotarizationSigsMet(txheight,numsigs,signedmask,numnotaries,chainName.isKMD()) )
+                {
+                    fprintf(stderr,"numsigs.%d mask.%llx error\n",numsigs,(long long)signedmask);
+                    return(-3);
+                }
+            }
             return(0);
         }
         else

@@ -16,7 +16,7 @@
 #include "komodo_defs.h"
 #include "komodo_structs.h"
 
-void komodo_eventadd_notarized(komodo_state *sp, const char *symbol,int32_t height, komodo::event_notarized& ntz);
+bool komodo_eventadd_notarized(komodo_state *sp, const char *symbol,int32_t height, komodo::event_notarized& ntz);
 
 void komodo_eventadd_pubkeys(komodo_state *sp, const char *symbol,int32_t height, komodo::event_pubkeys& pk);
 

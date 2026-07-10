@@ -10,7 +10,10 @@
 static const int32_t iguanaPort = 9333;
 static const int8_t BTCminsigs = 13;
 static const int8_t overrideMinSigs = 7;
-static const int32_t DPOW_LITECOIN_ACTIVATION_HEIGHT = 0; // disabled until the dPoW hardfork height is chosen
+// Zero disables the upgrade. A positive value is the first Pirate block at which
+// consensus accepts receipts from the six-member Litecoin authority set. Iguana must
+// use the identical threshold for starting direct source-chain rounds.
+static const int32_t DPOW_LITECOIN_ACTIVATION_HEIGHT = 0;
 static const char *DPOW_LITECOIN_CHAIN_SYMBOL = "PIRATE";
 static const int8_t DPOW_LITECOIN_NOTARY_COUNT = 6;
 static const int8_t DPOW_LITECOIN_REQUIRED_SIGS = 3;

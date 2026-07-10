@@ -47,6 +47,11 @@ void komodo_stateupdate(int32_t height,uint8_t notarypubs[][33],uint8_t numnotar
         uint256 txhash,uint32_t *pvals,uint8_t numpvals,int32_t KMDheight,uint32_t KMDtimestamp,
         uint64_t opretvalue,uint8_t *opretbuf,uint16_t opretlen,uint16_t vout,uint256 MoM,int32_t MoMdepth);
 
+bool komodo_notarization_target_is_active(const uint256& srchash,int32_t notarized_height);
+int32_t komodo_validate_chain(uint256 srchash,int32_t notarized_height);
+void komodo_apply_notarization_state(struct komodo_state *sp,int32_t notarized_height,
+        const uint256& srchash,const uint256& desttxid,const uint256& MoM,int32_t MoMdepth);
+
 int32_t komodo_voutupdate(bool fJustCheck,int32_t *isratificationp,int32_t notaryid,
         uint8_t *scriptbuf,int32_t scriptlen,int32_t height,uint256 txhash,int32_t i,
         int32_t j,uint64_t *voutmaskp,int32_t *specialtxp,int32_t *notarizedheightp,
