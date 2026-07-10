@@ -213,14 +213,12 @@ namespace LegacyEventsTests {
         CBlockIndex indexDummy(b);
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
+        uint256 notarizedHash = uint256S("0983a2c9709e524a2a66887266455c2141aebbae558ef9b78718fda8db7094a9");
+        CBlockIndex notarizedIndex;
+        notarizedIndex.phashBlock = &notarizedHash;
+        notarizedIndex.nHeight = 3507260;
+        indexDummy.pprev = &notarizedIndex;
         chainActive.SetTip(&indexDummy);
-
-        if (IsInitialBlockDownload() == false) {
-            CBlockIndex *pfakeIndex = new CBlockIndex();
-            pfakeIndex->nHeight = 3507260;
-            mapBlockIndex.insert(std::make_pair(uint256S("0983a2c9709e524a2a66887266455c2141aebbae558ef9b78718fda8db7094a9"), pfakeIndex));
-            // pfakeIndex will be cleaned in destructor of CMainCleanup
-        }
 
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
@@ -564,14 +562,12 @@ namespace LegacyEventsTests {
         CBlockIndex indexDummy(b);
         indexDummy.nHeight = fakeBlockHeight;
         indexDummy.nTime = 1689620962; /* for AC tests set blockindex time is mandatory (!) */
+        uint256 notarizedHash = uint256S("0007f0f477aa48cb8ebaf9250ee5dbf51627b2fc5dc2a0b82924b6e2c51a5343");
+        CBlockIndex notarizedIndex;
+        notarizedIndex.phashBlock = &notarizedHash;
+        notarizedIndex.nHeight = 136766;
+        indexDummy.pprev = &notarizedIndex;
         chainActive.SetTip(&indexDummy);
-
-        if (IsInitialBlockDownload() == false) {
-            CBlockIndex *pfakeIndex = new CBlockIndex();
-            pfakeIndex->nHeight = 136766;
-            mapBlockIndex.insert(std::make_pair(uint256S("0007f0f477aa48cb8ebaf9250ee5dbf51627b2fc5dc2a0b82924b6e2c51a5343"), pfakeIndex));
-            // pfakeIndex will be cleaned in destructor of CMainCleanup
-        }
 
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 

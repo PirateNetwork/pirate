@@ -1,8 +1,14 @@
 #include "testutils.h"
 #include "chainparams.h"
+#include "komodo.h"
+#include "komodo_bitcoind.h"
+#include "komodo_events.h"
+#include "komodo_gateway.h"
+#include "komodo_globals.h"
 #include "komodo_notary.h"
 #include "notaries_staked.h"
 
+#include <boost/filesystem.hpp>
 #include <gtest/gtest.h>
 
 //void undo_init_notaries(); // test helper
@@ -11,6 +17,81 @@ void komodo_notaries_uninit();
 
 namespace TestNotary
 {
+
+class DPoWActiveChain
+{
+public:
+    DPoWActiveChain()
+        : genesisHash(uint256S("01")), primaryHash1(uint256S("11")), primaryHash2(uint256S("12")),
+          primaryHash3(uint256S("13")), forkHash1(uint256S("21")), forkHash2(uint256S("22")),
+          forkHash3(uint256S("23"))
+    {
+        InitializeIndex(genesis,genesisHash,0,nullptr);
+        InitializeIndex(primary1,primaryHash1,1,&genesis);
+        InitializeIndex(primary2,primaryHash2,2,&primary1);
+        InitializeIndex(primary3,primaryHash3,3,&primary2);
+        InitializeIndex(fork1,forkHash1,1,&genesis);
+        InitializeIndex(fork2,forkHash2,2,&fork1);
+        InitializeIndex(fork3,forkHash3,3,&fork2);
+        UsePrimary();
+    }
+
+    ~DPoWActiveChain()
+    {
+        LOCK(cs_main);
+        chainActive.SetTip(nullptr);
+    }
+
+    void UsePrimary()
+    {
+        LOCK(cs_main);
+        chainActive.SetTip(&primary3);
+    }
+
+    void UseFork()
+    {
+        LOCK(cs_main);
+        chainActive.SetTip(&fork3);
+    }
+
+    const uint256& PrimaryHash2() const { return primaryHash2; }
+
+private:
+    static void InitializeIndex(CBlockIndex& index,uint256& hash,int32_t height,CBlockIndex *previous)
+    {
+        index.phashBlock = &hash;
+        index.nHeight = height;
+        index.nTime = 1700000000 + height;
+        index.pprev = previous;
+    }
+
+    uint256 genesisHash;
+    uint256 primaryHash1;
+    uint256 primaryHash2;
+    uint256 primaryHash3;
+    uint256 forkHash1;
+    uint256 forkHash2;
+    uint256 forkHash3;
+    CBlockIndex genesis;
+    CBlockIndex primary1;
+    CBlockIndex primary2;
+    CBlockIndex primary3;
+    CBlockIndex fork1;
+    CBlockIndex fork2;
+    CBlockIndex fork3;
+};
+
+CScript DPoWReceiptScript(const uint256& blockHash,int32_t blockHeight,const uint256& litecoinTxid)
+{
+    std::vector<uint8_t> payload(blockHash.begin(),blockHash.end());
+    uint32_t encodedHeight = static_cast<uint32_t>(blockHeight);
+    for (int32_t i=0; i<4; ++i)
+        payload.push_back((encodedHeight >> (8 * i)) & 0xff);
+    payload.insert(payload.end(),litecoinTxid.begin(),litecoinTxid.end());
+    const char symbol[] = "PIRATE";
+    payload.insert(payload.end(),symbol,symbol + sizeof(symbol));
+    return(CScript() << OP_RETURN << payload);
+}
 
 /***
  * A little class to help with the different formats keys come in
@@ -257,23 +338,134 @@ TEST(TestNotary, DPoWLitecoinSignatureChecksSwitchAtActivation)
 {
     chainName = assetchain("PIRATE");
 
-    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,2,0,DPOW_LITECOIN_NOTARY_COUNT,false,100));
-    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0,DPOW_LITECOIN_NOTARY_COUNT,false,100));
-    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0,DPOW_LITECOIN_NOTARY_COUNT - 1,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,2,0x3,DPOW_LITECOIN_NOTARY_COUNT,false,100));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0x7,DPOW_LITECOIN_NOTARY_COUNT,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0x7,DPOW_LITECOIN_NOTARY_COUNT - 1,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,0x3,DPOW_LITECOIN_NOTARY_COUNT,false,100));
 
     EXPECT_FALSE(DPoWVoutSigsMetAtHeight(100,2,DPOW_LITECOIN_NOTARY_COUNT,100));
     EXPECT_TRUE(DPoWVoutSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,DPOW_LITECOIN_NOTARY_COUNT,100));
     EXPECT_FALSE(DPoWVoutSigsMetAtHeight(100,DPOW_LITECOIN_REQUIRED_SIGS,DPOW_LITECOIN_NOTARY_COUNT - 1,100));
 
-    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99,6,1,64,false,100));
-    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99,7,1,64,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99,6,0x3f,64,false,100));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99,7,0x7f,64,false,100));
     EXPECT_FALSE(DPoWVoutSigsMetAtHeight(99,6,64,100));
     EXPECT_TRUE(DPoWVoutSigsMetAtHeight(99,7,64,100));
 
-    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99999,10,1,64,false,100000));
-    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99999,11,1,64,false,100000));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(99999,10,0x3ff,64,false,100000));
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(99999,11,0x7ff,64,false,100000));
     EXPECT_FALSE(DPoWVoutSigsMetAtHeight(99999,10,64,100000));
     EXPECT_TRUE(DPoWVoutSigsMetAtHeight(99999,11,64,100000));
+}
+
+TEST(TestNotary, DPoWLitecoinReceiptAndReorgUseActiveChain)
+{
+    chainName = assetchain("PIRATE");
+    DPoWActiveChain testChain;
+    uint256 litecoinTxid = uint256S("abcdef");
+    CScript script = DPoWReceiptScript(testChain.PrimaryHash2(),2,litecoinTxid);
+    uint64_t voutmask = 0;
+    int32_t isratification = 0,specialtx = 0,notarizedheight = 0;
+
+    EXPECT_TRUE(komodo_notarization_target_is_active(testChain.PrimaryHash2(),2));
+    EXPECT_EQ(komodo_voutupdate(true,&isratification,-1,script.data(),script.size(),3,uint256(),1,1,
+            &voutmask,&specialtx,&notarizedheight,0,1,0,1700000003),-2);
+    EXPECT_EQ(notarizedheight,2);
+
+    testChain.UseFork();
+    EXPECT_FALSE(komodo_notarization_target_is_active(testChain.PrimaryHash2(),2));
+    EXPECT_NE(komodo_voutupdate(true,&isratification,-1,script.data(),script.size(),3,uint256(),1,1,
+            &voutmask,&specialtx,&notarizedheight,0,1,0,1700000003),-2);
+}
+
+TEST(TestNotary, DPoWLitecoinRestartReplayRejectsOrphanedReceipt)
+{
+    chainName = assetchain("PIRATE");
+    IS_KOMODO_NOTARY = false;
+    DPoWActiveChain testChain;
+    komodo::event_notarized event(3,"LTC");
+    event.notarizedheight = 2;
+    event.blockhash = testChain.PrimaryHash2();
+    event.desttxid = uint256S("abcdef");
+
+    boost::filesystem::path tempDir = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+    boost::filesystem::create_directories(tempDir);
+    std::string stateFilename = (tempDir / "komodoevents").string();
+    FILE *fp = fopen(stateFilename.c_str(),"wb");
+    ASSERT_NE(fp,nullptr);
+    ASSERT_GT(write_event(event,fp),0U);
+    fclose(fp);
+
+    char symbol[] = "PIRATE";
+    char dest[] = "LTC";
+    komodo_state restartedState;
+    EXPECT_TRUE(komodo_faststateinit(&restartedState,stateFilename.c_str(),symbol,dest));
+    EXPECT_EQ(restartedState.NumCheckpoints(),1U);
+    EXPECT_EQ(restartedState.LastNotarizedHash(),testChain.PrimaryHash2());
+
+    testChain.UseFork();
+    komodo_state reindexedState;
+    EXPECT_TRUE(komodo_faststateinit(&reindexedState,stateFilename.c_str(),symbol,dest));
+    EXPECT_EQ(reindexedState.NumCheckpoints(),0U);
+    boost::filesystem::remove_all(tempDir);
+}
+
+TEST(TestNotary, DPoWLitecoinCheckpointStateClearsMissingMoM)
+{
+    komodo_state state;
+    state.SetLastNotarizedMoM(uint256S("feed"));
+    state.SetLastNotarizedMoMDepth(100);
+
+    uint256 noMoM;
+    noMoM.SetNull();
+    komodo_apply_notarization_state(&state,2,uint256S("12"),uint256S("abcdef"),noMoM,0);
+
+    EXPECT_TRUE(state.LastNotarizedMoM().IsNull());
+    EXPECT_EQ(state.LastNotarizedMoMDepth(),0);
+    EXPECT_EQ(state.LastNotarizedHeight(),2);
+}
+
+TEST(TestNotary, DPoWLitecoinNspvAndMinerUseConsensusSignerMask)
+{
+    chainName = assetchain("PIRATE");
+    EXPECT_TRUE(DPoWNotarizationSigsMetAtHeight(100,3,0x7,6,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,2,0x3,6,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,3,0x3,6,false,100));
+    EXPECT_FALSE(DPoWNotarizationSigsMetAtHeight(100,3,0x7,5,false,100));
+}
+
+TEST(TestNotary, DPoWLitecoinExternalRpcFailureIsDiagnostic)
+{
+    chainName = assetchain("PIRATE");
+    DPoWActiveChain testChain;
+    komodo_state state;
+    komodo::event_notarized event(3,"LTC");
+    event.notarizedheight = 2;
+    event.blockhash = testChain.PrimaryHash2();
+    event.desttxid = uint256S("abcdef");
+
+    std::string previousUserpass(BTCUSERPASS);
+    uint16_t previousPort = DEST_PORT;
+    bool previousNotary = IS_KOMODO_NOTARY;
+    strcpy(BTCUSERPASS,"unavailable:unavailable");
+    DEST_PORT = 1;
+    IS_KOMODO_NOTARY = true;
+
+    EXPECT_TRUE(komodo_eventadd_notarized(&state,"PIRATE",3,event));
+    EXPECT_EQ(state.NumCheckpoints(),1U);
+
+    strncpy(BTCUSERPASS,previousUserpass.c_str(),sizeof(BTCUSERPASS)-1);
+    BTCUSERPASS[sizeof(BTCUSERPASS)-1] = 0;
+    DEST_PORT = previousPort;
+    IS_KOMODO_NOTARY = previousNotary;
+}
+
+TEST(TestNotary, DPoWLitecoinConfirmationHeightIsOneBased)
+{
+    EXPECT_EQ(komodo_txheight_from_confirmations(100,1),100);
+    EXPECT_EQ(komodo_txheight_from_confirmations(100,2),99);
+    EXPECT_EQ(komodo_txheight_from_confirmations(100,101),0);
+    EXPECT_EQ(komodo_txheight_from_confirmations(100,0),0);
 }
 
 } // namespace TestNotary

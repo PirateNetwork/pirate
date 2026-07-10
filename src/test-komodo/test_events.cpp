@@ -9,6 +9,7 @@
 #include "komodo_gateway.h"
 #include "komodo_notary.h"
 #include "komodo_extern_globals.h"
+#include "main.h"
 
 namespace test_events {
 
@@ -19,6 +20,38 @@ uint256 fill_hash(uint8_t val)
         bin[i] = val;
     return uint256(bin);
 }
+
+class ScopedActiveNotarizationTargets
+{
+public:
+    ScopedActiveNotarizationTargets()
+        : targetHash(fill_hash(1)), previousTip(nullptr)
+    {
+        target2.phashBlock = &targetHash;
+        target2.nHeight = 2;
+        target2.nTime = 2;
+        target3.phashBlock = &targetHash;
+        target3.nHeight = 3;
+        target3.nTime = 3;
+        target3.pprev = &target2;
+
+        LOCK(cs_main);
+        previousTip = chainActive.Tip();
+        chainActive.SetTip(&target3);
+    }
+
+    ~ScopedActiveNotarizationTargets()
+    {
+        LOCK(cs_main);
+        chainActive.SetTip(previousTip);
+    }
+
+private:
+    uint256 targetHash;
+    CBlockIndex target2;
+    CBlockIndex target3;
+    CBlockIndex *previousTip;
+};
 
 void write_p_record(std::FILE* fp)
 {
@@ -291,6 +324,7 @@ TEST(test_events, komodo_faststateinit_test)
     chainName = assetchain("TST");
     KOMODO_EXTERNAL_NOTARIES = 1;
     IS_KOMODO_NOTARY = false;   // avoid calling komodo_verifynotarization
+    ScopedActiveNotarizationTargets activeTargets;
 
     clear_state(symbol);
 
@@ -694,6 +728,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
     chainName = assetchain();
     KOMODO_EXTERNAL_NOTARIES = 0;
     IS_KOMODO_NOTARY = false;   // avoid calling komodo_verifynotarization
+    ScopedActiveNotarizationTargets activeTargets;
 
     clear_state(symbol);
 
