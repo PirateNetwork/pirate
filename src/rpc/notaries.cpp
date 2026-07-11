@@ -485,11 +485,11 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
             // builder.SendChangeTo(CTxDestination(nn_pubkey.GetID())); // no change?
 
             // Build the transaction
-            auto maybe_tx = builder.Build();
-            if (!maybe_tx) {
-                throw JSONRPCError(RPC_WALLET_ERROR, "Failed to build transaction.");
+            TransactionBuilderResult buildResult = builder.Build();
+            if (buildResult.IsError()) {
+                throw JSONRPCError(RPC_WALLET_ERROR, "Failed to build transaction: " + buildResult.GetError());
             }
-            tx_ = maybe_tx.get();
+            tx_ = buildResult.GetTxOrThrow();
 
             auto signedtxn = EncodeHexTx(tx_);
 
@@ -707,20 +707,26 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
         fundingTx.vout.push_back(CTxOut(changeValue, GetScriptForDestination(CTxDestination(firstNotary.GetID()))));
     }
 
-    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
-        pwalletMain->LockCoin(std::get<0>(utxo));
+    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
+        COutPoint outpoint = std::get<0>(utxo);
+        pwalletMain->LockCoin(outpoint);
+    }
 
     CTransaction fundingTxSigned;
     std::string fundingResult;
     try {
         fundingResult = SignAndMaybeSendTx(fundingTx, NullUniValue, fSendTransaction, fundingTxSigned);
     } catch (...) {
-        for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
-            pwalletMain->UnlockCoin(std::get<0>(utxo));
+        for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
+            COutPoint outpoint = std::get<0>(utxo);
+            pwalletMain->UnlockCoin(outpoint);
+        }
         throw;
     }
-    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
-        pwalletMain->UnlockCoin(std::get<0>(utxo));
+    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
+        COutPoint outpoint = std::get<0>(utxo);
+        pwalletMain->UnlockCoin(outpoint);
+    }
 
     const uint256 fundingTxid = fundingTxSigned.GetHash();
 
