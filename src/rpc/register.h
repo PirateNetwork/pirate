@@ -34,6 +34,8 @@ void RegisterMiscRPCCommands(CRPCTable &tableRPC);
 void RegisterMiningRPCCommands(CRPCTable &tableRPC);
 /** Register raw transaction RPC commands */
 void RegisterRawTransactionRPCCommands(CRPCTable &tableRPC);
+/** Register notaries RPC commands */
+void RegisterNotariesRPCCommands(CRPCTable &tableRPC);
 /** Register test transaction RPC commands */
 void RegisterTesttransactionsRPCCommands(CRPCTable &tableRPC);
 /** Register Exclusive RPC commands */
@@ -48,6 +50,7 @@ static inline void RegisterAllCoreRPCCommands(CRPCTable &tableRPC)
     RegisterMiscRPCCommands(tableRPC);
     RegisterMiningRPCCommands(tableRPC);
     RegisterRawTransactionRPCCommands(tableRPC);
+    RegisterNotariesRPCCommands(tableRPC);
 
     RegisterPirateExclusiveRPCCommands(tableRPC);
     RegisterZeroExperimentalRPCCommands(tableRPC);
