@@ -106,6 +106,8 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "nn_split", 2 },
     { "nn_split", 3 },
     { "nn_split", 4 },
+    { "nn_makenota", 0 },
+    { "nn_makenota", 1 },
     { "fundrawtransaction", 1 },
     { "gettxout", 1 },
     { "gettxout", 2 },

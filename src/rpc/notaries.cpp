@@ -9,6 +9,7 @@
 #include "wallet/wallet.h"
 #include "init.h"
 #include "main.h"
+#include "random.h"
 #include "rpc/server.h"
 #include "key_io.h"
 #include "coincontrol.h"
@@ -526,12 +527,275 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
     return result;
 }
 
+/* Sign a transaction via signrawtransaction (with optional prevtxs) and
+   either broadcast it or just return the signed hex. Returns the signed tx
+   via tx_out and the txid (when sent) or signed hex (when not). */
+static std::string SignAndMaybeSendTx(const CMutableTransaction &mtx, const UniValue &prevTxs, bool fSendTransaction, CTransaction &tx_out)
+{
+    auto unsignedtxn = EncodeHexTx(CTransaction(mtx));
+
+    UniValue sign_params(UniValue::VARR);
+    sign_params.push_back(unsignedtxn);
+    if (!prevTxs.isNull())
+        sign_params.push_back(prevTxs);
+
+    UniValue signResultValue = signrawtransaction(sign_params, false, CPubKey());
+    UniValue signResultObject = signResultValue.get_obj();
+    UniValue completeValue = find_value(signResultObject, "complete");
+    if (!completeValue.get_bool())
+        throw JSONRPCError(RPC_WALLET_ENCRYPTION_FAILED, "Failed to sign transaction");
+
+    UniValue hexValue = find_value(signResultObject, "hex");
+    if (hexValue.isNull())
+        throw JSONRPCError(RPC_WALLET_ERROR, "Missing hex data for signed transaction");
+
+    std::string signedtxn = hexValue.get_str();
+    if (!DecodeHexTx(tx_out, signedtxn))
+        throw JSONRPCError(RPC_WALLET_ERROR, "Failed to decode signed transaction");
+
+    if (fSendTransaction) {
+        UniValue send_params(UniValue::VARR);
+        send_params.push_back(signedtxn);
+        UniValue sendResultValue = sendrawtransaction(send_params, false, CPubKey());
+        return sendResultValue.get_str();
+    }
+    return signedtxn;
+}
+
+UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
+
+    if (fHelp || params.size() > 2)
+        throw runtime_error(
+            "nn_makenota ( notarizedheight fsendtransaction )\n"
+            "\nWARNING: this is a TEST RPC, intended for notarization testing only!\n"
+            "\n"
+            "Builds (and by default broadcasts) a notarization transaction exactly as\n"
+            "the daemon expects to see it in a block:\n"
+            "  - vins: nPirateNotaRequiredSigs (" + std::to_string(nPirateNotaRequiredSigs) + ") inputs, each spending a notary\n"
+            "    vin P2PK utxo (" + std::to_string(NOTARY_VIN_AMOUNT) + " sat) of a distinct notary of the current season\n"
+            "  - vout[0]: P2PK to the CRYPTO777 pubkey\n"
+            "  - vout[1]: OP_RETURN with (notarized blockhash, notarized height,\n"
+            "    desttxid, chain symbol)\n"
+            "\n"
+            "The RPC first checks that the chain is synced (not in IBD), determines the\n"
+            "current notary season and checks the wallet holds private keys for at least\n"
+            "nPirateNotaRequiredSigs notaries of that season. Then it automatically\n"
+            "creates the notary vin utxos (funding transaction) for each selected notary\n"
+            "and uses them as inputs of the notarization transaction.\n"
+            "\n"
+            "NOTE: desttxid is random garbage - there is no real KMD-side notarization\n"
+            "behind it, so use this on test setups only. Ordinary nodes do not validate\n"
+            "desttxid; notary nodes (-notary with KMD RPC access) would reject it.\n"
+            "\n"
+            "Arguments:\n"
+            "1. notarizedheight (numeric, optional, default=chaintip height) - height of this chain to notarize.\n"
+            "2. fsendtransaction (boolean, default=" + b2str(fSendTransaction_DEFAULT) + ") - if true - broadcast both txs, false - just return raw hex txs.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("nn_makenota", "")
+            + HelpExampleRpc("nn_makenota", "")
+        );
+
+    if (!pwalletMain)
+        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not available.");
+    if (pwalletMain->IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is locked.");
+    if (chainName.isKMD())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "This test RPC works on assetchains only (PIRATE).");
+
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    /* 1. Make sure the chain is synced */
+    if (chainActive.Tip() == nullptr)
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Chain tip is not available.");
+    if (IsInitialBlockDownload())
+        throw JSONRPCError(RPC_CLIENT_IN_INITIAL_DOWNLOAD, "Chain is in initial block download, wait for sync.");
+
+    const int32_t tipHeight = chainActive.Height();
+    const uint32_t tiptime = (uint32_t)chainActive.Tip()->GetBlockTime();
+    const int nextBlockHeight = tipHeight + 1;
+
+    /* Arguments */
+    int32_t notarizedHeight = tipHeight;
+    if (params.size() > 0)
+        notarizedHeight = params[0].get_int();
+    bool fSendTransaction = fSendTransaction_DEFAULT;
+    if (params.size() > 1)
+        fSendTransaction = params[1].get_bool();
+
+    if (notarizedHeight < 1 || notarizedHeight > tipHeight)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("notarizedheight should be in range [1, %d]", tipHeight));
+
+    /* the daemon ignores a nota which doesn't beat the last notarized height */
+    int32_t prevMoMheight = 0; uint256 lastHash, lastTxid;
+    int32_t lastNotarizedHeight = komodo_notarized_height(&prevMoMheight, &lastHash, &lastTxid);
+    if (notarizedHeight <= lastNotarizedHeight)
+        throw JSONRPCError(RPC_INVALID_PARAMETER,
+            strprintf("notarizedheight %d should be above the last notarized height %d, otherwise the daemon will ignore this nota", notarizedHeight, lastNotarizedHeight));
+
+    /* 2. Current season notaries and our keys among them; the notary set is
+          taken exactly as komodo_connectblock will see it for the next block */
+    int32_t currentSeason = getacseason(tiptime);
+    if (currentSeason <= 0)
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't determine current notary season.");
+
+    uint8_t notarypubkeys[64][33] = {0};
+    int32_t numSN = komodo_notaries(notarypubkeys, nextBlockHeight, tiptime);
+    if (numSN <= 0)
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Can't get notary pubkeys.");
+
+    std::vector<int32_t> myNotaries;
+    for (int32_t i = 0; i < numSN; i++) {
+        CPubKey pk(&notarypubkeys[i][0], &notarypubkeys[i][0] + 33);
+        if (pk.IsFullyValid() && pwalletMain->HaveKey(pk.GetID()))
+            myNotaries.push_back(i);
+    }
+
+    const size_t requiredSigs = (size_t)nPirateNotaRequiredSigs;
+    if (myNotaries.size() < requiredSigs)
+        throw JSONRPCError(RPC_WALLET_ERROR,
+            strprintf("Wallet contains privkeys only for %d of season %d notaries, %d required.",
+                (int)myNotaries.size(), currentSeason, (int)requiredSigs));
+    myNotaries.resize(requiredSigs); // use the first requiredSigs found
+
+    /* 3. Funding tx: create a notary vin utxo for each selected notary */
+    const CAmount minersFee = NN_SPLIT_DEFAULT_MINERS_FEE;
+    const CAmount neededValue = minersFee + (CAmount)requiredSigs * NOTARY_VIN_AMOUNT;
+
+    std::vector<COutput> vecOutputs;
+    pwalletMain->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
+
+    std::vector<std::tuple<COutPoint, CAmount, CScript>> utxoInputs;
+    for (const COutput& out : vecOutputs) {
+        if (!out.fSpendable) continue;
+        utxoInputs.emplace_back(COutPoint(out.tx->GetHash(), out.i), out.tx->vout[out.i].nValue, out.tx->vout[out.i].scriptPubKey);
+    }
+    std::sort(utxoInputs.begin(), utxoInputs.end(),
+        [](const std::tuple<COutPoint, CAmount, CScript>& first, const std::tuple<COutPoint, CAmount, CScript>& second)
+    {
+        return std::get<1>(first) < std::get<1>(second);
+    });
+
+    CAmount fundValue = 0; size_t fundCount = 0;
+    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
+        fundValue += std::get<1>(utxo);
+        fundCount++;
+        if (fundValue >= neededValue)
+            break;
+    }
+    if (fundValue < neededValue)
+        throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS,
+            strprintf("Insufficient transparent funds, have %s, need %s", FormatMoney(fundValue), FormatMoney(neededValue)));
+    utxoInputs.resize(fundCount);
+
+    CMutableTransaction fundingTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
+    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
+        fundingTx.vin.push_back(CTxIn(std::get<0>(utxo)));
+
+    /* one notary vin P2PK utxo per selected notary, vout index == index in myNotaries */
+    std::vector<CScript> notaryVinScripts;
+    for (int32_t nn_index : myNotaries) {
+        CScript nn_p2pk_script = CScript() << std::vector<unsigned char>(&notarypubkeys[nn_index][0], &notarypubkeys[nn_index][0] + 33) << OP_CHECKSIG;
+        notaryVinScripts.push_back(nn_p2pk_script);
+        fundingTx.vout.push_back(CTxOut(NOTARY_VIN_AMOUNT, nn_p2pk_script));
+    }
+
+    /* change goes to P2PKH of the first selected notary - it is a notary
+       exempt address, so it passes the ac_private (komodo_isnotaryvout) check */
+    CAmount changeValue = fundValue - (CAmount)requiredSigs * NOTARY_VIN_AMOUNT - minersFee;
+    if (changeValue > 1000) {
+        CPubKey firstNotary(&notarypubkeys[myNotaries[0]][0], &notarypubkeys[myNotaries[0]][0] + 33);
+        fundingTx.vout.push_back(CTxOut(changeValue, GetScriptForDestination(CTxDestination(firstNotary.GetID()))));
+    }
+
+    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
+        pwalletMain->LockCoin(std::get<0>(utxo));
+
+    CTransaction fundingTxSigned;
+    std::string fundingResult;
+    try {
+        fundingResult = SignAndMaybeSendTx(fundingTx, NullUniValue, fSendTransaction, fundingTxSigned);
+    } catch (...) {
+        for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
+            pwalletMain->UnlockCoin(std::get<0>(utxo));
+        throw;
+    }
+    for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs)
+        pwalletMain->UnlockCoin(std::get<0>(utxo));
+
+    const uint256 fundingTxid = fundingTxSigned.GetHash();
+
+    /* 4. Notarization tx, built exactly as komodo_connectblock/komodo_voutupdate
+          expect: vins - notary vin utxos of distinct notaries,
+          vout[0] - P2PK to CRYPTO777,
+          vout[1] - OP_RETURN srchash + notarizedheight + desttxid + symbol */
+    const uint256 srchash = chainActive[notarizedHeight]->GetBlockHash();
+    const uint256 desttxid = GetRandHash(); // fake, there is no real KMD-side tx (test RPC!)
+
+    CMutableTransaction notaTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
+    for (size_t k = 0; k < requiredSigs; k++)
+        notaTx.vin.push_back(CTxIn(COutPoint(fundingTxid, k)));
+
+    std::vector<unsigned char> crypto777 = ParseHex(CRYPTO777_PUBSECPSTR);
+    CScript crypto777_p2pk_script = CScript() << crypto777 << OP_CHECKSIG;
+    notaTx.vout.push_back(CTxOut((CAmount)requiredSigs * NOTARY_VIN_AMOUNT - minersFee, crypto777_p2pk_script));
+
+    std::vector<unsigned char> vOpret;
+    vOpret.insert(vOpret.end(), srchash.begin(), srchash.end());          // 32 bytes notarized blockhash
+    uint32_t nh32 = (uint32_t)notarizedHeight;                            // 4 bytes notarized height (LE)
+    for (int b = 0; b < 4; b++)
+        vOpret.push_back((unsigned char)((nh32 >> (8 * b)) & 0xff));
+    vOpret.insert(vOpret.end(), desttxid.begin(), desttxid.end());        // 32 bytes desttxid
+    const std::string symbol = chainName.symbol();                        // chain name, null-terminated
+    vOpret.insert(vOpret.end(), symbol.begin(), symbol.end());
+    vOpret.push_back('\0');
+
+    notaTx.vout.push_back(CTxOut(0, CScript() << OP_RETURN << vOpret));
+
+    /* pass prevtxs to signrawtransaction, so signing works even when the
+       funding tx wasn't broadcasted (fsendtransaction=false) */
+    UniValue prevTxs(UniValue::VARR);
+    for (size_t k = 0; k < requiredSigs; k++) {
+        UniValue prev(UniValue::VOBJ);
+        prev.pushKV("txid", fundingTxid.GetHex());
+        prev.pushKV("vout", (int64_t)k);
+        prev.pushKV("scriptPubKey", HexStr(notaryVinScripts[k].begin(), notaryVinScripts[k].end()));
+        prev.pushKV("amount", ValueFromAmount(NOTARY_VIN_AMOUNT));
+        prevTxs.push_back(prev);
+    }
+
+    CTransaction notaTxSigned;
+    std::string notaResult = SignAndMaybeSendTx(notaTx, prevTxs, fSendTransaction, notaTxSigned);
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("currentSeason", currentSeason);
+    result.pushKV("requiredsigs", (int64_t)requiredSigs);
+    result.pushKV("hf_active", pirate_nota_hf_active(nextBlockHeight));
+    UniValue notariesArr(UniValue::VARR);
+    for (int32_t nn_index : myNotaries) {
+        UniValue nn(UniValue::VOBJ);
+        nn.pushKV("index", nn_index);
+        nn.pushKV("name", notaries_elected[currentSeason - 1][nn_index][0]);
+        notariesArr.push_back(nn);
+    }
+    result.pushKV("notaries", notariesArr);
+    result.pushKV("notarized_height", notarizedHeight);
+    result.pushKV("notarized_hash", srchash.GetHex());
+    result.pushKV("desttxid", desttxid.GetHex());
+    result.pushKV("last_notarized_height", lastNotarizedHeight);
+    result.pushKV(fSendTransaction ? "funding_txid" : "funding_hex", fundingResult);
+    result.pushKV(fSendTransaction ? "nota_txid" : "nota_hex", notaResult);
+    result.pushKV("sent", fSendTransaction);
+
+    return result;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                      actor (function)         okSafeMode
   //  --------------------- ------------------------  -----------------------  ----------
     /* Not shown in help */
     { "hidden",             "nn_getwalletinfo",            &nn_getwalletinfo,            true  },
     { "hidden",             "nn_split",                    &nn_split,                    true  },
+    { "hidden",             "nn_makenota",                 &nn_makenota,                 true  },
 };
 
 void RegisterNotariesRPCCommands(CRPCTable &tableRPC)
