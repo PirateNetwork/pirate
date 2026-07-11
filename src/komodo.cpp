@@ -770,9 +770,20 @@ int32_t komodo_connectblock(bool fJustCheck, CBlockIndex *pindex,CBlock& block)
                 } //else printf("cant get scriptPubKey for ht.%d txi.%d vin.%d\n",height,i,j);
             }
             numvalid = bitweight(signedmask);
-            if ( ((height < 90000 || (signedmask & 1) != 0) && numvalid >= KOMODO_MINRATIFY) 
-                    || (numvalid >= KOMODO_MINRATIFY && !chainName.isKMD()) 
-                    || numvalid > (numnotaries/5) )
+            bool isNotaQuorum;
+            if ( pirate_nota_hf_active(height) )
+            {
+                // from this height PIRATE requires exactly nPirateNotaRequiredSigs notary sigs,
+                // the legacy 11/13 disjuncts below must not apply
+                isNotaQuorum = (numvalid >= nPirateNotaRequiredSigs);
+            }
+            else
+            {
+                isNotaQuorum = ( ((height < 90000 || (signedmask & 1) != 0) && numvalid >= KOMODO_MINRATIFY)
+                        || (numvalid >= KOMODO_MINRATIFY && !chainName.isKMD())
+                        || numvalid > (numnotaries/5) );
+            }
+            if ( isNotaQuorum )
             {
                 if ( !fJustCheck && !chainName.isKMD() )
                 {

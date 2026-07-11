@@ -24,6 +24,9 @@ extern const int32_t nS8HardforkHeight;   // dPoW Season 8, Fri Oct 4 2024
 
 extern const int32_t nKIP0003Activation;  // https://github.com/KomodoPlatform/kips/blob/main/kips/kip-0003.mediawiki
 
+extern const int32_t nPirateNotaHardforkHeight; // PIRATE: activation height of the notary requiredSigs change
+extern const int32_t nPirateNotaRequiredSigs;   // PIRATE: notary sigs required for a notarization from that height
+
 static const uint32_t KMD_SEASON_TIMESTAMPS[NUM_KMD_SEASONS] = {
     1525132800,
     1563148800,

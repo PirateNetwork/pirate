@@ -170,10 +170,14 @@ int32_t Eval::GetNotaries(uint8_t pubkeys[64][33], int32_t height, uint32_t time
 
 bool Eval::CheckNotaryInputs(const CTransaction &tx, uint32_t height, uint32_t timestamp) const
 {
-    if (tx.vin.size() < 11) return false;
+    int32_t requiredSigs = 11;
+    if (pirate_nota_hf_active((int32_t)height))
+        requiredSigs = nPirateNotaRequiredSigs;
+
+    if ((int32_t)tx.vin.size() < requiredSigs) return false;
 
     CrosschainAuthority auth;
-    auth.requiredSigs = 11;
+    auth.requiredSigs = requiredSigs;
     auth.size = GetNotaries(auth.notaries, height, timestamp);
 
     return CrossChain::CheckTxAuthority(tx, auth);

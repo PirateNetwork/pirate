@@ -220,6 +220,11 @@ int32_t komodo_electednotary(int32_t *numnotariesp,uint8_t *pubkey33,int32_t hei
     return(-1);
 }
 
+bool pirate_nota_hf_active(int32_t height)
+{
+    return chainName.isSymbol("PIRATE") && height >= nPirateNotaHardforkHeight;
+}
+
 int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask)
 {
     int32_t numnotaries, i, wt = 0;

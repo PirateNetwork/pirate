@@ -58,6 +58,13 @@ int32_t komodo_notaries(uint8_t pubkeys[64][33],int32_t height,uint32_t timestam
 
 int32_t komodo_electednotary(int32_t *numnotariesp,uint8_t *pubkey33,int32_t height,uint32_t timestamp);
 
+/****
+ * @brief check whether the PIRATE notary requiredSigs hardfork is active
+ * @param height the height of the block containing the notarization tx
+ * @returns true on PIRATE from nPirateNotaHardforkHeight onward
+ */
+bool pirate_nota_hf_active(int32_t height);
+
 int32_t komodo_ratify_threshold(int32_t height,uint64_t signedmask);
 
 /*****
