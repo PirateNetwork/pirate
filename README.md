@@ -5,6 +5,8 @@
 
 This is the official Pirate Chain sourcecode repository based on https://github.com/jl777/komodo.
 
+The Qt wallet part is based on the KomodoOcean (Komodo-QT) work from https://github.com/DeckerSU/KomodoOcean.
+
 ## Development Resources
 
 - Pirate Chain Website: [https://piratechain.com](https://piratechain.com/)
