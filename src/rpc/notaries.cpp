@@ -735,7 +735,11 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
           vout[0] - P2PK to CRYPTO777,
           vout[1] - OP_RETURN srchash + notarizedheight + desttxid + symbol */
     const uint256 srchash = chainActive[notarizedHeight]->GetBlockHash();
-    const uint256 desttxid = GetRandHash(); // fake, there is no real KMD-side tx (test RPC!)
+    uint256 desttxid = GetRandHash(); // fake, there is no real KMD-side tx (test RPC!)
+    /* stamp the first bytes with "DECKER" so this fake desttxid is recognizable
+       inside the OP_RETURN and can be told apart from real notarizations */
+    static const char deckerTag[] = "DECKER";
+    memcpy(desttxid.begin(), deckerTag, sizeof(deckerTag) - 1);
 
     CMutableTransaction notaTx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), nextBlockHeight);
     for (size_t k = 0; k < requiredSigs; k++)
