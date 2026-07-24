@@ -36,11 +36,11 @@ static const std::string SAPLING_SPEND_SHA256 = "8e48ffd23abb3a5fd9c5589204f32d9
 static const std::string SAPLING_OUTPUT_SHA256 = "2f0ebbcbb9bb0bcffe95a397e7eba89c29eb4dde6191c339db88570e3f3fb0e4";
 static const std::string SPROUT_GROTH16_SHA256 = "b685d700c60328498fbde589c8c7c484c722b788b265b72af448a5bf0ee55b50";
 
-// static const std::string PK_URL = "https://bootstrap.arrr.black/downloads/sprout-proving.key";
-// static const std::string VK_URL = "https://bootstrap.arrr.black/downloads/sprout-verifying.key";
-static const std::string SAPLING_SPEND_URL = "https://bootstrap.arrr.black/downloads/sapling-spend.params";
-static const std::string SAPLING_OUTPUT_URL = "https://bootstrap.arrr.black/downloads/sapling-output.params";
-static const std::string SPROUT_GROTH16_URL = "https://bootstrap.arrr.black/downloads/sprout-groth16.params";
+// static const std::string PK_URL = "https://github.com/PirateNetwork/zcash_params/releases/download/release_bd4e9a3/sprout-proving.key";
+// static const std::string VK_URL = "https://github.com/PirateNetwork/zcash_params/releases/download/release_bd4e9a3/sprout-verifying.key";
+static const std::string SAPLING_SPEND_URL = "https://github.com/PirateNetwork/zcash_params/releases/download/release_bd4e9a3/sapling-spend.params";
+static const std::string SAPLING_OUTPUT_URL = "https://github.com/PirateNetwork/zcash_params/releases/download/release_bd4e9a3/sapling-output.params";
+static const std::string SPROUT_GROTH16_URL = "https://github.com/PirateNetwork/zcash_params/releases/download/release_bd4e9a3/sprout-groth16.params";
 
 
 

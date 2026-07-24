@@ -8,13 +8,13 @@ else
     PARAMS_DIR="$HOME/.zcash-params"
 fi
 
-SPROUT_PKEY_REALNAME='sprout-proving.key.deprecated-sworn-elves'
+SPROUT_PKEY_REALNAME='sprout-proving.key'
 SPROUT_PKEY_NAME='sprout-proving.key'
 SPROUT_VKEY_NAME='sprout-verifying.key'
 SAPLING_SPEND_NAME='sapling-spend.params'
 SAPLING_OUTPUT_NAME='sapling-output.params'
 SAPLING_SPROUT_GROTH16_NAME='sprout-groth16.params'
-SPROUT_URL="https://bootstrap.arrr.black/downloads"
+SPROUT_URL="https://github.com/PirateNetwork/zcash_params/releases/download/release_bd4e9a3"
 SPROUT_IPFS="/ipfs/QmZKKx7Xup7LiAtFRhYsE1M7waXcv9ir9eCECyXAFGxhEo"
 
 SHA256CMD="$(command -v sha256sum || echo shasum)"
