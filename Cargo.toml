@@ -32,7 +32,7 @@ incrementalmerkletree = "0.8"
 libc = "0.2"
 jubjub = "0.10"
 memuse = "0.2"
-orchard = "=0.15.0-pre.2"
+orchard = "=0.15.4"
 redjubjub = "0.8"
 sapling-crypto = { package = "sapling-crypto", version = "0.7" }
 subtle = "2.2"
@@ -40,14 +40,14 @@ rand_core = "0.6"
 tracing = "0.1"
 tracing-core = "0.1"
 tracing-appender = "0.1"
-zcash_address = "=0.13.0-pre.0"
+zcash_address = "=0.13.0"
 zcash_encoding = "0.4"
-zcash_history = "=0.5.0-pre.0"
+zcash_history = "=0.5.0"
 zcash_note_encryption = "0.4.1"
-zcash_primitives = { version = "=0.29.0-pre.0", features = ["temporary-zcashd", "transparent-inputs"] }
-zcash_protocol = "=0.10.0-pre.0"
-zcash_proofs = { version = "=0.29.0-pre.0", features = ["directories"] }
-zcash_transparent = "=0.9.0-pre.0"
+zcash_primitives = { version = "=0.29.0", features = ["temporary-zcashd", "transparent-inputs"] }
+zcash_protocol = "=0.10.0"
+zcash_proofs = { version = "=0.29.0", features = ["directories"] }
+zcash_transparent = "=0.9.0"
 zip32 = "0.2"
 zcash_spec = "0.2"
 ed25519-zebra = "4"
@@ -72,19 +72,19 @@ funty = "=1.1.0"
 
 [patch.crates-io]
 sapling-crypto        = { git = "https://github.com/piratenetwork/sapling-crypto.git",        rev = "62fcf59a4d933244ee6280182c6cd3e5290e8a90" }
-zcash_note_encryption = { git = "https://github.com/PirateNetwork/zcash_note_encryption.git", rev = "ede44ea608e667c78309c598fbf4d70f69c15c29" }
-orchard               = { git = "https://github.com/PirateNetwork/orchard.git",                rev = "a997c1d9cdabdf9c973c9c12152d9291708162b5" } # feat-ironwood
+zcash_note_encryption = { git = "https://github.com/PirateNetwork/zcash_note_encryption.git", rev = "a8c90d1ce3737cc5898e0bf232ea325a5a61ec9f" }
+orchard               = { git = "https://github.com/PirateNetwork/orchard.git",                rev = "c0545158b15259805e31ea1953867d6a507c08e4" } # feat-ironwood, orchard 0.15.4
 halo2_gadgets         = { git = "https://github.com/PirateNetwork/halo2.git",                 rev = "261faaccd5a30c19bb8468600841a0dac305adf5" }
 halo2_proofs          = { git = "https://github.com/PirateNetwork/halo2.git",                 rev = "261faaccd5a30c19bb8468600841a0dac305adf5" }
 halo2_poseidon        = { git = "https://github.com/PirateNetwork/halo2.git",                 rev = "261faaccd5a30c19bb8468600841a0dac305adf5" }
 # feat-ironwood
-zcash_address         = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
-zcash_encoding        = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
-zcash_protocol        = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
-zcash_primitives      = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
-zcash_proofs          = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
-zcash_history         = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
-zcash_transparent     = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cb402befcba3628bfe37cfbae0a89877f124647a" }
+zcash_address         = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
+zcash_encoding        = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
+zcash_protocol        = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
+zcash_primitives      = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
+zcash_proofs          = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
+zcash_history         = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
+zcash_transparent     = { git = "https://github.com/piratenetwork/librustzcash.git",           rev = "cc3c11cf57944fd56ec61674f6794f6f38fa43bf" }
 
 [dependencies.tracing-subscriber]
 version = "0.2.12"
