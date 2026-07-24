@@ -947,41 +947,48 @@ bool CBlockTreeDB::ReadShieldedSubtrees(
 {
     subtrees.clear();
 
-    boost::scoped_ptr<CDBIterator> pcursor(const_cast<CBlockTreeDB*>(this)->NewIterator());
-    const char entryKey = ShieldedSubtreeEntryKey(type);
-    pcursor->Seek(std::make_pair(entryKey, startIndex));
-
-    uint64_t expectedIndex = startIndex;
-    while (pcursor->Valid()) {
-        boost::this_thread::interruption_point();
-        try {
-            std::pair<char, uint64_t> keyObj;
-            pcursor->GetKey(keyObj);
-            if (keyObj.first != entryKey) {
-                break;
-            }
-            if (keyObj.second != expectedIndex) {
-                LogPrintf(
-                    "%s: subtree metadata gap for type=%d expected=%llu actual=%llu\n",
-                    __func__,
-                    static_cast<int>(type),
-                    static_cast<unsigned long long>(expectedIndex),
-                    static_cast<unsigned long long>(keyObj.second));
-                return false;
-            }
-
-            ShieldedSubtreeData subtree;
-            if (!pcursor->GetValue(subtree)) {
-                return false;
-            }
-            subtrees.push_back(std::make_pair(keyObj.second, subtree));
-            expectedIndex++;
-            if (limit != 0 && subtrees.size() >= limit) {
-                break;
-            }
-            pcursor->Next();
-        } catch (const std::exception&) {
+    uint64_t latestIndex = 0;
+    if (!ReadLatestShieldedSubtreeIndex(type, latestIndex)) {
+        ShieldedSubtreeData firstSubtree;
+        if (ReadShieldedSubtree(type, 0, firstSubtree)) {
+            LogPrintf(
+                "%s: subtree metadata exists for type=%d without a latest-index record\n",
+                __func__,
+                static_cast<int>(type));
             return false;
+        }
+        return true;
+    }
+    if (startIndex > latestIndex) {
+        return true;
+    }
+
+    uint64_t endIndex = latestIndex;
+    if (limit != 0) {
+        const uint64_t maxOffset = static_cast<uint64_t>(limit) - 1;
+        if (maxOffset < latestIndex - startIndex) {
+            endIndex = startIndex + maxOffset;
+        }
+    }
+
+    for (uint64_t index = startIndex; ; index++) {
+        boost::this_thread::interruption_point();
+
+        ShieldedSubtreeData subtree;
+        if (!ReadShieldedSubtree(type, index, subtree)) {
+            LogPrintf(
+                "%s: missing subtree metadata for type=%d index=%llu (latest=%llu)\n",
+                __func__,
+                static_cast<int>(type),
+                static_cast<unsigned long long>(index),
+                static_cast<unsigned long long>(latestIndex));
+            subtrees.clear();
+            return false;
+        }
+        subtrees.push_back(std::make_pair(index, subtree));
+
+        if (index == endIndex) {
+            break;
         }
     }
 
