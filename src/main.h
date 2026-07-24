@@ -107,6 +107,9 @@ static const int DEFAULT_SCRIPTCHECK_THREADS = 0;
 static const int MAX_BLOCKS_IN_TRANSIT_PER_PEER = 128;  // Increased from 16 to improve sync speed
 /** Timeout in seconds during which a peer must stall block download progress before being disconnected. */
 static const unsigned int BLOCK_STALLING_TIMEOUT = 10;  // Increased from 2 to reduce false disconnects
+/** Seconds to wait for a designated headers-sync peer to deliver any headers before releasing its
+ *  sync slot so a fresh getheaders can be (re-)attempted, either to the same peer or another one. */
+static const int64_t HEADERS_SYNC_TIMEOUT = 30;
 /** Number of headers sent in one getheaders result. We rely on the assumption that if a peer sends
  *  less than this number, we reached its tip. Changing this value is a protocol upgrade. */
 static const unsigned int MAX_HEADERS_RESULTS = 160;

@@ -364,6 +364,10 @@ namespace {
         CBlockIndex *pindexLastCommonBlock;
         //! Whether we've started headers synchronization with this peer.
         bool fSyncStarted;
+        //! Time (microseconds) fSyncStarted was set, so a peer that never delivers can be retried instead of holding the sync slot forever.
+        int64_t nSyncStartTime;
+        //! Time (microseconds) headers were last accepted from this peer.
+        int64_t nLastHeadersReceived;
         //! Since when we're stalling block download progress (in microseconds), or 0.
         int64_t nStallingSince;
         list<QueuedBlock> vBlocksInFlight;
@@ -380,6 +384,8 @@ namespace {
             hashLastUnknownBlock.SetNull();
             pindexLastCommonBlock = NULL;
             fSyncStarted = false;
+            nSyncStartTime = 0;
+            nLastHeadersReceived = 0;
             nStallingSince = 0;
             nBlocksInFlight = 0;
             nBlocksInFlightValidHeaders = 0;
@@ -9094,23 +9100,13 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return error("headers message size = %u", nCount);
         }
         
-        // During block download, prioritize block processing over header sync
-        // to avoid cs_main lock contention
-        static int64_t lastHeadersProcessed = 0;
-        static int headersInFlight = 0;
-        int64_t now = GetTimeMicros();
-        
-        if (IsInitialBlockDownload() && mapBlocksInFlight.size() > 100) {
-            // Throttle header processing when we have many blocks in-flight
-            if (now - lastHeadersProcessed < 500000) { // 0.5 seconds between header batches
-                LogPrint("net", "Throttling headers from peer=%d (blocks in-flight: %d)\n", 
-                         pfrom->id, mapBlocksInFlight.size());
-                return true;
-            }
-        }
-        
-        lastHeadersProcessed = now;
-        
+        // Headers are always accepted into the block index regardless of how many
+        // blocks are currently in flight: AcceptBlockHeader is bounded (at most
+        // MAX_HEADERS_RESULTS headers per message) and cheap relative to full block
+        // validation, and dropping an already-received batch here has no recovery
+        // path other than a peer disconnect/reconnect. Backpressure during heavy
+        // block download is applied below, on the "request more" continuation
+        // instead, where deferring rather than discarding is safe.
         headers.resize(nCount);
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
@@ -9118,6 +9114,12 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         LOCK(cs_main);
+
+        {
+            CNodeState *nodestate = State(pfrom->GetId());
+            if (nodestate)
+                nodestate->nLastHeadersReceived = GetTimeMicros();
+        }
 
         if (nCount == 0) {
             // Nothing interesting. Stop asking this peers for more headers.
@@ -9186,27 +9188,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             // Headers message had its maximum size; the peer may have more headers.
             // TODO: optimize: if pindexLast is an ancestor of chainActive.Tip or pindexBestHeader, continue
             // from there instead.
-            
-            // Throttle "more getheaders" requests during IBD to reduce lock contention
-            static std::map<NodeId, int64_t> lastGetHeadersRequest;
-            int64_t now = GetTimeMicros();
-            bool shouldRequest = true;
-            
-            if (IsInitialBlockDownload() && mapBlocksInFlight.size() > 50) {
-                // During heavy block sync, throttle header requests per peer
-                auto it = lastGetHeadersRequest.find(pfrom->GetId());
-                if (it != lastGetHeadersRequest.end() && now - it->second < 2000000) { // 2 seconds
-                    LogPrint("net", "Throttling more getheaders to peer=%d (blocks in-flight: %d, last request: %.2fs ago)\n", 
-                             pfrom->id, mapBlocksInFlight.size(), (now - it->second) / 1000000.0);
-                    shouldRequest = false;
-                }
-            }
-            
-            if (shouldRequest && (pfrom->sendhdrsreq >= chainActive.Height()-MAX_HEADERS_RESULTS || pindexLast->nHeight != pfrom->sendhdrsreq))
+            //
+            // Always request the continuation immediately rather than throttling on
+            // mapBlocksInFlight: the known-header horizon (state->pindexBestKnownBlock,
+            // via UpdateBlockAvailability) gates FindNextBlocksToDownload's window, so
+            // pacing header requests to the block-in-flight count starves that window
+            // and stalls block download rather than protecting it.
+            if (pfrom->sendhdrsreq >= chainActive.Height()-MAX_HEADERS_RESULTS || pindexLast->nHeight != pfrom->sendhdrsreq)
             {
                 pfrom->sendhdrsreq = (int32_t)pindexLast->nHeight;
-                lastGetHeadersRequest[pfrom->GetId()] = now;
-                LogPrint("net", "more getheaders (%d) to end to peer=%d (startheight:%d, blocks in-flight: %d)\n", 
+                LogPrint("net", "more getheaders (%d) to end to peer=%d (startheight:%d, blocks in-flight: %d)\n",
                          pindexLast->nHeight, pfrom->id, pfrom->nStartingHeight, mapBlocksInFlight.size());
                 pfrom->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexLast), uint256());
             }
@@ -9663,9 +9654,22 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
             if ((nSyncStarted == 0 && fFetch) || pindexBestHeader->GetBlockTime() > GetTime() - 24 * 60 * 60) {
                 state.fSyncStarted = true;
                 nSyncStarted++;
+                state.nSyncStartTime = GetTimeMicros();
                 CBlockIndex *pindexStart = pindexBestHeader->pprev ? pindexBestHeader->pprev : pindexBestHeader;
                 LogPrint("net", "initial getheaders (%d) to peer=%d (startheight:%d) - Starting sync\n", pindexStart->nHeight, pto->id, pto->nStartingHeight);
                 pto->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexStart), uint256());
+            }
+        } else if (state.fSyncStarted && !pto->fClient && !fImporting && !fReindex && IsInitialBlockDownload()) {
+            // A designated sync peer that never delivers headers would otherwise hold
+            // its sync slot (and, when nSyncStarted == 0 was the condition that picked
+            // it, block any other peer from ever being tried) forever. Release the slot
+            // once it's gone quiet so a fresh peer can be selected on a later tick.
+            int64_t sinceLastHeaders = GetTimeMicros() - std::max(state.nSyncStartTime, state.nLastHeadersReceived);
+            if (sinceLastHeaders > HEADERS_SYNC_TIMEOUT * 1000000) {
+                LogPrint("net", "headers sync stalled on peer=%d (%.0fs since last progress), releasing sync slot\n",
+                         pto->id, sinceLastHeaders / 1000000.0);
+                state.fSyncStarted = false;
+                nSyncStarted--;
             }
         }
 
