@@ -204,6 +204,7 @@ bool downloadFiles(std::string title)
                 }
 
                 curl_easy_setopt(it->second.curl, CURLOPT_URL, it->second.URL.c_str());
+                curl_easy_setopt(it->second.curl, CURLOPT_FOLLOWLOCATION, 1L);
                 curl_easy_setopt(it->second.curl, CURLOPT_SSL_VERIFYPEER, 0L);
                 curl_easy_setopt(it->second.curl, CURLOPT_SSL_VERIFYHOST, 0L);
                 curl_easy_setopt(it->second.curl, CURLOPT_VERBOSE, 0L);
