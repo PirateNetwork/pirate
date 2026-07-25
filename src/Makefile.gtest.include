@@ -40,7 +40,36 @@ pirate_gtest_SOURCES += \
 	gtest/test_paymentdisclosure.cpp \
 	gtest/test_pedersen_hash.cpp \
 	gtest/test_checkblock.cpp \
-	gtest/test_zip32.cpp
+	gtest/test_zip32.cpp \
+	gtest/test_block_connect.cpp \
+	gtest/test_coinimport.cpp \
+	gtest/test_addrman.cpp \
+	gtest/test_alerts.cpp \
+	gtest/test_buffered_file.cpp \
+	gtest/test_coins.cpp \
+	gtest/test_cryptoconditions.cpp \
+	gtest/test_equihash.cpp \
+	gtest/test_eval_notarisation.cpp \
+	gtest/test_events.cpp \
+	gtest/test-gmp-arith.cpp \
+	gtest/test_haraka_removal.cpp \
+	gtest/test_hex.cpp \
+	gtest/test_kmd_feat.cpp \
+	gtest/test_legacy_events.cpp \
+	gtest/test_mempool.cpp \
+	gtest/test_miner.cpp \
+	gtest/test_netbase_tests.cpp \
+	gtest/test_notary.cpp \
+	gtest/test_oldhash_removal.cpp \
+	gtest/test_parse_args.cpp \
+	gtest/test_parse_notarisation.cpp \
+	gtest/test_parse_notarisation.h \
+	gtest/test_parse_notarisation_data.cpp \
+	gtest/test_pow.cpp \
+	gtest/test_random.cpp \
+	gtest/test_script_standard_tests.cpp \
+	gtest/test_sha256_crypto.cpp \
+	gtest/test_txid.cpp
 
 if ENABLE_WALLET
 pirate_gtest_SOURCES += \

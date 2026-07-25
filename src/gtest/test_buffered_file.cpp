@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 #include "streams.h"
 #include <boost/filesystem.hpp>
 #include "clientversion.h"

@@ -992,8 +992,7 @@ endif
 endif
 
 if ENABLE_TESTS
-include Makefile.gtest.include #zcash tests
-#include Makefile.ktest.include #komodo tests
+include Makefile.gtest.include #zcash + komodo tests (komodo tests merged in from Makefile.ktest.include)
 #include Makefile.test.include #bitcoin tests
 endif
 

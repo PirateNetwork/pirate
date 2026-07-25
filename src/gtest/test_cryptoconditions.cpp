@@ -9,7 +9,7 @@
 #include "script/interpreter.h"
 #include "script/serverchecker.h"
 
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 
 
 

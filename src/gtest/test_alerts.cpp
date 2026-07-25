@@ -312,6 +312,11 @@ TEST_F(TestAlerts, AlertNotify)
         alert.ProcessAlert(alertKey, false);
 
     std::vector<std::string> r = ReadLines( alertnotify_file);
+
+    // CAlert::Notify only actually runs the -alertnotify command when built with
+    // ENABLE_SYSTEM_COMMAND (off in this build, and not exposed by configure at
+    // all); otherwise it just logs and returns, so the file is never written.
+#ifdef ENABLE_SYSTEM_COMMAND
     EXPECT_EQ(r.size(), 6u);
 
 // Windows built-in echo semantics are different than posixy shells. Quotes and
@@ -331,6 +336,9 @@ TEST_F(TestAlerts, AlertNotify)
     EXPECT_EQ(r[3], "'Alert 3, disables RPC' ");
     EXPECT_EQ(r[4], "'Alert 4, re-enables RPC' ");
     EXPECT_EQ(r[5], "'Evil Alert; /bin/ls; echo ' ");
+#endif
+#else
+    EXPECT_EQ(r.size(), 0u);
 #endif
 
     SetMockTime(0);

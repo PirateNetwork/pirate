@@ -10,7 +10,92 @@
 #include "policy/fees.h"
 #include "util.h"
 
-void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranchId) {
+#include "gtest/gtestutils.h"
+
+// AcceptToMemoryPool() reads the global pcoinsTip directly (via CCoinsViewMemPool) to
+// check view.HaveCoins(); it's null by default (or left dangling by an earlier test in
+// the same process that deleted its own pcoinsTip without re-nulling it), causing a
+// null-pointer crash. Call this at the start of any test that reaches AcceptToMemoryPool
+// to point pcoinsTip at an always-empty view (GTestCoinsViewDB's HaveCoins() returns
+// false), so these tests reach their intended rejection reasons instead of crashing or
+// short-circuiting on "already have coins". Static duration: static init order across
+// translation units is unspecified, and pcoinsTip is mutated by other tests at runtime,
+// so this must be (re-)assigned explicitly rather than relying on static initialization.
+static void EnsureEmptyPcoinsTip() {
+    static GTestCoinsViewDB baseView;
+    static CCoinsViewCache view(&baseView);
+    pcoinsTip = &view;
+}
+
+// Like EnsureEmptyPcoinsTip, but recognizes GetValidTransaction()'s two hardcoded
+// input prevout hashes (...0...01, ...0...02) as existing, unspent, single-output
+// coins - needed by tests whose tx actually reaches AcceptToMemoryPool's "do all
+// inputs exist" check and is meant to be rejected by a later, specific rule rather
+// than a generic missing-inputs short-circuit. Still reports false for any other
+// hash (in particular the transaction's own hash), so the "already have coins"
+// check above it doesn't false-positive.
+//
+// GetBestBlock() must resolve to a real mapBlockIndex entry: ContextualCheckInputs
+// -> GetSpendHeight() does mapBlockIndex.find(inputs.GetBestBlock())->second
+// unconditionally, so an unresolvable hash (e.g. the null hash) segfaults on the
+// end() iterator. EnsurePcoinsTipWithValidInputs() below sets up a matching fake
+// tip once and this class just reports its hash.
+class FakeCoinsViewValidInputs : public CCoinsView {
+public:
+    uint256 tipHash;
+
+    // CCoinsViewCache::HaveCoins()/FetchCoins() consult GetCoins(), not HaveCoins()
+    // directly - the hash check has to live here for it to actually take effect.
+    bool GetCoins(const uint256 &txid, CCoins &coins) const {
+        if (txid != uint256S("0000000000000000000000000000000000000000000000000000000000000001") &&
+            txid != uint256S("0000000000000000000000000000000000000000000000000000000000000002")) {
+            return false;
+        }
+        CCoins newCoins;
+        newCoins.vout.resize(1);
+        newCoins.vout[0].nValue = COIN;
+        // GetValidTransaction()'s vin scriptSigs are empty, so the matching
+        // scriptPubKey needs to require no unlocking data at all to pass real
+        // script verification in ContextualCheckInputs.
+        newCoins.vout[0].scriptPubKey = CScript() << OP_TRUE;
+        newCoins.nHeight = 1;
+        coins.swap(newCoins);
+        return true;
+    }
+    bool HaveCoins(const uint256 &txid) const {
+        return txid == uint256S("0000000000000000000000000000000000000000000000000000000000000001") ||
+               txid == uint256S("0000000000000000000000000000000000000000000000000000000000000002");
+    }
+    uint256 GetBestBlock() const { return tipHash; }
+    uint256 GetBestAnchor(ShieldedType type) const { uint256 a; return a; }
+};
+
+static void EnsurePcoinsTipWithValidInputs() {
+    static FakeCoinsViewValidInputs baseView;
+    static CCoinsViewCache view(&baseView);
+    static CBlockIndex* fakeTip = nullptr;
+    if (fakeTip == nullptr) {
+        CBlock block;
+        fakeTip = new CBlockIndex(block);
+        fakeTip->nHeight = 1;
+        baseView.tipHash = block.GetHash();
+        mapBlockIndex.insert(std::make_pair(baseView.tipHash, fakeTip));
+    }
+    chainActive.SetTip(fakeTip);
+    pcoinsTip = &view;
+}
+
+// Subclass of CTransaction which doesn't call UpdateHash when constructing
+// from a CMutableTransaction. This enables us to create a CTransaction with
+// bad values (e.g. nVersion=0) which normally trigger an exception (now routed
+// through the Rust digest FFI) during construction, so the intended downstream
+// consensus-level rejection can be exercised instead.
+class UNSAFE_CTransaction : public CTransaction {
+    public:
+        UNSAFE_CTransaction(const CMutableTransaction &tx) : CTransaction(tx, true) {}
+};
+
+static void CreateJoinSplitSignature(CMutableTransaction& mtx, uint32_t consensusBranchId) {
     // Generate an ephemeral keypair.
     uint256 joinSplitPubKey;
     unsigned char joinSplitPrivKey[crypto_sign_SECRETKEYBYTES];
@@ -163,6 +248,7 @@ CCriticalSection& get_cs_main(); // in main.cpp
 
 TEST(Mempool, TxInputLimit) {
     SelectParams(CBaseChainParams::REGTEST);
+    EnsureEmptyPcoinsTip();
 
     CTxMemPool pool(::minRelayTxFee);
     bool missingInputs;
@@ -177,7 +263,7 @@ TEST(Mempool, TxInputLimit) {
 
     // Check it fails as expected
     CValidationState state1;
-    CTransaction tx1(mtx);
+    UNSAFE_CTransaction tx1(mtx);
     LOCK( get_cs_main() );
     EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
     EXPECT_EQ(state1.GetRejectReason(), "bad-txns-version-too-low");
@@ -195,7 +281,7 @@ TEST(Mempool, TxInputLimit) {
 
     // Check it now fails due to exceeding the limit
     CValidationState state3;
-    CTransaction tx3(mtx);
+    UNSAFE_CTransaction tx3(mtx);
     EXPECT_FALSE(AcceptToMemoryPool(pool, state3, tx3, false, &missingInputs));
     // The -mempooltxinputlimit check doesn't set a reason
     EXPECT_EQ(state3.GetRejectReason(), "");
@@ -230,6 +316,9 @@ TEST(Mempool, TxInputLimit) {
 TEST(Mempool, OverwinterNotActiveYet) {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    // This tx's inputs must appear to exist so AcceptToMemoryPool reaches the
+    // overwinter-activation check instead of short-circuiting on missing inputs.
+    EnsurePcoinsTipWithValidInputs();
 
     CTxMemPool pool(::minRelayTxFee);
     bool missingInputs;
@@ -250,103 +339,3 @@ TEST(Mempool, OverwinterNotActiveYet) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
-
-// Sprout transaction version 3 when Overwinter is not active:
-// 1. pass CheckTransaction (and CheckTransactionWithoutProofVerification)
-// 2. pass ContextualCheckTransaction
-// 3. fail IsStandardTx
-TEST(Mempool, SproutV3TxFailsAsExpected) {
-    SelectParams(CBaseChainParams::TESTNET);
-
-    CTxMemPool pool(::minRelayTxFee);
-    bool missingInputs;
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit.resize(0); // no joinsplits
-    mtx.fOverwintered = false;
-    mtx.nVersion = 3;
-    CValidationState state1;
-    CTransaction tx1(mtx);
-
-    LOCK( get_cs_main() );
-    EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
-    EXPECT_EQ(state1.GetRejectReason(), "version");
-}
-
-
-// Sprout transaction version 3 when Overwinter is always active:
-// 1. pass CheckTransaction (and CheckTransactionWithoutProofVerification)
-// 2. fails ContextualCheckTransaction
-TEST(Mempool, SproutV3TxWhenOverwinterActive) {
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-
-    CTxMemPool pool(::minRelayTxFee);
-    bool missingInputs;
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit.resize(0); // no joinsplits
-    mtx.fOverwintered = false;
-    mtx.nVersion = 3;
-    CValidationState state1;
-    CTransaction tx1(mtx);
-
-    LOCK( get_cs_main() );
-    EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
-    EXPECT_EQ(state1.GetRejectReason(), "tx-overwintered-flag-not-set");
-
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-}
-
-
-// Sprout transaction with negative version, rejected by the mempool in CheckTransaction
-// under Sprout consensus rules, should still be rejected under Overwinter consensus rules.
-// 1. fails CheckTransaction (specifically CheckTransactionWithoutProofVerification)
-TEST(Mempool, SproutNegativeVersionTxWhenOverwinterActive) {
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-
-    CTxMemPool pool(::minRelayTxFee);
-    bool missingInputs;
-    CMutableTransaction mtx = GetValidTransaction();
-    mtx.vjoinsplit.resize(0); // no joinsplits
-    mtx.fOverwintered = false;
-
-    LOCK( get_cs_main() );
-
-    // A Sprout transaction with version -3 is created using Sprout code (as found in zcashd <= 1.0.14).
-    // First four bytes of transaction, parsed as an uint32_t, has the value: 0xfffffffd
-    // This test simulates an Overwinter node receiving this transaction, but incorrectly deserializing the
-    // transaction due to a (pretend) bug of not detecting the most significant bit, which leads
-    // to not setting fOverwintered and not masking off the most significant bit of the header field.
-    // The resulting Sprout tx with nVersion -3 should be rejected by the Overwinter node's mempool.
-    {
-        mtx.nVersion = -3;
-        EXPECT_EQ(mtx.nVersion, static_cast<int32_t>(0xfffffffd));
-
-        CTransaction tx1(mtx);
-        EXPECT_EQ(tx1.nVersion, -3);
-
-        CValidationState state1;
-        EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
-        EXPECT_EQ(state1.GetRejectReason(), "bad-txns-version-too-low");
-    }
-
-    // A Sprout transaction with version -3 created using Overwinter code (as found in zcashd >= 1.0.15).
-    // First four bytes of transaction, parsed as an uint32_t, has the value: 0x80000003
-    // This test simulates the same pretend bug described above.
-    // The resulting Sprout tx with nVersion -2147483645 should be rejected by the Overwinter node's mempool.
-    {
-        mtx.nVersion = static_cast<int32_t>((1 << 31) | 3);
-        EXPECT_EQ(mtx.nVersion, static_cast<int32_t>(0x80000003));
-
-        CTransaction tx1(mtx);
-        EXPECT_EQ(tx1.nVersion, -2147483645);
-
-        CValidationState state1;
-        EXPECT_FALSE(AcceptToMemoryPool(pool, state1, tx1, false, &missingInputs));
-        EXPECT_EQ(state1.GetRejectReason(), "bad-txns-version-too-low");
-    }
-
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-}

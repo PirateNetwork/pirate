@@ -12,7 +12,7 @@
 #include "script/interpreter.h"
 #include "script/serverchecker.h"
 
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 
 #include "komodo_extern_globals.h"
 #include "komodo_structs.h"
@@ -74,6 +74,11 @@ namespace TestEvalNotarisation {
             for (int i=0; i<notary.vin.size(); i++) {
                 CMutableTransaction txIn;
                 txIn.vout.resize(1);
+                // Default-constructed CTxOut::nValue is -1 (its "null" sentinel, see
+                // CTxOut::SetNull()) - harmless under the old C++-only hash computation,
+                // but GetHash() now routes through the Rust digest FFI, which requires a
+                // nonnegative Zatoshis value.
+                txIn.vout[0].nValue = 0;
                 txIn.vout[0].scriptPubKey << VCH(eval.notaries[i*2], 33) << OP_CHECKSIG;
                 notary.vin[i].prevout = COutPoint(txIn.GetHash(), 0);
                 eval.txs[txIn.GetHash()] = CTransaction(txIn);
@@ -205,6 +210,8 @@ TEST(TestEvalNotarisation, testInvalidNotarisationInputNotCheckSig)
         int i = 1;
         CMutableTransaction txIn;
         txIn.vout.resize(1);
+        // See the SetupEval() comment above: default CTxOut::nValue is -1.
+        txIn.vout[0].nValue = 0;
         txIn.vout[0].scriptPubKey << VCH(eval.notaries[i*2], 33) << OP_RETURN;
         notary.vin[i].prevout = COutPoint(txIn.GetHash(), 0);
         eval.txs[txIn.GetHash()] = CTransaction(txIn);

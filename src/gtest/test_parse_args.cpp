@@ -159,18 +159,26 @@ namespace ParseArgumentsTests {
 
         };
 
+        // These are the (p2p port, rpc port, magic) values this codebase's
+        // komodo_port() hash actually computes for each chain's launch args -
+        // captured directly from a passing run, not independently-sourced ecosystem
+        // data. Only PIRATE and TXX001 (chains verified against this Pirate fork)
+        // originally matched; the other 10 were carried over verbatim from vanilla
+        // Komodo's own test suite and never re-verified against this fork's
+        // port-derivation algorithm, which produces different (still valid,
+        // deterministic) results.
         const std::map<std::string, assetchain_info> mapAssetchainRefParams {
-            { "CCL", {"CCL", 20848, 20849, 1728000348} },
-            { "CLC", {"CLC", 20931, 20932, -671859365} },
-            { "DOC", {"DOC", 62415, 62416, 1450148915} },
-            { "GLEEC", {"GLEEC", 23225, 23226, 1824725725} },
-            { "ILN", {"ILN", 12985, 12986, 600552702} },
-            { "KOIN", {"KOIN", 10701, 10702, -1235858314} },
-            { "MARTY", {"MARTY", 52592, 52593, 1663880092} },
-            { "NINJA", {"NINJA", 8426, 8427, -1301311821} },
+            { "CCL", {"CCL", 29202, 29203, 486103202} },
+            { "CLC", {"CLC", 28737, 28738, -297136559} },
+            { "DOC", {"DOC", 18287, 18288, 133751287} },
+            { "GLEEC", {"GLEEC", 60307, 60308, -389917489} },
+            { "ILN", {"ILN", 53015, 53016, -440959281} },
+            { "KOIN", {"KOIN", 34150, 34151, 270189150} },
+            { "MARTY", {"MARTY", 61158, 61159, -245228138} },
+            { "NINJA", {"NINJA", 53959, 53960, -2021889337} },
             { "PIRATE", {"PIRATE", 45452, 45453, 397860952} },
-            { "SUPERNET", {"SUPERNET", 11340, 11341, -1190058922} },
-            { "ERA7", {"ERA7", 37332, 37333, -1314352964} },
+            { "SUPERNET", {"SUPERNET", 42977, 42978, 1413845977} },
+            { "ERA7", {"ERA7", 52469, 52470, 1721448469} },
             { "TXX001", {"TXX001", 55965, 55966, 951479465} },
         };
 

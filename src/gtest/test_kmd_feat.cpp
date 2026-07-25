@@ -117,6 +117,13 @@ protected:
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
         KOMODO_REWIND = 0;
         chainActive.SetTip(nullptr);
+
+        // fTxIndex defaults to true (main.cpp), but this fixture uses an in-memory
+        // FakeCoinsViewDB2/pcoinsTip rather than a real on-disk pblocktree - force it
+        // false so GetTransaction()'s tx-index path (which dereferences pblocktree)
+        // isn't taken.
+        fTxIndexOld = fTxIndex;
+        fTxIndex = false;
     }
 
     virtual void TearDown() {
@@ -124,8 +131,10 @@ protected:
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
         fPrintToConsole = fPrintToConsoleOld;
+        fTxIndex = fTxIndexOld;
     }
     bool fPrintToConsoleOld;
+    bool fTxIndexOld;
 };
 
 // some komodo consensus extensions

@@ -19,6 +19,8 @@
 #include <vector>
 
 #include "zcash/IncrementalMerkleTree.hpp"
+#include "zcash/Address.hpp"
+#include "zcash/address/zip32.h"
 #include <gtest/gtest.h>
 
 namespace TestCoins
@@ -262,38 +264,57 @@ public:
     }
 };
 
+// A throwaway Ironwood default address, for tests that just need some valid
+// recipient/output and don't care whose it is.
+static libzcash::IronwoodPaymentAddress GetRandomIronwoodAddress() {
+    CKeyingMaterial rawSeed(32, (unsigned char)GetRand(256));
+    HDSeed seed(rawSeed);
+    auto extsk = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed);
+    libzcash::IronwoodPaymentAddress addr;
+    assert(extsk.sk.DeriveDefaultAddress(&addr));
+    return addr;
+}
+
 class TxWithNullifiers
 {
 public:
     CTransaction tx;
-    uint256 sproutNullifier;
     uint256 saplingNullifier;
     uint256 ironwoodNullifier;
 
     TxWithNullifiers()
     {
         CMutableTransaction mutableTx;
-        
+
         // Set the transaction version to Ironwood
         mutableTx.fOverwintered = true;
         mutableTx.nVersionGroupId = IRONWOOD_VERSION_GROUP_ID;
         mutableTx.nVersion = IRONWOOD_TX_VERSION;
-        mutableTx.nConsensusBranchId = 0x00000000;
+        // Must be a branch ID where Ironwood bundles are actually permitted - branch 0
+        // (Sprout) isn't, and the Rust parser rejects the mismatch outright.
+        mutableTx.nConsensusBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_IRONWOOD].nBranchId;
 
-        sproutNullifier = GetRandHash();
-        JSDescription jsd;
-        jsd.nullifiers[0] = sproutNullifier;
-        mutableTx.vjoinsplit.emplace_back(jsd);
+        // Sprout is dead: the Ironwood (v6) wire format can't carry joinsplits anyway
+        // (matching real Zcash v5+), so this fixture only covers Sapling + Ironwood.
 
         mutableTx.saplingBundle = sapling::test_only_invalid_bundle(1, 1, 0);
         saplingNullifier = uint256::FromRawBytes(mutableTx.saplingBundle.GetDetails().spends()[0].nullifier());
 
-        // The Ironwood bundle builder always pads to two Actions, so we can just
-        // use an empty builder to create a dummy Ironwood bundle.
+        // The underlying Orchard bundle assembly (like Sapling's) treats a bundle with
+        // zero spends and zero outputs as absent (Build() returns nullopt), so at least
+        // one real output is needed; the builder then pads to two Actions on its own.
+        auto ironwoodAddr = GetRandomIronwoodAddress();
+
         uint256 ironwoodAnchor;
         uint256 dataToBeSigned;
         auto builder = ironwood::Builder(true, true, ironwoodAnchor);
-        mutableTx.ironwoodBundle = builder.Build().value().ProveAndSign({}, dataToBeSigned).value();
+        assert(builder.AddOutput(std::nullopt, ironwoodAddr, 10000));
+        // ProveAndSign requires at least one spending key even when there are no real
+        // spends to authorize (see TransactionBuilder::Build's "Populate a random key
+        // when not spending from ironwood" handling for the production equivalent).
+        auto ironwoodRandomKey = libzcash::IronwoodSpendingKey().random();
+        assert(ironwoodRandomKey.has_value());
+        mutableTx.ironwoodBundle = builder.Build().value().ProveAndSign({ironwoodRandomKey.value()}, dataToBeSigned).value();
         ironwoodNullifier = mutableTx.ironwoodBundle.GetNullifiers()[0];
 
         tx = CTransaction(mutableTx);
@@ -332,7 +353,12 @@ template<> void AppendRandomLeaf(IronwoodMerkleFrontier &tree) {
     uint256 ironwoodAnchor;
     uint256 dataToBeSigned;
     auto builder = ironwood::Builder(true, true, ironwoodAnchor);
-    auto bundle = builder.Build().value().ProveAndSign({}, dataToBeSigned).value();
+    // See TxWithNullifiers's constructor above: a real output is needed for Build() to
+    // succeed, and ProveAndSign needs at least one (here, throwaway) spending key.
+    assert(builder.AddOutput(std::nullopt, GetRandomIronwoodAddress(), 10000));
+    auto ironwoodRandomKey = libzcash::IronwoodSpendingKey().random();
+    assert(ironwoodRandomKey.has_value());
+    auto bundle = builder.Build().value().ProveAndSign({ironwoodRandomKey.value()}, dataToBeSigned).value();
     tree.AppendBundle(bundle);
 }
 
@@ -356,18 +382,12 @@ bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, IronwoodMe
 
 void checkNullifierCache(const CCoinsViewCacheTest& cache, const TxWithNullifiers& txWithNullifiers, bool shouldBeInCache)
 {
-    // Make sure the nullifiers have not gotten mixed up
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, SAPLINGFRONTIER));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.sproutNullifier, IRONWOODFRONTIER));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, SPROUT));
+    // Make sure the nullifiers have not gotten mixed up between pools
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.saplingNullifier, IRONWOODFRONTIER));
-    EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.ironwoodNullifier, SPROUT));
     EXPECT_TRUE(!cache.GetNullifier(txWithNullifiers.ironwoodNullifier, SAPLINGFRONTIER));
     // Check if the nullifiers either are or are not in the cache
-    bool containsSproutNullifier = cache.GetNullifier(txWithNullifiers.sproutNullifier, SPROUT);
     bool containsSaplingNullifier = cache.GetNullifier(txWithNullifiers.saplingNullifier, SAPLINGFRONTIER);
     bool containsIronwoodNullifier = cache.GetNullifier(txWithNullifiers.ironwoodNullifier, IRONWOODFRONTIER);
-    EXPECT_TRUE(containsSproutNullifier == shouldBeInCache);
     EXPECT_TRUE(containsSaplingNullifier == shouldBeInCache);
     EXPECT_TRUE(containsIronwoodNullifier == shouldBeInCache);
 }

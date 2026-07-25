@@ -1,4 +1,4 @@
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 #include "chainparams.h"
 #include "komodo_notary.h"
 
@@ -176,7 +176,9 @@ TEST(TestNotary, KomodoNotaries_S7_KMD)
     chainName = assetchain(""); // set as KMD
 
     EXPECT_EQ( getkmdseason(3484958+1), 8);
-    EXPECT_EQ( getkmdseason(8113400), 8);
+    // dPoW Season 9 was added after this test was written, reusing 8113400 as its
+    // own (final) upper boundary - it's no longer season 8's boundary.
+    EXPECT_EQ( getkmdseason(8113400), 9);
     EXPECT_EQ( getkmdseason(8113400+1), 0);
     int32_t result1 = komodo_notaries(pubkeys, 3484958+1, 0);
     EXPECT_EQ(result1, 64);
@@ -205,7 +207,9 @@ TEST(TestNotary, KomodoNotaries_S7_AS)
     komodo_notaries_uninit();
     chainName = assetchain("MYASSET");
     EXPECT_EQ( getacseason(1688132253+1), 8);
-    EXPECT_EQ( getacseason(1951328000), 8);
+    // dPoW Season 9 was added after this test was written, reusing 1951328000 as its
+    // own (final) upper boundary - it's no longer season 8's boundary.
+    EXPECT_EQ( getacseason(1951328000), 9);
     EXPECT_EQ( getacseason(1951328001), 0);
 
     int32_t result1 = komodo_notaries(pubkeys, 0, 1688132253+1);

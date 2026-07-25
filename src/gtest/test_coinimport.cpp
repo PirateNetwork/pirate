@@ -14,7 +14,7 @@
 #include "script/serverchecker.h"
 #include "txmempool.h"
 
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 
 
 extern Eval* EVAL_TEST;

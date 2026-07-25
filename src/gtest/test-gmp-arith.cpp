@@ -183,12 +183,18 @@ namespace GMPArithTests
             // {std::numeric_limits<int64_t>::max(), 1, std::numeric_limits<int64_t>::max(), 0},
         };
 
+        // fTxIndex defaults to true (main.cpp), but pblocktree isn't initialized yet
+        // at this point in the test - force it false so myGetTransaction takes its
+        // "no transaction index" path instead of dereferencing a null pblocktree.
+        bool fTxIndexOld = fTxIndex;
+        fTxIndex = false;
         for (const TestRewardsParams &testCase : testCasesBeforeHF)
         {
             // myGetTransaction inside CCduration will return 0, so duration will be equal maxseconds
             uint64_t rewards = RewardsCalc(testCase.amount, txid, testCase.APR, 0 /* minseconds */, testCase.duration /* maxseconds */, nStakedDecemberHardforkTimestamp);
             ASSERT_EQ(rewards, testCase.rewards);
         }
+        fTxIndex = fTxIndexOld;
 
         // here we should force myGetTransaction inside CCduration to find given
         // txid via fTxIndex, i.e. create tx index, blockfile with given txid in /tmp first.

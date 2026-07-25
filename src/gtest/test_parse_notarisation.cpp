@@ -3,7 +3,7 @@
 #include "cc/eval.h"
 #include "core_io.h"
 #include "key.h"
-#include "testutils.h"
+#include "gtest/gtestutils.h"
 #include "assetchain.h"
 #include "komodo_utils.h"
 #include "komodo_notary.h"
@@ -590,6 +590,12 @@ TEST(TestParseNotarisation, DISABLED_OldVsNew)
 
 TEST(TestParseNotarisation, FilePaths)
 {
+    // chainName is a global other tests mutate (e.g. ParseArgumentsTests.ParseCommandLineArgs
+    // leaves it set to whichever assetchain it last processed) and don't reset - this test's
+    // expected config path assumes plain KMD, so reset explicitly rather than depend on
+    // whatever ran before it in the same process.
+    chainName = assetchain();
+
 #if defined(__APPLE__)
     std::string komodo_conf = "Komodo.conf";
 #else

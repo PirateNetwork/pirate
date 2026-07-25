@@ -6,6 +6,11 @@
 #include "main.h"
 #include "wallet/wallet.h"
 #include "consensus/validation.h"
+#include "coincontrol.h"
+#include "utilmoneystr.h"
+#include "cc/CCinclude.h"
+#include "script/cc.h"
+#include <cryptoconditions.h>
 
 class TestWallet;
 
@@ -190,10 +195,144 @@ public:
         LOCK(cs_wallet);
         bool firstRunRet;
         DBErrors err = LoadWallet(firstRunRet);
+        key.MakeNewKey(true);
+        AddKey(key);
         RegisterValidationInterface(this);
     }
 
-    ~TestWallet() {}
+    /***
+     * A wallet for testing, wrapping an already-existing key
+     * @param in a key that already exists
+     * @param name a name for the wallet
+     */
+    TestWallet(const CKey& in, const std::string& name)
+        : CWallet( name + ".dat"), key(in)
+    {
+        LOCK(cs_wallet);
+        bool firstRunRet;
+        DBErrors err = LoadWallet(firstRunRet);
+        AddKey(key);
+        RegisterValidationInterface(this);
+    }
+
+    ~TestWallet() { UnregisterValidationInterface(this); }
+
+    /*** @returns the public key */
+    CPubKey GetPubKey() const { return key.GetPubKey(); }
+
+    /*** @returns the private key */
+    CKey GetPrivKey() const { return key; }
+
+    /*** Sign a typical transaction */
+    std::vector<unsigned char> Sign(uint256 hash, unsigned char hashType) {
+        std::vector<unsigned char> retVal;
+        key.Sign(hash, retVal);
+        retVal.push_back(hashType);
+        return retVal;
+    }
+
+    /*** Sign a cryptocondition */
+    std::vector<unsigned char> Sign(CC* cc, uint256 hash) {
+        cc_signTreeSecp256k1Msg32(cc, key.begin(), hash.begin());
+        return CCSigVec(cc);
+    }
+
+    using CWallet::CreateTransaction;
+    using CWallet::CommitTransaction;
+
+    /***
+     * Create a transaction, do not place in mempool
+     * @note throws std::logic_error if there was a problem
+     */
+    TransactionInProcess CreateSpendTransaction(std::shared_ptr<TestWallet> to,
+            CAmount amount, CAmount fee = 0, bool commit = true)
+    {
+        CAmount curBalance = this->GetBalance();
+        if (amount <= 0)
+            throw std::logic_error("Invalid amount");
+        if (amount > curBalance)
+            throw std::logic_error("Insufficient funds");
+
+        std::vector<CRecipient> vecSend;
+        bool fSubtractFeeFromAmount = false;
+        CRecipient recipient = {GetScriptForDestination(to->GetPubKey()), amount, fSubtractFeeFromAmount};
+        vecSend.push_back(recipient);
+        CAmount nFeeRequired = 0;
+        std::string strError;
+        int nChangePosRet = -1;
+        TransactionInProcess retVal(this);
+        if (!CWallet::CreateTransaction(vecSend, retVal.transaction, retVal.reserveKey, nFeeRequired,
+                nChangePosRet, strError, fee))
+        {
+            if (!fSubtractFeeFromAmount && amount + nFeeRequired > GetBalance())
+                strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!",
+                        FormatMoney(nFeeRequired));
+            throw std::logic_error(strError);
+        }
+
+        if (commit && !CWallet::CommitTransaction(retVal.transaction, retVal.reserveKey))
+        {
+            throw std::logic_error("Unable to commit transaction");
+        }
+
+        return retVal;
+    }
+
+    /***
+     * Create a transaction spending a vout that is not yet in the wallet
+     * @note throws std::logic_error if there was a problem
+     */
+    TransactionInProcess CreateSpendTransaction(std::shared_ptr<TestWallet> to,
+            CAmount amount, CAmount fee, CCoinControl& coinControl)
+    {
+        std::vector<COutPoint> availableTxs;
+        coinControl.ListSelected(availableTxs);
+        CTransaction tx;
+        uint256 hashBlock;
+        if (!myGetTransaction(availableTxs[0].hash, tx, hashBlock))
+            throw std::logic_error("Requested tx not found");
+
+        CAmount curBalance = tx.vout[availableTxs[0].n].nValue;
+        if (amount <= 0)
+            throw std::logic_error("Invalid amount");
+        if (amount > curBalance)
+            throw std::logic_error("Insufficient funds");
+
+        std::vector<CRecipient> vecSend;
+        bool fSubtractFeeFromAmount = false;
+        CRecipient recipient = {GetScriptForDestination(to->GetPubKey()), amount, fSubtractFeeFromAmount};
+        vecSend.push_back(recipient);
+        CAmount nFeeRequired = 0;
+        std::string strError;
+        int nChangePosRet = -1;
+        TransactionInProcess retVal(this);
+        if (!CWallet::CreateTransaction(vecSend, retVal.transaction, retVal.reserveKey, nFeeRequired,
+                nChangePosRet, strError, fee, &coinControl))
+        {
+            if (!fSubtractFeeFromAmount && amount + nFeeRequired > curBalance)
+                strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!",
+                        FormatMoney(nFeeRequired));
+            throw std::logic_error(strError);
+        }
+        return retVal;
+    }
+
+    /*** Call after CreateTransaction unless you want to abort. Reports mempool rejection via state. */
+    bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey, CValidationState& state);
+
+    /*** Transfer to another user (sends to mempool) */
+    CTransaction Transfer(std::shared_ptr<TestWallet> to, CAmount amount, CAmount fee = 0)
+    {
+        TransactionInProcess tip = CreateSpendTransaction(to, amount, fee);
+        if (!CWallet::CommitTransaction(tip.transaction, tip.reserveKey))
+            throw std::logic_error("Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
+        return tip.transaction;
+    }
+
+private:
+    CKey key;
+
+public:
 
     bool EncryptSerializedWalletObjects(
         const CKeyingMaterial &vchSecret,
