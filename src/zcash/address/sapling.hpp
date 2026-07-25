@@ -163,9 +163,10 @@ public:
     // Returns true on success, false if the FFI call fails.
     bool DeriveIVK(SaplingIncomingViewingKey* ivk) const;
 
-    // Derives the default payment address from the FVK into *addr.
-    // Returns true on success, false if the FFI call fails.
-    bool DeriveDefaultAddress(SaplingPaymentAddress* addr) const;
+    // NOTE: There is deliberately no DeriveDefaultAddress() here. This 96-byte FVK
+    // (ak/nk/ovk only) doesn't carry dk, so it can't derive the ZIP 32-canonical default
+    // diversifier (which requires the dk-keyed FF1 permutation). Use
+    // SaplingExtendedFullViewingKey::DefaultAddress(), which has the real dk.
 
     // Derives the address for a given diversifier from this full viewing key (external chain).
     // Writes result to *addr. Returns true on success, false if the FFI call fails.
@@ -219,13 +220,11 @@ public:
     // Returns true on success, false if ask or nsk are not canonical field elements.
     bool DeriveFVK(SaplingFullViewingKey* fvk) const;
 
-    // Derives the default external payment address from this expanded spending key into *addr.
-    // Follows expsk → FVK → IVK (External) → first-valid-raw-diversifier.
-    // Returns true on success, false if ask or nsk are not canonical field elements.
-    bool DeriveDefaultAddress(SaplingPaymentAddress* addr) const;
-
-    // NOTE: DeriveDefaultAddressInternal has been removed. Internal-scope derivations
-    // require the real dk and must use SaplingExtendedSpendingKey::ToXFVK().<method>.
+    // NOTE: There is deliberately no DeriveDefaultAddress() here (nor an Internal-scope
+    // variant). This 96-byte expsk (ask/nsk/ovk only) doesn't carry dk, so it can't derive
+    // the ZIP 32-canonical default diversifier, which requires the dk-keyed FF1 permutation.
+    // Use SaplingExtendedSpendingKey::DefaultAddress() (or ToXFVK().<method>() for
+    // internal/change scope), both of which carry the real dk.
 
     friend inline bool operator==(const SaplingExpandedSpendingKey& a, const SaplingExpandedSpendingKey& b)
     {

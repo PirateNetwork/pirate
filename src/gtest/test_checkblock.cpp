@@ -127,10 +127,16 @@ protected:
         mtx.vout[0].nValue = 0;
 
         // Give it a a vout
+        //
+        // Not using GetBlockSubsidy(1, ...) here: with no chain symbol configured
+        // (as in this gtest binary), chainName.isKMD() is true, so GetBlockSubsidy
+        // takes Komodo mainnet's literal height-1 "ICO allocation" branch (100,000,000
+        // coins) - a value that exceeds the vendored Rust crate's hardcoded
+        // MAX_MONEY (21,000,000 * COIN) and makes CTransaction construction throw.
+        // A real Pirate daemon always configures a non-empty chain symbol, so this
+        // branch never fires in production; the test only needs some valid reward.
         auto rewardScript = scriptPubKey;
-        mtx.vout.push_back(CTxOut(
-                    GetBlockSubsidy(1, Params().GetConsensus()),
-                    rewardScript));
+        mtx.vout.push_back(CTxOut(10 * COIN, rewardScript));
 
         return mtx;
     }
@@ -204,10 +210,9 @@ TEST_F(ContextualCheckBlockTest, BadCoinbaseHeight) {
     EXPECT_TRUE(ContextualCheckBlock(0, block, state, NULL));
 
 
-    // Give the transaction a vout
-    mtx.vout.push_back(CTxOut(
-                GetBlockSubsidy(1, Params().GetConsensus()),
-                scriptPubKey));
+    // Give the transaction a vout. See the comment in GetFirstBlockCoinbaseTx()
+    // for why GetBlockSubsidy(1, ...) isn't used here.
+    mtx.vout.push_back(CTxOut(10 * COIN, scriptPubKey));
 
     // Treating block as non-genesis should fail
     CTransaction tx2 {mtx};

@@ -12,6 +12,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+using libzcash::SaplingIncomingViewingKey;
+using libzcash::SaplingPaymentAddress;
+
 static const std::string tSecretRegtest = "UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1";
 
 class MockCValidationState : public CValidationState {
@@ -92,12 +95,18 @@ TEST(TransactionBuilder, Invoke)
     SaplingPaymentAddress pk;
     ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
-    libzcash::SaplingExtendedSpendingKey extsk;
+    // depth/parentFVKTag/childIndex are plain POD fields with no default member
+    // initializer; leaving them uninitialized produces a garbage childIndex that
+    // the Rust deserializer now rejects ("Unsupported child index in encoding").
+    // Only .expsk matters for ConvertRawSaplingSpend's signing authority, so
+    // zero the rest to a valid (masterlike) shape.
+    libzcash::SaplingExtendedSpendingKey extsk = {};
     extsk.expsk = expsk;
 
     // Create a shielding transaction from transparent to Sapling
     // 0.0005 t-ARRR in, 0.0004 z-ARRR out, 0.0001 t-ARRR fee
     auto builder1 = TransactionBuilder(consensusParams, 1, &keystore);
+    builder1.InitializeSapling(uint256());
     builder1.AddTransparentInput(COutPoint(coinbaseTx.GetHash(),0), scriptPubKey, 50000);
     builder1.AddSaplingOutputRaw(pk, 40000, {});
     builder1.ConvertRawSaplingOutput(fvk_from.ovk);
@@ -109,7 +118,8 @@ TEST(TransactionBuilder, Invoke)
     EXPECT_EQ(tx1.vout.size(), 0);
     EXPECT_EQ(tx1.vjoinsplit.size(), 0);
     EXPECT_EQ(tx1.GetSaplingSpendsCount(), 0);
-    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 1);
+    // MIN_SHIELDED_OUTPUTS pads a bundle with >=1 real spend/output to at least 2 outputs.
+    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 2);
     EXPECT_EQ(tx1.GetValueBalanceSapling(), -40000);
 
     CValidationState state;
@@ -135,6 +145,14 @@ TEST(TransactionBuilder, Invoke)
     // Update Coins
     UpdateCoins(tx1, view, 1);
 
+    // UpdateCoins doesn't push anchors on its own (see main.cpp's ConnectBlock,
+    // which does this separately) - without this, ContextualCheckShieldedInputs
+    // can never recognize an anchor computed from a spend built on tx1's outputs.
+    if (tx1.GetSaplingBundle().IsPresent()) {
+        saplingFrontier.AppendBundle(tx1.GetSaplingBundle());
+        view.PushAnchor(saplingFrontier);
+    }
+
     // Update the wallets with the new transaction
     if (tx1.GetSaplingBundle().IsPresent()) {
         saplingWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
@@ -151,20 +169,30 @@ TEST(TransactionBuilder, Invoke)
         }
     }
 
-    // Prepare to spend the note that was just created
+    // Prepare to spend the note that was just created. The Sapling builder pads to a
+    // privacy-floor minimum of 2 outputs (MIN_SHIELDED_OUTPUTS) and shuffles real and
+    // dummy outputs together, so the real one isn't necessarily at index 0 - find it by
+    // trial decryption instead.
     auto vOutputs = tx1.GetSaplingOutputs();
-    auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
+    int realOutputIndex = -1;
+    std::optional<libzcash::SaplingNotePlaintext> maybe_pt;
+    for (int j = 0; j < vOutputs.size(); j++) {
+        maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], ivk);
+        if (maybe_pt) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+    auto cmu = uint256::FromRawBytes(vOutputs[realOutputIndex].cmu());
 
-    // Use Rust decryption
-    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ivk);
-    ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.value().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);
     auto note = maybe_note.value();
 
     // Get Merkle path for the note
     libzcash::MerklePath saplingMerklePath;
-    EXPECT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), 0, saplingMerklePath));
+    EXPECT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), realOutputIndex, saplingMerklePath));
 
     // Get the Merkle root anchor for the note
     uint256 anchor;
@@ -173,10 +201,11 @@ TEST(TransactionBuilder, Invoke)
     // Create a Sapling-only transaction
     // 0.0004 z-ARRR in, 0.00025 z-ARRR out, 0.0001 t-ARRR fee, 0.00005 z-ARRR change
     auto builder2 = TransactionBuilder(consensusParams, 2);
-    EXPECT_TRUE(builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor));  
+    builder2.InitializeSapling(anchor);
+    EXPECT_TRUE(builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor));
 
     // Check that trying to add a different anchor fails
-    EXPECT_FALSE(builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, uint256()));
+    EXPECT_FALSE(builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, uint256()));
 
     // Convert the Sapling spend with the extended spending key
     EXPECT_TRUE(builder2.ConvertRawSaplingSpend(extsk));    
@@ -309,13 +338,19 @@ TEST(TransactionBuilder, FailsWithNegativeChange)
     SaplingPaymentAddress pk;
     ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
-    libzcash::SaplingExtendedSpendingKey extsk;
+    // depth/parentFVKTag/childIndex are plain POD fields with no default member
+    // initializer; leaving them uninitialized produces a garbage childIndex that
+    // the Rust deserializer now rejects ("Unsupported child index in encoding").
+    // Only .expsk matters for ConvertRawSaplingSpend's signing authority, so
+    // zero the rest to a valid (masterlike) shape.
+    libzcash::SaplingExtendedSpendingKey extsk = {};
     extsk.expsk = expsk;
 
     // Create a shielding transaction from transparent to Sapling
     // Fail if there is only a Sapling output
     // 0.0004 z-ARRR out, 0.0001 t-ARRR fee
     auto builder1 = TransactionBuilder(consensusParams, 3, &keystore);
+    builder1.InitializeSapling(uint256());
     builder1.AddSaplingOutputRaw(pk, 40000, {});
     builder1.ConvertRawSaplingOutput(fvk_from.ovk);
     auto maybe_tx1 = builder1.Build();
@@ -325,6 +360,7 @@ TEST(TransactionBuilder, FailsWithNegativeChange)
     // Fail if Sapling output > Transparent Input
     // 0.00025 z-ARRR, 0.0004 z-ARRR out, 0.0001 t-ARRR fee
     auto builder2 = TransactionBuilder(consensusParams, 3, &keystore);
+    builder2.InitializeSapling(uint256());
     builder2.AddTransparentInput(COutPoint(coinbaseTx1.GetHash(),0), scriptPubKey, 25000);
     builder2.AddSaplingOutputRaw(pk, 40000, {});
     builder2.ConvertRawSaplingOutput(fvk_from.ovk);
@@ -335,6 +371,7 @@ TEST(TransactionBuilder, FailsWithNegativeChange)
     // Succeed with valid inputs and outputs
     // 0.0005 z-ARRR, 0.0004 z-ARRR out, 0.0001 t-ARRR fee
     auto builder3 = TransactionBuilder(consensusParams, 3, &keystore);
+    builder3.InitializeSapling(uint256());
     builder3.AddTransparentInput(COutPoint(coinbaseTx1.GetHash(),0), scriptPubKey, 25000);
     builder3.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 25000);
     builder3.AddSaplingOutputRaw(pk, 40000, {});
@@ -427,7 +464,12 @@ TEST(TransactionBuilder, ChangeOutput)
     SaplingPaymentAddress change_pk;
     ASSERT_TRUE(ivk.DeriveAddress(&change_pk, change_d));
 
-    libzcash::SaplingExtendedSpendingKey extsk;
+    // depth/parentFVKTag/childIndex are plain POD fields with no default member
+    // initializer; leaving them uninitialized produces a garbage childIndex that
+    // the Rust deserializer now rejects ("Unsupported child index in encoding").
+    // Only .expsk matters for ConvertRawSaplingSpend's signing authority, so
+    // zero the rest to a valid (masterlike) shape.
+    libzcash::SaplingExtendedSpendingKey extsk = {};
     extsk.expsk = expsk;
 
     // No change address and no Sapling spends
@@ -441,6 +483,7 @@ TEST(TransactionBuilder, ChangeOutput)
     // No Fee Shileding Transaction
     // 0.0005 t-ARRR in, 0.0005 z-ARRR out
     auto builder1 = TransactionBuilder(consensusParams, 3, &keystore);
+    builder1.InitializeSapling(uint256());
     builder1.AddTransparentInput(COutPoint(coinbaseTx1.GetHash(),0), scriptPubKey, 50000);
     builder1.AddSaplingOutputRaw(pk, 50000, {});
     builder1.SetFee(0);
@@ -453,9 +496,10 @@ TEST(TransactionBuilder, ChangeOutput)
     EXPECT_EQ(tx1.vout.size(), 0);
     EXPECT_EQ(tx1.vjoinsplit.size(), 0);
     EXPECT_EQ(tx1.GetSaplingSpendsCount(), 0);
-    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 1);
+    // MIN_SHIELDED_OUTPUTS pads a bundle with >=1 real spend/output to at least 2 outputs.
+    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 2);
     EXPECT_EQ(tx1.GetValueBalanceSapling(), -50000);
-    
+
     CValidationState state;
 
     // Check that the transaction is valid without proof verification
@@ -495,20 +539,30 @@ TEST(TransactionBuilder, ChangeOutput)
         }
     }
 
-    // Prepare to spend the note that was just created
+    // Prepare to spend the note that was just created. The Sapling builder pads to a
+    // privacy-floor minimum of 2 outputs (MIN_SHIELDED_OUTPUTS) and shuffles real and
+    // dummy outputs together, so the real one isn't necessarily at index 0 - find it by
+    // trial decryption instead.
     auto vOutputs = tx1.GetSaplingOutputs();
-    auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
+    int realOutputIndex = -1;
+    std::optional<libzcash::SaplingNotePlaintext> maybe_pt;
+    for (int j = 0; j < vOutputs.size(); j++) {
+        maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], ivk);
+        if (maybe_pt) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+    auto cmu = uint256::FromRawBytes(vOutputs[realOutputIndex].cmu());
 
-    // Use Rust decryption
-    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ivk);
-    ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.value().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);
     auto note = maybe_note.value();
 
     // Get Merkle path for the note
     libzcash::MerklePath saplingMerklePath;
-    EXPECT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), 0, saplingMerklePath));
+    EXPECT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), realOutputIndex, saplingMerklePath));
 
     // Get the Merkle root anchor for the note
     uint256 anchor;
@@ -520,9 +574,10 @@ TEST(TransactionBuilder, ChangeOutput)
         // Create a Sapling-only transaction
         // 0.0005 t-ARRR in, 0.0005 z-ARRR in, 0.0006 z-ARRR out, 0.0001 t-ARRR fee, 0.00003 z-ARRR change
         auto builder2 = TransactionBuilder(consensusParams, 2,&keystore);
+        builder2.InitializeSapling(anchor);
         builder2.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 50000);
-        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor);  
-        builder2.ConvertRawSaplingSpend(extsk);    
+        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor);
+        builder2.ConvertRawSaplingSpend(extsk);
 
         // Add a Sapling output
         builder2.AddSaplingOutputRaw(pk, 60000, {});
@@ -546,9 +601,10 @@ TEST(TransactionBuilder, ChangeOutput)
         // Create a Sapling-only transaction
         // 0.0005 t-ARRR in, 0.0005 z-ARRR in, 0.0006 z-ARRR out, 0.0001 t-ARRR fee, 0.00003 t-ARRR change
         auto builder2 = TransactionBuilder(consensusParams, 2, &keystore);
+        builder2.InitializeSapling(anchor);
         builder2.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 50000);
-        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor);  
-        builder2.ConvertRawSaplingSpend(extsk);    
+        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor);
+        builder2.ConvertRawSaplingSpend(extsk);
 
         // Add a Sapling output
         builder2.AddSaplingOutputRaw(pk, 60000, {});
@@ -575,9 +631,10 @@ TEST(TransactionBuilder, ChangeOutput)
         // Create a Sapling-only transaction
         // 0.0005 t-ARRR in, 0.0005 z-ARRR in, 0.0006 z-ARRR out, 0.0001 t-ARRR fee, 0.00003 z-ARRR change
         auto builder2 = TransactionBuilder(consensusParams, 2, &keystore);
+        builder2.InitializeSapling(anchor);
         builder2.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 50000);
-        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor);  
-        builder2.ConvertRawSaplingSpend(extsk);    
+        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor);
+        builder2.ConvertRawSaplingSpend(extsk);
 
         // Add a Sapling output
         builder2.AddSaplingOutputRaw(pk, 60000, {});
@@ -683,12 +740,18 @@ TEST(TransactionBuilder, SetFee)
     SaplingPaymentAddress change_pk;
     ASSERT_TRUE(ivk.DeriveAddress(&change_pk, change_d));
 
-    libzcash::SaplingExtendedSpendingKey extsk;
+    // depth/parentFVKTag/childIndex are plain POD fields with no default member
+    // initializer; leaving them uninitialized produces a garbage childIndex that
+    // the Rust deserializer now rejects ("Unsupported child index in encoding").
+    // Only .expsk matters for ConvertRawSaplingSpend's signing authority, so
+    // zero the rest to a valid (masterlike) shape.
+    libzcash::SaplingExtendedSpendingKey extsk = {};
     extsk.expsk = expsk;
 
     // No Fee Shileding Transaction
     // 0.0005 t-ARRR in, 0.0005 z-ARRR out
     auto builder1 = TransactionBuilder(consensusParams, 3, &keystore);
+    builder1.InitializeSapling(uint256());
     builder1.AddTransparentInput(COutPoint(coinbaseTx1.GetHash(),0), scriptPubKey, 50000);
     builder1.AddSaplingOutputRaw(pk, 50000, {});
     builder1.SetFee(0);
@@ -701,7 +764,8 @@ TEST(TransactionBuilder, SetFee)
     EXPECT_EQ(tx1.vout.size(), 0);
     EXPECT_EQ(tx1.vjoinsplit.size(), 0);
     EXPECT_EQ(tx1.GetSaplingSpendsCount(), 0);
-    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 1);
+    // MIN_SHIELDED_OUTPUTS pads a bundle with >=1 real spend/output to at least 2 outputs.
+    EXPECT_EQ(tx1.GetSaplingOutputsCount(), 2);
     EXPECT_EQ(tx1.GetValueBalanceSapling(), -50000);
     
     CValidationState state;
@@ -744,20 +808,30 @@ TEST(TransactionBuilder, SetFee)
         }
     }
 
-    // Prepare to spend the note that was just created
+    // Prepare to spend the note that was just created. The Sapling builder pads to a
+    // privacy-floor minimum of 2 outputs (MIN_SHIELDED_OUTPUTS) and shuffles real and
+    // dummy outputs together, so the real one isn't necessarily at index 0 - find it by
+    // trial decryption instead.
     auto vOutputs = tx1.GetSaplingOutputs();
-    auto cmu = uint256::FromRawBytes(vOutputs[0].cmu());
+    int realOutputIndex = -1;
+    std::optional<libzcash::SaplingNotePlaintext> maybe_pt;
+    for (int j = 0; j < vOutputs.size(); j++) {
+        maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], ivk);
+        if (maybe_pt) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+    auto cmu = uint256::FromRawBytes(vOutputs[realOutputIndex].cmu());
 
-    // Use Rust decryption
-    auto maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[0], ivk);
-    ASSERT_EQ(static_cast<bool>(maybe_pt), true);
     auto maybe_note = maybe_pt.value().note(ivk);
     ASSERT_EQ(static_cast<bool>(maybe_note), true);
     auto note = maybe_note.value();
 
     // Get Merkle path for the note
     libzcash::MerklePath saplingMerklePath;
-    EXPECT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), 0, saplingMerklePath));
+    EXPECT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), realOutputIndex, saplingMerklePath));
 
     // Get the Merkle root anchor for the note
     uint256 anchor;
@@ -769,9 +843,10 @@ TEST(TransactionBuilder, SetFee)
         // Create a Sapling-only transaction
         // 0.0005 t-ARRR in, 0.0005 z-ARRR in, 0.0006 z-ARRR out, 0.0001 t-ARRR fee, 0.00003 z-ARRR change
         auto builder2 = TransactionBuilder(consensusParams, 2,&keystore);
+        builder2.InitializeSapling(anchor);
         builder2.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 50000);
-        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor);  
-        builder2.ConvertRawSaplingSpend(extsk);    
+        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor);
+        builder2.ConvertRawSaplingSpend(extsk);
 
         // Add a Sapling output
         builder2.AddSaplingOutputRaw(pk, 60000, {});
@@ -795,9 +870,10 @@ TEST(TransactionBuilder, SetFee)
         // Create a Sapling-only transaction
         // 0.0005 t-ARRR in, 0.0005 z-ARRR in, 0.0006 z-ARRR out, 0.0002 t-ARRR fee, 0.00002 z-ARRR change
         auto builder2 = TransactionBuilder(consensusParams, 2,&keystore);
+        builder2.InitializeSapling(anchor);
         builder2.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 50000);
-        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor);  
-        builder2.ConvertRawSaplingSpend(extsk);    
+        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor);
+        builder2.ConvertRawSaplingSpend(extsk);
 
         // Add a Sapling output
         builder2.AddSaplingOutputRaw(pk, 60000, {});
@@ -823,9 +899,10 @@ TEST(TransactionBuilder, SetFee)
         // Create a Sapling-only transaction
         // 0.0005 t-ARRR in, 0.0005 z-ARRR in, 0.0006 z-ARRR out, 0.0005 t-ARRR fee
         auto builder2 = TransactionBuilder(consensusParams, 2,&keystore);
+        builder2.InitializeSapling(anchor);
         builder2.AddTransparentInput(COutPoint(coinbaseTx2.GetHash(),0), scriptPubKey, 50000);
-        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), 0),pk , note.value(), note.rcm(), saplingMerklePath, anchor);  
-        builder2.ConvertRawSaplingSpend(extsk);    
+        builder2.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex),pk , note.value(), note.rcm(), saplingMerklePath, anchor);
+        builder2.ConvertRawSaplingSpend(extsk);
 
         // Add a Sapling output
         builder2.AddSaplingOutputRaw(pk, 60000, {});
@@ -853,8 +930,13 @@ TEST(TransactionBuilder, CheckSaplingTxVersion)
 
     auto sk = libzcash::SaplingSpendingKey::random();
     auto expsk = sk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
+    libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     libzcash::SaplingPaymentAddress pk;
-    expsk.DeriveDefaultAddress(&pk);
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
 
     // Cannot add Sapling outputs to a non-Sapling transaction
     auto builder = TransactionBuilder(consensusParams, 1);

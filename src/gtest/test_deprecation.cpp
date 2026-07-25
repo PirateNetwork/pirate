@@ -131,7 +131,12 @@ TEST_F(DeprecationTest, AlertNotify) {
     EnforceNodeDeprecation(DEPRECATION_HEIGHT - DEPRECATION_WARN_LIMIT, false, false);
 
     std::vector<std::string> r = read_lines(temp);
-    EXPECT_EQ(r.size(), 1u);
+
+    // CAlert::Notify only actually runs the -alertnotify command when built with
+    // ENABLE_SYSTEM_COMMAND (off in this build, and not exposed by configure at
+    // all); otherwise it just logs and returns, so the file is never written.
+#ifdef ENABLE_SYSTEM_COMMAND
+    ASSERT_EQ(r.size(), 1u);
 
     // -alertnotify restricts the message to safe characters.
     auto expectedMsg = strprintf(
@@ -144,6 +149,9 @@ TEST_F(DeprecationTest, AlertNotify) {
     EXPECT_EQ(r[0], expectedMsg);
 #else
     EXPECT_EQ(r[0], strprintf("'%s' ", expectedMsg));
+#endif
+#else
+    EXPECT_EQ(r.size(), 0u);
 #endif
     boost::filesystem::remove(temp);
 }

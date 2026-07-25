@@ -91,67 +91,6 @@ pub fn fvk_to_ivk_internal(fvk: &[u8; 96], out: &mut [u8; 32]) -> bool {
 
 // ── FVK → Address ───────────────────────────────────────────────────────────
 
-/// Scans raw 11-byte diversifiers starting from `[0u8; 11]` (little-endian) until one
-/// produces a valid Jubjub point and a payment address for the given IVK.
-///
-/// This treats index bytes **directly** as diversifier bytes (no dk PRF mapping),
-/// matching the same convention as `ivk_to_address_from_index`.
-/// `dfvk.default_address()` / `dfvk.change_address()` must NOT be used here
-/// because they apply a `DiversifierKey` FF1-AES-256 PRF to map indices to
-/// diversifiers — with a zeroed dk that produces results entirely inconsistent
-/// with the real-dk path used by the legacy `SaplingExtendedFullViewingKey::DefaultAddress()`.
-fn ivk_default_address(ivk: &SaplingIvk, out: &mut [u8; 43]) -> bool {
-    let mut d = [0u8; 11];
-    loop {
-        let diversifier = Diversifier(d);
-        if diversifier.g_d().is_some() {
-            if let Some(addr) = ivk.to_payment_address(diversifier) {
-                *out = addr.to_bytes();
-                return true;
-            }
-        }
-        // Increment d as a little-endian 88-bit counter
-        let mut carry = true;
-        for byte in d.iter_mut() {
-            if carry {
-                let (v, c) = byte.overflowing_add(1);
-                *byte = v;
-                carry = c;
-            } else {
-                break;
-            }
-        }
-        if carry {
-            return false; // Exhausted the full 2^88 diversifier space
-        }
-    }
-}
-
-/// Derives the default external payment address from a 96-byte Sapling FVK.
-/// Follows the FVK → IVK (External) → first-valid-raw-diversifier path,
-/// consistent with `ivk_to_address_from_index`.
-/// Returns false if the FVK bytes are invalid.
-pub fn fvk_to_default_address(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool {
-    match dfvk_from_fvk(fvk) {
-        Some(dfvk) => ivk_default_address(&dfvk.to_ivk(Scope::External), out),
-        None => false,
-    }
-}
-
-/// Derives the default internal payment address from a 96-byte Sapling FVK.
-/// Follows the FVK → IVK (Internal) → first-valid-raw-diversifier path.
-/// NOTE: This function uses a zeroed dk, so the internal address shares the same
-/// diversifier bytes as the external address (only pk_d differs). For a visually
-/// distinct change address that uses the proper ZIP 32 internal dk derivation,
-/// use `dfvk_to_change_address` instead (which requires the full 128-byte DFVK).
-/// Returns false if the FVK bytes are invalid.
-pub fn fvk_to_default_address_internal(fvk: &[u8; 96], out: &mut [u8; 43]) -> bool {
-    match dfvk_from_fvk(fvk) {
-        Some(dfvk) => ivk_default_address(&dfvk.to_ivk(Scope::Internal), out),
-        None => false,
-    }
-}
-
 /// Derives the default internal (change) payment address from a 128-byte Sapling DFVK
 /// encoding: [fvk(96) || dk(32)].
 ///
@@ -387,40 +326,6 @@ pub fn expsk_to_fvk(expsk: &[u8; 96], out: &mut [u8; 96]) -> bool {
             out[32..64].copy_from_slice(&fvk.vk.nk.0.to_bytes());
             out[64..].copy_from_slice(&fvk.ovk.0);
             true
-        }
-        Err(_) => false,
-    }
-}
-
-/// Derives the default external payment address from a 96-byte Sapling expanded spending key.
-/// Follows the expsk → FVK → IVK (External) → first-valid-raw-diversifier path,
-/// consistent with `fvk_to_default_address`.
-/// Returns false if the expsk bytes are invalid.
-pub fn expsk_to_default_address(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool {
-    match ExpandedSpendingKey::from_bytes(expsk) {
-        Ok(expsk_key) => {
-            let fvk = FullViewingKey::from_expanded_spending_key(&expsk_key);
-            match dfvk_from_fvk(&fvk.to_bytes()) {
-                Some(dfvk) => ivk_default_address(&dfvk.to_ivk(Scope::External), out),
-                None => false,
-            }
-        }
-        Err(_) => false,
-    }
-}
-
-/// Derives the default internal payment address from a 96-byte Sapling expanded spending key.
-/// Follows the expsk → FVK → IVK (Internal) → first-valid-raw-diversifier path,
-/// consistent with `fvk_to_default_address_internal`.
-/// Returns false if the expsk bytes are invalid.
-pub fn expsk_to_default_address_internal(expsk: &[u8; 96], out: &mut [u8; 43]) -> bool {
-    match ExpandedSpendingKey::from_bytes(expsk) {
-        Ok(expsk_key) => {
-            let fvk = FullViewingKey::from_expanded_spending_key(&expsk_key);
-            match dfvk_from_fvk(&fvk.to_bytes()) {
-                Some(dfvk) => ivk_default_address(&dfvk.to_ivk(Scope::Internal), out),
-                None => false,
-            }
         }
         Err(_) => false,
     }

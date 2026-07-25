@@ -37,16 +37,17 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
     // Now this call succeeds
     auto address = wallet.GenerateNewSaplingZKey();
 
-    // wallet should have one key
+    // wallet should have one key, registered under both its external (receiving)
+    // and internal (change) default addresses - see AddSaplingExtendedFullViewingKey.
     wallet.GetSaplingPaymentAddresses(addrs);
-    ASSERT_EQ(1, addrs.size());
+    ASSERT_EQ(2, addrs.size());
 
     // verify wallet has incoming viewing key for the address
     ASSERT_TRUE(wallet.HaveSaplingIncomingViewingKey(address));
 
     // manually add new spending key to wallet
     auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
-    auto sk = m.Derive(0);
+    auto sk = m.Derive(0 | HARDENED_KEY_LIMIT);
     ASSERT_TRUE(wallet.AddSaplingZKey(sk));
 
     // verify wallet did add it
@@ -58,9 +59,10 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
     wallet.GetSaplingSpendingKey(extfvk, keyOut);
     ASSERT_EQ(sk, keyOut);
 
-    // verify there are two keys
+    // verify there are two keys, each registered under both its external and
+    // internal default addresses (4 addresses total)
     wallet.GetSaplingPaymentAddresses(addrs);
-    EXPECT_EQ(2, addrs.size());
+    EXPECT_EQ(4, addrs.size());
     EXPECT_EQ(1, addrs.count(address));
     EXPECT_EQ(1, addrs.count(sk.DefaultAddress()));
 
@@ -89,7 +91,7 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
     EXPECT_EQ(wallet.nTimeFirstKey, 1);
 
     // Load a third key into the wallet
-    auto sk2 = m.Derive(1);
+    auto sk2 = m.Derive(1 | HARDENED_KEY_LIMIT);
     ASSERT_TRUE(wallet.LoadSaplingZKey(sk2));
 
     // attach metadata to this third key
@@ -142,9 +144,10 @@ TEST(wallet_zkeys_tests, WriteCryptedSaplingZkeyDirectToDb) {
     // Add random key to the wallet
     auto address = wallet.GenerateNewSaplingZKey();
 
-    // wallet should have one key
+    // wallet should have one key, registered under both its external and
+    // internal default addresses
     wallet.GetSaplingPaymentAddresses(addrs);
-    ASSERT_EQ(1, addrs.size());
+    ASSERT_EQ(2, addrs.size());
 
     // Generate a diversified address different to the default
     // If we can't get an early diversified address, we are very unlucky
@@ -190,9 +193,12 @@ TEST(wallet_zkeys_tests, WriteCryptedSaplingZkeyDirectToDb) {
     ASSERT_TRUE(&wallet != &wallet2);
     ASSERT_TRUE(wallet2.HaveHDSeed());
 
-    // wallet should have three addresses
+    // wallet should have five addresses: address and address2 each registered
+    // under both their external and internal default addresses (2+2), plus the
+    // manually-added diversified address dpa (1, no internal counterpart since
+    // it was added via a bare AddSaplingIncomingViewingKey call, not a full XFVK)
     wallet2.GetSaplingPaymentAddresses(addrs);
-    ASSERT_EQ(3, addrs.size());
+    ASSERT_EQ(5, addrs.size());
 
     //check we have entries for our payment addresses
     ASSERT_TRUE(addrs.count(address));
@@ -242,9 +248,10 @@ TEST(wallet_zkeys_tests, StoreAndLoadIronwoodKeys) {
     // Now this call succeeds
     auto ironwoodAddr = wallet.GenerateNewIronwoodZKey();
 
-    // wallet should have one key
+    // wallet should have one key, registered under both its external and
+    // internal default addresses
     wallet.GetIronwoodPaymentAddresses(ironwoodAddrs);
-    ASSERT_EQ(1, ironwoodAddrs.size());
+    ASSERT_EQ(2, ironwoodAddrs.size());
     ASSERT_TRUE(ironwoodAddrs.count(ironwoodAddr));
 
     // verify wallet has incoming viewing key for the address
@@ -293,9 +300,10 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockIronwoodKeys) {
     // Add random key to the wallet
     auto ironwoodAddr = wallet.GenerateNewIronwoodZKey();
 
-    // wallet should have one key
+    // wallet should have one key, registered under both its external and
+    // internal default addresses
     wallet.GetIronwoodPaymentAddresses(ironwoodAddrs);
-    ASSERT_EQ(1, ironwoodAddrs.size());
+    ASSERT_EQ(2, ironwoodAddrs.size());
 
     // encrypt wallet
     SecureString strWalletPass;
@@ -326,9 +334,10 @@ TEST(wallet_zkeys_tests, EncryptAndUnlockIronwoodKeys) {
     ASSERT_TRUE(&wallet != &wallet2);
     ASSERT_TRUE(wallet2.HaveHDSeed());
 
-    // wallet should have two addresses
+    // wallet should have four addresses: ironwoodAddr and ironwoodAddr2 each
+    // registered under both their external and internal default addresses
     wallet2.GetIronwoodPaymentAddresses(ironwoodAddrs);
-    ASSERT_EQ(2, ironwoodAddrs.size());
+    ASSERT_EQ(4, ironwoodAddrs.size());
     ASSERT_TRUE(ironwoodAddrs.count(ironwoodAddr));
     ASSERT_TRUE(ironwoodAddrs.count(ironwoodAddr2));
 

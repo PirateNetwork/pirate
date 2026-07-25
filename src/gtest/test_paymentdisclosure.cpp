@@ -1,211 +1,311 @@
 #include <gtest/gtest.h>
 
-#include "main.h"
-#include "utilmoneystr.h"
 #include "chainparams.h"
-#include "util/strencodings.h"
-#include "zcash/Address.hpp"
+#include "consensus/params.h"
+#include "consensus/consensus.h"
+#include "consensus/validation.h"
+#include "key_io.h"
+#include "main.h"
+#include "pubkey.h"
+#include "random.h"
+#include "transaction_builder.h"
+#include "txmempool.h"
 #include "wallet/wallet.h"
-#include "amount.h"
-
-#include <array>
-#include <memory>
-#include <string>
-#include <set>
-#include <vector>
-#include <boost/filesystem.hpp>
-#include <iostream>
-#include "util.h"
+#include "zcash/Address.hpp"
+#include "zcash/address/zip32.h"
 
 #include "paymentdisclosure.h"
-#include "paymentdisclosuredb.h"
+#include "gtest/gtestutils.h"
+#include <rust/bridge.h>
 
-#include "sodium.h"
+using namespace libzcash;
 
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_generators.hpp>
-#include <boost/uuid/uuid_io.hpp>
+static const std::string tSecretRegtest = "UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1";
 
-using namespace std;
-
-/*
-    To run tests:
-    ./zcash-gtest --gtest_filter="paymentdisclosure.*"
-
-    Note: As an experimental feature, writing your own tests may require option flags to be set.
-    mapArgs["-experimentalfeatures"] = true;
-    mapArgs["-paymentdisclosure"] = true;
-*/
-
-#define NUM_TRIES 10000
-
-#define DUMP_DATABASE_TO_STDOUT false
-
-static boost::uuids::random_generator uuidgen;
-
-static uint256 random_uint256()
+// Inserts tx directly into the mempool, bypassing full policy/consensus
+// checks: these tests exercise GenerateSaplingDisclosure/VerifySaplingDisclosure
+// (and their Ironwood counterparts), which only need GetTransaction() to find
+// the transaction via mempool.lookup(); they are not testing mempool-acceptance
+// policy itself.
+static void InsertIntoMempool(const CTransaction& tx, uint32_t consensusBranchId, bool spendsCoinbase)
 {
-    uint256 ret;
-    randombytes_buf(ret.begin(), 32);
-    return ret;
+    CTxMemPoolEntry entry(tx, /*fee=*/1000, GetTime(), /*priority=*/0.0, /*height=*/1,
+                           /*poolHasNoInputsOf=*/true, spendsCoinbase, consensusBranchId);
+    mempool.addUnchecked(tx.GetHash(), entry);
 }
 
-// Subclass of PaymentDisclosureDB to add debugging methods
-class PaymentDisclosureDBTest : public PaymentDisclosureDB {
-public:
-    PaymentDisclosureDBTest(const boost::filesystem::path& dbPath) : PaymentDisclosureDB(dbPath) {}
+TEST(paymentdisclosure, SaplingGenerateAndVerify)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    auto consensusParams = Params().GetConsensus();
+    auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
-    void DebugDumpAllStdout() {
-        ASSERT_NE(db, nullptr);
-        std::lock_guard<std::mutex> guard(lock_);
+    // Transparent key that funds the shielding transaction.
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
 
-        // Iterate over each item in the database and print them
-        leveldb::Iterator* it = db->NewIterator(leveldb::ReadOptions());
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
 
-        for (it->SeekToFirst(); it->Valid(); it->Next()) {
-            cout << it->key().ToString() << " : ";
-            // << it->value().ToString() << endl;
-            try {
-                std::string strValue = it->value().ToString();
-                PaymentDisclosureInfo info;
-                CDataStream ssValue(strValue.data(), strValue.data() + strValue.size(), SER_DISK, CLIENT_VERSION);
-                ssValue >> info;
-                cout << info.ToString() << std::endl;
-            } catch (const std::exception& e) {
-                cout << e.what() << std::endl;
-            }
+    // Wallet holding the sending (OVK-bearing) Sapling key. This is the wallet
+    // GenerateSaplingDisclosure searches to find the OVK that encrypted the output.
+    CWallet fromWallet;
+    CKeyingMaterial rawSeed(32, 0);
+    HDSeed seed(rawSeed);
+    fromWallet.LoadHDSeed(seed);
+    auto fromAddr = fromWallet.GenerateNewSaplingZKey();
+    libzcash::SaplingExtendedSpendingKey fromExtsk;
+    ASSERT_TRUE(fromWallet.GetSaplingExtendedSpendingKey(fromAddr, fromExtsk));
+
+    // Destination address, not tracked by fromWallet. The 96-byte expsk (ask/nsk/ovk
+    // only) doesn't carry dk, so it can't derive the ZIP 32 default diversifier (needs
+    // the dk-keyed FF1 permutation) - treat the random key's seed as a ZIP 32 master
+    // seed instead (bip39Enabled=false so it's used directly) to get a real dk.
+    auto recipientSk = SaplingSpendingKey::random();
+    RawHDSeed recipientRawSeed(recipientSk.begin(), recipientSk.end());
+    auto recipientExtsk = libzcash::SaplingExtendedSpendingKey::Master(HDSeed(recipientRawSeed), false);
+    SaplingPaymentAddress recipientAddr = recipientExtsk.DefaultAddress();
+
+    auto builder = TransactionBuilder(consensusParams, 1, &keystore);
+    builder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder.InitializeSapling(uint256());
+    ASSERT_TRUE(builder.AddSaplingOutputRaw(recipientAddr, 40000, {}));
+    ASSERT_TRUE(builder.ConvertRawSaplingOutput(fromExtsk.expsk.ovk));
+    auto maybeTx = builder.Build();
+    ASSERT_TRUE(maybeTx.IsTx());
+    auto tx = maybeTx.GetTxOrThrow();
+
+    // The Sapling builder pads to a privacy-floor minimum of 2 outputs
+    // (MIN_SHIELDED_OUTPUTS) and shuffles real and dummy outputs together, so the
+    // real one isn't necessarily at index 0 - find it via trial decryption.
+    ASSERT_EQ(tx.GetSaplingOutputsCount(), 2);
+    libzcash::SaplingIncomingViewingKey recipientIvk;
+    ASSERT_TRUE(recipientExtsk.ToXFVK().fvk.DeriveIVK(&recipientIvk));
+    auto vOutputs = tx.GetSaplingOutputs();
+    int realOutputIndex = -1;
+    for (int j = 0; j < (int)vOutputs.size(); j++) {
+        if (libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], recipientIvk)) {
+            realOutputIndex = j;
+            break;
         }
-
-        if (false == it->status().ok()) {
-            cerr << "An error was found iterating over the database" << endl;
-            cerr << it->status().ToString() << endl;
-        }
-
-        delete it;
     }
-};
+    ASSERT_NE(realOutputIndex, -1);
 
+    CheckTransationResults results = ContextualCheckTransactionSingleThreaded(tx, 1, false);
+    EXPECT_TRUE(results.validationPassed);
 
+    InsertIntoMempool(tx, consensusId, /*spendsCoinbase=*/false);
 
-// This test creates random payment disclosure blobs and checks that they can be
-// 1. inserted and retrieved from a database
-// 2. serialized and deserialized without corruption
-// Note that the zpd: prefix is not part of the payment disclosure blob itself.  It is only
-// used as convention to improve the user experience when sharing payment disclosure blobs.
-TEST(paymentdisclosure, mainnet) {
-    SelectParams(CBaseChainParams::MAIN);
+    // Generate the disclosure from the sending wallet.
+    std::string disclosure = GenerateSaplingDisclosure(&fromWallet, tx.GetHash(), realOutputIndex);
+    ASSERT_FALSE(disclosure.empty());
 
-    boost::filesystem::path pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-    boost::filesystem::create_directories(pathTemp);
-    mapArgs["-datadir"] = pathTemp.string();
+    // Verify it independently of the wallet.
+    SaplingDisclosureVerificationResult result = VerifySaplingDisclosure(disclosure);
+    EXPECT_TRUE(result.success) << result.error;
+    EXPECT_EQ(result.txid, tx.GetHash());
+    EXPECT_EQ(result.outputIndex, realOutputIndex);
+    EXPECT_EQ(result.value, 40000);
+    EXPECT_EQ(result.address, EncodePaymentAddress(recipientAddr));
 
-    //std::cout << "Test payment disclosure database created in folder: " << pathTemp.string() << std::endl;
+    // A garbage disclosure string should fail cleanly, not throw.
+    SaplingDisclosureVerificationResult badResult = VerifySaplingDisclosure("not-a-real-disclosure");
+    EXPECT_FALSE(badResult.success);
+    EXPECT_FALSE(badResult.error.empty());
 
-    PaymentDisclosureDBTest mydb(pathTemp);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+}
 
-    for (int i=0; i<NUM_TRIES; i++) {
-        // Generate an ephemeral keypair for joinsplit sig.
-        uint256 joinSplitPubKey;
-        unsigned char buffer[crypto_sign_SECRETKEYBYTES] = {0};
-        crypto_sign_keypair(joinSplitPubKey.begin(), &buffer[0]);
+TEST(paymentdisclosure, IronwoodGenerateAndVerify)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    auto consensusParams = Params().GetConsensus();
+    auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_IRONWOOD].nBranchId;
 
-        // First 32 bytes contain private key, second 32 bytes contain public key.
-        ASSERT_EQ(0, memcmp(joinSplitPubKey.begin(), &buffer[0]+32, 32));
-        std::vector<unsigned char> vch(&buffer[0], &buffer[0] + 32);
-        uint256 joinSplitPrivKey = uint256(vch);
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
 
-        // Create payment disclosure key and info data to store in test database
-        size_t js = random_uint256().GetCheapHash() % std::numeric_limits<size_t>::max();
-        uint8_t n = random_uint256().GetCheapHash() % std::numeric_limits<uint8_t>::max();
-        PaymentDisclosureKey key { random_uint256(), js, n};
-        PaymentDisclosureInfo info;
-        info.esk = random_uint256();
-        info.joinSplitPrivKey = joinSplitPrivKey;
-        info.zaddr = libzcash::SproutSpendingKey::random().address();
-        ASSERT_TRUE(mydb.Put(key, info));
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
 
-        // Retrieve info from test database into new local variable and test it matches
-        PaymentDisclosureInfo info2;
-        ASSERT_TRUE(mydb.Get(key, info2));
-        ASSERT_EQ(info, info2);
+    // Wallet holding the sending (OVK-bearing) Ironwood key.
+    CWallet fromWallet;
+    CKeyingMaterial rawSeed(32, 0);
+    HDSeed seed(rawSeed);
+    fromWallet.LoadHDSeed(seed);
+    auto fromAddr = fromWallet.GenerateNewIronwoodZKey();
+    libzcash::IronwoodExtendedSpendingKeyPirate fromExtsk;
+    ASSERT_TRUE(fromWallet.GetIronwoodExtendedSpendingKey(fromAddr, fromExtsk));
+    IronwoodFullViewingKey fromFvk;
+    ASSERT_TRUE(fromExtsk.sk.DeriveFVK(&fromFvk));
+    IronwoodOutgoingViewingKey fromOvk;
+    ASSERT_TRUE(fromFvk.DeriveOVK(&fromOvk));
 
-        // Modify this local variable and confirm it no longer matches
-        info2.esk = random_uint256();
-        info2.joinSplitPrivKey = random_uint256();
-        info2.zaddr = libzcash::SproutSpendingKey::random().address();        
-        ASSERT_NE(info, info2);
+    // Destination address, derived from a different seed, not tracked by fromWallet.
+    CKeyingMaterial recipientRawSeed(32, 7);
+    HDSeed recipientSeed(recipientRawSeed);
+    auto recipientExtsk = IronwoodExtendedSpendingKeyPirate::Master(recipientSeed);
+    IronwoodPaymentAddress recipientAddr;
+    ASSERT_TRUE(recipientExtsk.sk.DeriveDefaultAddress(&recipientAddr));
 
-        // Using the payment info object, let's create a dummy payload
-        PaymentDisclosurePayload payload;
-        payload.version = PAYMENT_DISCLOSURE_VERSION_EXPERIMENTAL;
-        payload.esk = info.esk;
-        payload.txid = key.hash;
-        payload.js = key.js;
-        payload.n = key.n;
-        payload.message = "random-" + boost::uuids::to_string(uuidgen());   // random message
-        payload.zaddr = info.zaddr;
+    auto builder = TransactionBuilder(consensusParams, 1, &keystore);
+    builder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder.InitializeIronwood(/*spendsEnabled=*/false, /*outputsEnabled=*/true, uint256());
+    ASSERT_TRUE(builder.AddIronwoodOutputRaw(recipientAddr, 40000, {}));
+    ASSERT_TRUE(builder.ConvertRawIronwoodOutput(fromOvk.ovk));
+    auto maybeTx = builder.Build();
+    ASSERT_TRUE(maybeTx.IsTx());
+    auto tx = maybeTx.GetTxOrThrow();
 
-        // Serialize and hash the payload to generate a signature
-        uint256 dataToBeSigned = SerializeHash(payload, SER_GETHASH, 0);
-
-        // Compute the payload signature
-        unsigned char payloadSig[64];
-        if (!(crypto_sign_detached(&payloadSig[0], NULL,
-            dataToBeSigned.begin(), 32,
-            &buffer[0] // buffer containing both private and public key required
-            ) == 0))
-        {
-            throw std::runtime_error("crypto_sign_detached failed");
+    // The vendored orchard crate (which backs Ironwood) pads a bundle to at least
+    // 2 actions whenever any real action exists, mirroring Sapling's
+    // MIN_SHIELDED_OUTPUTS rule. Real vs. dummy actions are shuffled, so find the
+    // real one via trial decryption rather than assuming index 0.
+    const auto& bundleDetails = tx.GetIronwoodBundle().GetDetails();
+    ASSERT_EQ(bundleDetails.num_actions(), 2);
+    auto actions = bundleDetails.actions();
+    uint256_t fromOvkBytes;
+    std::copy(fromOvk.ovk.begin(), fromOvk.ovk.end(), fromOvkBytes.begin());
+    int realActionIndex = -1;
+    for (size_t i = 0; i < actions.size(); i++) {
+        uint256_t ock;
+        if (!ironwood::derive_ironwood_ock(actions[i], fromOvkBytes, ock)) {
+            continue;
         }
-
-        // Sanity check
-        if (!(crypto_sign_verify_detached(&payloadSig[0],
-            dataToBeSigned.begin(), 32,
-            joinSplitPubKey.begin()
-            ) == 0))
-        {
-            throw std::runtime_error("crypto_sign_verify_detached failed");
+        uint64_t testValue;
+        std::array<uint8_t, 43> testAddress;
+        std::array<uint8_t, 512> testMemo;
+        uint256_t testRho, testRseed;
+        if (ironwood::try_ironwood_decrypt_action_ock(
+                actions[i], ock, testValue, testAddress, testMemo, testRho, testRseed)) {
+            realActionIndex = (int)i;
+            break;
         }
-
-        // Convert signature buffer to boost array
-        std::array<unsigned char, 64> arrayPayloadSig;
-        memcpy(arrayPayloadSig.data(), &payloadSig[0], 64);
-
-        // Payment disclosure blob to pass around
-        PaymentDisclosure pd = {payload, arrayPayloadSig};
-
-        // Test payment disclosure constructors
-        PaymentDisclosure pd2(payload, arrayPayloadSig);
-        ASSERT_EQ(pd, pd2);
-        PaymentDisclosure pd3(joinSplitPubKey, key, info, payload.message);
-        ASSERT_EQ(pd, pd3);
-
-        // Verify serialization and deserialization works
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << pd;
-        std::string ssHexString = HexStr(ss.begin(), ss.end());
-
-        PaymentDisclosure pdTmp;
-        CDataStream ssTmp(ParseHex(ssHexString), SER_NETWORK, PROTOCOL_VERSION);
-        ssTmp >> pdTmp;
-        ASSERT_EQ(pd, pdTmp);
-
-        CDataStream ss2(SER_NETWORK, PROTOCOL_VERSION);
-        ss2 << pdTmp;
-        std::string ss2HexString = HexStr(ss2.begin(), ss2.end());
-        ASSERT_EQ(ssHexString, ss2HexString);
-
-        // Verify marker
-        ASSERT_EQ(pd.payload.marker, PAYMENT_DISCLOSURE_PAYLOAD_MAGIC_BYTES);
-        ASSERT_EQ(pdTmp.payload.marker, PAYMENT_DISCLOSURE_PAYLOAD_MAGIC_BYTES);
-        ASSERT_EQ(0, ssHexString.find("706462ff")); // Little endian encoding of PAYMENT_DISCLOSURE_PAYLOAD_MAGIC_BYTES value
-
-        // Sanity check
-        PaymentDisclosure pdDummy;
-        ASSERT_NE(pd, pdDummy);
     }
+    ASSERT_NE(realActionIndex, -1);
 
-#if DUMP_DATABASE_TO_STDOUT == true
-    mydb.DebugDumpAllStdout();
-#endif
+    InsertIntoMempool(tx, consensusId, /*spendsCoinbase=*/false);
+
+    std::string disclosure = GenerateIronwoodDisclosure(&fromWallet, tx.GetHash(), realActionIndex);
+    ASSERT_FALSE(disclosure.empty());
+
+    IronwoodDisclosureVerificationResult result = VerifyIronwoodDisclosure(disclosure);
+    EXPECT_TRUE(result.success) << result.error;
+    EXPECT_EQ(result.txid, tx.GetHash());
+    EXPECT_EQ(result.actionIndex, realActionIndex);
+    EXPECT_EQ(result.value, 40000);
+    EXPECT_EQ(result.address, EncodePaymentAddress(recipientAddr));
+
+    IronwoodDisclosureVerificationResult badResult = VerifyIronwoodDisclosure("not-a-real-disclosure");
+    EXPECT_FALSE(badResult.success);
+    EXPECT_FALSE(badResult.error.empty());
+
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+}
+
+TEST(paymentdisclosure, UnifiedVerifyDispatchesByType)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    auto consensusParams = Params().GetConsensus();
+    auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    CWallet fromWallet;
+    CKeyingMaterial rawSeed(32, 0);
+    HDSeed seed(rawSeed);
+    fromWallet.LoadHDSeed(seed);
+    auto fromAddr = fromWallet.GenerateNewSaplingZKey();
+    libzcash::SaplingExtendedSpendingKey fromExtsk;
+    ASSERT_TRUE(fromWallet.GetSaplingExtendedSpendingKey(fromAddr, fromExtsk));
+
+    auto recipientSk = SaplingSpendingKey::random();
+    RawHDSeed recipientRawSeed(recipientSk.begin(), recipientSk.end());
+    auto recipientExtsk = libzcash::SaplingExtendedSpendingKey::Master(HDSeed(recipientRawSeed), false);
+    SaplingPaymentAddress recipientAddr = recipientExtsk.DefaultAddress();
+
+    auto builder = TransactionBuilder(consensusParams, 1, &keystore);
+    builder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder.InitializeSapling(uint256());
+    ASSERT_TRUE(builder.AddSaplingOutputRaw(recipientAddr, 40000, {}));
+    ASSERT_TRUE(builder.ConvertRawSaplingOutput(fromExtsk.expsk.ovk));
+    auto maybeTx = builder.Build();
+    ASSERT_TRUE(maybeTx.IsTx());
+    auto tx = maybeTx.GetTxOrThrow();
+
+    // The Sapling builder pads to a privacy-floor minimum of 2 outputs
+    // (MIN_SHIELDED_OUTPUTS) and shuffles real and dummy outputs together, so the
+    // real one isn't necessarily at index 0 - find it via trial decryption.
+    libzcash::SaplingIncomingViewingKey recipientIvk;
+    ASSERT_TRUE(recipientExtsk.ToXFVK().fvk.DeriveIVK(&recipientIvk));
+    auto vOutputs = tx.GetSaplingOutputs();
+    int realOutputIndex = -1;
+    for (int j = 0; j < (int)vOutputs.size(); j++) {
+        if (libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], recipientIvk)) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+
+    InsertIntoMempool(tx, consensusId, /*spendsCoinbase=*/false);
+
+    std::string disclosure = GenerateSaplingDisclosure(&fromWallet, tx.GetHash(), realOutputIndex);
+    ASSERT_FALSE(disclosure.empty());
+
+    UnifiedDisclosureVerificationResult result = VerifyPaymentDisclosure(disclosure);
+    EXPECT_TRUE(result.success) << result.error;
+    EXPECT_EQ(result.disclosureType, "Sapling");
+    EXPECT_EQ(result.value, 40000);
+
+    UnifiedDisclosureVerificationResult badResult = VerifyPaymentDisclosure("not-a-real-disclosure");
+    EXPECT_FALSE(badResult.success);
+    EXPECT_FALSE(badResult.error.empty());
+
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }

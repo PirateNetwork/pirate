@@ -36,6 +36,18 @@ void displayBlock(const CBlock& blk);
 
 void setConsoleDebugging(bool enable);
 
+// ContextualCheckTransaction/ContextualCheckShieldedInputs take a CValidationState
+// out-param and an isInitBlockDownload function pointer; these wrappers adapt that
+// to the plain-bool, result-struct shape tests are written against.
+CheckTransationResults ContextualCheckTransactionSingleThreaded(
+    const CTransaction& tx, int nHeight, int dosLevel, bool isInitBlockDownload);
+CheckTransationResults ContextualCheckTransactionSingleThreaded(
+    const CTransaction& tx, int nHeight, bool isInitBlockDownload);
+
+CheckTransationResults ContextualCheckTransactionShieldedBundles(
+    const std::vector<const CTransaction*>& vtx, CCoinsViewCache* view,
+    uint32_t consensusBranchId, bool isInitBlockDownload, bool isMined);
+
 void setupChain();
 /***
  * Generate a block
@@ -158,11 +170,13 @@ public:
     MOCK_METHOD4(WriteCryptedArcTx, bool(uint256 txid, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
     MOCK_METHOD4(WriteCryptedArcSaplingOp, bool(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
     MOCK_METHOD4(WriteCryptedArcIronwoodOp, bool(uint256 nullifier, uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, bool txnProtected));
-    MOCK_METHOD3(WriteCryptedSaplingPaymentAddress, bool(libzcash::SaplingPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecret));
-    MOCK_METHOD3(WriteCryptedIronwoodPaymentAddress, bool(libzcash::IronwoodPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecre));
-    
+    MOCK_METHOD3(WriteCryptedSaplingPaymentAddress, bool(const libzcash::SaplingPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecret));
+    MOCK_METHOD3(WriteCryptedIronwoodPaymentAddress, bool(const libzcash::IronwoodPaymentAddress &addr,const uint256 chash,const std::vector<unsigned char> &vchCryptedSecret));
+
     MOCK_METHOD1(WriteSaplingWitnesses, bool(const SaplingWallet& wallet));
+    MOCK_METHOD3(WriteCryptedSaplingWitnesses, bool(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, const uint256 legacyChash));
     MOCK_METHOD1(WriteIronwoodWitnesses, bool(const IronwoodWallet& wallet));
+    MOCK_METHOD3(WriteCryptedIronwoodWitnesses, bool(const uint256 chash, const std::vector<unsigned char>& vchCryptedSecret, const uint256 legacyChash));
 
 };
 

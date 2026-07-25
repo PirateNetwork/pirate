@@ -49,6 +49,58 @@ void adjust_hwmheight(int32_t in); // in komodo.cpp
 CCriticalSection& get_cs_main(); // in main.cpp
 std::shared_ptr<CBlock> generateBlock(CWallet* wallet, CValidationState* state = nullptr); // in mining.cpp
 
+static bool AlwaysBlockDownloadTrue() { return true; }
+static bool AlwaysBlockDownloadFalse() { return false; }
+
+CheckTransationResults ContextualCheckTransactionSingleThreaded(
+    const CTransaction& tx, int nHeight, int dosLevel, bool isInitBlockDownload)
+{
+    CheckTransationResults results;
+    CValidationState state;
+    results.validationPassed = ContextualCheckTransaction(
+        tx, state, nHeight, dosLevel,
+        isInitBlockDownload ? AlwaysBlockDownloadTrue : AlwaysBlockDownloadFalse);
+    results.reasonString = state.GetRejectReason();
+    int nDoS = 0;
+    state.IsInvalid(nDoS);
+    results.dosLevel = nDoS;
+    return results;
+}
+
+CheckTransationResults ContextualCheckTransactionSingleThreaded(
+    const CTransaction& tx, int nHeight, bool isInitBlockDownload)
+{
+    return ContextualCheckTransactionSingleThreaded(tx, nHeight, 100, isInitBlockDownload);
+}
+
+CheckTransationResults ContextualCheckTransactionShieldedBundles(
+    const std::vector<const CTransaction*>& vtx, CCoinsViewCache* view,
+    uint32_t consensusBranchId, bool isInitBlockDownload, bool isMined)
+{
+    CheckTransationResults results;
+    CValidationState state;
+    const Consensus::Params& consensus = Params().GetConsensus();
+    std::optional<rust::Box<sapling::BatchValidator>> saplingAuth = std::nullopt;
+    std::optional<rust::Box<ironwood::BatchValidator>> ironwoodAuth = std::nullopt;
+
+    for (const CTransaction* ptx : vtx) {
+        std::vector<CTxOut> allPrevOutputs;
+        allPrevOutputs.resize(ptx->vin.size());
+        PrecomputedTransactionData txdata(*ptx, allPrevOutputs);
+        if (!ContextualCheckShieldedInputs(*ptx, txdata, state, *view, saplingAuth, ironwoodAuth,
+                                            consensus, consensusBranchId, isMined,
+                                            isInitBlockDownload ? AlwaysBlockDownloadTrue : AlwaysBlockDownloadFalse)) {
+            results.validationPassed = false;
+            results.reasonString = state.GetRejectReason();
+            int nDoS = 0;
+            state.IsInvalid(nDoS);
+            results.dosLevel = nDoS;
+            return results;
+        }
+    }
+    return results;
+}
+
 void displayTransaction(const CTransaction& tx)
 {
     std::cout << "Transaction Hash: " << tx.GetHash().ToString();

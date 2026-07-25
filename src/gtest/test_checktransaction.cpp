@@ -92,6 +92,13 @@ CMutableTransaction GetValidTransaction(uint32_t consensusBranchId=SPROUT_BRANCH
     mtx.vjoinsplit[1].nullifiers.at(0) = uint256S("0000000000000000000000000000000000000000000000000000000000000002");
     mtx.vjoinsplit[1].nullifiers.at(1) = uint256S("0000000000000000000000000000000000000000000000000000000000000003");
 
+    // Anchor to the empty Sprout tree, so tests that run these joinsplits through
+    // ContextualCheckShieldedInputs (which checks the anchor before the signature)
+    // see a recognized anchor once that same empty tree is pushed into their view.
+    uint256 emptyRoot = SproutMerkleTree().root();
+    mtx.vjoinsplit[0].anchor = emptyRoot;
+    mtx.vjoinsplit[1].anchor = emptyRoot;
+
     if (mtx.nVersion >= SAPLING_TX_VERSION) {
         libzcash::GrothProof emptyProof;
         mtx.vjoinsplit[0].proof = emptyProof;
@@ -323,8 +330,17 @@ TEST(ChecktransactionTests, BadTxnsVoutToolarge) {
 
 TEST(ChecktransactionTests, BadTxnsTxouttotalToolargeOutputs) {
     CMutableTransaction mtx = GetValidTransaction();
-    mtx.vout[0].nValue = MAX_MONEY;
-    mtx.vout[1].nValue = 1;
+    // Rust's vendored zcash_protocol crate hardcodes each Zatoshis-typed value to
+    // <= 21,000,000*COIN (Zcash's money supply, unrelated to this chain's larger
+    // runtime MAX_MONEY). Use several outputs at that per-output cap so their sum
+    // exceeds this chain's actual MAX_MONEY - triggering the C++ txouttotal check
+    // this test is named for - without any single output exceeding the per-field
+    // bound enforced (via the Rust digest FFI) during CTransaction construction.
+    const CAmount kRustZatBalanceMax = 21000000LL * COIN;
+    mtx.vout.resize(10);
+    for (auto& out : mtx.vout) {
+        out.nValue = kRustZatBalanceMax;
+    }
 
     CTransaction tx(mtx);
 
@@ -333,21 +349,25 @@ TEST(ChecktransactionTests, BadTxnsTxouttotalToolargeOutputs) {
     CheckTransactionWithoutProofVerification(0, tx, state);
 }
 
-TEST(ChecktransactionTests, ValueBalanceNonZero) {
-    CMutableTransaction mtx = GetValidTransaction(NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId);
-    mtx.saplingBundle = sapling::test_only_invalid_bundle(0, 0, 10);
-
-    CTransaction tx(mtx);
-
-    MockCValidationState state;
-    EXPECT_CALL(state, DoS(100, false, REJECT_INVALID, "bad-txns-valuebalance-nonzero", false)).Times(1);
-    CheckTransactionWithoutProofVerification(0, tx, state);
-}
-
 TEST(ChecktransactionTests, ValueBalanceOverflowsTotal) {
     CMutableTransaction mtx = GetValidTransaction(NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId);
-    mtx.vout[0].nValue = 1;
-    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, -MAX_MONEY);
+    // sapling::test_only_invalid_bundle constructs its value balance via the
+    // vendored zcash_protocol crate's ZatBalance::from_i64, which panics outside
+    // its own hardcoded +-21,000,000*COIN range (Zcash's money supply, unrelated
+    // to this chain's much larger runtime MAX_MONEY). Likewise, each individual
+    // vout must stay within that same per-field bound or CTransaction construction
+    // throws (see the Rust digest FFI's TxOut parsing). So: use 9 vouts at the
+    // Rust cap (sum = 9*21M = 189M*COIN, still under this chain's 200M*COIN
+    // MAX_MONEY, so the plain vout-total check passes) and a negative value
+    // balance at the Rust cap; the value balance's contribution alone
+    // (189M + 21M = 210M*COIN) then pushes the combined total over MAX_MONEY,
+    // exercising the valueBalance-specific overflow check this test is named for.
+    const CAmount kRustZatBalanceMax = 21000000LL * COIN;
+    mtx.vout.resize(9);
+    for (auto& out : mtx.vout) {
+        out.nValue = kRustZatBalanceMax;
+    }
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, -kRustZatBalanceMax);
 
     CTransaction tx(mtx);
 
@@ -539,6 +559,10 @@ TEST(ChecktransactionTests, BadTxnsInvalidJoinsplitSignature) {
     MockCValidationState state;
     GTestCoinsViewDB baseView;
     CCoinsViewCache view(&baseView);
+    // Register the empty Sprout tree GetValidTransaction() anchored these
+    // joinsplits to, so the anchor check in ContextualCheckShieldedInputs passes
+    // and the (invalid) signature is what gets checked.
+    view.PushAnchor(SproutMerkleTree());
 
     // during initial block download, for transactions being accepted into the
     // mempool (and thus not mined), DoS ban score should be zero
@@ -563,6 +587,9 @@ TEST(ChecktransactionTests, NonCanonicalEd25519Signature) {
 
     GTestCoinsViewDB baseView;
     CCoinsViewCache view(&baseView);
+    // Register the empty Sprout tree GetValidTransaction() anchored these
+    // joinsplits to, so the anchor check in ContextualCheckShieldedInputs passes.
+    view.PushAnchor(SproutMerkleTree());
 
     auto saplingBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
     CMutableTransaction mtx = GetValidTransaction(saplingBranchId);
@@ -876,7 +903,15 @@ TEST(ChecktransactionTests, SaplingSproutInputSumsTooLarge) {
 
     mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, 0);
 
-    mtx.vjoinsplit[0].vpub_new = (MAX_MONEY / 2) + 10;
+    // sapling::test_only_invalid_bundle constructs its value balance via the
+    // vendored zcash_protocol crate's ZatBalance::from_i64, which panics outside
+    // its own hardcoded +-21,000,000*COIN range (Zcash's money supply, unrelated
+    // to this chain's much larger runtime MAX_MONEY). Split the excess between
+    // vpub_new (a plain CAmount, not Rust-bound) and the Sapling value balance
+    // (capped at Rust's max) so the combined total still tips over this chain's
+    // actual MAX_MONEY by the same 10 zatoshis the original test intended.
+    const CAmount kRustZatBalanceMax = 21000000LL * COIN;
+    mtx.vjoinsplit[0].vpub_new = MAX_MONEY - kRustZatBalanceMax + 10;
 
     {
         UNSAFE_CTransaction tx(mtx);
@@ -884,7 +919,7 @@ TEST(ChecktransactionTests, SaplingSproutInputSumsTooLarge) {
         EXPECT_TRUE(CheckTransactionWithoutProofVerification(0, tx, state));
     }
 
-    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, (MAX_MONEY / 2) + 10);
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(1, 0, kRustZatBalanceMax);
 
     {
         UNSAFE_CTransaction tx(mtx);

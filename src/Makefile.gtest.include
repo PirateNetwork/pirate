@@ -51,6 +51,36 @@ if TARGET_WINDOWS
 pirate_gtest_SOURCES += test-komodo/komodo-test-res.rc
 endif
 
+# JSON test vectors these sources #include as generated headers (see the
+# %.json.h rule below). Kept separate from Makefile.test.include's own,
+# larger JSON_TEST_FILES list since that suite stays disabled.
+GTEST_JSON_TEST_FILES = \
+	test/data/sapling_key_components.json \
+	test/data/merkle_roots.json \
+	test/data/merkle_roots_empty.json \
+	test/data/merkle_serialization.json \
+	test/data/merkle_witness_serialization.json \
+	test/data/merkle_path.json \
+	test/data/merkle_commitments.json \
+	test/data/merkle_roots_sapling.json \
+	test/data/merkle_roots_empty_sapling.json \
+	test/data/merkle_serialization_sapling.json \
+	test/data/merkle_witness_serialization_sapling.json \
+	test/data/merkle_path_sapling.json \
+	test/data/merkle_commitments_sapling.json
+
+GTEST_GENERATED_JSON_H_FILES = $(GTEST_JSON_TEST_FILES:.json=.json.h)
+
+$(pirate_gtest_OBJECTS): $(GTEST_GENERATED_JSON_H_FILES)
+
+%.json.h: %.json
+	@$(MKDIR_P) $(@D)
+	@echo "namespace json_tests{" > $@
+	@echo "static unsigned const char $(*F)[] = {" >> $@
+	@$(HEXDUMP) -v -e '8/1 "0x%02x, "' -e '"\n"' $< | $(SED) -e 's/0x  ,//g' >> $@
+	@echo "};};" >> $@
+	@echo "Generated $@"
+
 pirate_gtest_CPPFLAGS = $(pirated_CPPFLAGS)
 
 pirate_gtest_LDADD = -lgtest -lgmock $(pirated_LDADD)

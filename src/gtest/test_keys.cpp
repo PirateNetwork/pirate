@@ -15,7 +15,9 @@ TEST(Keys, EncodeAndDecodeSapling)
     auto m = libzcash::SaplingExtendedSpendingKey::Master(seed);
 
     for (uint32_t i = 0; i < 100; i++) {
-        auto sk = m.Derive(i);
+        // Sapling ZIP 32 derivation is hardened-only; the Rust FFI (librustzcash_zip32_xsk_derive)
+        // requires the hardened bit set and panics otherwise.
+        auto sk = m.Derive(i | HARDENED_KEY_LIMIT);
         auto vk = sk.ToXFVK();
         auto addr = sk.DefaultAddress();
 

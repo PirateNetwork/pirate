@@ -159,38 +159,6 @@ bool SaplingFullViewingKey::DeriveIVK(SaplingIncomingViewingKey* ivk) const {
     return rustCompleted;
 }
 
-bool SaplingFullViewingKey::DeriveDefaultAddress(SaplingPaymentAddress* addr) const
-{
-    // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION);
-
-    // Transfer Data
-    SaplingPaymentAddress_FFI_t address_t;
-    SaplingFullViewingKey_FFI_t fvk_t;
-
-    // Serialize sending data
-    ss << *this;
-    ss >> fvk_t;
-
-    // Call rust FFI
-    bool rustCompleted = sapling_keys::fvk_to_default_address(fvk_t, address_t);
-
-    // Deserialize rust result on success
-    if (rustCompleted) {
-        rs << address_t;
-        rs >> *addr;
-    }
-
-    // Cleanse the memory of the transfer and serialization objects
-    memory_cleanse(ss.data(), ss.size());
-    memory_cleanse(rs.data(), rs.size());
-    memory_cleanse(address_t.data(), address_t.size());
-    memory_cleanse(fvk_t.data(), fvk_t.size());
-
-    return rustCompleted;
-}
-
 bool SaplingFullViewingKey::DeriveAddress(SaplingPaymentAddress* addr, diversifier_t diversifier) const
 {
     // Datastreams for serialization
@@ -311,41 +279,6 @@ bool SaplingExpandedSpendingKey::DeriveFVK(SaplingFullViewingKey* fvk) const
     memory_cleanse(expsk_t.data(), expsk_t.size());
     memory_cleanse(fvk_t.data(), fvk_t.size());
     memory_cleanse(ivk_t.data(), ivk_t.size());
-
-    return rustCompleted;
-}
-
-bool SaplingExpandedSpendingKey::DeriveDefaultAddress(SaplingPaymentAddress* addr) const
-{
-    // Datastreams for serialization
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
-    CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
-
-    // Transfer Data
-    SaplingExpandedSpendingKey_FFI_t expsk_t;
-    SaplingPaymentAddress_FFI_t address_t;
-
-    // rust result
-    bool rustCompleted;
-
-    // Serialize sending data
-    ss << *this;
-    ss >> expsk_t;
-
-    // Call rust FFI
-    rustCompleted = sapling_keys::expsk_to_default_address(expsk_t, address_t);
-
-    // Deserialize rust result on success
-    if (rustCompleted) {
-        rs << address_t;
-        rs >> *addr;
-    }
-
-    // Cleanse the memory of the transfer and serialization objects
-    memory_cleanse(ss.data(), ss.size());
-    memory_cleanse(rs.data(), rs.size());
-    memory_cleanse(expsk_t.data(), expsk_t.size());
-    memory_cleanse(address_t.data(), address_t.size());
 
     return rustCompleted;
 }
