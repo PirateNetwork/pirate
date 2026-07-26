@@ -136,6 +136,13 @@ namespace ParseArgumentsTests {
                 komodo_setactivation(Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
                 SelectParams(CBaseChainParams::REGTEST);
 
+                // The "PIRATE" case in ParseCommandLineArgs below passes -ac_private=1
+                // through the real komodo_args(), which sets this global with no
+                // corresponding reset - left uncleared, it makes every other test in
+                // the process (anything calling CheckTransaction on a plain transparent
+                // tx) fail with "this is a private chain, only sprout -> taddr allowed".
+                ASSETCHAINS_PRIVATE = 0;
+
                 mempool.clear();
                 ClearKomodoGlobals();
             }

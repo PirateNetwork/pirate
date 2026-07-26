@@ -69,7 +69,66 @@ pirate_gtest_SOURCES += \
 	gtest/test_random.cpp \
 	gtest/test_script_standard_tests.cpp \
 	gtest/test_sha256_crypto.cpp \
-	gtest/test_txid.cpp
+	gtest/test_txid.cpp \
+	gtest/test_sanity.cpp \
+	gtest/test_base64.cpp \
+	gtest/test_base32.cpp \
+	gtest/test_hash_bitcoin.cpp \
+	gtest/test_convertbits.cpp \
+	gtest/test_script_p2pkh.cpp \
+	gtest/test_reverselock.cpp \
+	gtest/test_compress.cpp \
+	gtest/test_sigopcount.cpp \
+	gtest/test_txdb_subtrees.cpp \
+	gtest/test_mruset.cpp \
+	gtest/test_raii_event.cpp \
+	gtest/test_pow_bitcoin.cpp \
+	gtest/test_bech32.cpp \
+	gtest/test_skiplist.cpp \
+	gtest/bignum.h \
+	gtest/test_scriptnum.cpp \
+	gtest/test_equihash_bitcoin.cpp \
+	gtest/test_bip32.cpp \
+	gtest/test_torcontrol.cpp \
+	gtest/test_key_bitcoin.cpp \
+	gtest/test_uint256_bitcoin.cpp \
+	gtest/test_base58.cpp \
+	gtest/test_policyestimator.cpp \
+	gtest/test_dbwrapper.cpp \
+	gtest/test_crypto_bitcoin.cpp \
+	gtest/test_univalue.cpp \
+	gtest/test_netbase_bitcoin.cpp \
+	gtest/test_arith_uint256.cpp \
+	gtest/test_addrman_bitcoin.cpp \
+	gtest/test_bloom_bitcoin.cpp \
+	gtest/test_util_bitcoin.cpp \
+	gtest/test_script_bitcoin.cpp \
+	gtest/test_main_bitcoin.cpp \
+	gtest/test_dos_bitcoin.cpp \
+	gtest/test_prevector_bitcoin.cpp \
+	gtest/test_mempool_bitcoin.cpp \
+	gtest/test_rpc_bitcoin.cpp \
+	gtest/test_sighash_bitcoin.cpp \
+	gtest/test_transaction_bitcoin.cpp \
+	gtest/test_rpc_wallet_bitcoin.cpp \
+	gtest/test_allocator_bitcoin.cpp \
+	gtest/test_getarg_bitcoin.cpp \
+	gtest/test_multisig_bitcoin.cpp \
+	gtest/test_pmt_bitcoin.cpp \
+	gtest/test_scheduler_bitcoin.cpp \
+	gtest/test_script_P2SH_bitcoin.cpp \
+	gtest/test_serialize_bitcoin.cpp \
+	gtest/test_net_bitcoin.cpp \
+	gtest/test_sha256compress_bitcoin.cpp \
+	gtest/test_txdb_bitcoin.cpp
+
+# gtest/test_miner_bitcoin.cpp is intentionally NOT built yet: CreateNewBlock()
+# depends on chainName identity/notary/staked-era globals that only get sane
+# values via komodo_args()/AppInit2 during real daemon startup, which no gtest
+# fixture runs. The file is fully ported and ready (REGTEST self-mining via a
+# real Equihash solve per block, replacing the old stale pre-mined blob), but
+# needs that daemon-init gap closed in the fixture before it can pass. See
+# BitcoinTestingSetup in gtest/gtestutils.h/.cpp.
 
 if ENABLE_WALLET
 pirate_gtest_SOURCES += \
@@ -84,6 +143,10 @@ endif
 # %.json.h rule below). Kept separate from Makefile.test.include's own,
 # larger JSON_TEST_FILES list since that suite stays disabled.
 GTEST_JSON_TEST_FILES = \
+	test/data/base58_encode_decode.json \
+	test/data/base58_keys_invalid.json \
+	test/data/script_valid.json \
+	test/data/script_invalid.json \
 	test/data/sapling_key_components.json \
 	test/data/merkle_roots.json \
 	test/data/merkle_roots_empty.json \
@@ -96,7 +159,10 @@ GTEST_JSON_TEST_FILES = \
 	test/data/merkle_serialization_sapling.json \
 	test/data/merkle_witness_serialization_sapling.json \
 	test/data/merkle_path_sapling.json \
-	test/data/merkle_commitments_sapling.json
+	test/data/merkle_commitments_sapling.json \
+	test/data/sighash.json \
+	test/data/tx_valid.json \
+	test/data/tx_invalid.json
 
 GTEST_GENERATED_JSON_H_FILES = $(GTEST_JSON_TEST_FILES:.json=.json.h)
 

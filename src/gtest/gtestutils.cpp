@@ -27,6 +27,11 @@
 #include "gtest/gtestutils.h"
 #include "coincontrol.h"
 #include "cc/CCinclude.h"
+#include "init.h"
+#include "net.h"
+#include "rpc/register.h"
+#include "wallet/db.h"
+#include "txmempool.h"
 
 // Global variables for testing
 std::string notaryPubkey = "0205a8ad0c1dbc515f149af377981aab58b836af008d4d7ab21bd76faf80550b47";
@@ -309,6 +314,108 @@ TestChain::~TestChain()
 }
 
 boost::filesystem::path TestChain::GetDataDir() { return dataDir; }
+
+CTxMemPoolEntry TestMemPoolEntryHelper::FromTx(CMutableTransaction &tx, CTxMemPool *pool) {
+    return CTxMemPoolEntry(tx, nFee, nTime, dPriority, nHeight,
+                           pool ? pool->HasNoInputsOf(tx) : hadNoDependencies,
+                           spendsCoinbase, nBranchId);
+}
+
+void BitcoinBasicTestingSetup::SetUp()
+{
+    previousNetwork = Params().NetworkIDString();
+    fCheckBlockIndex = true;
+    SelectTestParams();
+}
+
+void BitcoinBasicTestingSetup::TearDown()
+{
+    if (previousNetwork == "main")
+        SelectParams(CBaseChainParams::MAIN);
+    if (previousNetwork == "regtest")
+        SelectParams(CBaseChainParams::REGTEST);
+    if (previousNetwork == "test")
+        SelectParams(CBaseChainParams::TESTNET);
+}
+
+void BitcoinTestingSetup::SetUp()
+{
+    BitcoinBasicTestingSetup::SetUp();
+
+    RegisterAllCoreRPCCommands(tableRPC);
+#ifdef ENABLE_WALLET
+    RegisterWalletRPCCommands(tableRPC);
+#endif
+
+    // Same lesson as TestChain::setupChain(): never trust a mock time left over
+    // from an earlier test - a stale frozen clock can make a freshly-created
+    // genesis block look "from the future" and silently fail to activate.
+    SetMockTime(0);
+
+    ClearDatadirCache();
+    fHadPreviousDatadir = mapArgs.count("-datadir") != 0;
+    if (fHadPreviousDatadir)
+        previousDatadir = mapArgs["-datadir"];
+    pathTemp = GetTempPath() / strprintf("test_bitcoin_%lu_%i", (unsigned long)GetTime(), (int)(GetRand(100000)));
+    boost::filesystem::create_directories(pathTemp);
+    mapArgs["-datadir"] = pathTemp.string();
+
+    UnloadBlockIndex();
+    pblocktree = new CBlockTreeDB(1 << 20, true);
+    pcoinsdbviewTest = new CCoinsViewDB(1 << 23, true);
+    pcoinsTip = new CCoinsViewCache(pcoinsdbviewTest);
+    InitBlockIndex();
+#ifdef ENABLE_WALLET
+    bitdb->MakeMock();
+    bool fFirstRun;
+    pwalletMain = new CWallet("wallet.dat");
+    pwalletMain->LoadWallet(fFirstRun);
+    RegisterValidationInterface(pwalletMain);
+#endif
+    nScriptCheckThreads = 3;
+    for (int i = 0; i < nScriptCheckThreads - 1; i++)
+        threadGroup.create_thread(&ThreadScriptCheck);
+    RegisterNodeSignals(GetNodeSignals());
+}
+
+void BitcoinTestingSetup::TearDown()
+{
+    UnregisterNodeSignals(GetNodeSignals());
+    threadGroup.interrupt_all();
+    threadGroup.join_all();
+#ifdef ENABLE_WALLET
+    UnregisterValidationInterface(pwalletMain);
+    delete pwalletMain;
+    pwalletMain = nullptr;
+#endif
+    UnloadBlockIndex();
+    delete pcoinsTip;
+    pcoinsTip = nullptr;
+    delete pcoinsdbviewTest;
+    pcoinsdbviewTest = nullptr;
+    delete pblocktree;
+    pblocktree = nullptr;
+#ifdef ENABLE_WALLET
+    bitdb->Flush(true);
+    bitdb->Reset();
+#endif
+    boost::filesystem::remove_all(pathTemp);
+
+    // Restore whatever -datadir was in effect before this fixture ran (or clear
+    // it if there wasn't one) - otherwise it's left pointing at the now-deleted
+    // pathTemp, breaking any other order-dependent test that reads mapArgs
+    // afterward (see the wallet gtests' own "depends on global state" note).
+    if (fHadPreviousDatadir)
+        mapArgs["-datadir"] = previousDatadir;
+    else
+        mapArgs.erase("-datadir");
+    // GetDataDir() caches its result until explicitly invalidated - without this,
+    // a later test's GetDataDir() calls would keep returning pathTemp (now
+    // deleted) regardless of what mapArgs["-datadir"] is restored to above.
+    ClearDatadirCache();
+
+    BitcoinBasicTestingSetup::TearDown();
+}
 
 void TestChain::CleanGlobals()
 {

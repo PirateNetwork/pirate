@@ -19,7 +19,6 @@
 #include "util.h"
 #include "util/strencodings.h"
 
-#include "test/test_bitcoin.h"
 
 #include <fstream>
 

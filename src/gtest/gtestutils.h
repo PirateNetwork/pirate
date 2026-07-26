@@ -4,6 +4,7 @@
 #include <gtest/gtest.h>
 
 #include "main.h"
+#include "txdb.h"
 #include "wallet/wallet.h"
 #include "consensus/validation.h"
 #include "coincontrol.h"
@@ -11,6 +12,7 @@
 #include "cc/CCinclude.h"
 #include "script/cc.h"
 #include <cryptoconditions.h>
+#include <boost/thread.hpp>
 
 class TestWallet;
 
@@ -87,6 +89,73 @@ public:
     TransactionInProcess(CWallet* wallet) : reserveKey(wallet) {}
     CWalletTx transaction;
     CReserveKey reserveKey;
+};
+
+/*** Ported verbatim from the former Boost.Test suite's test/test_bitcoin.h. */
+class CTxMemPoolEntry;
+class CTxMemPool;
+struct TestMemPoolEntryHelper
+{
+    CAmount nFee;
+    int64_t nTime;
+    double dPriority;
+    unsigned int nHeight;
+    bool hadNoDependencies;
+    bool spendsCoinbase;
+    uint32_t nBranchId;
+
+    TestMemPoolEntryHelper() :
+        nFee(0), nTime(0), dPriority(0.0), nHeight(1),
+        hadNoDependencies(false), spendsCoinbase(false),
+        nBranchId(SPROUT_BRANCH_ID) { }
+
+    CTxMemPoolEntry FromTx(CMutableTransaction &tx, CTxMemPool *pool = NULL);
+
+    TestMemPoolEntryHelper &Fee(CAmount _fee) { nFee = _fee; return *this; }
+    TestMemPoolEntryHelper &Time(int64_t _time) { nTime = _time; return *this; }
+    TestMemPoolEntryHelper &Priority(double _priority) { dPriority = _priority; return *this; }
+    TestMemPoolEntryHelper &Height(unsigned int _height) { nHeight = _height; return *this; }
+    TestMemPoolEntryHelper &HadNoDependencies(bool _hnd) { hadNoDependencies = _hnd; return *this; }
+    TestMemPoolEntryHelper &SpendsCoinbase(bool _flag) { spendsCoinbase = _flag; return *this; }
+    TestMemPoolEntryHelper &BranchId(uint32_t _branchId) { nBranchId = _branchId; return *this; }
+};
+
+/****
+ * Fixtures ported from the former Boost.Test suite's test/test_bitcoin.h
+ * (BasicTestingSetup/TestingSetup). ECC_Start(), libsodium init, and zk-SNARK
+ * param loading already happen once, globally, in gtest/main.cpp, so unlike the
+ * original per-test-case BasicTestingSetup these only handle what genuinely needs
+ * to be reset per test: chain params selection and a couple of debug flags.
+ */
+class BitcoinBasicTestingSetup : public ::testing::Test {
+protected:
+    void SetUp() override;
+    void TearDown() override;
+    // Hook for subclasses that need a chain other than MAIN selected before
+    // BitcoinTestingSetup builds its genesis/InitBlockIndex - e.g. a REGTEST-
+    // difficulty Equihash fixture that self-mines blocks instead of MAIN's
+    // full-difficulty params.
+    virtual void SelectTestParams() { SelectParams(CBaseChainParams::MAIN); }
+private:
+    std::string previousNetwork;
+};
+
+/****
+ * Full datadir + coins db + wallet environment, ported from test/test_bitcoin.h's
+ * TestingSetup. Applies the same defensive resets (mock time, UnloadBlockIndex before
+ * InitBlockIndex) that TestChain::setupChain() needed after a hard-won order-dependent
+ * segfault during the ktest merge - this fixture has the same process-global footprint.
+ */
+class BitcoinTestingSetup : public BitcoinBasicTestingSetup {
+protected:
+    void SetUp() override;
+    void TearDown() override;
+
+    CCoinsViewDB *pcoinsdbviewTest = nullptr;
+    boost::filesystem::path pathTemp;
+    boost::thread_group threadGroup;
+    bool fHadPreviousDatadir = false;
+    std::string previousDatadir;
 };
 
 class TestWallet;

@@ -992,8 +992,7 @@ endif
 endif
 
 if ENABLE_TESTS
-include Makefile.gtest.include #zcash + komodo tests (komodo tests merged in from Makefile.ktest.include)
-#include Makefile.test.include #bitcoin tests
+include Makefile.gtest.include #zcash + komodo + bitcoin tests (komodo tests merged in from Makefile.ktest.include, bitcoin tests merged in from Makefile.test.include)
 endif
 
 # Bundle the depends-built tor/i2pd binaries (see depends/packages/tor.mk,

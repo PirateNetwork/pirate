@@ -799,7 +799,9 @@ void CNode::Ban(const CNetAddr& addr, const BanReason &banReason, int64_t bantim
 }
 
 void CNode::Ban(const CSubNet& subNet, const BanReason &banReason, int64_t bantimeoffset, bool sinceUnixEpoch) {
-    CBanEntry banEntry(GetTime()+GetArg("-bantime", 60*60*24));  // Default 24-hour ban
+    CBanEntry banEntry(GetTime());
+    banEntry.banReason = banReason;
+    banEntry.nBanUntil = GetTime()+GetArg("-bantime", 60*60*24);  // Default 24-hour ban
     if (bantimeoffset > 0)
         banEntry.nBanUntil = (sinceUnixEpoch ? 0 : GetTime() )+bantimeoffset;
 
