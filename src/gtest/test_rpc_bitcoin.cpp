@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,6 +20,11 @@
 #include <gtest/gtest.h>
 
 #include <univalue.h>
+
+// Ported Bitcoin Core RPC unit tests covering transparent-pool surfaces:
+// rawtransaction parameter handling and signing, monetary value parsing,
+// JSON parsing helpers, and ban-list RPCs. Pool-agnostic infrastructure
+// coverage rather than shielded-pool-specific behavior.
 
 using namespace std;
 

@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,6 +11,10 @@
 
 #include <boost/algorithm/string.hpp>
 #include <gtest/gtest.h>
+
+// Tests ArgsManager/GetArg-style command-line and config-file argument
+// parsing: -arg, -arg=value, boolean flags, negation (-noarg), and
+// duplicate/override handling.
 
 class getarg_tests_bitcoin : public BitcoinBasicTestingSetup {
 protected:

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "zcash/Address.hpp"
@@ -6,6 +10,10 @@
 #include "util.h"
 
 #include <boost/filesystem.hpp>
+
+// Covers CWallet z-key generation, storage, and encryption for both the
+// Sapling and Ironwood shielded pools (StoreAndLoadSaplingZkeys,
+// StoreAndLoadIronwoodKeys, and related load/decrypt paths).
 
 /**
  * This test covers Sapling methods on CWallet

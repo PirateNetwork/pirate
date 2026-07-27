@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "gtest/gtestutils.h"
 #include "crypto/sha256.h"
 #include "uint256.h"
@@ -6,6 +10,9 @@
 
 #include <gtest/gtest.h>
 
+// Tests CSHA256::FinalizeNoPadding, the raw SHA256 compression function used
+// by Equihash (as opposed to full padded SHA256). Protocol-agnostic
+// infrastructure, not shielded-pool-specific.
 class sha256compress_tests_bitcoin : public BitcoinBasicTestingSetup {};
 
 TEST_F(sha256compress_tests_bitcoin, compression)

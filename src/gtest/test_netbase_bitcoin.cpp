@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,6 +11,9 @@
 
 #include <gtest/gtest.h>
 
+// Covers netbase address/hostname parsing: network classification, host/port
+// splitting, numeric-address lookup, and CSubNet parsing.
+//
 // Named _bitcoin: gtest/test_netbase_tests.cpp already covers netbase_getgroup
 // (TestAddrmanTests.netbase_getgroup), so it isn't re-ported here.
 //

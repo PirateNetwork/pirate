@@ -1,4 +1,5 @@
 // Copyright (c) 2017 Pieter Wuille
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +8,9 @@
 
 #include <gtest/gtest.h>
 
+// Tests the bech32 checksum/encode/decode implementation against the BIP173
+// test vectors. Protocol-agnostic encoding infrastructure, not
+// shielded-pool-specific.
 class bech32_tests : public BitcoinBasicTestingSetup {};
 
 static bool CaseInsensitiveEqual(const std::string &s1, const std::string &s2)

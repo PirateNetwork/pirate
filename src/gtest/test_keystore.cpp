@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "test/data/sapling_key_components.json.h"
@@ -11,6 +15,10 @@
 #include "zcash/address/zip32.h"
 
 #include "json_test_vectors.h"
+
+// Covers CKeyStore wallet-key-management infrastructure: HD seed
+// derivation and storage, plus Sapling-specific spending and viewing
+// key handling (extended keys, incoming/full viewing keys).
 
 #define MAKE_STRING(x) std::string((x), (x)+sizeof(x))
 
@@ -230,6 +238,52 @@ TEST(keystore_tests, StoreAndRetrieveSaplingSpendingKey) {
     EXPECT_TRUE(keyStore.GetSaplingFullViewingKey(ivk, extfvkOut));
     EXPECT_TRUE(keyStore.HaveSaplingIncomingViewingKey(addr));
     EXPECT_TRUE(keyStore.GetSaplingIncomingViewingKey(addr, ivkOut));
+    EXPECT_EQ(sk, skOut);
+    EXPECT_EQ(extfvk, extfvkOut);
+    EXPECT_EQ(ivk, ivkOut);
+}
+
+// Ironwood counterpart to StoreAndRetrieveSaplingSpendingKey above - keystore.h
+// defines a fully parallel Ironwood API (AddIronwoodSpendingKey,
+// HaveIronwoodSpendingKey, GetIronwoodFullViewingKey,
+// AddIronwoodIncomingViewingKey, etc.) that had no direct CBasicKeyStore-level
+// test anywhere (wallet-level coverage exists separately in
+// wallet/gtest/test_wallet_zkeys.cpp, but that's a different layer).
+TEST(keystore_tests, StoreAndRetrieveIronwoodSpendingKey) {
+    CBasicKeyStore keyStore;
+    libzcash::IronwoodExtendedSpendingKeyPirate skOut;
+    libzcash::IronwoodExtendedFullViewingKeyPirate extfvkOut;
+    libzcash::IronwoodIncomingViewingKey ivkOut;
+
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed(32);
+    HDSeed seed(rawSeed);
+    auto sk = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed);
+    auto extfvkOpt = sk.GetXFVK();
+    ASSERT_TRUE(extfvkOpt.has_value());
+    auto extfvk = extfvkOpt.value();
+    libzcash::IronwoodIncomingViewingKey ivk;
+    ASSERT_TRUE(extfvk.fvk.DeriveIVK(&ivk));
+    libzcash::IronwoodPaymentAddress addr;
+    ASSERT_TRUE(sk.sk.DeriveDefaultAddress(&addr));
+
+    // Sanity-check: we can't get a key we haven't added
+    EXPECT_FALSE(keyStore.HaveIronwoodSpendingKey(extfvk));
+    EXPECT_FALSE(keyStore.GetIronwoodSpendingKey(extfvk, skOut));
+    // Sanity-check: we can't get a full viewing key we haven't added
+    EXPECT_FALSE(keyStore.HaveIronwoodFullViewingKey(ivk));
+    EXPECT_FALSE(keyStore.GetIronwoodFullViewingKey(ivk, extfvkOut));
+    // Sanity-check: we can't get an incoming viewing key we haven't added
+    EXPECT_FALSE(keyStore.HaveIronwoodIncomingViewingKey(addr));
+    EXPECT_FALSE(keyStore.GetIronwoodIncomingViewingKey(addr, ivkOut));
+
+    // When we specify the default address, we get the full mapping
+    keyStore.AddIronwoodSpendingKey(sk);
+    EXPECT_TRUE(keyStore.HaveIronwoodSpendingKey(extfvk));
+    EXPECT_TRUE(keyStore.GetIronwoodSpendingKey(extfvk, skOut));
+    EXPECT_TRUE(keyStore.HaveIronwoodFullViewingKey(ivk));
+    EXPECT_TRUE(keyStore.GetIronwoodFullViewingKey(ivk, extfvkOut));
+    EXPECT_TRUE(keyStore.HaveIronwoodIncomingViewingKey(addr));
+    EXPECT_TRUE(keyStore.GetIronwoodIncomingViewingKey(addr, ivkOut));
     EXPECT_EQ(sk, skOut);
     EXPECT_EQ(extfvk, extfvkOut);
     EXPECT_EQ(ivk, ivkOut);

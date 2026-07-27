@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <sodium.h>
@@ -6,6 +10,11 @@
 #include "primitives/transaction.h"
 #include "consensus/validation.h"
 #include "gtest/gtestutils.h"
+
+// Tests for CheckTransaction() and ContextualCheckShieldedInputs(), covering
+// per-field structural validation of transactions plus shielded-input checks
+// (nullifier well-formedness, proof/binding-signature verification, balance
+// rules) for both the Sprout and Sapling pools.
 
 extern ZCJoinSplit* params;
 
@@ -866,6 +875,66 @@ TEST(ChecktransactionTests, IronwoodExpiryHeight) {
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+}
+
+// Phase 3 consensus-rule audit: UPGRADE_IRONWOOD's branch ID deliberately
+// aliases upstream Zcash's Nu6_3 branch ID (consensus/upgrades.cpp) so the
+// Rust side resolves the right bundle version. ContextualCheckTransaction's
+// enforcement that an Ironwood tx actually carries the current branch ID
+// (main.cpp, "bad-tx-consensus-branch-id-missing"/"-mismatch") had no test
+// anywhere - a wrong alias here would silently corrupt sighash computation
+// instead of throwing, so this is the only thing that would ever catch it.
+TEST(ChecktransactionTests, IronwoodConsensusBranchIdEnforced) {
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    auto consensusParams = Params().GetConsensus();
+
+    // RAII guard so the reverts below always run - via a normal return, an
+    // EXPECT/ASSERT failure, or an uncaught exception (e.g. constructing a
+    // plain CTransaction from a branch-id-less Ironwood mtx throws, see the
+    // UNSAFE_CTransaction comment below) - instead of leaking REGTEST's
+    // consensus params to every later test in the process.
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+
+    {
+        // Correctly-branched Ironwood tx: passes.
+        CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, 0);
+        ASSERT_TRUE(mtx.nConsensusBranchId.has_value());
+        CTransaction tx(mtx);
+        CheckTransationResults results = ContextualCheckTransactionSingleThreaded(tx, 0, 100, false);
+        EXPECT_TRUE(results.validationPassed);
+    }
+
+    {
+        // Branch ID missing entirely. A normal CTransaction constructor throws
+        // while hashing a malformed Ironwood tx (the Rust digest FFI expects the
+        // branch ID to be present) - use UNSAFE_CTransaction, as elsewhere in
+        // this file, to reach ContextualCheckTransaction's own graceful check.
+        CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, 0);
+        mtx.nConsensusBranchId = std::nullopt;
+        UNSAFE_CTransaction tx(mtx);
+        CheckTransationResults results = ContextualCheckTransactionSingleThreaded(tx, 0, 100, false);
+        EXPECT_FALSE(results.validationPassed);
+        EXPECT_EQ(results.reasonString, "bad-tx-consensus-branch-id-missing");
+    }
+
+    {
+        // Branch ID present but wrong.
+        CMutableTransaction mtx = CreateNewContextualCMutableTransaction(consensusParams, 0);
+        mtx.nConsensusBranchId = mtx.nConsensusBranchId.value() ^ 0xFFFFFFFF;
+        UNSAFE_CTransaction tx(mtx);
+        CheckTransationResults results = ContextualCheckTransactionSingleThreaded(tx, 0, 100, false);
+        EXPECT_FALSE(results.validationPassed);
+        EXPECT_EQ(results.reasonString, "bad-tx-consensus-branch-id-mismatch");
+    }
 }
 
 // Test that a Sprout tx with a negative version number is detected

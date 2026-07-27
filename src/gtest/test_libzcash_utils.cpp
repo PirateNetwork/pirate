@@ -1,5 +1,13 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include "zcash/util.h"
+
+// Tests small libzcash namespace helpers: byte-vector<->bit-vector
+// conversion and bit-vector<->integer conversion. Protocol-agnostic
+// infrastructure, not shielded-pool-specific despite the namespace name.
 
 TEST(libzcash_utils, convertBytesVectorToVector)
 {

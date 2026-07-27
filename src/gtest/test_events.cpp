@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include <gtest/gtest.h>
 #include <memory>
 #include <cstdio>
@@ -9,6 +12,10 @@
 #include "komodo_gateway.h"
 #include "komodo_notary.h"
 #include "komodo_extern_globals.h"
+
+// Tests for komodo_faststateinit and the on-disk komodo event log it reads
+// (pubkey/notarization/opreturn records), plus event-copy/round-trip
+// handling used to rebuild in-memory notary/notarization state at startup.
 
 namespace test_events {
 
@@ -925,7 +932,7 @@ TEST(test_events, komodo_faststateinit_test_kmd)
     boost::filesystem::remove_all(temp);
 }
 
-TEST(test_events, DISABLED_write_test) // test from dev branch from S6 season
+TEST(test_events, write_test) // test from dev branch from S6 season
 {
     char symbol[] = "TST";
     chainName = assetchain(symbol);
@@ -962,7 +969,10 @@ TEST(test_events, DISABLED_write_test) // test from dev branch from S6 season
             komodo::event_pubkeys& ev = static_cast<komodo::event_pubkeys&>( *state->events.front() );
             EXPECT_EQ(ev.height, 10);
             EXPECT_EQ(ev.type, komodo::komodo_event_type::EVENT_PUBKEYS);
-            std::fclose(fp);
+            // fp was already fclose()'d above (right after write_p_record); a
+            // second fclose() here on the same handle double-frees glibc's
+            // FILE* buffers, reliably crashing the process - this is what
+            // disabled this test ("double free detected in tcache").
             // verify files still exists
             EXPECT_TRUE(boost::filesystem::exists(full_filename));
         }

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "util/strencodings.h"
@@ -16,6 +20,11 @@
 #include "zcash/IncrementalMerkleTree.hpp"
 
 #include <array>
+
+// Sprout JoinSplit tests: h_sig computation against known test vectors, the
+// full prove/verify/decrypt/spend-again API round trip, and Sprout note
+// plaintext encryption/serialization. Sprout is the legacy, deprioritized
+// shielded pool - this covers only Sprout, with no Sapling or Ironwood paths.
 
 using namespace libzcash;
 

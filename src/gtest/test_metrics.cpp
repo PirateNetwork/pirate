@@ -1,8 +1,16 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "metrics.h"
 #include "utiltime.h"
 
+// Tests for the UI metrics screen: AtomicTimer/AtomicCounter rate tracking,
+// GetLocalSolPS() mining-hashrate display, and EstimateNetHeightInner()'s
+// net-height estimation from checkpoint spacing during initial sync.
+// Uses SetMockTime() to drive timer/rate calculations deterministically.
 
 TEST(Metrics, AtomicTimer) {
     AtomicTimer t;

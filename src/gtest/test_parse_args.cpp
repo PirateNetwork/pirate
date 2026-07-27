@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include <map>
 #include <string>
@@ -5,6 +9,10 @@
 #include "komodo_globals.h"
 #include "komodo_utils.h"
 #include "main.h"
+
+// Tests ParseCommandLineArgs() and this fork's -ac_* asset-chain argument
+// parsing (asset chain name, ports, magic number derivation), which is
+// native to this codebase rather than ported from upstream Bitcoin Core.
 
 void chainparams_commandline();
 namespace fs = boost::filesystem;
@@ -142,6 +150,15 @@ namespace ParseArgumentsTests {
                 // the process (anything calling CheckTransaction on a plain transparent
                 // tx) fail with "this is a private chain, only sprout -> taddr allowed".
                 ASSETCHAINS_PRIVATE = 0;
+
+                // Same lesson, different global: ParseCommandLineArgs's last-processed
+                // map entry (TXX001, sorted last alphabetically) leaves chainName set to
+                // a non-KMD, era-reward asset chain via the real komodo_args() call.
+                // Left uncleared, chainName.isKMD() stays false for every later test in
+                // the process, so GetBlockSubsidy() takes TXX001's multi-era reward
+                // schedule instead of the flat-3-coin KMD-default path (observed
+                // breaking rpc_wallet_tests_bitcoin.rpc_wallet's getblocksubsidy checks).
+                chainName = assetchain();
 
                 mempool.clear();
                 ClearKomodoGlobals();

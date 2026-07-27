@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,6 +17,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Broad grab-bag of util.cpp tests: ParseHex/HexStr, DateTimeStr,
+// ParseParameters/command-line handling, money-string formatting, and
+// critical-section (locking) behavior.
 
 using namespace std;
 

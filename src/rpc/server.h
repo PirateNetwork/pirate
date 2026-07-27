@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -496,6 +497,8 @@ extern UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& 
 extern UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 
+extern UniValue enablesaplingconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
+extern UniValue enableironwoodconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue consolidationaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp
 extern UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcwallet.cpp

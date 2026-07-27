@@ -1,3 +1,12 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+// Regression tests confirming legacy/removed hash routines (e.g. the old
+// LibTomCrypt-derived calc_rmd160) stay gone and current code paths produce
+// equivalent results. Pirate/Komodo-native removal-verification content, not
+// an upstream Bitcoin Core port.
+
 #include <gtest/gtest.h>
 #include "komodo_utils.h"
 #include <cstring>

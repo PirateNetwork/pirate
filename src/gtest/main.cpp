@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "key.h"
 #include "base58.h"
 #include "script/sigcache.h"
@@ -5,6 +9,11 @@
 #include "gtest/gtest.h"
 #include "crypto/common.h"
 #include "gtest/gtestutils.h"
+
+// Not a test file itself: this is the gtest binary's actual main()
+// entrypoint. It performs global init (ECC_Start, sodium, zk-SNARK
+// parameters, signature/bundle caches, network params, the shared test
+// wallet) before handing off to RUN_ALL_TESTS().
 
 struct ECCryptoClosure
 {

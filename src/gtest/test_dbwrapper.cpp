@@ -1,5 +1,6 @@
 // Copyright (c) 2018 The Zcash developers
 // Copyright (c) 2012-2017 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +10,10 @@
 #include "gtest/gtestutils.h"
 
 #include <gtest/gtest.h>
+
+// Tests CDBWrapper, the leveldb-backed key/value store wrapper used by the
+// chain, tx, and block-index databases: basic get/write/erase, batch writes,
+// and iterator behavior.
 
 using namespace boost::filesystem;
 

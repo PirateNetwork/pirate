@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <cryptoconditions.h>
 #include <gtest/gtest.h>
@@ -16,6 +19,12 @@
 
 #include "gtest/gtestutils.h"
 
+// Tests for importcoin / cross-chain coin import, exercised through the
+// CryptoConditions eval path. testProcessImportThroughPipeline and
+// testImportTombstone remain DISABLED_ - see their comments - because they
+// require a genuinely valid crosschain proof (real CheckMoMoM/
+// CheckNotariesApproval data), which this synthetic-burn-tx fixture can't
+// produce.
 
 extern Eval* EVAL_TEST;
 
@@ -33,7 +42,11 @@ public:
     TxProof proof;
     uint256 MoMoM;
     CMutableTransaction importTx;
-    uint32_t testCcid = 2;
+    // cc/import.cpp rejects any targetCcid < KOMODO_FIRSTFUNGIBLEID (100) with
+    // "chain-not-fungible" before reaching any of the checks these tests
+    // actually mean to exercise - must be >= 100 for the burn tx embedding
+    // this value to be considered a valid import candidate at all.
+    uint32_t testCcid = 100;
     std::string testSymbol = "PIZZA";
     CAmount amount = 100;
 
@@ -84,6 +97,15 @@ protected:
 };
 
 
+// Requires a genuinely valid crosschain proof to reach the mempool at all:
+// cc/import.cpp's CheckMigration takes the default (MerkleBranch-kind)
+// ImportProof this fixture builds and checks it via CrossChain::CheckMoMoM
+// against real notarized chain data, which a synthetic unit-test burn tx
+// can't satisfy - it now fails "momom-check-fail" before any of this test's
+// assertions become reachable, and segfaults if force-run (chain-state
+// corruption from the InvalidateBlock/acceptTx sequence on top of a rejected
+// tx). The fixture's GetProofRoot()/MoMoM member this test relies on for its
+// premise is unreferenced dead code - see the file-level comment above.
 TEST_F(TestCoinImport, DISABLED_testProcessImportThroughPipeline)
 {
     CValidationState mainstate;
@@ -115,6 +137,8 @@ TEST_F(TestCoinImport, DISABLED_testProcessImportThroughPipeline)
 }
 
 
+// Same root cause as DISABLED_testProcessImportThroughPipeline above: needs
+// a real crosschain proof to ever reach the mempool/tombstone logic.
 TEST_F(TestCoinImport, DISABLED_testImportTombstone)
 {
     CValidationState mainstate;
@@ -193,7 +217,7 @@ TEST_F(TestCoinImport, testInvalidBurnParams)
 }
 
 
-TEST_F(TestCoinImport, DISABLED_testWrongChainId)
+TEST_F(TestCoinImport, testWrongChainId)
 {
     testCcid = 0;
     TestRunCCEval(importTx);
@@ -211,44 +235,65 @@ TEST_F(TestCoinImport, testInvalidBurnAmount)
 }
 
 
-TEST_F(TestCoinImport, DISABLED_testPayoutTooHigh)
+TEST_F(TestCoinImport, testPayoutTooHigh)
 {
-    importTx.vout[1].nValue = 101;
+    // vout[0] is the payout (vout[1] is the opret, always tail); raising it
+    // above burnAmount (100) trips cc/import.cpp's totalOut>burnAmount check.
+    // (This and testAmountInOpret had their vout indices swapped - mutating
+    // vout[1], the opret, always makes MakeImportCoinTransaction's
+    // reconstruction (which hardcodes the opret's own nValue to 0) disagree
+    // with the given tx, so it was really testing "non-canonical" instead.)
+    importTx.vout[0].nValue = 101;
     TestRunCCEval(importTx);
-    EXPECT_EQ("payout-too-high", state.GetRejectReason());
+    EXPECT_EQ("payout-too-high-or-too-low", state.GetRejectReason());
 }
 
 
-TEST_F(TestCoinImport, DISABLED_testAmountInOpret)
+TEST_F(TestCoinImport, testAmountInOpret)
 {
-    importTx.vout[0].nValue = 1;
+    // vout[1] is the opret CTxOut(0, OP_RETURN ...) appended by
+    // MakeImportCoinTransaction; giving it a nonzero value makes the
+    // reconstructed tx (which always uses nValue=0 for this vout) disagree
+    // with the given one, i.e. exactly "an amount in the opret" -> non-canonical.
+    importTx.vout[1].nValue = 1;
     TestRunCCEval(importTx);
     EXPECT_EQ("non-canonical", state.GetRejectReason());
 }
 
 
 
-TEST_F(TestCoinImport, DISABLED_testInvalidPayouts)
+TEST_F(TestCoinImport, testInvalidPayouts)
 {
-    importTx.vout[1].nValue = 40;
-    importTx.vout.push_back(importTx.vout[0]);
+    // Insert an extra, zero-value payout entry *before* the opret tail (not
+    // append after it - that made vout.back() no longer a valid opret, so
+    // UnmarshalImportTx failed structurally with "invalid-params" instead of
+    // ever reaching the payouts-hash check). Zero value keeps totalOut
+    // unchanged (avoids tripping payout-too-high-or-too-low first), while the
+    // extra entry makes the reconstructed payouts hash disagree with what's
+    // embedded in the burn tx.
+    importTx.vout.insert(importTx.vout.end() - 1, CTxOut(0, importTx.vout[0].scriptPubKey));
     TestRunCCEval(importTx);
     EXPECT_EQ("wrong-payouts", state.GetRejectReason());
 }
 
 
-TEST_F(TestCoinImport, DISABLED_testCouldntLoadMomom)
-{
-    MoMoM.SetNull();
-    TestRunCCEval(importTx);
-    EXPECT_EQ("coudnt-load-momom", state.GetRejectReason());
-}
+// testCouldntLoadMomom (expected reject reason "coudnt-load-momom") deleted:
+// that string doesn't exist anywhere in production code. It - and this
+// fixture's GetProofRoot()/MoMoM member - are leftovers from an older
+// GetProofRoot-callback-based crosschain-proof design; the current
+// cc/import.cpp validates crosschain proofs via ImportProof's
+// MerkleBranch/NotaryTxids variants and CrossChain::CheckMoMoM /
+// CheckNotariesApproval instead, neither of which GetProofRoot participates
+// in (grep confirms GetProofRoot is unreferenced outside this test file).
 
-
-TEST_F(TestCoinImport, DISABLED_testMomomCheckFail)
+TEST_F(TestCoinImport, testMomomCheckFail)
 {
-    MoMoM.SetNull();
-    MoMoM.begin()[0] = 1;
+    // The fixture's `proof` member is a default TxProof, which ImportProof's
+    // implicit-conversion constructor always turns into a MerkleBranch-kind
+    // proof (see importcoin.h) - so this always takes the CheckMoMoM path in
+    // cc/import.cpp regardless of the (vestigial) MoMoM member above, and
+    // fails it since there's no real crosschain notarization backing a
+    // synthetic unit-test burn tx.
     TestRunCCEval(importTx);
     EXPECT_EQ("momom-check-fail", state.GetRejectReason());
 }

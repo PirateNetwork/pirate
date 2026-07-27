@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include <gtest/gtest.h>
 
 #include "cc/eval.h"
@@ -14,6 +17,11 @@
 
 #include <boost/filesystem.hpp>
 #include <fstream>
+
+// Tests for parsing notarisation data (prevMoM / notarizeddata) out of raw
+// notarisation transactions. Test fixture checkpoints are supplied by
+// get_test_checkpoints_from_file(), provided by the sibling
+// notarisation_test_data.cpp / test_parse_notarisation.h.
 
 // todo remove
 /*komodo_state *komodo_stateptr(char *symbol,char *dest);
@@ -710,6 +718,13 @@ TEST(TestParseNotarisation, FilePaths)
         EXPECT_EQ(ASSETCHAINS_P2PPORT, 7770);
         EXPECT_EQ(ASSETCHAINS_RPCPORT, 7771);
     }
+
+    // The last two blocks above leave mapArgs["-datadir"] pointing at a
+    // MockDataDirectory that its destructor already deleted, and both blocks
+    // called ClearDatadirCache() on the way out - a later test that calls
+    // GetDataDir() would silently resolve to "" (fs::is_directory() fails on
+    // the deleted path) instead of a real directory.
+    mapArgs.erase("-datadir");
 #endif // #ifndef __WINDOWS__
 }
 

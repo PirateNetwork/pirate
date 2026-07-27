@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <cryptoconditions.h>
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
@@ -32,6 +36,11 @@
 #include "rpc/register.h"
 #include "wallet/db.h"
 #include "txmempool.h"
+
+// Shared test-harness infrastructure for the gtest suite: this is not a test
+// file itself. It provides the TestWallet helper, block/transaction mining
+// helpers, and the BitcoinBasicTestingSetup/BitcoinTestingSetup fixture base
+// classes that other test files build on.
 
 // Global variables for testing
 std::string notaryPubkey = "0205a8ad0c1dbc515f149af377981aab58b836af008d4d7ab21bd76faf80550b47";
@@ -141,6 +150,27 @@ void displayBlock(const CBlock& blk)
 void setConsoleDebugging(bool enable)
 {
     fPrintToConsole = enable;
+}
+
+void InjectMessage(CNode* pfrom, const char* command, CDataStream& payload)
+{
+    CNetMessage msg(Params().MessageStart(), SER_NETWORK, PROTOCOL_VERSION);
+    msg.hdr = CMessageHeader(Params().MessageStart(), command, payload.size());
+    uint256 hash = Hash(payload.begin(), payload.end());
+    msg.hdr.nChecksum = ReadLE32((const unsigned char*)&hash);
+    msg.vRecv = payload;
+    msg.in_data = true;
+    msg.nDataPos = payload.size();
+    pfrom->vRecvMsg.push_back(msg);
+    ProcessMessages(pfrom);
+}
+
+int GetMisbehavior(NodeId id)
+{
+    CNodeStateStats stats;
+    if (!GetNodeStateStats(id, stats))
+        return -1;
+    return stats.nMisbehavior;
 }
 
 void setupChain()
@@ -323,6 +353,13 @@ CTxMemPoolEntry TestMemPoolEntryHelper::FromTx(CMutableTransaction &tx, CTxMemPo
 
 void BitcoinBasicTestingSetup::SetUp()
 {
+    // Same lesson as TestChain::setupChain(): some earlier test in the full
+    // suite may have left chainName set to a non-default asset chain (many
+    // tests do `chainName = assetchain("...")` with no restore), which would
+    // silently change consensus-critical behavior gated on chainName.isKMD()
+    // (e.g. GetBlockSubsidy()) for every test using this fixture.
+    chainName = assetchain();
+
     previousNetwork = Params().NetworkIDString();
     fCheckBlockIndex = true;
     SelectTestParams();

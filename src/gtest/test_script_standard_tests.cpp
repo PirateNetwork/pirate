@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include "key.h"
 #include "keystore.h"
@@ -6,6 +10,10 @@
 #include "script/script_error.h"
 #include "script/standard.h"
 #include "util/strencodings.h"
+
+// Tests Solver() and ExtractDestination() standard-script-type
+// classification (P2PKH, P2SH, multisig, etc.). Covers the TRANSPARENT pool
+// specifically, not Sapling/Ironwood/Sprout shielded logic.
 
 namespace TestScriptStandartTests {
 

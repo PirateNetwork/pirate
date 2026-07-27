@@ -1,4 +1,5 @@
 // Copyright (c) 2017 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 //
@@ -6,6 +7,9 @@
 #include "torcontrol.cpp"
 
 #include <gtest/gtest.h>
+
+// Covers Tor control-protocol line parsing (SplitTorReplyLine/ParseTorReplyMapping)
+// used by torcontrol.cpp to talk to a local Tor daemon for hidden-service setup.
 
 class torcontrol_tests : public BitcoinBasicTestingSetup {};
 

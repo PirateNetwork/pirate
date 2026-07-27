@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6317,6 +6318,108 @@ static int64_t ParseConsolidationInt(const UniValue& v)
     throw JSONRPCError(RPC_TYPE_ERROR, "Expected numeric value");
 }
 
+UniValue enablesaplingconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "enablesaplingconsolidation true/false\n"
+            "\nEnable or Disable Sapling consolidation function in a running node."
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("enablesaplingconsolidation", "true")
+            + HelpExampleCli("enablesaplingconsolidation", "1")
+            + HelpExampleRpc("enablesaplingconsolidation", "true")
+            + HelpExampleRpc("enablesaplingconsolidation", "1")
+        );
+
+      LOCK2(cs_main, pwalletMain->cs_wallet);
+      EnsureWalletIsUnlockedForReporting();
+
+      bool enabled = false;
+      if (params[0].isNum()) {
+          if (params[0].get_int() != 0) {
+              enabled = true;
+          }
+      } else if (params[0].isBool()) {
+          if (params[0].isTrue()) {
+              enabled = true;
+          }
+      } else if(params[0].isStr()) {
+          if (params[0].get_str() == "true" || params[0].get_str() == "1") {
+              enabled = true;
+          } else if (params[0].get_str() == "false" || params[0].get_str() == "0") {
+              enabled = false;
+          } else {
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+          }
+      } else {
+          throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+      }
+
+
+      pwalletMain->fSaplingConsolidationEnabled = enabled;
+
+      UniValue result(UniValue::VOBJ);
+      result.push_back(Pair("consolidationEnabled", enabled));
+
+      return result;
+}
+
+UniValue enableironwoodconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+
+    if (!EnsureWalletIsAvailable(fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "enableironwoodconsolidation true/false\n"
+            "\nEnable or Disable Ironwood consolidation function in a running node."
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("enableironwoodconsolidation", "true")
+            + HelpExampleCli("enableironwoodconsolidation", "1")
+            + HelpExampleRpc("enableironwoodconsolidation", "true")
+            + HelpExampleRpc("enableironwoodconsolidation", "1")
+        );
+
+      LOCK2(cs_main, pwalletMain->cs_wallet);
+      EnsureWalletIsUnlockedForReporting();
+
+      bool enabled = false;
+      if (params[0].isNum()) {
+          if (params[0].get_int() != 0) {
+              enabled = true;
+          }
+      } else if (params[0].isBool()) {
+          if (params[0].isTrue()) {
+              enabled = true;
+          }
+      } else if(params[0].isStr()) {
+          if (params[0].get_str() == "true" || params[0].get_str() == "1") {
+              enabled = true;
+          } else if (params[0].get_str() == "false" || params[0].get_str() == "0") {
+              enabled = false;
+          } else {
+            throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+          }
+      } else {
+          throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Verbose parameter must be a boolean.");
+      }
+
+
+      pwalletMain->fIronwoodConsolidationEnabled = enabled;
+
+      UniValue result(UniValue::VOBJ);
+      result.push_back(Pair("consolidationEnabled", enabled));
+
+      return result;
+}
+
 UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
 
@@ -6326,7 +6429,9 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "enableconsolidation true/false\n"
-            "\nEnable or Disable consolidation function in a running node."
+            "\nEnable or Disable consolidation function for both the Sapling and Ironwood"
+            " pools in a running node. Equivalent to calling enablesaplingconsolidation"
+            " and enableironwoodconsolidation with the same value."
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("enableconsolidation", "true")
@@ -6361,9 +6466,11 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
 
 
       pwalletMain->fSaplingConsolidationEnabled = enabled;
+      pwalletMain->fIronwoodConsolidationEnabled = enabled;
 
       UniValue result(UniValue::VOBJ);
-      result.push_back(Pair("consolidationEnabled", enabled));
+      result.push_back(Pair("saplingConsolidationEnabled", enabled));
+      result.push_back(Pair("ironwoodConsolidationEnabled", enabled));
 
       return result;
 }
@@ -10340,6 +10447,8 @@ static const CRPCCommand commands[] =
     { "wallet",             "z_viewtransaction",        &z_viewtransaction,        true  },
     { "wallet",             "rescan",                   &rescan,                   true  },
 
+    { "consolidation",         "enablesaplingconsolidation", &enablesaplingconsolidation, true },
+    { "consolidation",         "enableironwoodconsolidation", &enableironwoodconsolidation, true },
     { "consolidation",         "enableconsolidation",      &enableconsolidation,       true },
     { "consolidation",         "consolidationaddresses",   &consolidationaddresses,    true },
     { "consolidation",         "consolidationstatus",      &consolidationstatus,       true },

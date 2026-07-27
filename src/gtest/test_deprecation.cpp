@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -11,6 +15,20 @@
 
 #include <boost/filesystem/operations.hpp>
 #include <fstream>
+
+// Tests for the node's deprecation-warning and forced-shutdown logic (version
+// age-out behavior), unrelated to the shielded-pool consensus rules covered
+// elsewhere in this suite.
+//
+// CAVEAT (matches the convention used elsewhere in this suite, e.g.
+// gtest/test_pow.cpp, gtest/test_block_connect.cpp): EnforceNodeDeprecation
+// (deprecation.cpp) starts with `if (networkID != "main" || !chainName.isKMD())
+// return;` - a no-op unless chainName.isKMD() is true. A real Pirate daemon
+// always configures a chain symbol, so chainName.isKMD() is always false in
+// production and this mechanism never actually fires there. These tests only
+// exercise it because the gtest binary's global chainName defaults to empty
+// (KMD-identified) unless a test explicitly sets it otherwise - i.e. exactly
+// the state that never occurs on a real node.
 
 using ::testing::StrictMock;
 

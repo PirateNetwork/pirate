@@ -1,4 +1,5 @@
 // Copyright (c) 2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -22,6 +23,10 @@
 #include "zcash/Address.hpp"
 #include "zcash/address/zip32.h"
 #include <gtest/gtest.h>
+
+// Tests for CCoinsViewCache's tracking of spendable outputs alongside
+// nullifier sets and note-commitment-tree anchors, for both the Sprout and
+// Sapling shielded pools.
 
 namespace TestCoins
 {
@@ -1026,10 +1031,56 @@ TEST(TestCoins, coins_coinbase_spends)
     mtx2.vout[0].scriptPubKey = CScript() << OP_1;
 
     {
+        // MAIN sets consensus.fCoinbaseMustBeProtected = false (chainparams.cpp),
+        // so a matured coinbase spent to a transparent output is legitimately
+        // accepted here - this is the positive case for that rule, not a miss.
         CTransaction tx2(mtx2);
         EXPECT_TRUE(Consensus::CheckTxInputs(tx2, state, cache, 100 + Params().CoinbaseMaturity(), Params().GetConsensus()));
-        // EXPECT_TRUE(state.GetRejectReason() == "bad-txns-coinbase-spend-has-transparent-outputs");
     }
+}
+
+// Phase 3 consensus-rule audit: the negative case for the check above -
+// "bad-txns-coinbase-spend-has-transparent-outputs" (main.cpp, CheckInputs) -
+// had no test anywhere; only the MAIN-params positive path (transparent
+// coinbase spend allowed) was exercised. TESTNET sets
+// consensus.fCoinbaseMustBeProtected = true, which is what actually gates
+// this rule.
+TEST(TestCoins, coins_coinbase_spend_to_transparent_rejected_when_protected)
+{
+    SelectParams(CBaseChainParams::TESTNET);
+    fCoinbaseEnforcedProtectionEnabled = true;
+    ASSERT_TRUE(Params().GetConsensus().fCoinbaseMustBeProtected);
+
+    CCoinsViewTest base;
+    CCoinsViewCacheTest cache(&base);
+
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vin[0].scriptSig = CScript() << OP_1;
+    mtx.vin[0].nSequence = 0;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 500;
+    mtx.vout[0].scriptPubKey = CScript() << OP_1;
+
+    CTransaction tx(mtx);
+    ASSERT_TRUE(tx.IsCoinBase());
+
+    CValidationState state;
+    UpdateCoins(tx, cache, 100);
+
+    // Matured spend of that coinbase to a transparent output.
+    CMutableTransaction mtx2;
+    mtx2.vin.resize(1);
+    mtx2.vin[0].prevout = COutPoint(tx.GetHash(), 0);
+    mtx2.vin[0].scriptSig = CScript() << OP_1;
+    mtx2.vin[0].nSequence = 0;
+    mtx2.vout.resize(1);
+    mtx2.vout[0].nValue = 500;
+    mtx2.vout[0].scriptPubKey = CScript() << OP_1;
+
+    CTransaction tx2(mtx2);
+    EXPECT_FALSE(Consensus::CheckTxInputs(tx2, state, cache, 100 + Params().CoinbaseMaturity(), Params().GetConsensus()));
+    EXPECT_EQ(state.GetRejectReason(), "bad-txns-coinbase-spend-has-transparent-outputs");
 }
 
 TEST(TestCoins, ccoins_serialization)

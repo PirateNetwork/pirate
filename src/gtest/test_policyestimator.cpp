@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2015 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,6 +11,10 @@
 #include "gtest/gtestutils.h"
 
 #include <gtest/gtest.h>
+
+// Covers CBlockPolicyEstimator's fee-rate bucketing: recording transactions'
+// fee rates against the number of blocks until confirmation, and estimating
+// a fee rate likely to confirm within a target number of blocks.
 
 class policyestimator_tests : public BitcoinBasicTestingSetup {};
 

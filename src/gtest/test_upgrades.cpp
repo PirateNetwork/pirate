@@ -1,7 +1,15 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "chainparams.h"
 #include "consensus/upgrades.h"
+
+// Tests for NetworkUpgrade activation-height logic: NetworkUpgradeActive(),
+// CurrentEpoch(), and consensus-branch-id resolution. This machinery underlies
+// activation of the Overwinter, Sapling, and Ironwood upgrades.
 
 class UpgradesTest : public ::testing::Test {
 protected:

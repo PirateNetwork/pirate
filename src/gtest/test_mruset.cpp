@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,6 +12,10 @@
 #include <set>
 
 #include <gtest/gtest.h>
+
+// Tests mruset, the most-recently-used bounded set container: insertion,
+// eviction order once the size limit is reached, and set-like lookup/erase
+// semantics.
 
 #define NUM_TESTS 16
 #define MAX_SIZE 100

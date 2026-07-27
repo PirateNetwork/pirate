@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include <boost/filesystem.hpp>
@@ -6,6 +10,10 @@
 #include "addrman.h"
 #include <string>
 #include "netbase.h"
+
+// Covers netbase's network-group classification (CNetAddr::GetGroup), which
+// CAddrMan uses to bucket peer addresses by /16 or ASN so that addresses from
+// a single network can't dominate outbound peer selection.
 
 #define GTEST_COUT_NOCOLOR std::cerr << "[          ] [ INFO ] "
 namespace testing
@@ -54,7 +62,7 @@ static CNetAddr ResolveIP(const std::string& ip)
 
 namespace TestNetBaseTests {
 
-    TEST(TestAddrmanTests, netbase_getgroup) {
+    TEST(TestNetBaseTests, netbase_getgroup) {
 
         std::vector<bool> asmap; // use /16
         ASSERT_TRUE(ResolveIP("127.0.0.1").GetGroup(asmap) == std::vector<unsigned char>({0})); // Local -> !Routable()

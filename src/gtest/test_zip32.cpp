@@ -1,8 +1,21 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 //#include "miner.h"
 #include "zcash/address/zip32.h"
+
+// ZIP 32 hierarchical deterministic key derivation. TestVectors below covers
+// SaplingExtendedSpendingKey derivation against known-good vectors (master
+// key, hardened child derivation, XFVK conversion). IronwoodStructuralDerivation
+// covers IronwoodExtendedSpendingKeyPirate::Derive, this fork's own
+// second-generation shielded pool - there are no published known-good test
+// vectors for it (it's Pirate-specific, not an upstream Zcash ZIP 32 scheme),
+// so that test checks structural invariants (depth/chaincode change on
+// derivation, distinct addresses per account index) rather than exact values.
 
 // Derivation path is m -> m/1h -> m/1h/2h, following
 // https://github.com/zcash-hackworks/zcash-test-vectors/blob/master/zcash_test_vectors/zip_0032.py,
@@ -118,4 +131,58 @@ TEST(ZIP32, TestVectors) {
     // hardened and non-hardened derivation from an xfvk currently fail.
     EXPECT_FALSE(m_1_2hv.Derive(3 | HARDENED_KEY_LIMIT));
     EXPECT_FALSE(m_1_2hv.Derive(3));
+}
+
+// IronwoodExtendedSpendingKeyPirate::Derive was never called anywhere in the
+// gtest suite prior to this - every other test touching an Ironwood extended
+// key only called Master(). No published test vectors exist for this scheme
+// (see file comment above), so this checks derivation actually changes the
+// key material deterministically and distinct accounts yield distinct keys,
+// rather than asserting exact byte values.
+TEST(ZIP32, IronwoodStructuralDerivation) {
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+    HDSeed seed(rawSeed);
+
+    auto m = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, false);
+    EXPECT_EQ(m.depth, 0);
+    EXPECT_EQ(m.parentFVKTag, 0);
+    EXPECT_EQ(m.childIndex, 0);
+
+    uint32_t bip44CoinType = 133; // Pirate's registered SLIP-44 coin type
+    auto account0Opt = m.Derive(bip44CoinType, 0);
+    ASSERT_TRUE(account0Opt.has_value());
+    auto account0 = account0Opt.value();
+
+    // Derivation must actually move away from the master key.
+    EXPECT_NE(account0.depth, m.depth);
+    EXPECT_NE(account0.chaincode, m.chaincode);
+    EXPECT_FALSE(account0.sk == m.sk);
+
+    // Deterministic: deriving the same (coin type, account) twice from the
+    // same master key must yield an identical child key.
+    auto account0AgainOpt = m.Derive(bip44CoinType, 0);
+    ASSERT_TRUE(account0AgainOpt.has_value());
+    EXPECT_TRUE(account0 == account0AgainOpt.value());
+
+    // Distinct accounts must yield distinct keys and distinct addresses.
+    auto account1Opt = m.Derive(bip44CoinType, 1);
+    ASSERT_TRUE(account1Opt.has_value());
+    auto account1 = account1Opt.value();
+    EXPECT_FALSE(account0 == account1);
+
+    libzcash::IronwoodPaymentAddress addr0, addr1;
+    ASSERT_TRUE(account0.sk.DeriveDefaultAddress(&addr0));
+    ASSERT_TRUE(account1.sk.DeriveDefaultAddress(&addr1));
+    EXPECT_FALSE(addr0 == addr1);
+
+    // FVK conversion must carry over the same depth/chaincode/childIndex as
+    // the spending key it was derived from (mirrors the Sapling ToXFVK check
+    // above, via IronwoodExtendedSpendingKeyPirate::GetXFVK instead).
+    auto fvkOpt = account0.GetXFVK();
+    ASSERT_TRUE(fvkOpt.has_value());
+    EXPECT_EQ(fvkOpt.value().depth, account0.depth);
+    EXPECT_EQ(fvkOpt.value().chaincode, account0.chaincode);
+    EXPECT_EQ(fvkOpt.value().childIndex, account0.childIndex);
 }

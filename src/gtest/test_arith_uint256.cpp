@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +14,10 @@
 #include <string>
 #include "version.h"
 #include "gtest/gtestutils.h"
+
+// Tests arith_uint256, the fixed-width big-integer type used for proof-of-work
+// target/difficulty math (as distinct from uint256's opaque hash storage).
+// Protocol-agnostic low-level infrastructure, not shielded-pool-specific.
 
 class arith_uint256_tests : public BitcoinBasicTestingSetup {};
 

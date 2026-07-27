@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include <gtest/gtest-spi.h>
 
@@ -12,6 +16,11 @@
 
 #include "gtest/gtestutils.h"
 
+// AcceptToMemoryPool() acceptance-policy tests: checks the specific rejection
+// reasons returned for invalid/non-standard/already-known transactions, plus
+// a priority-overflow regression case. Complementary to test_mempool_bitcoin.cpp,
+// which covers CTxMemPool's container mechanics (remove/cascade, indexing).
+//
 // AcceptToMemoryPool() reads the global pcoinsTip directly (via CCoinsViewMemPool) to
 // check view.HaveCoins(); it's null by default (or left dangling by an earlier test in
 // the same process that deleted its own pcoinsTip without re-nulling it), causing a
@@ -337,5 +346,44 @@ TEST(Mempool, OverwinterNotActiveYet) {
 
     // Revert to default
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+}
+
+// treasurechest_attack_vectors.md #10 / dos_vulnerability_analysis.md VULN-11:
+// AcceptToMemoryPool() used to let shielded (JoinSplit) transactions paying
+// >= ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE (10000 zatoshis) skip the
+// size-based GetMinRelayFee() check entirely. That call-site branch was
+// removed; GetMinRelayFee() itself was already tx-type-agnostic (it only
+// looks at nBytes and the tx's mempool fee-delta, never vjoinsplit), so pin
+// that down directly: it returns the identical fee for a joinsplit-bearing
+// and a plain transaction of equal size, both under and over the
+// free-transaction size floor - i.e. there is no shielded-specific exemption
+// left anywhere on this path.
+//
+// (Reproducing the removed bypass end-to-end through AcceptToMemoryPool
+// itself isn't practical here: the size-based fee only becomes nonzero for
+// transactions >= DEFAULT_BLOCK_PRIORITY_SIZE - 1000 (~999000 bytes), and
+// building a real ~1MB joinsplit transaction requires actual Sprout proof
+// generation.)
+TEST(Mempool, GetMinRelayFeeIgnoresJoinSplitsAndScalesWithSize) {
+    CMutableTransaction mtxPlain = GetValidTransaction();
+    mtxPlain.vjoinsplit.resize(0);
+    CTransaction txPlain(mtxPlain);
+
+    CMutableTransaction mtxShielded = GetValidTransaction(); // carries vjoinsplit
+    CTransaction txShielded(mtxShielded);
+
+    // Below the free-transaction-size floor, both fall into the free area
+    // (fAllowFree=true): min fee is 0 for either, joinsplits or not.
+    EXPECT_EQ(GetMinRelayFee(txPlain, 1000, true), 0);
+    EXPECT_EQ(GetMinRelayFee(txShielded, 1000, true), 0);
+
+    // Past that floor, the real size-based fee applies identically to both,
+    // and for a size representative of a large tx it comfortably exceeds the
+    // old fixed 10000-zatoshi bypass threshold.
+    unsigned int nLargeSize = DEFAULT_BLOCK_PRIORITY_SIZE;
+    CAmount plainFee = GetMinRelayFee(txPlain, nLargeSize, true);
+    CAmount shieldedFee = GetMinRelayFee(txShielded, nLargeSize, true);
+    EXPECT_EQ(plainFee, shieldedFee);
+    EXPECT_GT(plainFee, 10000); // old ASYNC_RPC_OPERATION_DEFAULT_MINERS_FEE bypass threshold
 }
 

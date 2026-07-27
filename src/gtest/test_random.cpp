@@ -1,3 +1,11 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+// Tests MappedShuffle, the RNG-driven Fisher-Yates-style shuffle used to
+// randomize input/output ordering. Protocol-agnostic infrastructure, not
+// shielded-pool-specific.
+
 #include <gtest/gtest.h>
 
 #include "random.h"

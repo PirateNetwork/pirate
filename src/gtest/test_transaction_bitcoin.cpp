@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -37,6 +38,10 @@
 #include "zcash/Note.hpp"
 #include "zcash/Address.hpp"
 #include "zcash/Proof.hpp"
+
+// Tests basic transaction validity via the tx_valid/tx_invalid JSON test
+// vectors. Covers the TRANSPARENT pool specifically (transaction/script
+// mechanics), not Sapling/Ironwood/Sprout shielded logic.
 
 using namespace std;
 

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "chainparams.h"
 #include "consensus/params.h"
 #include "consensus/consensus.h"
@@ -6,11 +10,18 @@
 #include "main.h"
 #include "pubkey.h"
 #include "transaction_builder.h"
+#include "wallet/wallet.h"
 #include "zcash/Address.hpp"
 #include "gtest/gtestutils.h"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
+// TransactionBuilder tests. Most assertions here are transparent
+// input/output/fee/change-address cases plus one CheckSaplingTxVersion case
+// guarding Sapling spend/output rejection on a pre-Sapling transaction.
+// TransactionBuilder.Invoke and TransactionBuilder.IronwoodShieldAndSpend
+// cover the Sapling and Ironwood shield-then-spend builder paths respectively.
 
 using libzcash::SaplingIncomingViewingKey;
 using libzcash::SaplingPaymentAddress;
@@ -39,6 +50,12 @@ TEST(TransactionBuilder, Invoke)
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
@@ -243,10 +260,165 @@ TEST(TransactionBuilder, Invoke)
     //Shielded Bundle Contextual Check
     CheckTransationResults results3 = ContextualCheckTransactionShieldedBundles(vvtx2[0], &view, consensusId, false, 0);
     EXPECT_TRUE(results3.validationPassed);
+}
 
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+// Phase 4 protocol-coverage audit: AddIronwoodSpendRaw/ConvertRawIronwoodSpend
+// (and, less critically, InitializeIronwood/AddIronwoodOutputRaw/
+// ConvertRawIronwoodOutput) had zero direct coverage anywhere in the gtest
+// suite prior to this - only Sapling's builder path was exercised here, and
+// Ironwood's output (not spend) side got incidental exercise via
+// gtest/test_paymentdisclosure.cpp. This mirrors the Sapling shield-then-spend
+// flow in TransactionBuilder.Invoke above, but for the Ironwood pool end to end.
+TEST(TransactionBuilder, IronwoodShieldAndSpend)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+    auto consensusParams = Params().GetConsensus();
+    auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_IRONWOOD].nBranchId;
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    IronwoodWallet ironwoodWallet;
+    IronwoodMerkleFrontier ironwoodFrontier;
+    ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontier);
+
+    // Wallet holding the Ironwood key we'll shield to, then spend from.
+    CWallet fromWallet;
+    CKeyingMaterial rawSeed(32, 0);
+    HDSeed seed(rawSeed);
+    fromWallet.LoadHDSeed(seed);
+    auto addr = fromWallet.GenerateNewIronwoodZKey();
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+    ASSERT_TRUE(fromWallet.GetIronwoodExtendedSpendingKey(addr, extsk));
+    libzcash::IronwoodFullViewingKey fvk;
+    ASSERT_TRUE(extsk.sk.DeriveFVK(&fvk));
+    libzcash::IronwoodOutgoingViewingKey ovk;
+    ASSERT_TRUE(fvk.DeriveOVK(&ovk));
+
+    // Shielding transaction: transparent -> Ironwood output only.
+    // 0.0005 t-ARRR in, 0.0004 z-ARRR out, 0.0001 t-ARRR fee
+    auto builder1 = TransactionBuilder(consensusParams, 1, &keystore);
+    builder1.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder1.InitializeIronwood(/*spendsEnabled=*/false, /*outputsEnabled=*/true, uint256());
+    ASSERT_TRUE(builder1.AddIronwoodOutputRaw(addr, 40000, {}));
+    ASSERT_TRUE(builder1.ConvertRawIronwoodOutput(ovk.ovk));
+    auto maybe_tx1 = builder1.Build();
+    ASSERT_EQ(maybe_tx1.IsTx(), true);
+    auto tx1 = maybe_tx1.GetTxOrThrow();
+
+    EXPECT_EQ(tx1.vin.size(), 1);
+    EXPECT_EQ(tx1.vout.size(), 0);
+    EXPECT_EQ(tx1.GetIronwoodActionsCount(), 2); // real + dummy, per Orchard's min-2-actions padding
+    EXPECT_EQ(tx1.GetValueBalanceIronwood(), -40000);
+
+    CValidationState state;
+    EXPECT_TRUE(CheckTransactionWithoutProofVerification(0, tx1, state));
+    EXPECT_EQ(state.GetRejectReason(), "");
+    CheckTransationResults results0 = ContextualCheckTransactionSingleThreaded(tx1, 1, false);
+    EXPECT_TRUE(results0.validationPassed);
+
+    // Find the real (non-dummy) action via trial decryption using our own OVK,
+    // exactly as gtest/test_paymentdisclosure.cpp's IronwoodGenerateAndVerify does.
+    const auto& bundleDetails = tx1.GetIronwoodBundle().GetDetails();
+    auto actions = bundleDetails.actions();
+    uint256_t ovkBytes;
+    std::copy(ovk.ovk.begin(), ovk.ovk.end(), ovkBytes.begin());
+    int realActionIndex = -1;
+    uint64_t noteValue = 0;
+    uint256_t noteRho{}, noteRseed{};
+    for (size_t i = 0; i < actions.size(); i++) {
+        uint256_t ock;
+        if (!ironwood::derive_ironwood_ock(actions[i], ovkBytes, ock)) {
+            continue;
+        }
+        uint64_t testValue;
+        std::array<uint8_t, 43> testAddress;
+        std::array<uint8_t, 512> testMemo;
+        uint256_t testRho, testRseed;
+        if (ironwood::try_ironwood_decrypt_action_ock(
+                actions[i], ock, testValue, testAddress, testMemo, testRho, testRseed)) {
+            realActionIndex = (int)i;
+            noteValue = testValue;
+            noteRho = testRho;
+            noteRseed = testRseed;
+            break;
+        }
+    }
+    ASSERT_NE(realActionIndex, -1);
+    EXPECT_EQ(noteValue, 40000);
+    uint256 rho = uint256::FromRawBytes(noteRho);
+    uint256 rseed = uint256::FromRawBytes(noteRseed);
+    uint256 cmx = uint256::FromRawBytes(actions[realActionIndex].cmx());
+
+    // Populate the wallet's note-commitment tree with tx1's actions (mirrors
+    // the Sapling equivalent in TransactionBuilder.Invoke above).
+    ironwoodWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
+    for (size_t j = 0; j < actions.size(); j++) {
+        ironwoodWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, (int)j, &actions[j], true);
+    }
+
+    libzcash::MerklePath ironwoodMerklePath;
+    ASSERT_TRUE(ironwoodWallet.GetMerklePathOfNote(tx1.GetHash(), realActionIndex, ironwoodMerklePath));
+    uint256 anchor;
+    ASSERT_TRUE(ironwoodWallet.GetPathRootWithCMU(ironwoodMerklePath, cmx, anchor));
+
+    // Ironwood-only transaction: spend the note just created, send some of it
+    // to a different address, and let the builder auto-generate change.
+    // 0.0004 z-ARRR in, 0.00025 z-ARRR out, 0.0001 z-ARRR fee, 0.00005 z-ARRR change
+    CKeyingMaterial recipientRawSeed(32, 7);
+    HDSeed recipientSeed(recipientRawSeed);
+    auto recipientExtsk = libzcash::IronwoodExtendedSpendingKeyPirate::Master(recipientSeed);
+    libzcash::IronwoodPaymentAddress recipientAddr;
+    ASSERT_TRUE(recipientExtsk.sk.DeriveDefaultAddress(&recipientAddr));
+
+    auto builder2 = TransactionBuilder(consensusParams, 2);
+    builder2.InitializeIronwood(/*spendsEnabled=*/true, /*outputsEnabled=*/true, anchor);
+    EXPECT_TRUE(builder2.AddIronwoodSpendRaw(
+        IronwoodOutPoint(tx1.GetHash(), realActionIndex), addr, noteValue, rho, rseed, ironwoodMerklePath, anchor));
+
+    // Check that trying to add a different anchor fails, mirroring the Sapling case above.
+    EXPECT_FALSE(builder2.AddIronwoodSpendRaw(
+        IronwoodOutPoint(tx1.GetHash(), realActionIndex), addr, noteValue, rho, rseed, ironwoodMerklePath, uint256()));
+
+    EXPECT_TRUE(builder2.ConvertRawIronwoodSpend(extsk));
+    ASSERT_TRUE(builder2.AddIronwoodOutputRaw(recipientAddr, 25000, {}));
+    ASSERT_TRUE(builder2.ConvertRawIronwoodOutput(ovk.ovk));
+
+    auto maybe_tx2 = builder2.Build();
+    ASSERT_EQ(maybe_tx2.IsTx(), true);
+    auto tx2 = maybe_tx2.GetTxOrThrow();
+
+    EXPECT_EQ(tx2.vin.size(), 0);
+    EXPECT_EQ(tx2.vout.size(), 0);
+    EXPECT_EQ(tx2.GetValueBalanceIronwood(), 10000); // 40000 spent - (25000 output + 5000 auto-change)
+
+    EXPECT_TRUE(CheckTransactionWithoutProofVerification(0, tx2, state));
+    EXPECT_EQ(state.GetRejectReason(), "");
+    CheckTransationResults results2 = ContextualCheckTransactionSingleThreaded(tx2, 3, false);
+    EXPECT_TRUE(results2.validationPassed);
 }
 
 TEST(TransactionBuilder, ThrowsOnTransparentInputWithoutKeyStore)
@@ -282,6 +454,12 @@ TEST(TransactionBuilder, FailsWithNegativeChange)
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
@@ -378,10 +556,6 @@ TEST(TransactionBuilder, FailsWithNegativeChange)
     builder3.ConvertRawSaplingOutput(fvk_from.ovk);
     auto maybe_tx3 = builder3.Build();
     EXPECT_TRUE(maybe_tx3.IsTx());
-
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST(TransactionBuilder, ChangeOutput)
@@ -390,6 +564,12 @@ TEST(TransactionBuilder, ChangeOutput)
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
@@ -655,10 +835,6 @@ TEST(TransactionBuilder, ChangeOutput)
         EXPECT_EQ(tx2.GetSaplingOutputsCount(), 2);
         EXPECT_EQ(tx2.GetValueBalanceSapling(), -40000);
     }
-
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST(TransactionBuilder, SetFee)
@@ -666,6 +842,12 @@ TEST(TransactionBuilder, SetFee)
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
@@ -916,16 +1098,17 @@ TEST(TransactionBuilder, SetFee)
         EXPECT_FALSE(maybe_tx2.IsTx());
 
     }
-
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST(TransactionBuilder, CheckSaplingTxVersion)
 {
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
 
     auto sk = libzcash::SaplingSpendingKey::random();
@@ -940,24 +1123,68 @@ TEST(TransactionBuilder, CheckSaplingTxVersion)
 
     // Cannot add Sapling outputs to a non-Sapling transaction
     auto builder = TransactionBuilder(consensusParams, 1);
+    // EXPECT_THROW fails the test outright if AddSaplingOutputRaw doesn't
+    // throw at all, unlike a bare try/catch (which would silently pass with
+    // zero assertions executed if a future refactor changed the guard from
+    // throw to a bool return).
+    EXPECT_THROW(builder.AddSaplingOutputRaw(pk, 12345, {}), std::runtime_error);
     try {
         builder.AddSaplingOutputRaw(pk, 12345, {});
     } catch (std::runtime_error const & err) {
         EXPECT_EQ(err.what(), std::string("TransactionBuilder cannot add Sapling output to pre-Sapling transaction"));
-    } catch(...) {
-        FAIL() << "Expected std::runtime_error";
     }
 
     // Cannot add Sapling spends to a non-Sapling transaction
     libzcash::MerklePath saplingMerklePath;
+    EXPECT_THROW(builder.AddSaplingSpendRaw(SaplingOutPoint(), pk, 10000, uint256(), saplingMerklePath, uint256()), std::runtime_error);
     try {
         builder.AddSaplingSpendRaw(SaplingOutPoint(), pk, 10000, uint256(),saplingMerklePath, uint256());
     } catch (std::runtime_error const & err) {
         EXPECT_EQ(err.what(), std::string("TransactionBuilder cannot add Sapling spend to pre-Sapling transaction"));
-    } catch(...) {
-        FAIL() << "Expected std::runtime_error";
+    }
+}
+
+// Ironwood counterpart to CheckSaplingTxVersion above: confirms
+// AddIronwoodOutputRaw/AddIronwoodSpendRaw reject a transaction built at a
+// height where Sapling is active but Ironwood is not, mirroring the guard
+// TransactionBuilder.IronwoodShieldAndSpend only ever exercises on the happy
+// (Ironwood-active) path.
+TEST(TransactionBuilder, CheckIronwoodTxVersion)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+    auto consensusParams = Params().GetConsensus();
+
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed(32);
+    HDSeed seed(rawSeed);
+    auto m = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed);
+    auto skOpt = m.Derive(Params().BIP44CoinType(), 0);
+    ASSERT_TRUE(skOpt.has_value());
+    libzcash::IronwoodPaymentAddress addr;
+    ASSERT_TRUE(skOpt.value().sk.DeriveDefaultAddress(&addr));
+
+    // Cannot add Ironwood outputs to a pre-Ironwood transaction
+    auto builder = TransactionBuilder(consensusParams, 1);
+    EXPECT_THROW(builder.AddIronwoodOutputRaw(addr, 12345, {}), std::runtime_error);
+    try {
+        builder.AddIronwoodOutputRaw(addr, 12345, {});
+    } catch (std::runtime_error const & err) {
+        EXPECT_EQ(err.what(), std::string("TransactionBuilder cannot add Ironwood Output before Ironwood activation"));
     }
 
-    // Revert to default
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    // Cannot add Ironwood spends to a pre-Ironwood transaction
+    libzcash::MerklePath ironwoodMerklePath;
+    EXPECT_THROW(builder.AddIronwoodSpendRaw(IronwoodOutPoint(), addr, 10000, uint256(), uint256(), ironwoodMerklePath, uint256()), std::runtime_error);
+    try {
+        builder.AddIronwoodSpendRaw(IronwoodOutPoint(), addr, 10000, uint256(), uint256(), ironwoodMerklePath, uint256());
+    } catch (std::runtime_error const & err) {
+        EXPECT_EQ(err.what(), std::string("TransactionBuilder cannot add Ironwood Spend before Ironwood activation"));
+    }
 }

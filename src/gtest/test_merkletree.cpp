@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "test/data/merkle_roots.json.h"
@@ -29,6 +33,12 @@
 #include <boost/foreach.hpp>
 
 #include "json_test_vectors.h"
+
+// Incremental Merkle tree tests: root computation, witnessing, path
+// generation, and serialization/deserialization, checked against test
+// vectors for both Sprout and Sapling commitment trees (test_tree<> is
+// instantiated for SproutTestingMerkleTree and SaplingTestingMerkleTree).
+// No Ironwood/Orchard commitment tree coverage in this file.
 
 using namespace std;
 

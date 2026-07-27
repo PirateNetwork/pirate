@@ -1,3 +1,14 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+// Tests the mini-gmp-backed base58 encode/decode used by komodo_utils.cpp
+// (bitcoin_address, NSPV helpers), checked against base58.h's independent
+// implementation. Note: despite the filename, this file's scope is broader
+// than GMP arithmetic - it also contains RewardsTest/PaymentsTest cases that
+// assert on subsidy/reward-calculation behavior (RewardsCalc, BnFitsCAmount),
+// which arguably belong in a consensus/subsidy-focused test file instead.
+
 #include <gtest/gtest.h>
 #include "util/strencodings.h"
 #include "base58.h"

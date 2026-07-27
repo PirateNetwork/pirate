@@ -1,4 +1,5 @@
 // Copyright (c) 2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,6 +22,11 @@
 #include <gtest/gtest.h>
 
 #include <univalue.h>
+
+// Tests SignatureHash computation against JSON test vectors across this
+// fork's transparent tx versions: legacy, Overwinter, and Sapling (all
+// non-Sprout sighash algorithms, not just the legacy one). Covers the
+// TRANSPARENT pool specifically, not Sapling/Ironwood/Sprout shielded logic.
 
 extern UniValue read_json(const std::string& jsondata);
 

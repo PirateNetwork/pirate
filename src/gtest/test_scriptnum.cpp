@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +10,11 @@
 #include <gtest/gtest.h>
 #include <limits.h>
 #include <stdint.h>
+
+// Tests CScriptNum construction, serialization, and arithmetic operators
+// against a CBigNum reference implementation, including overflow/edge-case
+// bounds. Covers the TRANSPARENT pool specifically (script-level numeric
+// encoding), not Sapling/Ironwood/Sprout shielded logic.
 
 class scriptnum_tests : public BitcoinBasicTestingSetup {};
 
@@ -172,6 +178,36 @@ TEST_F(scriptnum_tests, creation)
             RunCreate(values[i] - offsets[j]);
         }
     }
+}
+
+// CheckCreateVch (used by RunCreate/creation above) only ever constructs
+// CScriptNum with fRequireMinimal=false, so script/script.h's non-minimal-
+// encoding rejection path (and its 0xff00/0xff80 sign-bit exception) had no
+// coverage anywhere in this file.
+TEST_F(scriptnum_tests, NonMinimalEncoding)
+{
+    // Minimal encoding of zero is an empty vector; a single 0x00 byte is
+    // therefore non-minimal and must be rejected when fRequireMinimal=true,
+    // but still accepted when false (matches relaxed-verification callers).
+    std::vector<unsigned char> nonMinimalZero{0x00};
+    EXPECT_THROW(CScriptNum(nonMinimalZero, true), scriptnum_error);
+    EXPECT_NO_THROW(CScriptNum(nonMinimalZero, false));
+
+    // Sign-bit boundary exception: 0xff00/0xff80 encode +255/-255 and must
+    // NOT be rejected even though their last byte's low 7 bits are zero,
+    // since the second-to-last byte's sign bit is set.
+    std::vector<unsigned char> plus255{0xff, 0x00};
+    EXPECT_NO_THROW(CScriptNum(plus255, true));
+    EXPECT_EQ(CScriptNum(plus255, true).getint(), 255);
+
+    std::vector<unsigned char> minus255{0xff, 0x80};
+    EXPECT_NO_THROW(CScriptNum(minus255, true));
+    EXPECT_EQ(CScriptNum(minus255, true).getint(), -255);
+
+    // A genuinely non-minimal multi-byte encoding, where the sign-bit
+    // exception does not apply, must still be rejected.
+    std::vector<unsigned char> nonMinimalMultiByte{0x01, 0x00};
+    EXPECT_THROW(CScriptNum(nonMinimalMultiByte, true), scriptnum_error);
 }
 
 TEST_F(scriptnum_tests, operators)

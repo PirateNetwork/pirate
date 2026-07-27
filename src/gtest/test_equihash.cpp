@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #if defined(HAVE_CONFIG_H)
 #include "config/bitcoin-config.h"
 #endif
@@ -7,6 +11,11 @@
 
 #include "crypto/equihash.h"
 #include "uint256.h"
+
+// Tests for Equihash's bit-packing helpers (ExpandArray/CompressArray, used to
+// serialize/deserialize PoW solution indices) and the solver-cancellation
+// plumbing, as distinct from the known-answer solve/validate correctness
+// tests in gtest/test_equihash_bitcoin.cpp.
 
 void TestExpandAndCompress(const std::string &scope, size_t bit_len, size_t byte_pad,
                            std::vector<unsigned char> compact,

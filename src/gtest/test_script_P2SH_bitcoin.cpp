@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,6 +20,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Tests P2SH script signing, non-recursive P2SH behavior, and IsStandard()
+// classification for P2SH outputs. Covers the TRANSPARENT pool specifically:
+// script/address mechanics, not Sapling/Ironwood/Sprout shielded logic.
 
 using namespace std;
 

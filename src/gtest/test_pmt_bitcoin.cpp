@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -14,6 +15,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Tests CPartialMerkleTree, the SPV partial-merkle-tree proof structure:
+// building a proof from a set of matched transactions and verifying it
+// extracts the correct matched txids and merkle root.
 
 using namespace std;
 

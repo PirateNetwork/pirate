@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,6 +13,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Tests GetSigOpCount(), the signature-operation counter used to enforce
+// standardness and consensus sigop limits. Covers the TRANSPARENT pool
+// specifically, not Sapling/Ironwood/Sprout shielded logic.
 
 class sigopcount_tests : public BitcoinBasicTestingSetup {};
 
@@ -59,4 +64,24 @@ TEST_F(sigopcount_tests, GetSigOpCount)
     CScript scriptSig2;
     scriptSig2 << OP_1 << ToByteVector(dummy) << ToByteVector(dummy) << Serialize(s2);
     EXPECT_EQ(p2sh.GetSigOpCount(scriptSig2), 3U);
+}
+
+// GetSigOpCount above only exercises OP_CHECKSIG/OP_CHECKMULTISIG; the
+// structurally-identical OP_CHECKSIGVERIFY/OP_CHECKMULTISIGVERIFY branches
+// (script/script.cpp) had no coverage at all - a regression dropping either
+// VERIFY clause from the counter would pass silently.
+TEST_F(sigopcount_tests, GetSigOpCountVerifyOpcodes)
+{
+    CScript checksigVerify;
+    checksigVerify << OP_CHECKSIGVERIFY;
+    EXPECT_EQ(checksigVerify.GetSigOpCount(true), 1U);
+    EXPECT_EQ(checksigVerify.GetSigOpCount(false), 1U);
+
+    uint160 dummy;
+    CScript checkmultisigVerify;
+    checkmultisigVerify << OP_1 << ToByteVector(dummy) << ToByteVector(dummy) << OP_2 << OP_CHECKMULTISIGVERIFY;
+    // Accurate counting reads the immediately-preceding OP_2 as n=2.
+    EXPECT_EQ(checkmultisigVerify.GetSigOpCount(true), 2U);
+    // Inaccurate counting treats every CHECKMULTISIG(VERIFY) as 20 sigops.
+    EXPECT_EQ(checkmultisigVerify.GetSigOpCount(false), 20U);
 }

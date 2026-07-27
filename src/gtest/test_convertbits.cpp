@@ -1,4 +1,5 @@
 // Copyright (c) 2018 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +9,9 @@
 
 #include <gtest/gtest.h>
 
+// Tests ConvertBits<>, the generic bit-width-regrouping helper (e.g. 8-bit
+// bytes <-> 5-bit groups) used by bech32 encoding. Protocol-agnostic
+// infrastructure, not shielded-pool-specific despite the zcash/ include.
 class convertbits_tests : public BitcoinBasicTestingSetup {};
 
 TEST_F(convertbits_tests, convertbits_deterministic)

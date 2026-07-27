@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -11,6 +12,11 @@
 
 #include <gtest/gtest.h>
 #include <list>
+
+// CTxMemPool container-mechanics tests: remove/cascade of dependent
+// transactions, fee-rate index ordering, removeWithoutBranchId, and
+// sanity-check frequency. Complementary to test_mempool.cpp, which covers
+// AcceptToMemoryPool's acceptance-policy/rejection-reason behavior.
 
 class mempool_tests_bitcoin : public BitcoinTestingSetup {};
 

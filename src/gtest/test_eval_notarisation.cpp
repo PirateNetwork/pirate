@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include <cryptoconditions.h>
 #include <gtest/gtest.h>
 
@@ -19,6 +22,10 @@
 #include "komodo_notary.h"
 
 #include <boost/filesystem.hpp>
+
+// Tests for the notarisation CryptoConditions eval code: verifying notary
+// signatures against a notarisation payload and exercising
+// komodo_notarysinit initialization used by the eval callback.
 
 extern std::map<std::string, std::string> mapArgs;
 
@@ -237,6 +244,13 @@ TEST(TestEvalNotarisation, test_komodo_notarysinit)
     boost::filesystem::create_directories(temp_path);
 
     mapArgs["-datadir"] = temp_path.string();
+    // mapArgs["-datadir"] otherwise leaks pointing at a directory this test
+    // deletes below; a later test that calls ClearDatadirCache() (several do)
+    // without setting its own -datadir would then get a GetDataDir() that
+    // fails to resolve (fs::is_directory() on a deleted path).
+    struct DatadirArgReverter {
+        ~DatadirArgReverter() { mapArgs.erase("-datadir"); }
+    } datadirArgReverter;
     {
         boost::filesystem::path file = temp_path / "komodostate";
         std::FILE* fp = std::fopen(file.string().c_str(), "wb+");
@@ -332,6 +346,9 @@ TEST(TestEvalNotarisation, test_komodo_notaries)
     boost::filesystem::path temp_path = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(temp_path);
     mapArgs["-datadir"] = temp_path.string();
+    struct DatadirArgReverter {
+        ~DatadirArgReverter() { mapArgs.erase("-datadir"); }
+    } datadirArgReverter;
     {
         boost::filesystem::path file = temp_path / "komodostate";
         std::FILE* fp = std::fopen(file.string().c_str(), "wb+");

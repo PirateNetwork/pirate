@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include <cryptoconditions.h>
 #include <gtest/gtest.h>
 
@@ -5,13 +8,15 @@
 #include "key.h"
 #include "script/cc.h"
 #include "cc/eval.h"
+#include "cc/CCinclude.h"
 #include "primitives/transaction.h"
 #include "script/interpreter.h"
 #include "script/serverchecker.h"
 
 #include "gtest/gtestutils.h"
 
-
+// Tests for Komodo CryptoConditions (CC) smart-condition scripts: signing,
+// verifying, and spending CC-encoded outputs via the CC eval framework.
 
 class CCTest : public ::testing::Test {
 public:
@@ -180,6 +185,19 @@ TEST_F(CCTest, testCryptoConditionsDisabled)
 
     ASSETCHAINS_CC = 0;
     ASSERT_FALSE(CCVerify(mtxTo, cond));
+}
+
+
+// treasurechest_attack_vectors.md: GetCryptoCondition() used to compute
+// ffbin.size()-1 (size_t) to strip the trailing hashtype byte before handing
+// the fulfillment to the BER decoder. An attacker-controlled scriptSig with
+// an empty push made that underflow to SIZE_MAX, driving an out-of-bounds
+// read. The fix returns null on an empty push before that subtraction.
+TEST_F(CCTest, testGetCryptoConditionEmptyFulfillment)
+{
+    CScript scriptSig = CScript() << std::vector<unsigned char>();
+    CC *cond = GetCryptoCondition(scriptSig);
+    EXPECT_EQ(cond, nullptr);
 }
 
 

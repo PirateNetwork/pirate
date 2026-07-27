@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <chainparams.h>
 #include <key_io.h>
 #include <zcash/Address.hpp>
@@ -5,6 +9,10 @@
 #include "consensus/upgrades.h"
 
 #include <gtest/gtest.h>
+
+// Tests Sapling address/spending-key/viewing-key encode and decode
+// round-trips via ZIP 32 derivation. This covers the SAPLING shielded pool
+// specifically, not the transparent pool.
 
 TEST(Keys, EncodeAndDecodeSapling)
 {
@@ -51,6 +59,65 @@ TEST(Keys, EncodeAndDecodeSapling)
       vk.fvk.DeriveIVK(&ivk1);
       vk2.fvk.DeriveIVK(&ivk2);
       ASSERT_EQ(ivk1, ivk2);
+        }
+    }
+}
+
+// Ironwood counterpart to EncodeAndDecodeSapling above. key_io.cpp has full
+// Ironwood bech32 encode/decode support (IronwoodExtendedSpendingKeyPirate,
+// IronwoodPaymentAddress, IronwoodExtendedFullViewingKeyPirate), and
+// libzcash::SpendingKey/PaymentAddress/ViewingKey are std::variants that
+// include the Ironwood arm, but nothing round-tripped it through these
+// specific bech32 functions.
+TEST(Keys, EncodeAndDecodeIronwood)
+{
+    SelectParams(CBaseChainParams::MAIN);
+
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed(32);
+    HDSeed seed(rawSeed);
+    auto m = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed);
+    uint32_t bip44CoinType = Params().BIP44CoinType();
+
+    for (uint32_t i = 0; i < 20; i++) {
+        auto skOpt = m.Derive(bip44CoinType, i);
+        ASSERT_TRUE(skOpt.has_value());
+        auto sk = skOpt.value();
+        auto vkOpt = sk.GetXFVK();
+        ASSERT_TRUE(vkOpt.has_value());
+        auto vk = vkOpt.value();
+        libzcash::IronwoodPaymentAddress addr;
+        ASSERT_TRUE(sk.sk.DeriveDefaultAddress(&addr));
+
+        {
+            std::string str = EncodeSpendingKey(sk);
+            libzcash::SpendingKey spendingkey2 = DecodeSpendingKey(str);
+            ASSERT_TRUE(IsValidSpendingKey(spendingkey2));
+            auto sk2 = std::get_if<libzcash::IronwoodExtendedSpendingKeyPirate>(&spendingkey2);
+            ASSERT_TRUE(sk2 != nullptr);
+            ASSERT_EQ(sk, *sk2);
+        }
+
+        {
+            std::string str = EncodePaymentAddress(addr);
+            libzcash::PaymentAddress paymentaddr2 = DecodePaymentAddress(str);
+            ASSERT_TRUE(IsValidPaymentAddress(paymentaddr2));
+            auto addr2 = std::get_if<libzcash::IronwoodPaymentAddress>(&paymentaddr2);
+            ASSERT_TRUE(addr2 != nullptr);
+            ASSERT_EQ(addr, *addr2);
+        }
+
+        {
+            std::string vk_string = EncodeViewingKey(vk);
+            libzcash::ViewingKey viewingkey2 = DecodeViewingKey(vk_string);
+            ASSERT_TRUE(IsValidViewingKey(viewingkey2));
+            auto vk2_ptr = std::get_if<libzcash::IronwoodExtendedFullViewingKeyPirate>(&viewingkey2);
+            ASSERT_TRUE(vk2_ptr != nullptr);
+            auto vk2 = *vk2_ptr;
+            ASSERT_EQ(vk, vk2);
+            libzcash::IronwoodIncomingViewingKey ivk1, ivk2;
+            ASSERT_TRUE(vk.fvk.DeriveIVK(&ivk1));
+            ASSERT_TRUE(vk2.fvk.DeriveIVK(&ivk2));
+            ASSERT_EQ(ivk1, ivk2);
         }
     }
 }

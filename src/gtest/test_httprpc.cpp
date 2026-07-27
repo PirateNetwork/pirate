@@ -1,8 +1,16 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
 #include "httprpc.cpp"
 #include "httpserver.h"
+
+// Covers HTTP JSON-RPC request handling in httprpc.cpp, specifically
+// RFC2617-style HTTP Basic authentication (method checks, missing auth
+// header, bad credentials). Pool-agnostic transport-layer surface.
 
 using ::testing::Return;
 

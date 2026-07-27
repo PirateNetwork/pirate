@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "arith_uint256.h"
@@ -15,6 +16,9 @@
 #include <string>
 #include <stdio.h>
 
+// Tests uint256/arith_uint256: comparisons, hex/string conversion,
+// serialization round-trips, and basic arithmetic operations.
+//
 // Named _bitcoin to avoid colliding with any future gtest/test_uint256.cpp; no
 // such file exists yet in this suite, but arith_uint256-adjacent naming is common.
 class uint256_tests : public BitcoinBasicTestingSetup {};

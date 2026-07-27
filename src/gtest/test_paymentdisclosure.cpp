@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "chainparams.h"
@@ -17,6 +21,14 @@
 #include "paymentdisclosure.h"
 #include "gtest/gtestutils.h"
 #include <rust/bridge.h>
+
+// Payment disclosure tests: generating and independently verifying a
+// disclosure that proves a shielded output's value/address without revealing
+// the spending key. Covers both pools in parallel - SaplingGenerateAndVerify
+// and IronwoodGenerateAndVerify build near-identical scenarios for their
+// respective pool, and UnifiedVerifyDispatchesByType checks the shared
+// VerifyPaymentDisclosure entry point dispatches by disclosure type. Good
+// reference for how a dual-pool test pair should be structured.
 
 using namespace libzcash;
 
@@ -39,6 +51,12 @@ TEST(paymentdisclosure, SaplingGenerateAndVerify)
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
@@ -107,6 +125,13 @@ TEST(paymentdisclosure, SaplingGenerateAndVerify)
     EXPECT_TRUE(results.validationPassed);
 
     InsertIntoMempool(tx, consensusId, /*spendsCoinbase=*/false);
+    struct MempoolReverter {
+        const CTransaction& tx;
+        ~MempoolReverter() {
+            std::list<CTransaction> removed;
+            mempool.remove(tx, removed, true);
+        }
+    } mempoolReverter{tx};
 
     // Generate the disclosure from the sending wallet.
     std::string disclosure = GenerateSaplingDisclosure(&fromWallet, tx.GetHash(), realOutputIndex);
@@ -124,9 +149,6 @@ TEST(paymentdisclosure, SaplingGenerateAndVerify)
     SaplingDisclosureVerificationResult badResult = VerifySaplingDisclosure("not-a-real-disclosure");
     EXPECT_FALSE(badResult.success);
     EXPECT_FALSE(badResult.error.empty());
-
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST(paymentdisclosure, IronwoodGenerateAndVerify)
@@ -135,6 +157,13 @@ TEST(paymentdisclosure, IronwoodGenerateAndVerify)
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_IRONWOOD].nBranchId;
 
@@ -211,6 +240,13 @@ TEST(paymentdisclosure, IronwoodGenerateAndVerify)
     ASSERT_NE(realActionIndex, -1);
 
     InsertIntoMempool(tx, consensusId, /*spendsCoinbase=*/false);
+    struct MempoolReverter {
+        const CTransaction& tx;
+        ~MempoolReverter() {
+            std::list<CTransaction> removed;
+            mempool.remove(tx, removed, true);
+        }
+    } mempoolReverter{tx};
 
     std::string disclosure = GenerateIronwoodDisclosure(&fromWallet, tx.GetHash(), realActionIndex);
     ASSERT_FALSE(disclosure.empty());
@@ -225,10 +261,6 @@ TEST(paymentdisclosure, IronwoodGenerateAndVerify)
     IronwoodDisclosureVerificationResult badResult = VerifyIronwoodDisclosure("not-a-real-disclosure");
     EXPECT_FALSE(badResult.success);
     EXPECT_FALSE(badResult.error.empty());
-
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST(paymentdisclosure, UnifiedVerifyDispatchesByType)
@@ -236,6 +268,12 @@ TEST(paymentdisclosure, UnifiedVerifyDispatchesByType)
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
     auto consensusParams = Params().GetConsensus();
     auto consensusId = NetworkUpgradeInfo[Consensus::UPGRADE_SAPLING].nBranchId;
 
@@ -293,6 +331,13 @@ TEST(paymentdisclosure, UnifiedVerifyDispatchesByType)
     ASSERT_NE(realOutputIndex, -1);
 
     InsertIntoMempool(tx, consensusId, /*spendsCoinbase=*/false);
+    struct MempoolReverter {
+        const CTransaction& tx;
+        ~MempoolReverter() {
+            std::list<CTransaction> removed;
+            mempool.remove(tx, removed, true);
+        }
+    } mempoolReverter{tx};
 
     std::string disclosure = GenerateSaplingDisclosure(&fromWallet, tx.GetHash(), realOutputIndex);
     ASSERT_FALSE(disclosure.empty());
@@ -305,7 +350,4 @@ TEST(paymentdisclosure, UnifiedVerifyDispatchesByType)
     UnifiedDisclosureVerificationResult badResult = VerifyPaymentDisclosure("not-a-real-disclosure");
     EXPECT_FALSE(badResult.success);
     EXPECT_FALSE(badResult.error.empty());
-
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }

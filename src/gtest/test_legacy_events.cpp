@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 #include <vector>
@@ -12,6 +15,12 @@
 #include "core_io.h"
 #include "komodo.h"
 #include "komodo_notary.h"
+
+// Tests for specific cross-chain notarization event scenarios (e.g.
+// PhantomOpReturnEvent, NormalKMDLTCNota, MILKMDNota, MARTYKMDNota) parsed
+// from real notarization transaction hex. Closely related to
+// test_events.cpp, but covers concrete event cases rather than the
+// faststateinit/event-copy machinery.
 
 // https://bitcointalk.org/index.php?topic=1605144.msg32538076#msg32538076 - notarization txes explained
 

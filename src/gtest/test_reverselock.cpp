@@ -1,4 +1,5 @@
 // Copyright (c) 2015 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,6 +7,10 @@
 #include "gtest/gtestutils.h"
 
 #include <gtest/gtest.h>
+
+// Tests the REVERSE_LOCK utility, which temporarily unlocks an already-held
+// lock for the duration of a scope and re-locks it on destruction, including
+// its failure mode when used on a lock that isn't held.
 
 class reverselock_tests : public BitcoinBasicTestingSetup {};
 

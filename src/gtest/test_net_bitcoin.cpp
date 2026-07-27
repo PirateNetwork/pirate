@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2020 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,6 +20,10 @@
 #include <ios>
 #include <string>
 
+// Covers CNetAddr serialization (legacy v1, v2/BIP155 addrv2 wire formats),
+// reachability tracking (IsReachable/SetReachable), and local-address
+// lifecycle management.
+//
 // test/net_tests.cpp (upstream Bitcoin Core, 2012-2020) targets a much newer
 // net stack than this fork has (class-based gArgs, AdvertiseLocal(),
 // PoissonNextSend(), SetAddrLocal(), and a differently-shaped CNode/CAddrDB

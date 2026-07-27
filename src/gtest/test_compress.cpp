@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +10,10 @@
 #include <stdint.h>
 
 #include <gtest/gtest.h>
+
+// Tests the compact script/amount compression used in the UTXO set
+// serialization: CScriptCompressor's standard-script encoding and
+// CTxOutCompressor's amount compression/decompression round-trips.
 
 // amounts 0.00000001 .. 0.00100000
 #define NUM_MULTIPLES_UNIT 100000

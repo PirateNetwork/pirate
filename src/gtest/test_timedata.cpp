@@ -1,4 +1,5 @@
 // Copyright (c) 2020 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -8,6 +9,9 @@
 #include "timedata.h"
 #include "random.h"
 #include "netbase.h"
+
+// Covers CMedianFilter-based peer time-offset tracking and the warning logic
+// that fires when this node's clock appears to disagree with enough peers.
 
 using ::testing::StrictMock;
 

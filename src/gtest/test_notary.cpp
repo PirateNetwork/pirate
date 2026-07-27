@@ -1,8 +1,15 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "gtest/gtestutils.h"
 #include "chainparams.h"
 #include "komodo_notary.h"
 
 #include <gtest/gtest.h>
+
+// Tests for Komodo notary node elections: the KomodoNotaries pubkey table,
+// ElectedNotary selection logic, and the S7-era season transitions used to
+// determine which notary set is active at a given block height.
 
 //void undo_init_notaries(); // test helper
 void komodo_notaries_uninit();
@@ -49,6 +56,9 @@ TEST(TestNotary, KomodoNotaries)
 {
     // Test komodo_notaries(), getkmdseason()
     chainName = assetchain(""); // set as KMD
+    struct ChainNameReverter {
+        ~ChainNameReverter() { chainName = assetchain(""); }
+    } chainNameReverter;
     SelectParams(CBaseChainParams::MAIN);
     komodo_notaries_uninit();
     //undo_init_STAKED();
@@ -206,6 +216,9 @@ TEST(TestNotary, KomodoNotaries_S7_AS)
     SelectParams(CBaseChainParams::MAIN);
     komodo_notaries_uninit();
     chainName = assetchain("MYASSET");
+    struct ChainNameReverter {
+        ~ChainNameReverter() { chainName = assetchain(""); }
+    } chainNameReverter;
     EXPECT_EQ( getacseason(1688132253+1), 8);
     // dPoW Season 9 was added after this test was written, reusing 1951328000 as its
     // own (final) upper boundary - it's no longer season 8's boundary.

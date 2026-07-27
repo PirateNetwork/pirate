@@ -1,4 +1,5 @@
 // Copyright (c) 2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,6 +16,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Test vectors for the low-level hash/MAC primitives (RIPEMD160, SHA1,
+// SHA512, HMAC-SHA256, HMAC-SHA512). Protocol-agnostic cryptographic
+// infrastructure, not shielded-pool-specific.
 
 // Named _bitcoin: the original file's sha256_testvectors case is already
 // covered (and slightly exceeded) by the pre-existing

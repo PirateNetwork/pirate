@@ -1,13 +1,27 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "zcash/Address.hpp"
 #include "zcash/Note.hpp"
+#include "zcash/address/zip32.h"
 
 #include "amount.h"
 #include "random.h"
 #include "librustzcash.h"
 
 #include <array>
+
+// Basic sanity checks on Sapling/Ironwood Note construction: SaplingNote.Random
+// checks notes built with the same diversifier/pk_d differ in value/rcm as
+// expected, and notes derived from distinct spending keys get distinct
+// diversifiers and pk_d. IronwoodNote.Random is the Ironwood counterpart -
+// this pool didn't exist when SaplingNote.Random was originally written, so
+// there was never an Ironwood version of this check anywhere in the suite;
+// IronwoodNote is otherwise only ever touched indirectly, via the full
+// TransactionBuilder/paymentdisclosure pipeline in other test files.
 
 using namespace libzcash;
 
@@ -42,4 +56,32 @@ TEST(SaplingNote, Random)
     SaplingNote note3(addr3.d, addr3.pk_d, GetRand(MAX_MONEY), GetRandHash(), Zip212Enabled::BeforeZip212);
     ASSERT_NE(note1.d, note3.d);
     ASSERT_NE(note1.pk_d, note3.pk_d);
+}
+
+static libzcash::IronwoodPaymentAddress DefaultIronwoodAddressFromRandomSeed(unsigned char seedByte) {
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed(32, seedByte);
+    HDSeed seed(rawSeed);
+    auto sk = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, false);
+    libzcash::IronwoodPaymentAddress addr;
+    EXPECT_TRUE(sk.sk.DeriveDefaultAddress(&addr));
+    return addr;
+}
+
+TEST(IronwoodNote, Random)
+{
+    // Test creating random notes at the same address
+    auto address1 = DefaultIronwoodAddressFromRandomSeed(1);
+    IronwoodNote note1(address1, GetRand(MAX_MONEY), GetRandHash(), GetRandHash(), GetRandHash());
+    IronwoodNote note2(address1, GetRand(MAX_MONEY), GetRandHash(), GetRandHash(), GetRandHash());
+
+    ASSERT_TRUE(note1.address == note2.address);
+    ASSERT_NE(note1.value(), note2.value());
+    ASSERT_NE(note1.rho(), note2.rho());
+    ASSERT_NE(note1.rseed(), note2.rseed());
+
+    // Test diversifier and pk_d are not the same for a different address
+    auto address3 = DefaultIronwoodAddressFromRandomSeed(3);
+    IronwoodNote note3(address3, GetRand(MAX_MONEY), GetRandHash(), GetRandHash(), GetRandHash());
+    ASSERT_NE(note1.address.d, note3.address.d);
+    ASSERT_NE(note1.address.pk_d, note3.address.pk_d);
 }

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "primitives/block.h"
 #include "gtest/gtestutils.h"
 #include "komodo_extern_globals.h"
@@ -7,6 +11,11 @@
 
 #include <thread>
 #include <gtest/gtest.h>
+
+// Integration-style tests for ConnectBlock()-level block-connection logic,
+// driving a real TestChain to generate and connect blocks and checking
+// consensus outcomes (e.g. coinbase/subsidy caps) that only surface once a
+// block is actually connected to the active chain.
 
 // NB! first generateBlock call changes IsInitialBlockDownload() to false globally (!), affects other tests
 
@@ -68,6 +77,118 @@ TEST(test_block, TestConnectWithoutChecks)
     EXPECT_TRUE( chain.ConnectBlock(block, state, &newIndex, true, false) );
     if (!state.IsValid() )
         FAIL() << state.GetRejectReason();
+}
+
+// dos_vulnerability_analysis.md / Phase 3 consensus-rule audit: ConnectBlock()'s
+// "bad-cb-amount" check (ConnectBlock, guarding block.vtx[0].GetValueOut() against
+// blockReward+KOMODO_EXTRASATOSHI) is the direct inflation-limit backstop - a
+// coinbase that pays itself more than the computed subsidy must be rejected. Had
+// no test coverage anywhere in the suite prior to this.
+TEST(test_block, TestCoinbaseOverpayRejected)
+{
+    TestChain chain;
+    // See TestStopAt's comment: KMD-default chainName at height 1 produces an
+    // unconstructable coinbase under the current Rust digest FFI.
+    chainName = assetchain("TST");
+    auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
+    std::shared_ptr<CBlock> lastBlock = chain.generateBlock(notary); // genesis block
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
+
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
+    auto consensusParams = Params().GetConsensus();
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << newHeight << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    // Overpay by a full coin relative to the correct subsidy for newHeight.
+    txNew.vout[0].nValue = GetBlockSubsidy(newHeight, consensusParams) + COIN;
+    txNew.nExpiryHeight = 0;
+
+    CBlock block;
+    block.vtx.push_back(CTransaction(txNew));
+
+    CValidationState state;
+    auto index = chain.GetIndex();
+    CBlockIndex newIndex;
+    newIndex.pprev = index;
+    newIndex.nHeight = newHeight; // ConnectBlock() reads pindex->nHeight directly, not derived from pprev.
+    EXPECT_FALSE( chain.ConnectBlock(block, state, &newIndex, true, false) );
+    EXPECT_EQ(state.GetRejectReason(), "bad-cb-amount");
+}
+
+// consensus_logic_audit.md CL-01 / Phase 3 consensus-rule audit: ConnectBlock()'s
+// ZIP-209-style turnstile check rejects a block whose cumulative shielded-pool
+// value has gone negative (main.cpp, right after the block-index nChainSupply
+// bookkeeping). pindex->nChainSaplingValue/nChainIronwoodValue are computed
+// upstream of ConnectBlock (in AddToBlockIndex/ReceivedBlockTransactions, not
+// here), so a direct ConnectBlock()-level test can't derive a violation from
+// real spends/outputs - it sets the already-computed cumulative field directly
+// on a synthetic CBlockIndex, which is exactly what ConnectBlock reads. This
+// check had no test coverage at all prior to this (the CL-01 audit finding
+// itself turned out to be stale/pointed at the wrong line - the real fix
+// already existed - but the fix was unverified).
+TEST(test_block, TestTurnstileSaplingViolationRejected)
+{
+    TestChain chain;
+    chainName = assetchain("TST");
+    auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
+    std::shared_ptr<CBlock> lastBlock = chain.generateBlock(notary); // genesis block
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
+
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
+    auto consensusParams = Params().GetConsensus();
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << newHeight << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].nValue = GetBlockSubsidy(newHeight, consensusParams); // correctly paid, doesn't trip bad-cb-amount
+    txNew.nExpiryHeight = 0;
+
+    CBlock block;
+    block.vtx.push_back(CTransaction(txNew));
+
+    CValidationState state;
+    auto index = chain.GetIndex();
+    CBlockIndex newIndex;
+    newIndex.pprev = index;
+    newIndex.nHeight = newHeight;
+    newIndex.nChainSaplingValue = -1; // simulates the cumulative Sapling pool having gone negative
+    EXPECT_FALSE( chain.ConnectBlock(block, state, &newIndex, true, false) );
+    EXPECT_EQ(state.GetRejectReason(), "turnstile-violation-sapling-shielded-pool");
+}
+
+TEST(test_block, TestTurnstileIronwoodViolationRejected)
+{
+    TestChain chain;
+    chainName = assetchain("TST");
+    auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
+    std::shared_ptr<CBlock> lastBlock = chain.generateBlock(notary); // genesis block
+    ASSERT_GT( chain.GetIndex()->nHeight, 0 );
+
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
+    auto consensusParams = Params().GetConsensus();
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << newHeight << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].nValue = GetBlockSubsidy(newHeight, consensusParams); // correctly paid, doesn't trip bad-cb-amount
+    txNew.nExpiryHeight = 0;
+
+    CBlock block;
+    block.vtx.push_back(CTransaction(txNew));
+
+    CValidationState state;
+    auto index = chain.GetIndex();
+    CBlockIndex newIndex;
+    newIndex.pprev = index;
+    newIndex.nHeight = newHeight;
+    newIndex.nChainSaplingValue = 0; // must not itself trip the Sapling check
+    newIndex.nChainIronwoodValue = -1; // simulates the cumulative Ironwood pool having gone negative
+    EXPECT_FALSE( chain.ConnectBlock(block, state, &newIndex, true, false) );
+    EXPECT_EQ(state.GetRejectReason(), "turnstile-violation-ironwood-shielded-pool");
 }
 
 // TestSpendInSameBlock and TestDoubleSpendInSameBlock removed: both required

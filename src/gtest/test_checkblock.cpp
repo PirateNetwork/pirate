@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
@@ -6,6 +10,12 @@
 #include "keystore.h"
 #include "key_io.h"
 #include "zcash/Proof.hpp"
+
+// Tests for CheckBlock() and ContextualCheckBlock(), the block-level structural
+// and consensus-rule checks applied before a block is connected. Covers version
+// checks, coinbase-height enforcement, and per-network-upgrade-era transaction
+// acceptance/rejection across Sprout, Overwinter, Sapling, Blossom, and Ironwood
+// rule branches.
 
 static const std::string tSecretRegtest = "UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1";
 
@@ -89,6 +99,78 @@ TEST(CheckBlock, BlockSproutRejectsBadVersion) {
     EXPECT_FALSE(CheckBlock(&futureblock, 1, &indexPrev, block, state, verifier, false, false));
 }
 
+
+// Phase 3 consensus-rule audit: ContextualCheckBlockHeader()'s "bad-diffbits",
+// "time-too-old", and "time-too-new" checks had no test coverage anywhere -
+// these gate every block header's proof-of-work target and timestamp, and
+// are cheap to exercise directly (no transactions/proofs needed).
+TEST(CheckBlock, ContextualCheckBlockHeaderDiffbitsAndTimestamps) {
+    // A stale mock time left over from an earlier test would make GetTime()
+    // return a frozen, possibly tiny value, which the "time-too-new" case
+    // below relies on being real wall-clock time to land after the "time-too-old"
+    // floor - see the same lesson documented in gtestutils.cpp's TestChain setup.
+    SetMockTime(0);
+
+    SelectParams(CBaseChainParams::MAIN);
+    const Consensus::Params& consensusParams = Params().GetConsensus();
+    CBlockIndex indexPrev{ Params().GenesisBlock() }; // nHeight stays 0, so the next header is height 1
+
+    // This synthetic indexPrev/header pair isn't part of a real chainActive,
+    // so MAIN's real checkpoint table would reject height 1 outright (below
+    // its first checkpoint) via a path unrelated to what's under test here.
+    fCheckpointsEnabled = false;
+
+    {
+        // Correct diffbits, timestamp just past the median-time-past floor: passes.
+        // nVersion must be >= 4 (main.cpp's separate "bad-version" check) - unrelated
+        // to diffbits/timestamps, but CBlockHeader's default nVersion is 0.
+        CBlockHeader header;
+        header.nVersion = 4;
+        header.nTime = (uint32_t)indexPrev.GetMedianTimePast() + 1;
+        header.nBits = GetNextWorkRequired(&indexPrev, &header, consensusParams);
+
+        CValidationState state;
+        EXPECT_TRUE(ContextualCheckBlockHeader(header, state, &indexPrev));
+    }
+
+    {
+        // Same valid timestamp, wrong nBits.
+        CBlockHeader header;
+        header.nVersion = 4;
+        header.nTime = (uint32_t)indexPrev.GetMedianTimePast() + 1;
+        header.nBits = GetNextWorkRequired(&indexPrev, &header, consensusParams) + 1;
+
+        CValidationState state;
+        EXPECT_FALSE(ContextualCheckBlockHeader(header, state, &indexPrev));
+        EXPECT_EQ(state.GetRejectReason(), "bad-diffbits");
+    }
+
+    {
+        // Correct nBits for a timestamp at (not past) the median-time-past floor.
+        CBlockHeader header;
+        header.nVersion = 4;
+        header.nTime = (uint32_t)indexPrev.GetMedianTimePast();
+        header.nBits = GetNextWorkRequired(&indexPrev, &header, consensusParams);
+
+        CValidationState state;
+        EXPECT_FALSE(ContextualCheckBlockHeader(header, state, &indexPrev));
+        EXPECT_EQ(state.GetRejectReason(), "time-too-old");
+    }
+
+    {
+        // Correct nBits, timestamp far beyond the allowed future-drift window.
+        CBlockHeader header;
+        header.nVersion = 4;
+        header.nTime = (uint32_t)(GetTime() + consensusParams.nMaxFutureBlockTime + 1000);
+        header.nBits = GetNextWorkRequired(&indexPrev, &header, consensusParams);
+
+        CValidationState state;
+        EXPECT_FALSE(ContextualCheckBlockHeader(header, state, &indexPrev));
+        EXPECT_EQ(state.GetRejectReason(), "time-too-new");
+    }
+
+    fCheckpointsEnabled = true;
+}
 
 class ContextualCheckBlockTest : public ::testing::Test {
 protected:

@@ -1,4 +1,5 @@
 // Copyright (c) 2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,6 +11,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Tests the CBlockIndex skiplist used by CChain for O(log n) ancestor
+// lookups: skip-height computation and traversal correctness over a long
+// synthetic chain.
 
 #define SKIPLIST_LENGTH 300000
 

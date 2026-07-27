@@ -1,4 +1,5 @@
 // Copyright (c) 2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -30,6 +31,10 @@
 #include <iostream>
 #include <cstdio> // for ::remove
 #include <thread>
+
+#include "gtest/gtestutils.h"
+#include "net.h"
+#include "protocol.h"
 
 namespace TestAlerts
 {
@@ -112,6 +117,9 @@ public:
                     << std::endl;
         if (!boost::filesystem::remove(binary_file))
             GTEST_COUT << "Unable to remove file " << binary_file.string() << std::endl;
+        // Otherwise leaks a -alertnotify command pointing at a now-deleted
+        // file to every later test in the process.
+        mapArgs.erase("-alertnotify");
     }
 
     virtual void SetUp() {}
@@ -429,6 +437,39 @@ TEST_F(TestAlerts, PartitionAlert)
     // PartitionCheck adds records to the alertnotify file asynchronously.
     // To remove the file, we need to wait briefly for it to be closed.
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
+}
+
+// Separate, heavier fixture (same rationale as gtest/test_bloom_bitcoin.cpp's
+// bloom_tests_bitcoin_processmsg): driving a message through ProcessMessages()
+// requires RegisterNodeSignals(), which only BitcoinTestingSetup::SetUp()
+// calls, not the plain ::testing::Test the rest of this file uses.
+class TestAlertsProcessMsg : public BitcoinTestingSetup {};
+
+// dos_vulnerability_analysis.md VULN-11: an alert that fails signature
+// verification now costs the sending peer 50 misbehavior points (was 10), so
+// two bad alerts trigger a ban instead of requiring ten.
+//
+// regtest's AlertKey() (a single 0x00 byte, not a valid pubkey - see
+// chainparams.cpp) makes CPubKey::Verify() fail immediately regardless of
+// vchMsg/vchSig content, so any alert delivered here exercises the
+// ProcessAlert()==false branch without needing a real signing key.
+TEST_F(TestAlertsProcessMsg, InvalidAlertSignatureBans50)
+{
+    CService service;
+    Lookup("1.2.3.4", service, 8333, false);
+    CAddress addr(service, NODE_NETWORK);
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CAlert alert;
+    alert.vchMsg = {0x01, 0x02, 0x03};
+    alert.vchSig = {0x04, 0x05, 0x06};
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    payload << alert;
+
+    InjectMessage(&dummyNode, NetMsgType::ALERT, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 50);
 }
 
 } // namespace TestAlerts

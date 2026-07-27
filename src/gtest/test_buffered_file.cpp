@@ -1,8 +1,16 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include "gtest/gtestutils.h"
 #include "streams.h"
 #include <boost/filesystem.hpp>
 #include "clientversion.h"
+
+// Tests CBufferedFile, the buffered/rewindable file stream wrapper used to
+// read serialized data (e.g. block/undo files) with lookahead and a bounded
+// rewind window.
 
 namespace TestBufferedFile {
 

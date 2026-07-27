@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 #include "crypto/sha256.h"
 #include "uint256.h"
@@ -5,6 +9,9 @@
 #include "random.h"
 #include "util/strencodings.h"
 
+// Tests CSHA256, including its no-padding compression-only mode (as used by
+// Equihash) and standard SHA256 test vectors. Protocol-agnostic
+// infrastructure, not shielded-pool-specific.
 namespace TestSHA256Crypto {
 
     class TestSHA256Crypto : public ::testing::Test {};

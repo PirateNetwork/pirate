@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include <gtest/gtest.h>
 #include <gtest/gtest-spi.h>
 
@@ -18,6 +21,8 @@
 #include "cc/CCinclude.h"
 #include "komodo_hardfork.h"
 
+// Tests for the KMD interest-bearing-coin feature: interest accrual and
+// payout via komodo_interest / komodo_interestnew on locked KMD utxos.
 
 CCriticalSection& get_cs_main(); // in main.cpp
 

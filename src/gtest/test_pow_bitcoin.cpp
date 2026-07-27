@@ -1,4 +1,5 @@
 // Copyright (c) 2015 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT/X11 software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -9,6 +10,10 @@
 
 #include <gtest/gtest.h>
 
+// Isolated exact-value regression tests of the raw next-work-required retarget
+// arithmetic and GetBlockProofEquivalentTime(), independent of any live chain
+// state (contrast with gtest/test_pow.cpp's chain-driven integration tests).
+//
 // Named _bitcoin to avoid colliding with the pre-existing gtest/test_pow.cpp
 // (PoW.DifficultyAveraging / PoW.MinDifficultyRules), which tests different code paths.
 class pow_tests : public BitcoinBasicTestingSetup {};

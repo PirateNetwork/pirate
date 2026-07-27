@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2015 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,6 +7,9 @@
 #include "gtest/gtestutils.h"
 
 #include <gtest/gtest.h>
+
+// Tests CScript::IsPayToPublicKeyHash() pattern matching against well-formed
+// and malformed scripts. Covers the TRANSPARENT pool specifically.
 
 class script_P2PKH_tests : public BitcoinBasicTestingSetup {};
 
@@ -45,10 +49,10 @@ TEST_F(script_P2PKH_tests, IsPayToPublicKeyHash)
     static const unsigned char missing2[] = {
         OP_DUP, OP_HASH160, 20, 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
     };
-    EXPECT_FALSE(CScript(missing2, missing2+sizeof(missing)).IsPayToPublicKeyHash());
+    EXPECT_FALSE(CScript(missing2, missing2+sizeof(missing2)).IsPayToPublicKeyHash());
 
     static const unsigned char tooshort[] = {
         OP_DUP, OP_HASH160, 2, 0,0, OP_EQUALVERIFY, OP_CHECKSIG
     };
-    EXPECT_FALSE(CScript(tooshort, tooshort+sizeof(direct)).IsPayToPublicKeyHash());
+    EXPECT_FALSE(CScript(tooshort, tooshort+sizeof(tooshort)).IsPayToPublicKeyHash());
 }

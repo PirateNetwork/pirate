@@ -1,9 +1,18 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include "assetchain.h"
 #include "chain.h"
 #include "chainparams.h"
+#include "komodo_extern_globals.h"
 #include "pow.h"
 #include "random.h"
 #include <gtest/gtest.h>
+
+// Chain-driven integration tests for the difficulty-averaging-window retarget
+// algorithm, plus testnet minimum-difficulty and time-warp rules, exercised
+// over a constructed chain of CBlockIndex entries.
 
 TEST(PoW, DifficultyAveraging) {
     SelectParams(CBaseChainParams::MAIN);
@@ -145,4 +154,53 @@ TEST(PoW, MinDifficultyRules) {
     EXPECT_LT(GetNextWorkRequired(&blocks[lastBlk], &next, params),
             bnRes.GetCompact());
 
+}
+
+// Phase 3 consensus-rule audit: CheckProofOfWork() (pow.cpp) is the function
+// that gates every block's validity against its claimed difficulty target -
+// it had zero test coverage anywhere in the suite. This exercises the actual
+// hash-vs-target comparison directly (not equihash-solution validity, which
+// is a separate check via CheckEquihashSolution).
+TEST(PoW, CheckProofOfWork) {
+    SelectParams(CBaseChainParams::REGTEST);
+    const Consensus::Params& params = Params().GetConsensus();
+
+    // A real chain symbol avoids the legacy KMD "isKMD() && height<=792000"
+    // notary-priority bypass path in pow.cpp (a known non-issue on Pirate,
+    // since chainName.isKMD() is always false here - see
+    // treasurechest_attack_vectors.md's "Notes / non-issues" section) and the
+    // height>34000 notary-election machinery entirely (skipped below 34000
+    // regardless of chain identity).
+    chainName = assetchain("TST");
+    KOMODO_LOADINGBLOCKS = false;
+    uint8_t pubkey33[33] = {0};
+    int32_t height = 2;
+
+    CBlockHeader header;
+    header.nVersion = 4;
+    header.nTime = (uint32_t)GetTime();
+    header.nBits = UintToArith256(params.powLimit).GetCompact();
+
+    // Search for a nonce whose header hash satisfies powLimit (the loosest
+    // target this chain allows) - a real block would reach this via mining;
+    // brute-forcing the (non-equihash-verified) header hash is equivalent for
+    // exercising the actual hash-vs-target comparison this function performs.
+    arith_uint256 target = UintToArith256(params.powLimit);
+    bool found = false;
+    for (uint32_t nonceTry = 0; nonceTry < 100000 && !found; nonceTry++) {
+        header.nNonce = ArithToUint256(arith_uint256(nonceTry));
+        if (UintToArith256(header.GetHash()) <= target) {
+            found = true;
+        }
+    }
+    ASSERT_TRUE(found) << "failed to find a header hash under powLimit within the search budget";
+
+    EXPECT_TRUE(CheckProofOfWork(header, pubkey33, height, params));
+
+    // Same header/nonce, but demand a target of 1 (i.e. hash must be <= 1) -
+    // reuses the exact hash from the positive case above, only the claimed
+    // target changes, isolating the hash-vs-target comparison itself.
+    CBlockHeader tooHard = header;
+    tooHard.nBits = arith_uint256(1).GetCompact();
+    EXPECT_FALSE(CheckProofOfWork(tooHard, pubkey33, height, params));
 }

@@ -1,4 +1,5 @@
 // Copyright 2014 BitPay, Inc.
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -10,6 +11,10 @@
 #include "gtest/gtestutils.h"
 
 #include <gtest/gtest.h>
+
+// Tests the UniValue JSON library used throughout the RPC layer: value
+// construction, type checking, JSON parsing/serialization round-trips, and
+// object/array accessors.
 
 class univalue_tests : public BitcoinBasicTestingSetup {};
 

@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "addrman.h"
@@ -13,6 +17,11 @@
 #include "chainparams.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+
+// Tests for CAddrMan, the peer address database backing GetAddr() replies and
+// outbound peer selection: Add/Select/Find/Create/Delete, ASMAP-based bucket
+// grouping (autonomous-system-aware address diversity so a single network
+// can't dominate the tried/new tables), and ASMAP serialization round-tripping.
 
 #define NODE_NONE 0
 

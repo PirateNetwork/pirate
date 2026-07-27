@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,11 +7,15 @@
 // Unit tests for denial-of-service detection/prevention code
 //
 
+#include "chainparams.h"
 #include "consensus/upgrades.h"
+#include "hash.h"
 #include "keystore.h"
 #include "main.h"
 #include "net.h"
 #include "pow.h"
+#include "primitives/block.h"
+#include "protocol.h"
 #include "script/sign.h"
 #include "serialize.h"
 #include "util.h"
@@ -38,6 +43,9 @@ static CService ip(uint32_t i)
     s.s_addr = i;
     return CService(CNetAddr(s), Params().GetDefaultPort());
 }
+
+// InjectMessage()/GetMisbehavior() are shared helpers declared in
+// gtest/gtestutils.h (also used by other message-handler regression tests).
 
 class DoS_tests_bitcoin : public BitcoinTestingSetup {};
 
@@ -107,6 +115,171 @@ TEST_F(DoS_tests_bitcoin, DoS_bantime)
 
     SetMockTime(nStartTime+60*60*24+1);
     EXPECT_TRUE(!CNode::IsBanned(addr));
+}
+
+// Regression coverage for treasurechest_attack_vectors.md #6 / dos_vulnerability_analysis.md
+// VULN-05: INV declaring a count above MAX_INV_SZ must be rejected (Misbehaving+20)
+// before the oversized vector is allocated/decoded.
+TEST_F(DoS_tests_bitcoin, DoS_InvSizeCap)
+{
+    CAddress addr(ip(0xa0b0c001));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(payload, MAX_INV_SZ + 1);
+    InjectMessage(&dummyNode, NetMsgType::INV, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 20);
+}
+
+// Same fix, GETDATA handler (treasurechest_attack_vectors.md #6).
+TEST_F(DoS_tests_bitcoin, DoS_GetDataSizeCap)
+{
+    CAddress addr(ip(0xa0b0c002));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(payload, MAX_INV_SZ + 1);
+    InjectMessage(&dummyNode, NetMsgType::GETDATA, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 20);
+}
+
+// Same fix, ADDR handler (cap is 1000, not MAX_INV_SZ).
+TEST_F(DoS_tests_bitcoin, DoS_AddrSizeCap)
+{
+    CAddress addr(ip(0xa0b0c003));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(payload, 1001);
+    InjectMessage(&dummyNode, NetMsgType::ADDR, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 20);
+}
+
+// treasurechest_attack_vectors.md #6 / VULN-04: GETBLOCKS locator over
+// MAX_LOCATOR_SZ=101 entries must be rejected (Misbehaving+20).
+TEST_F(DoS_tests_bitcoin, DoS_GetBlocksLocatorCap)
+{
+    CAddress addr(ip(0xa0b0c004));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CBlockLocator locator(std::vector<uint256>(102, GetRandHash()));
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    payload << locator << uint256();
+    InjectMessage(&dummyNode, NetMsgType::GETBLOCKS, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 20);
+}
+
+// Same fix, GETHEADERS handler.
+TEST_F(DoS_tests_bitcoin, DoS_GetHeadersLocatorCap)
+{
+    CAddress addr(ip(0xa0b0c005));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CBlockLocator locator(std::vector<uint256>(102, GetRandHash()));
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    payload << locator << uint256();
+    InjectMessage(&dummyNode, NetMsgType::GETHEADERS, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 20);
+}
+
+// VULN-04: GETBLOCKS is rate-limited to one per second per peer. A second
+// request inside the window must be silently dropped (no nLastGetBlocksRecv
+// update); a request outside the window must be processed (update allowed).
+TEST_F(DoS_tests_bitcoin, DoS_GetBlocksRateLimit)
+{
+    CAddress addr(ip(0xa0b0c006));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    SetMockTime(1000);
+    dummyNode.nLastGetBlocksRecv = 1000; // as if a request just landed this second
+
+    CBlockLocator locator(std::vector<uint256>(1, GetRandHash()));
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    payload << locator << uint256();
+    InjectMessage(&dummyNode, NetMsgType::GETBLOCKS, payload);
+    // Still within the 1-second window: rate-limited, no update.
+    EXPECT_EQ(dummyNode.nLastGetBlocksRecv, 1000);
+
+    SetMockTime(1002);
+    CDataStream payload2(SER_NETWORK, PROTOCOL_VERSION);
+    payload2 << locator << uint256();
+    InjectMessage(&dummyNode, NetMsgType::GETBLOCKS, payload2);
+    // Outside the window: processed, field updates.
+    EXPECT_EQ(dummyNode.nLastGetBlocksRecv, 1002);
+    SetMockTime(0);
+}
+
+// Same rate-limit fix, GETHEADERS handler.
+TEST_F(DoS_tests_bitcoin, DoS_GetHeadersRateLimit)
+{
+    CAddress addr(ip(0xa0b0c007));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    SetMockTime(2000);
+    dummyNode.nLastGetHeadersRecv = 2000;
+
+    CBlockLocator locator(std::vector<uint256>(1, GetRandHash()));
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    payload << locator << uint256();
+    InjectMessage(&dummyNode, NetMsgType::GETHEADERS, payload);
+    EXPECT_EQ(dummyNode.nLastGetHeadersRecv, 2000);
+
+    SetMockTime(2002);
+    CDataStream payload2(SER_NETWORK, PROTOCOL_VERSION);
+    payload2 << locator << uint256();
+    InjectMessage(&dummyNode, NetMsgType::GETHEADERS, payload2);
+    EXPECT_EQ(dummyNode.nLastGetHeadersRecv, 2002);
+    SetMockTime(0);
+}
+
+// treasurechest_attack_vectors.md #5: any std::ios_base::failure thrown while
+// parsing a message's payload (e.g. a declared element count with no backing
+// bytes) must trip Misbehaving(+10) via ProcessMessages()'s catch block, so a
+// peer can't stream parse-error traffic indefinitely to evade banning.
+TEST_F(DoS_tests_bitcoin, DoS_MisbehavingOnMalformedDeserialize)
+{
+    CAddress addr(ip(0xa0b0c008));
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    // Declares one CInv entry (well under MAX_INV_SZ) but provides none of
+    // its 36 payload bytes, so "vRecv >> vInv[n]" throws "end of data".
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(payload, 1);
+    InjectMessage(&dummyNode, NetMsgType::GETDATA, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 10);
+}
+
+// treasurechest_attack_vectors.md #9: mapRelay must not grow unbounded within
+// its 15-minute expiry window; a hard MAX_RELAY_ENTRIES=15000 cap evicts the
+// oldest entry on insert once full.
+TEST_F(DoS_tests_bitcoin, DoS_MapRelayCap)
+{
+    {
+        LOCK(cs_mapRelay);
+        mapRelay.clear();
+        vRelayExpiration.clear();
+    }
+
+    SetMockTime(GetTime());
+    const size_t kOverCap = 15010; // MAX_RELAY_ENTRIES(15000) + margin
+    for (size_t i = 0; i < kOverCap; i++) {
+        CMutableTransaction tx;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = (CAmount)i;
+        RelayTransaction(CTransaction(tx));
+    }
+
+    LOCK(cs_mapRelay);
+    EXPECT_LE(mapRelay.size(), (size_t)15000);
+    SetMockTime(0);
 }
 
 static CTransaction RandomOrphan()
@@ -206,4 +379,37 @@ TEST_F(DoS_tests_bitcoin, DoS_mapOrphans)
     EXPECT_TRUE(mapOrphanTransactions.empty());
     EXPECT_TRUE(mapOrphanTransactionsByPrev.empty());
     }
+}
+
+// treasurechest_attack_vectors.md #3 / VULN-03: a single peer may not fill
+// the orphan pool with more than DEFAULT_MAX_ORPHAN_PER_PEER (5) entries.
+// DoS_mapOrphans above never actually triggers this cap (each of its 50
+// same-peer-independent orphans uses its own peer id 0..49); this test
+// drives every AddOrphanTx call from the SAME peer id specifically to
+// exercise the per-peer limit.
+TEST_F(DoS_tests_bitcoin, DoS_OrphanPerPeerCap)
+{
+    LimitOrphanTxSize(0); // start from an empty pool
+    ASSERT_TRUE(mapOrphanTransactions.empty());
+
+    const NodeId peer = 777;
+    unsigned int accepted = 0;
+    for (int i = 0; i < 10; i++)
+    {
+        CMutableTransaction tx;
+        tx.vin.resize(1);
+        tx.vin[0].prevout.n = 0;
+        tx.vin[0].prevout.hash = GetRandHash();
+        tx.vin[0].scriptSig << OP_1;
+        tx.vout.resize(1);
+        tx.vout[0].nValue = 1*CENT;
+
+        if (AddOrphanTx(tx, peer))
+            accepted++;
+    }
+    EXPECT_EQ(accepted, DEFAULT_MAX_ORPHAN_PER_PEER);
+    EXPECT_EQ(mapOrphanTransactions.size(), (size_t)DEFAULT_MAX_ORPHAN_PER_PEER);
+
+    EraseOrphansFor(peer);
+    EXPECT_TRUE(mapOrphanTransactions.empty());
 }

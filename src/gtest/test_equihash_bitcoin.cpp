@@ -1,5 +1,6 @@
 // Copyright (c) 2016 Jack Grigg
 // Copyright (c) 2016 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,6 +22,9 @@
 
 #include <gtest/gtest.h>
 
+// Known-answer solve/validate correctness tests for the Equihash PoW algorithm
+// itself (as opposed to the bit-packing helper tests in gtest/test_equihash.cpp).
+//
 // Named _bitcoin to avoid colliding with the pre-existing gtest/test_equihash.cpp,
 // which already registers a TEST(equihash_tests, ...) suite of the same name -
 // gtest requires every test in a given suite to share one fixture class, so

@@ -1,3 +1,13 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
+// Despite the generic name, every case here is Sprout-specific: ZCNoteDecryption
+// and the PrfAddr/PrfNf/PrfPk/PrfRho/uint252 tests all exercise the legacy
+// Sprout note-commitment/PRF layer. Sapling's own note decryption is tested
+// on the Rust side, not here (see the comment below). Sprout is being phased
+// out of this fork, so this file is not a priority for new coverage.
+
 #include <gtest/gtest.h>
 #include "sodium.h"
 

@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,6 +33,10 @@
 #include <gtest/gtest.h>
 
 #include <univalue.h>
+
+// Tests script parsing and execution (script_build/valid/invalid, PushData)
+// against the JSON-vector-driven test suite. Covers the TRANSPARENT pool
+// specifically: script mechanics, not Sapling/Ironwood/Sprout shielded logic.
 
 using namespace std;
 

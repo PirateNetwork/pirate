@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #pragma once
 
 #include <gmock/gmock.h>
@@ -13,6 +17,11 @@
 #include "script/cc.h"
 #include <cryptoconditions.h>
 #include <boost/thread.hpp>
+
+// Declarations for the shared gtest test-harness infrastructure: this is not
+// a test file itself. It declares the TestWallet helper, block/transaction
+// display and mining helpers, and the BitcoinBasicTestingSetup/
+// BitcoinTestingSetup fixture base classes used across the whole suite.
 
 class TestWallet;
 
@@ -42,6 +51,25 @@ void displayTransaction(const CTransaction& tx);
 void displayBlock(const CBlock& blk);
 
 void setConsoleDebugging(bool enable);
+
+// Builds a well-formed message (correct MessageStart/command/size/checksum)
+// around the given already-serialized payload and feeds it through the real
+// ProcessMessages() entry point, exactly like data arriving off the wire
+// would. This is the only way to reach main.cpp's per-command dispatch
+// (ProcessMessage is file-static), so it's the shared basis for message-
+// handler regression tests across multiple gtest files.
+//
+// IMPORTANT: pfrom->nVersion must be set to a real, current protocol version
+// (e.g. PROTOCOL_VERSION) before calling this -- ProcessMessage silently
+// disconnects (no Misbehaving call, no crash) for any peer whose nVersion is
+// below the active network upgrade's required minimum, which a placeholder
+// value like 1 always fails. Tests that only call Misbehaving()/SendMessages()
+// directly (not this helper) are unaffected and may keep using nVersion=1.
+void InjectMessage(CNode* pfrom, const char* command, CDataStream& payload);
+
+// Reads back a node's current DoS misbehavior score via the public
+// GetNodeStateStats() accessor (returns -1 if the node isn't registered).
+int GetMisbehavior(NodeId id);
 
 // ContextualCheckTransaction/ContextualCheckShieldedInputs take a CValidationState
 // out-param and an isInitBlockDownload function pointer; these wrappers adapt that

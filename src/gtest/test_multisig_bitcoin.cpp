@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -18,6 +19,11 @@
 #endif
 
 #include <gtest/gtest.h>
+
+// Tests multisig script verification, IsStandard() classification, and
+// signing. This fork allows up to x-of-9 multisig as standard (not
+// upstream's x-of-3 limit). Covers the TRANSPARENT pool specifically, not
+// Sapling/Ironwood/Sprout shielded logic.
 
 using namespace std;
 
@@ -183,6 +189,17 @@ TEST_F(multisig_tests_bitcoin, multisig_IsStandard)
     CScript one_of_four;
     one_of_four << OP_1 << ToByteVector(key[0].GetPubKey()) << ToByteVector(key[1].GetPubKey()) << ToByteVector(key[2].GetPubKey()) << ToByteVector(key[3].GetPubKey()) << OP_4 << OP_CHECKMULTISIG;
     EXPECT_TRUE(::IsStandard(one_of_four, whichType));
+
+    // Boundary of the x-of-9 standardness limit itself (script/standard.cpp:
+    // `if (n < 1 || n > 9) return false;`): 9-of-9 must still be standard,
+    // one more (10-of-10, below) must not - pins the exact cutoff rather
+    // than just a value comfortably on each side of it.
+    CScript nine_of_nine;
+    nine_of_nine << OP_9;
+    for (int i = 0; i < 9; i++)
+        nine_of_nine << ToByteVector(key[i % 4].GetPubKey());
+    nine_of_nine << OP_9 << OP_CHECKMULTISIG;
+    EXPECT_TRUE(::IsStandard(nine_of_nine, whichType));
 
     CScript one_of_ten;
     one_of_ten << OP_1;

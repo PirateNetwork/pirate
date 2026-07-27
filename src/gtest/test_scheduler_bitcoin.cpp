@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,6 +13,10 @@
 #include <boost/random/uniform_int_distribution.hpp>
 #include <boost/thread.hpp>
 #include <gtest/gtest.h>
+
+// Tests CScheduler, the delayed/periodic task-scheduling thread used for
+// background work such as fee estimation flushing and net message
+// dispatch, including ordering and cancellation of queued tasks.
 
 using namespace boost::placeholders;
 

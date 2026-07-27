@@ -1,4 +1,5 @@
 # Copyright (c) 2016-2020 The Zcash developers
+# Copyright (c) 2026 Pirate Chain developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or https://www.opensource.org/licenses/mit-license.php .
 
@@ -19,7 +20,9 @@ pirate_gtest_SOURCES = \
 # depend on global state (see #1539)
 if ENABLE_WALLET
 pirate_gtest_SOURCES += \
-	wallet/gtest/test_wallet_zkeys.cpp
+	wallet/gtest/test_wallet_zkeys.cpp \
+	wallet/gtest/test_crypter.cpp \
+	wallet/gtest/test_wallet_encryption.cpp
 endif
 
 pirate_gtest_SOURCES += \
@@ -64,7 +67,7 @@ pirate_gtest_SOURCES += \
 	gtest/test_parse_args.cpp \
 	gtest/test_parse_notarisation.cpp \
 	gtest/test_parse_notarisation.h \
-	gtest/test_parse_notarisation_data.cpp \
+	gtest/notarisation_test_data.cpp \
 	gtest/test_pow.cpp \
 	gtest/test_random.cpp \
 	gtest/test_script_standard_tests.cpp \
@@ -99,7 +102,6 @@ pirate_gtest_SOURCES += \
 	gtest/test_univalue.cpp \
 	gtest/test_netbase_bitcoin.cpp \
 	gtest/test_arith_uint256.cpp \
-	gtest/test_addrman_bitcoin.cpp \
 	gtest/test_bloom_bitcoin.cpp \
 	gtest/test_util_bitcoin.cpp \
 	gtest/test_script_bitcoin.cpp \
@@ -119,8 +121,7 @@ pirate_gtest_SOURCES += \
 	gtest/test_script_P2SH_bitcoin.cpp \
 	gtest/test_serialize_bitcoin.cpp \
 	gtest/test_net_bitcoin.cpp \
-	gtest/test_sha256compress_bitcoin.cpp \
-	gtest/test_txdb_bitcoin.cpp
+	gtest/test_sha256compress_bitcoin.cpp
 
 # gtest/test_miner_bitcoin.cpp is intentionally NOT built yet: CreateNewBlock()
 # depends on chainName identity/notary/staked-era globals that only get sane

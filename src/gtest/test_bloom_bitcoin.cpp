@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -21,9 +22,19 @@
 
 #include <gtest/gtest.h>
 
+// Covers BIP37 bloom filters (CBloomFilter insert/match/serialize) and the
+// merkle blocks (CMerkleBlock) built from them for SPV-style transaction
+// filtering.
+
 using namespace std;
 
 class bloom_tests_bitcoin : public BitcoinBasicTestingSetup {};
+
+// Separate, heavier fixture (matching gtest/test_dos_bitcoin.cpp's convention)
+// for the one test below that drives a message through ProcessMessages():
+// that requires RegisterNodeSignals(), which only BitcoinTestingSetup::SetUp()
+// calls, not the lighter BitcoinBasicTestingSetup the rest of this file uses.
+class bloom_tests_bitcoin_processmsg : public BitcoinTestingSetup {};
 
 TEST_F(bloom_tests_bitcoin, bloom_create_insert_serialize)
 {
@@ -542,5 +553,43 @@ TEST_F(bloom_tests_bitcoin, rolling_bloom)
     for (int i = 0; i < DATASIZE; i++) {
         EXPECT_TRUE(rb2.contains(data[i]));
     }
+}
+
+// treasurechest_attack_vectors.md #7: CBloomFilter's deserializer rejects an
+// oversized vData count and throws before allocating/reading it, rather than
+// allocating first and checking after (bloom.h SerializationOp).
+TEST_F(bloom_tests_bitcoin, bloom_oversized_vData_rejected_before_allocation)
+{
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(stream, (uint64_t)MAX_BLOOM_FILTER_SIZE + 1);
+    // No vData bytes follow: if the deserializer allocated first and only
+    // checked afterward, this would instead throw a generic "end of data"
+    // once it tried to read the (unbacked) bytes. The real fix throws
+    // immediately on the count check itself, before any read/allocation.
+    CBloomFilter filter;
+    EXPECT_THROW(stream >> filter, std::ios_base::failure);
+}
+
+// Same fix's second guard: nHashFuncs isn't size-capped at the wire-format
+// level (only vData is), so FILTERLOAD re-checks the fully-deserialized
+// filter via IsWithinSizeConstraints() and misbehaves the peer if it's over
+// MAX_HASH_FUNCS, rather than silently accepting it.
+TEST_F(bloom_tests_bitcoin_processmsg, bloom_oversized_nHashFuncs_rejected_by_filterload)
+{
+    CService service;
+    Lookup("1.2.3.4", service, 8333, false);
+    CAddress addr(service, NODE_NETWORK);
+    CNode dummyNode(INVALID_SOCKET, addr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    WriteCompactSize(payload, 0); // empty vData: well within MAX_BLOOM_FILTER_SIZE
+    unsigned int nHashFuncs = MAX_HASH_FUNCS + 1;
+    unsigned int nTweak = 0;
+    unsigned char nFlags = BLOOM_UPDATE_ALL;
+    payload << nHashFuncs << nTweak << nFlags;
+
+    InjectMessage(&dummyNode, NetMsgType::FILTERLOAD, payload);
+    EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 100);
 }
 

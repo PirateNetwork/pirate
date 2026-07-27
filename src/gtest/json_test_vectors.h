@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <gtest/gtest.h>
 
 #include "util/strencodings.h"
@@ -6,6 +10,11 @@
 #include "streams.h"
 
 #include <univalue.h>
+
+// Not a test file itself: declares read_json(), a small helper that parses a
+// JSON test-vector array, plus expect_deser_same()/expect_test_vector()
+// template helpers used by JSON-test-vector-driven tests to round-trip and
+// compare serialized objects.
 
 UniValue
 read_json(const std::string& jsondata);

@@ -1,4 +1,5 @@
 // Copyright (c) 2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +14,10 @@
 #include <vector>
 
 #include <gtest/gtest.h>
+
+// Tests BIP32 hierarchical-deterministic key derivation (transparent HD
+// wallet keys) against known-answer test vectors. Covers the TRANSPARENT
+// pool specifically, not Sapling/Ironwood/Sprout shielded logic.
 
 class bip32_tests : public BitcoinBasicTestingSetup {};
 
@@ -136,4 +141,40 @@ TEST_F(bip32_tests, bip32_test1) {
 
 TEST_F(bip32_tests, bip32_test2) {
     RunTest(test2);
+}
+
+// bip32_test1/test2 above only exercise the known-good-vector happy path -
+// no failure-path coverage anywhere in this file.
+TEST_F(bip32_tests, bip32_negative_cases) {
+    std::vector<unsigned char> seed = ParseHex(test1.strHexMaster);
+    CExtKey key;
+    key.SetMaster(&seed[0], seed.size());
+    CExtPubKey pubkey = key.Neuter();
+
+    // Unlike upstream Bitcoin Core, this fork's CPubKey::Derive() enforces
+    // "no hardened index" via assert() (pubkey.cpp), not a checked runtime
+    // return - calling CExtPubKey::Derive with a hardened index is a caller
+    // contract violation that aborts the process, not a gracefully-testable
+    // failure path. RunTest above already guards every call site with
+    // `if (!(derive.nChild & 0x80000000))` for exactly this reason. A
+    // non-hardened index is the only case safe to call here.
+    CExtPubKey normalAttempt;
+    EXPECT_TRUE(pubkey.Derive(normalAttempt, 0));
+
+    // Malformed/corrupted base58 xprv/xpub strings must be safely rejected,
+    // not crash or silently produce a usable key. Note: CExtKey/CExtPubKey
+    // are plain structs with no constructor, so their own scalar members
+    // (nDepth/vchFingerprint/nChild) are left uninitialized by a failed
+    // Decode() - comparing struct equality against a separately-constructed
+    // "default" instance is not meaningful (both sides are garbage). The
+    // embedded CKey/CPubKey's IsValid() is the real, reliably-set signal.
+    EXPECT_FALSE(DecodeExtKey("not a valid extended key").key.IsValid());
+    EXPECT_FALSE(DecodeExtPubKey("not a valid extended pubkey").pubkey.IsValid());
+
+    // A single corrupted character in an otherwise-valid xprv (bad base58
+    // checksum) must also be rejected, not silently decoded.
+    std::string validPrv = EncodeExtKey(key);
+    std::string corruptedPrv = validPrv;
+    corruptedPrv[5] = (corruptedPrv[5] == 'a') ? 'b' : 'a';
+    EXPECT_FALSE(DecodeExtKey(corruptedPrv).key.IsValid());
 }
