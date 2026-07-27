@@ -7092,6 +7092,7 @@ bool static LoadBlockIndexDB()
                     pindex->nChainTotalBurned = std::nullopt;
                     pindex->nChainSproutValue = std::nullopt;
                     pindex->nChainSaplingValue = std::nullopt;
+                    pindex->nChainIronwoodValue = std::nullopt;
                     mapBlocksUnlinked.insert(std::make_pair(pindex->pprev, pindex));
                 }
             } else {
