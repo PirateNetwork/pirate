@@ -7,6 +7,7 @@
 #include "embedded_binary_hashes.h"
 #include "embeddedprocess.h"
 #include "netbase.h"
+#include "networking_watchdog.h"
 #include "util.h"
 #include "util/readwritefile.h"
 
@@ -53,7 +54,10 @@ bool StartEmbeddedI2Pd()
         LogPrintf("i2p: -i2psam port was busy, using %s instead\n", samTarget.ToStringIPPort());
     }
 
-    const fs::path binary = CManagedProcess::FindBinary("i2pd", GetArg("-i2pdpath", ""), EMBEDDED_I2PD_SHA256);
+    // "pirate-i2pd" is our own bundled copy (sibling of this executable, hash-verified);
+    // "i2pd" is only used as the $PATH fallback name, since that's what an externally
+    // managed system I2P router install is actually called - see FindBinary()'s doc comment.
+    const fs::path binary = CManagedProcess::FindBinary("pirate-i2pd", GetArg("-i2pdpath", ""), EMBEDDED_I2PD_SHA256, "i2pd");
     if (binary.empty()) {
         LogPrint("i2p", "i2p: no bundled i2pd binary found, assuming an externally managed I2P router is in use\n");
         return false;
@@ -94,6 +98,10 @@ bool StartEmbeddedI2Pd()
         LogPrintf("i2p: failed to launch embedded i2pd daemon\n");
         return false;
     }
+    // Report the actual binary basename (not a fixed "i2pd" label): -i2pdpath can point
+    // at an arbitrarily-named external binary, and pirate-networking identifies the
+    // process it's about to terminate by comparing against this same name.
+    NotifyNetworkingWatchdog(binary.stem().string(), g_i2pdProcess.GetProcessId());
 
     if (!g_i2pdProcess.WaitUntilReady(samTarget, I2PD_STARTUP_TIMEOUT_MS)) {
         LogPrintf("i2p: embedded i2pd daemon did not become ready within %d ms\n", I2PD_STARTUP_TIMEOUT_MS);

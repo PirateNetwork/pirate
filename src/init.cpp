@@ -62,6 +62,9 @@
 #if ENABLE_EMBEDDED_I2PD
 #include "i2pd_process.h"
 #endif
+#if ENABLE_EMBEDDED_TOR || ENABLE_EMBEDDED_I2PD
+#include "networking_watchdog.h"
+#endif
 #include "ui_interface.h"
 #include "util.h"
 #include "utilmoneystr.h"
@@ -277,6 +280,9 @@ void Shutdown()
     StopTorControl();
 #if ENABLE_EMBEDDED_TOR
     StopEmbeddedTor();
+#endif
+#if ENABLE_EMBEDDED_TOR || ENABLE_EMBEDDED_I2PD
+    StopNetworkingWatchdog();
 #endif
     UnregisterNodeSignals(GetNodeSignals());
 
@@ -2987,6 +2993,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // Start the thread that updates komodo internal structures
     threadGroup.create_thread(&ThreadUpdateKomodoInternals);
+
+#if ENABLE_EMBEDDED_TOR || ENABLE_EMBEDDED_I2PD
+    // Must happen before StartEmbeddedTor()/StartEmbeddedI2Pd() below so they
+    // have somewhere to report their pids to as soon as they spawn.
+    StartNetworkingWatchdog();
+#endif
 
     if (GetBoolArg("-listenonion", DEFAULT_LISTEN_ONION)) {
 #if ENABLE_EMBEDDED_TOR

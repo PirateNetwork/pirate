@@ -253,6 +253,9 @@ endif
 if ENABLE_WALLET
   bin_PROGRAMS += wallet-utility
 endif
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+  bin_PROGRAMS += pirate-networking
+endif
 
 
 LIBZCASH_H = \
@@ -432,6 +435,10 @@ if ENABLE_EMBEDDED_I2PD
   BITCOIN_CORE_H += i2pd_process.h
 endif
 
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+  BITCOIN_CORE_H += networking_watchdog.h
+endif
+
 	LIBTLS_H = \
 	    tls/utiltls.h
 
@@ -526,6 +533,10 @@ endif
 
 if ENABLE_EMBEDDED_I2PD
 libbitcoin_server_a_SOURCES += i2pd_process.cpp
+endif
+
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+libbitcoin_server_a_SOURCES += networking_watchdog.cpp
 endif
 
 libcxxbridge_a_CPPFLAGS = $(AM_CPPFLAGS) $(BITCOIN_INCLUDES) $(EVENT_CFLAGS) $(EVENT_PTHREADS_CFLAGS)
@@ -862,6 +873,16 @@ pirate_tx_LDADD = \
   $(CURL_LIBS)
 #
 
+# pirate-networking binary #
+# Deliberately does not link any bitcoin library - see pirate-networking.cpp
+# for why it needs to keep working even after pirated has already crashed.
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+pirate_networking_SOURCES = pirate-networking.cpp
+pirate_networking_CPPFLAGS = $(AM_CPPFLAGS)
+pirate_networking_CXXFLAGS = $(AM_CXXFLAGS) $(PIE_FLAGS)
+pirate_networking_LDFLAGS = $(RELDFLAGS) $(AM_LDFLAGS) $(LIBTOOL_APP_LDFLAGS)
+endif
+
 # zcash protocol primitives #
 libzcash_a_SOURCES = \
 	zcash/IncrementalMerkleTree.cpp \
@@ -997,15 +1018,19 @@ endif
 
 # Bundle the depends-built tor/i2pd binaries (see depends/packages/tor.mk,
 # depends/packages/i2pd.mk) alongside pirated/pirate-cli so embeddedprocess.cpp's
-# FindBinary() can discover them as a sibling of the running executable. Silently
+# FindBinary() can discover them as a sibling of the running executable. Installed
+# under a pirate-* name (not the upstream "tor"/"i2pd") so that a directory holding
+# both our bundle and a system-installed tor/i2pd package (e.g. /usr/local/bin) can
+# never end up with two different binaries fighting over the same filename - see
+# FindBinary()'s siblingName/pathFallbackName split in embeddedprocess.h. Silently
 # skipped if TOR_BINARY_PATH/I2PD_BINARY_PATH don't point at an actual file, so a
 # manual ./configure without the depends tree doesn't break `make install`.
 install-exec-hook:
 if ENABLE_EMBEDDED_TOR
 	@if test -f "$(TOR_BINARY_PATH)"; then \
 		$(MKDIR_P) "$(DESTDIR)$(bindir)"; \
-		$(INSTALL_PROGRAM) "$(TOR_BINARY_PATH)" "$(DESTDIR)$(bindir)/tor$(EXEEXT)"; \
-		$(STRIP) "$(DESTDIR)$(bindir)/tor$(EXEEXT)" 2>/dev/null || true; \
+		$(INSTALL_PROGRAM) "$(TOR_BINARY_PATH)" "$(DESTDIR)$(bindir)/pirate-tor$(EXEEXT)"; \
+		$(STRIP) "$(DESTDIR)$(bindir)/pirate-tor$(EXEEXT)" 2>/dev/null || true; \
 	else \
 		echo "warning: embedded Tor enabled but no tor binary found at '$(TOR_BINARY_PATH)', skipping bundling"; \
 	fi
@@ -1013,23 +1038,40 @@ endif
 if ENABLE_EMBEDDED_I2PD
 	@if test -f "$(I2PD_BINARY_PATH)"; then \
 		$(MKDIR_P) "$(DESTDIR)$(bindir)"; \
-		$(INSTALL_PROGRAM) "$(I2PD_BINARY_PATH)" "$(DESTDIR)$(bindir)/i2pd$(EXEEXT)"; \
-		$(STRIP) "$(DESTDIR)$(bindir)/i2pd$(EXEEXT)" 2>/dev/null || true; \
+		$(INSTALL_PROGRAM) "$(I2PD_BINARY_PATH)" "$(DESTDIR)$(bindir)/pirate-i2pd$(EXEEXT)"; \
+		$(STRIP) "$(DESTDIR)$(bindir)/pirate-i2pd$(EXEEXT)" 2>/dev/null || true; \
 	else \
 		echo "warning: embedded I2P enabled but no i2pd binary found at '$(I2PD_BINARY_PATH)', skipping bundling"; \
 	fi
+endif
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+	@$(STRIP) "$(DESTDIR)$(bindir)/pirate-networking$(EXEEXT)" 2>/dev/null || true
 endif
 
 BUILT_SOURCES += embedded_binary_hashes.h
 CLEANFILES += embedded_binary_hashes.h
 
-# Generated at build time from the exact tor/i2pd binaries this build produced
-# (see depends/packages/tor.mk, depends/packages/i2pd.mk), hashed after
-# stripping a throwaway copy so it matches what install-exec-hook above
-# actually ships (it strips the installed copy in place). embeddedprocess.cpp's
-# FindBinary() uses this to refuse a same-named sibling binary that doesn't
-# match what this build shipped - see embedded_binary_hashes.h's own comment.
-embedded_binary_hashes.h: $(TOR_BINARY_PATH) $(I2PD_BINARY_PATH)
+# pirate-networking is built by this same `make` run (unlike tor/i2pd, which are
+# prebuilt elsewhere by depends/packages/{tor,i2pd}.mk before src/Makefile ever
+# runs), so embedded_binary_hashes.h has to wait for it specifically rather than
+# just for a file that's already sitting on disk. Kept as a plain conditional
+# variable (rather than a second `if ENABLE_..._WATCHDOG` rule stanza for the
+# same target) since automake merges multiple rule stanzas for one target
+# unreliably across conditionals - it warns and can silently drop one.
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+PIRATE_NETWORKING_BIN_DEP = pirate-networking$(EXEEXT)
+else
+PIRATE_NETWORKING_BIN_DEP =
+endif
+
+# Generated at build time from the exact tor/i2pd/pirate-networking binaries this
+# build produced (see depends/packages/tor.mk, depends/packages/i2pd.mk for the
+# first two), hashed after stripping a throwaway copy so it matches what
+# install-exec-hook above actually ships (it strips each installed copy in
+# place). embeddedprocess.cpp's FindBinary() uses this to refuse a same-named
+# sibling binary that doesn't match what this build shipped - see
+# embedded_binary_hashes.h's own comment.
+embedded_binary_hashes.h: $(TOR_BINARY_PATH) $(I2PD_BINARY_PATH) $(PIRATE_NETWORKING_BIN_DEP)
 	@sha256_of() { \
 		f="$$1"; \
 		if [ -z "$$f" ] || [ ! -f "$$f" ]; then return; fi; \
@@ -1045,12 +1087,27 @@ embedded_binary_hashes.h: $(TOR_BINARY_PATH) $(I2PD_BINARY_PATH)
 	}; \
 	TORHASH=$$(sha256_of "$(TOR_BINARY_PATH)"); \
 	I2PDHASH=$$(sha256_of "$(I2PD_BINARY_PATH)"); \
+	NETWORKINGHASH=$$(sha256_of "pirate-networking$(EXEEXT)"); \
 	{ \
-		echo "// Auto-generated at build time from the tor/i2pd binaries this build produced - do not edit."; \
+		echo "// Auto-generated at build time from the tor/i2pd/pirate-networking binaries this build produced - do not edit."; \
 		echo "#ifndef BITCOIN_EMBEDDED_BINARY_HASHES_H"; \
 		echo "#define BITCOIN_EMBEDDED_BINARY_HASHES_H"; \
 		echo "#define EMBEDDED_TOR_SHA256 \"$$TORHASH\""; \
 		echo "#define EMBEDDED_I2PD_SHA256 \"$$I2PDHASH\""; \
+		echo "#define EMBEDDED_PIRATE_NETWORKING_SHA256 \"$$NETWORKINGHASH\""; \
 		echo "#endif"; \
 	} > $@.tmp
 	@mv $@.tmp $@
+
+# BUILT_SOURCES alone doesn't reliably order this ahead of unrelated parallel
+# compiles (`make -j`) - the only actual guarantee is an explicit prerequisite
+# on the specific objects that #include it, same as obj/build.h above.
+if ENABLE_EMBEDDED_TOR
+libbitcoin_server_a-tor_process.$(OBJEXT): embedded_binary_hashes.h
+endif
+if ENABLE_EMBEDDED_I2PD
+libbitcoin_server_a-i2pd_process.$(OBJEXT): embedded_binary_hashes.h
+endif
+if ENABLE_EMBEDDED_NETWORKING_WATCHDOG
+libbitcoin_server_a-networking_watchdog.$(OBJEXT): embedded_binary_hashes.h
+endif

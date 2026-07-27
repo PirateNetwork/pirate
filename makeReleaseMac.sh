@@ -7,7 +7,7 @@ mkdir ${PACKAGE_DIR}/Contents/MacOS
 mkdir ${PACKAGE_DIR}/Contents/Frameworks
 mkdir ${PACKAGE_DIR}/Contents/Resources
 
-binaries=("pirate-qt-mac")
+binaries=("pirate-qt-mac" "pirate-tor" "pirate-i2pd" "pirate-networking")
 alllibs=()
 for binary in "${binaries[@]}";
 do

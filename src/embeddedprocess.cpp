@@ -171,8 +171,11 @@ CManagedProcess::~CManagedProcess()
 }
 
 fs::path CManagedProcess::FindBinary(const std::string& name, const fs::path& explicitPath,
-                                     const std::string& expectedSha256Hex)
+                                     const std::string& expectedSha256Hex,
+                                     const std::string& pathFallbackName)
 {
+    const std::string& pathName = pathFallbackName.empty() ? name : pathFallbackName;
+
     if (!explicitPath.empty()) {
         if (IsUsableBinary(explicitPath)) {
             LogPrintf("CManagedProcess: using '%s' for '%s' (explicit path)\n", explicitPath.string(), name);
@@ -183,14 +186,16 @@ fs::path CManagedProcess::FindBinary(const std::string& name, const fs::path& ex
     }
 
 #ifdef _WIN32
-    const std::string fileName = name + ".exe";
+    const std::string siblingFileName = name + ".exe";
+    const std::string pathFileName = pathName + ".exe";
 #else
-    const std::string fileName = name;
+    const std::string& siblingFileName = name;
+    const std::string& pathFileName = pathName;
 #endif
 
     const fs::path selfPath = SelfExecutablePath();
     if (!selfPath.empty()) {
-        const fs::path sibling = selfPath.parent_path() / fileName;
+        const fs::path sibling = selfPath.parent_path() / siblingFileName;
         if (IsUsableBinary(sibling)) {
             if (!expectedSha256Hex.empty() && !VerifyFileSha256(sibling, expectedSha256Hex)) {
                 // A mismatch here means the file that shipped next to this executable was
@@ -211,9 +216,9 @@ fs::path CManagedProcess::FindBinary(const std::string& name, const fs::path& ex
     }
 
     for (const fs::path& dir : SplitPathEnv()) {
-        const fs::path candidate = dir / fileName;
+        const fs::path candidate = dir / pathFileName;
         if (IsUsableBinary(candidate)) {
-            LogPrintf("CManagedProcess: using '%s' for '%s' (found via $PATH)\n", candidate.string(), name);
+            LogPrintf("CManagedProcess: using '%s' for '%s' (found via $PATH)\n", candidate.string(), pathName);
             return candidate;
         }
     }
@@ -296,6 +301,16 @@ bool CManagedProcess::Spawn(const fs::path& binary, const std::vector<std::strin
     m_pid = pid;
     m_running = true;
     return true;
+#endif
+}
+
+int64_t CManagedProcess::GetProcessId() const
+{
+    if (!m_running) return 0;
+#ifdef _WIN32
+    return static_cast<int64_t>(m_procInfo.dwProcessId);
+#else
+    return static_cast<int64_t>(m_pid);
 #endif
 }
 

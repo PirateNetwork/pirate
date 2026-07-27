@@ -86,6 +86,7 @@ Install dependencies on Ubuntu 24.04/22.04:
 sudo apt-get update
 sudo apt-get install -y \
   build-essential \
+  cmake \
   pkg-config \
   m4 \
   g++-multilib \
@@ -144,6 +145,7 @@ Install dependencies:
 sudo apt-get update
 sudo apt-get install -y \
   build-essential \
+  cmake \
   pkg-config \
   m4 \
   autoconf \
@@ -205,6 +207,7 @@ Install dependencies:
 sudo apt-get update
 sudo apt-get install -y \
   build-essential \
+  cmake \
   pkg-config \
   m4 \
   autoconf \
@@ -257,7 +260,7 @@ Install Xcode Command Line Tools, Homebrew, and Rust:
 
 ```shell
 xcode-select --install
-brew install autoconf automake libtool coreutils bison pkgconf python wget curl
+brew install autoconf automake libtool coreutils bison pkgconf python wget curl cmake
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 . "$HOME/.cargo/env"
 ```

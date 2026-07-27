@@ -8,6 +8,7 @@
 #include "fs.h"
 #include "netaddress.h"
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -34,10 +35,27 @@ public:
     bool IsRunning() const { return m_running; }
 
     /**
-     * Locate a helper binary named `name` (".exe" is appended automatically on
-     * Windows). Search order: `explicitPath` if non-empty, then a sibling of
-     * the currently running executable, then $PATH. Returns an empty path if
-     * nothing usable was found.
+     * OS process id of the currently running child, or 0 if not running.
+     * Meant for handing off to an external watchdog (see networking_watchdog.h)
+     * that needs to identify this process by pid after we've spawned it -
+     * not used for anything internal to this class.
+     */
+    int64_t GetProcessId() const;
+
+    /**
+     * Locate a helper binary (".exe" is appended automatically on Windows).
+     * Search order: `explicitPath` if non-empty, then a sibling of the
+     * currently running executable named `name`, then $PATH searched for
+     * `pathFallbackName` (or `name`, if `pathFallbackName` is empty).
+     * Returns an empty path if nothing usable was found.
+     *
+     * The sibling and $PATH tiers are allowed to differ because they name
+     * conceptually different binaries: the sibling is *our* bundled copy
+     * (installed under a project-specific name like "pirate-tor" precisely so
+     * it can never collide with a same-directory install of the real thing),
+     * while the $PATH fallback is meant to find an externally-managed
+     * install of the actual upstream tool (e.g. a system "tor" package),
+     * which was never going to be installed under our project-specific name.
      *
      * If `expectedSha256Hex` is non-empty, it is checked - and only checked -
      * against the sibling-of-executable candidate, since that's the one
@@ -48,7 +66,8 @@ public:
      * is rejected (not returned) and the search falls through to $PATH.
      */
     static fs::path FindBinary(const std::string& name, const fs::path& explicitPath,
-                               const std::string& expectedSha256Hex = "");
+                               const std::string& expectedSha256Hex = "",
+                               const std::string& pathFallbackName = "");
 
     /**
      * Spawn `binary` with `args` (argv[0] is derived from `binary` automatically,

@@ -359,6 +359,16 @@ jobs:
           mkdir -p "$debdir/DEBIAN" "$debdir/usr/local/bin" "$debdir/usr/share/pixmaps" "$debdir/usr/share/applications"
           sed "s/RELEASE_VERSION/${deb_version}/g" zcutil/deb/control_amd64 > "$debdir/DEBIAN/control"
           cp pirate-qt-linux "$debdir/usr/local/bin/pirate-qt"
+          # Bundle the embedded tor/i2pd daemons and their crash-safety watchdog
+          # as siblings of pirate-qt, so the embedded-onion-routing feature (see
+          # doc/tor.md, doc/i2p.md) works out of the box from this .deb too -
+          # not just from the generic artifacts/bin/ produced by `make install`.
+          for bin in pirate-tor pirate-i2pd pirate-networking; do
+            if [ -f "artifacts/bin/$bin" ]; then
+              cp "artifacts/bin/$bin" "$debdir/usr/local/bin/$bin"
+              chmod +x "$debdir/usr/local/bin/$bin"
+            fi
+          done
           cp zcutil/deb/pirate.xpm "$debdir/usr/share/pixmaps/"
           cp zcutil/deb/desktopentry "$debdir/usr/share/applications/pirate-qt.desktop"
           dpkg-deb --build "$debdir"
@@ -493,6 +503,16 @@ jobs:
           mkdir -p "$debdir/DEBIAN" "$debdir/usr/local/bin" "$debdir/usr/share/pixmaps" "$debdir/usr/share/applications"
           sed "s/RELEASE_VERSION/${deb_version}/g" zcutil/deb/control_aarch64 > "$debdir/DEBIAN/control"
           cp pirate-qt-arm "$debdir/usr/local/bin/pirate-qt"
+          # Bundle the embedded tor/i2pd daemons and their crash-safety watchdog
+          # as siblings of pirate-qt, so the embedded-onion-routing feature (see
+          # doc/tor.md, doc/i2p.md) works out of the box from this .deb too -
+          # not just from the generic artifacts/bin/ produced by `make install`.
+          for bin in pirate-tor pirate-i2pd pirate-networking; do
+            if [ -f "artifacts/bin/$bin" ]; then
+              cp "artifacts/bin/$bin" "$debdir/usr/local/bin/$bin"
+              chmod +x "$debdir/usr/local/bin/$bin"
+            fi
+          done
           cp zcutil/deb/pirate.xpm "$debdir/usr/share/pixmaps/"
           cp zcutil/deb/desktopentry "$debdir/usr/share/applications/piratewallet-qt.desktop"
           dpkg-deb --build "$debdir"

@@ -7,6 +7,7 @@
 #include "embedded_binary_hashes.h"
 #include "embeddedprocess.h"
 #include "netbase.h"
+#include "networking_watchdog.h"
 #include "torcontrol.h"
 #include "util.h"
 #include "util/readwritefile.h"
@@ -48,7 +49,10 @@ bool StartEmbeddedTor()
         LogPrintf("tor: -torcontrol port was busy, using %s instead\n", torControlTarget.ToStringIPPort());
     }
 
-    const fs::path binary = CManagedProcess::FindBinary("tor", GetArg("-torpath", ""), EMBEDDED_TOR_SHA256);
+    // "pirate-tor" is our own bundled copy (sibling of this executable, hash-verified);
+    // "tor" is only used as the $PATH fallback name, since that's what an externally
+    // managed system Tor install is actually called - see FindBinary()'s doc comment.
+    const fs::path binary = CManagedProcess::FindBinary("pirate-tor", GetArg("-torpath", ""), EMBEDDED_TOR_SHA256, "tor");
     if (binary.empty()) {
         LogPrint("tor", "tor: no bundled tor binary found, assuming an externally managed tor is in use\n");
         return false;
@@ -85,6 +89,10 @@ bool StartEmbeddedTor()
         LogPrintf("tor: failed to launch embedded tor daemon\n");
         return false;
     }
+    // Report the actual binary basename (not a fixed "tor" label): -torpath can point
+    // at an arbitrarily-named external binary, and pirate-networking identifies the
+    // process it's about to terminate by comparing against this same name.
+    NotifyNetworkingWatchdog(binary.stem().string(), g_torProcess.GetProcessId());
 
     if (!g_torProcess.WaitUntilReady(torControlTarget, TOR_STARTUP_TIMEOUT_MS)) {
         LogPrintf("tor: embedded tor daemon did not become ready within %d ms\n", TOR_STARTUP_TIMEOUT_MS);

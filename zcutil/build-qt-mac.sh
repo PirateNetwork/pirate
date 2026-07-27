@@ -83,5 +83,15 @@ mkdir -p "$ARTIFACTS_DIR"
 cp -a "${STAGING_DIR}${PREFIX}/." "$ARTIFACTS_DIR/"
 rm -rf "$STAGING_DIR"
 
+# makeReleaseMac.sh bundles daemon binaries by bare name out of $mydir (like
+# pirate-qt-mac above); the embedded tor/i2pd daemons and their crash-safety
+# watchdog only exist under artifacts/bin/ at this point, so pull them out to
+# where it expects to find them, if this build produced them.
+for bin in pirate-tor pirate-i2pd pirate-networking; do
+    if [ -f "$ARTIFACTS_DIR/bin/$bin" ]; then
+        cp "$ARTIFACTS_DIR/bin/$bin" "$mydir/$bin"
+    fi
+done
+
 #Package as App bundle in a dmg
 ./makeReleaseMac.sh

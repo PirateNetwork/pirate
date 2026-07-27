@@ -913,6 +913,9 @@ else
 fi
 AM_CONDITIONAL([ENABLE_EMBEDDED_TOR], [test "x$use_embedded_onion_routing" = "xyes"])
 AM_CONDITIONAL([ENABLE_EMBEDDED_I2PD], [test "x$use_embedded_onion_routing" = "xyes"])
+dnl pirate-networking (see src/pirate-networking.cpp) only has anything to do
+dnl when at least one embedded daemon can be spawned for it to watch over.
+AM_CONDITIONAL([ENABLE_EMBEDDED_NETWORKING_WATCHDOG], [test "x$use_embedded_onion_routing" = "xyes"])
 
 dnl $with_tor_bin/$with_i2pd_bin may already be pre-set by depends/config.site.in
 dnl (pointing at the depends-built binaries); --with-tor-bin/--with-i2pd-bin let

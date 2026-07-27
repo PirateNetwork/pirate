@@ -82,6 +82,45 @@ it requires a Tor connection to work. It can be explicitly disabled with
 
 To see verbose Tor information in the pirated debug log, pass `-debug=tor`.
 
+### Embedded Tor daemon (no system Tor install required)
+
+Builds with embedded onion routing support (the default; disable at build
+time with `--disable-embedded-onion-routing`) don't need a separately
+installed and configured system Tor at all. `pirated`/`pirate-qt` bundle
+their own copy of tor, installed as `pirate-tor` (not the upstream `tor`
+filename) precisely so it can never collide with a real system Tor package
+that happens to live in the same directory, and launch and manage it
+automatically - so the "Control Port" and "Authentication" instructions below
+are only relevant if you disable this and fall back to an externally-managed
+Tor.
+
+Relevant options:
+
+    -torautostart=1  Automatically launch and manage the bundled pirate-tor daemon
+                      (default: 1). Set to 0 to disable and use an externally
+                      managed Tor instead - the "Control Port" / "Authentication"
+                      setup below then applies.
+
+    -torpath=<path>   Use a specific tor binary instead of the bundled/
+                      auto-detected one.
+
+The embedded daemon is only started if `-listenonion` is also enabled
+(the default) - it exists to serve the automatic onion service feature
+described above, not as a general-purpose SOCKS proxy.
+
+Binary discovery order, if `-torpath` isn't set: a `pirate-tor` binary sitting
+next to the running `pirated`/`pirate-qt` executable (checked against the
+SHA256 recorded at build time, so a tampered-with sibling binary is rejected
+rather than silently used) is tried first, then a plain `tor` on `$PATH` (an
+externally-managed system install, which was never going to be named
+`pirate-tor`).
+
+Its own torrc, data directory, and logs (`tor.stdout.log`/`tor.stderr.log`)
+live under `<datadir>/tor/`. Startup waits up to 180 seconds for the Control
+Port to come up; if it doesn't, pirated logs a warning and continues (the
+control connection logic below has its own retry logic and may still pick it
+up later).
+
 ### Control Port
 
 You may need to set up the Tor Control Port. On Linux distributions there may be
@@ -223,3 +262,27 @@ for normal IPv4/IPv6 communication, use:
   Otherwise it is trivial to link them, which may reduce privacy. Onion
   services created automatically (as in section 2) always have only one port
   open.
+
+## 5. Crash safety of the embedded Tor daemon
+
+Since the embedded tor daemon runs as its own OS process, a normal graceful
+shutdown of `pirated`/`pirate-qt` stops it along the way. But if the node
+crashes, is `kill -9`'d, or gets OOM-killed, that shutdown code never runs -
+without anything else in place, tor would be left running, orphaned, forever.
+
+To prevent this, builds with embedded onion routing support also launch a
+small companion process, `pirate-networking`, alongside `pirated`/`pirate-qt`.
+Its only job is to watch for the node disappearing without a clean shutdown
+and terminate the embedded tor (and i2pd, if enabled) daemon in that case. No
+configuration is required - it's started and stopped automatically together
+with the embedded daemons, and exits on its own once the node has shut down
+cleanly. You can see it running alongside your node (e.g. `ps aux | grep
+pirate-networking`), and its own logs live at
+`<datadir>/networking/networking.stdout.log` and
+`networking.stderr.log`.
+
+Like `pirate-tor`/`pirate-i2pd`, the `pirate-networking` sibling binary is
+itself SHA256-verified against the exact copy this build shipped before
+`pirated`/`pirate-qt` will launch it, for the same reason: it's handed a live
+control channel over the embedded daemons, so a tampered-with same-named file
+in the install directory is rejected rather than silently run.

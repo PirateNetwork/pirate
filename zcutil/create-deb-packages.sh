@@ -10,6 +10,15 @@ cat zcutil/deb/control_amd64 | sed "s/RELEASE_VERSION/$APP_VERSION/g" > $debdir/
 
 cp release/pirate-qt-linux                   $debdir/usr/local/bin/pirate-qt
 
+# Bundle the embedded tor/i2pd daemons and their crash-safety watchdog as
+# siblings of pirate-qt (see doc/tor.md, doc/i2p.md), if this build produced them.
+for bin in pirate-tor pirate-i2pd pirate-networking; do
+  if [ -f artifacts/bin/$bin ]; then
+    cp artifacts/bin/$bin $debdir/usr/local/bin/$bin
+    chmod +x $debdir/usr/local/bin/$bin
+  fi
+done
+
 mkdir -p $debdir/usr/share/pixmaps/
 cp zcutil/deb/pirate.xpm           $debdir/usr/share/pixmaps/
 
@@ -31,6 +40,15 @@ mkdir -p $debdir/usr/local/bin
 cat zcutil/deb/control_aarch64 | sed "s/RELEASE_VERSION/$APP_VERSION/g" > $debdir/DEBIAN/control
 
 cp release/pirate-qt-arm                   $debdir/usr/local/bin/pirate-qt
+
+# Bundle the embedded tor/i2pd daemons and their crash-safety watchdog as
+# siblings of pirate-qt (see doc/tor.md, doc/i2p.md), if this build produced them.
+for bin in pirate-tor pirate-i2pd pirate-networking; do
+  if [ -f artifacts/bin/$bin ]; then
+    cp artifacts/bin/$bin $debdir/usr/local/bin/$bin
+    chmod +x $debdir/usr/local/bin/$bin
+  fi
+done
 
 mkdir -p $debdir/usr/share/pixmaps/
 cp zcutil/deb/pirate.xpm           $debdir/usr/share/pixmaps/
