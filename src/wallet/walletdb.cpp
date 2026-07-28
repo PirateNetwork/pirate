@@ -118,15 +118,15 @@ bool CWalletDB::EraseCryptedPurpose(const uint256& chash)
     return Erase(make_pair(string("cpurpose"), chash));
 }
 
-//Begin Sapling Address book
-bool CWalletDB::WriteSaplingName(const string& strAddress, const string& strName)
+//Begin Shielded Address book
+bool CWalletDB::WriteShieldedName(const string& strAddress, const string& strName)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(make_pair(string("zname"), strAddress), strName);
 }
 
-bool CWalletDB::WriteCryptedSaplingName(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+bool CWalletDB::WriteCryptedShieldedName(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
@@ -138,7 +138,7 @@ bool CWalletDB::WriteCryptedSaplingName(const string& strAddress, const uint256&
     return true;
 }
 
-bool CWalletDB::EraseSaplingName(const string& strAddress)
+bool CWalletDB::EraseShieldedName(const string& strAddress)
 {
     LogPrintf("Updating db %s\n", __func__);;
     // This should only be used for sending addresses, never for receiving addresses,
@@ -147,7 +147,7 @@ bool CWalletDB::EraseSaplingName(const string& strAddress)
     return Erase(make_pair(string("zname"), strAddress));
 }
 
-bool CWalletDB::EraseCryptedSaplingName(const uint256& chash)
+bool CWalletDB::EraseCryptedShieldedName(const uint256& chash)
 {
     LogPrintf("Updating db %s\n", __func__);;
     // This should only be used for sending addresses, never for receiving addresses,
@@ -156,14 +156,14 @@ bool CWalletDB::EraseCryptedSaplingName(const uint256& chash)
     return Erase(make_pair(string("czname"), chash));
 }
 
-bool CWalletDB::WriteSaplingPurpose(const string& strAddress, const string& strPurpose)
+bool CWalletDB::WriteShieldedPurpose(const string& strAddress, const string& strPurpose)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Write(make_pair(string("zpurpose"), strAddress), strPurpose);
 }
 
-bool CWalletDB::WriteCryptedSaplingPurpose(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+bool CWalletDB::WriteCryptedShieldedPurpose(const string& strAddress, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
@@ -175,14 +175,14 @@ bool CWalletDB::WriteCryptedSaplingPurpose(const string& strAddress, const uint2
     return true;
 }
 
-bool CWalletDB::EraseSaplingPurpose(const string& strPurpose)
+bool CWalletDB::EraseShieldedPurpose(const string& strPurpose)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
     return Erase(make_pair(string("zpurpose"), strPurpose));
 }
 
-bool CWalletDB::EraseCryptedSaplingPurpose(const uint256& chash)
+bool CWalletDB::EraseCryptedShieldedPurpose(const uint256& chash)
 {
     LogPrintf("Updating db %s\n", __func__);
     nWalletDBUpdated++;
@@ -1762,7 +1762,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(key.DefaultAddress());
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[key.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[key.DefaultAddress()].name = "Sapling";
                 pwallet->mapZAddressBook[key.DefaultAddress()].purpose = "unknown";
             }
 
@@ -1772,7 +1772,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (key.ToXFVK().DefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].name = "Sapling";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -1799,7 +1799,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(extfvk.DefaultAddress());
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "Sapling";
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
             }
 
@@ -1808,7 +1808,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.DefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].name = "Sapling";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -1839,7 +1839,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(extfvk.DefaultAddress());
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "Sapling";
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
             }
 
@@ -1848,7 +1848,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.DefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].name = "Sapling";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -1876,7 +1876,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(extfvk.DefaultAddress());
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "z-sapling";
+                pwallet->mapZAddressBook[extfvk.DefaultAddress()].name = "Sapling";
                 pwallet->mapZAddressBook[extfvk.DefaultAddress()].purpose = "unknown";
             }
 
@@ -1885,7 +1885,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.DefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "z-sapling";
+                    pwallet->mapZAddressBook[internalAddr].name = "Sapling";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -1935,7 +1935,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "z-sapling";
+                pwallet->mapZAddressBook[addr].name = "Sapling";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
@@ -1959,7 +1959,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "z-sapling";
+                pwallet->mapZAddressBook[addr].name = "Sapling";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
@@ -2121,7 +2121,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "ironwood";
+                pwallet->mapZAddressBook[addr].name = "Ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
@@ -2131,7 +2131,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
+                    pwallet->mapZAddressBook[internalAddr].name = "Ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2165,7 +2165,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "ironwood";
+                pwallet->mapZAddressBook[addr].name = "Ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
@@ -2174,7 +2174,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
+                    pwallet->mapZAddressBook[internalAddr].name = "Ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2212,7 +2212,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "ironwood";
+                pwallet->mapZAddressBook[addr].name = "Ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
@@ -2221,7 +2221,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
+                    pwallet->mapZAddressBook[internalAddr].name = "Ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2256,7 +2256,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "ironwood";
+                pwallet->mapZAddressBook[addr].name = "Ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
 
@@ -2265,7 +2265,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             if (extfvk.fvk.DeriveDefaultAddressInternal(&internalAddr)) {
                 auto ri = pwallet->mapZAddressBook.find(internalAddr);
                 if (ri == pwallet->mapZAddressBook.end()) {
-                    pwallet->mapZAddressBook[internalAddr].name = "ironwood";
+                    pwallet->mapZAddressBook[internalAddr].name = "Ironwood";
                     pwallet->mapZAddressBook[internalAddr].purpose = "unknown";
                 }
             }
@@ -2339,7 +2339,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "ironwood";
+                pwallet->mapZAddressBook[addr].name = "Ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }
@@ -2363,7 +2363,7 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             //Insert if not found, don't overwrite if found
             auto r = pwallet->mapZAddressBook.find(addr);
             if (r == pwallet->mapZAddressBook.end()) {
-                pwallet->mapZAddressBook[addr].name = "ironwood";
+                pwallet->mapZAddressBook[addr].name = "Ironwood";
                 pwallet->mapZAddressBook[addr].purpose = "unknown";
             }
         }

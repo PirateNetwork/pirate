@@ -40,19 +40,19 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
         ui->labelProtocol->setVisible(true);
         ui->addressTypeCombo->setVisible(true);
         ui->labelEdit->setText("Shielded");
-        
+
         // Populate address type combo based on network upgrades
         {
             LOCK(cs_main);
             if (chainActive.Tip() != nullptr) {
                 int nHeight = chainActive.Height();
                 const Consensus::Params& consensusParams = Params().GetConsensus();
-                
+
                 bool saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
                 bool ironwoodActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
-                
+
                 ui->addressTypeCombo->clear();
-                
+
                 if (ironwoodActive) {
                     // Ironwood is active - show Ironwood as default (and recommended)
                     ui->addressTypeCombo->addItem("Ironwood (Recommended)", "ironwood");
@@ -60,9 +60,11 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
                     if (saplingActive) {
                         ui->addressTypeCombo->addItem("Sapling", "sapling");
                     }
+                    ui->labelEdit->setText("Ironwood");
                 } else if (saplingActive) {
                     // Only Sapling is active - show only Sapling
                     ui->addressTypeCombo->addItem("Sapling", "sapling");
+                    ui->labelEdit->setText("Sapling");
                 } else {
                     // Neither is active, disable the dialog
                     ui->addressTypeCombo->addItem("No shielded protocols active", "");
@@ -70,6 +72,9 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
                 }
             }
         }
+
+        connect(ui->addressTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                this, &EditZAddressDialog::updateLabelForAddressType);
         break;
     case NewSendingAddress:
         setWindowTitle(tr("New sending shielded address"));
@@ -112,6 +117,24 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
 EditZAddressDialog::~EditZAddressDialog()
 {
     delete ui;
+}
+
+void EditZAddressDialog::updateLabelForAddressType(int index)
+{
+    // Only auto-update the label if it still matches one of the type-driven
+    // defaults ("Shielded", "Ironwood", "Sapling"); leave it alone if the
+    // user has typed something else in.
+    QString currentLabel = ui->labelEdit->text();
+    if (currentLabel != "Shielded" && currentLabel != "Ironwood" && currentLabel != "Sapling") {
+        return;
+    }
+
+    QString addressType = ui->addressTypeCombo->itemData(index).toString();
+    if (addressType == "ironwood") {
+        ui->labelEdit->setText("Ironwood");
+    } else if (addressType == "sapling") {
+        ui->labelEdit->setText("Sapling");
+    }
 }
 
 void EditZAddressDialog::setModel(ZAddressTableModel *_model)

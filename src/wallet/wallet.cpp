@@ -339,7 +339,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
     // the Qt model shows it without needing a rescan or restart.
     libzcash::SaplingPaymentAddress changeAddr;
     if (xsk.ToXFVK().DefaultAddressInternal(&changeAddr)) {
-        SetZAddressBook(changeAddr, "z-sapling", "receive");
+        SetZAddressBook(changeAddr, "Sapling", "receive");
     }
 
     nTimeFirstKey = 1;
@@ -434,7 +434,7 @@ IronwoodPaymentAddress CWallet::GenerateNewIronwoodZKey()
     // the Qt model shows it without needing a rescan or restart.
     IronwoodPaymentAddress changeAddr;
     if (extfvk.fvk.DeriveDefaultAddressInternal(&changeAddr)) {
-        SetZAddressBook(changeAddr, "ironwood", "receive");
+        SetZAddressBook(changeAddr, "Ironwood", "receive");
     }
 
     nTimeFirstKey = 1;
@@ -495,6 +495,13 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
           auto addr = extsk.DefaultAddress();
           if (!AddSaplingZKey(extsk)) {
               throw std::runtime_error("CWallet::GenerateNewSaplingDiversifiedAddress(): AddSaplingZKey failed");
+          }
+
+          // Register the internal change address in the address book immediately so
+          // the Qt model shows it without needing a rescan or restart.
+          libzcash::SaplingPaymentAddress changeAddr;
+          if (extsk.ToXFVK().DefaultAddressInternal(&changeAddr)) {
+              SetZAddressBook(changeAddr, "Sapling", "receive");
           }
 
           //Return default address for default key
@@ -647,6 +654,14 @@ IronwoodPaymentAddress CWallet::GenerateNewIronwoodDiversifiedAddress()
             if (!AddIronwoodZKey(extsk)) {
                 throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): AddIronwoodZKey failed");
             }
+
+            // Register the internal change address in the address book immediately so
+            // the Qt model shows it without needing a rescan or restart.
+            IronwoodPaymentAddress changeAddr;
+            if (extfvk.fvk.DeriveDefaultAddressInternal(&changeAddr)) {
+                SetZAddressBook(changeAddr, "Ironwood", "receive");
+            }
+
             return addr;
         }
 
@@ -6825,12 +6840,12 @@ void CWallet::SyncTransactions(const std::vector<CTransaction> &vtx, const CBloc
     AddToWalletIfInvolvingMe(vtx, vOurs, pblock, nHeight, true, saplingAddressesFound, ironwoodAddressesFound, false);
 
     for (std::set<SaplingPaymentAddress>::iterator it = saplingAddressesFound.begin(); it != saplingAddressesFound.end(); it++) {
-        SetZAddressBook(*it, "z-sapling", "", true);
+        SetZAddressBook(*it, "Sapling", "", true);
     }
 
     for (std::set<IronwoodPaymentAddress>::iterator it = ironwoodAddressesFound.begin(); it != ironwoodAddressesFound.end(); it++) {
         // Internal (change) Ironwood addresses are added so the UI can label them "Change".
-        SetZAddressBook(*it, "ironwood", "", true);
+        SetZAddressBook(*it, "Ironwood", "", true);
     }
 
     for (int i = 0; i < vOurs.size(); i++) {
@@ -9824,12 +9839,12 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
     //Notfiy GUI of all new addresses found
     for (std::set<SaplingPaymentAddress>::iterator it = saplingAddressesFound.begin(); it != saplingAddressesFound.end(); it++) {
-        SetZAddressBook(*it, "z-sapling", "", true);
+        SetZAddressBook(*it, "Sapling", "", true);
     }
 
     for (std::set<IronwoodPaymentAddress>::iterator it = ironwoodAddressesFound.begin(); it != ironwoodAddressesFound.end(); it++) {
         // Internal (change) Ironwood addresses are added so the UI can label them "Change".
-        SetZAddressBook(*it, "ironwood", "", true);
+        SetZAddressBook(*it, "Ironwood", "", true);
     }
 
     //Notify GUI of changes in balances
@@ -11929,9 +11944,9 @@ bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const str
         return false;
 
     if (!IsCrypted()) {
-        if (!strPurpose.empty() && !CWalletDB(strWalletFile).WriteSaplingPurpose(EncodePaymentAddress(address), strPurpose))
+        if (!strPurpose.empty() && !CWalletDB(strWalletFile).WriteShieldedPurpose(EncodePaymentAddress(address), strPurpose))
             return false;
-        return CWalletDB(strWalletFile).WriteSaplingName(EncodePaymentAddress(address), strName);
+        return CWalletDB(strWalletFile).WriteShieldedName(EncodePaymentAddress(address), strName);
     } else {
 
         const string strAddress = EncodePaymentAddress(address);
@@ -11947,7 +11962,7 @@ bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const str
             return false;
         }
 
-        if (!CWalletDB(strWalletFile).WriteCryptedSaplingPurpose(strAddress, chash, vchCryptedSecretPurpose)) {
+        if (!CWalletDB(strWalletFile).WriteCryptedShieldedPurpose(strAddress, chash, vchCryptedSecretPurpose)) {
             return false;
         }
 
@@ -11962,7 +11977,7 @@ bool CWallet::SetZAddressBook(const libzcash::PaymentAddress &address, const str
             return false;
         }
 
-        if (!CWalletDB(strWalletFile).WriteCryptedSaplingName(strAddress, chash, vchCryptedSecretName)) {
+        if (!CWalletDB(strWalletFile).WriteCryptedShieldedName(strAddress, chash, vchCryptedSecretName)) {
             return false;
         }
     }

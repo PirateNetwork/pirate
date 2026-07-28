@@ -2554,7 +2554,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             // generate 1 address
             LOCK(pwalletMain->cs_wallet);
             auto zAddress = pwalletMain->GenerateNewSaplingZKey();
-            pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+            pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
         }
 
         //Set Minimum value of incoming notes accepted

@@ -3643,14 +3643,14 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
             throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet.");
         }
         auto zAddress = pwalletMain->GenerateNewSaplingZKey();
-        pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+        pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
         return EncodePaymentAddress(zAddress);
     } else if (addrType == ADDR_TYPE_IRONWOOD) {
         if (!ironwoodActive) {
             throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
         }
         auto zAddress = pwalletMain->GenerateNewIronwoodZKey();
-        pwalletMain->SetZAddressBook(zAddress, "ironwood", "");
+        pwalletMain->SetZAddressBook(zAddress, "Ironwood", "");
         return EncodePaymentAddress(zAddress);
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");
@@ -3704,14 +3704,14 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
             throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet.");
         }
         auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
-        pwalletMain->SetZAddressBook(zAddress, "z-sapling", "");
+        pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
         return EncodePaymentAddress(zAddress);
     } else if (addrType == ADDR_TYPE_IRONWOOD) {
         if (!ironwoodActive) {
             throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
         }
         auto zAddress = pwalletMain->GenerateNewIronwoodDiversifiedAddress();
-        pwalletMain->SetZAddressBook(zAddress, "ironwood", "");
+        pwalletMain->SetZAddressBook(zAddress, "Ironwood", "");
         return EncodePaymentAddress(zAddress);
     } else {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address type");

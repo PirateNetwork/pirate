@@ -43,6 +43,9 @@ public:
 public Q_SLOTS:
     void accept();
 
+private Q_SLOTS:
+    void updateLabelForAddressType(int index);
+
 private:
     bool saveCurrentRow();
 

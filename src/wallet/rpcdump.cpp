@@ -564,6 +564,19 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                                 if (ivk.DeriveAddress(&pa, extdsk->d)) {
                                     pwalletMain->SetZAddressBook(pa, addrName, "", false);
                                 }
+                            } else {
+                                auto ironwoodExtdsk = std::get_if<libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate>(&diversifiedSpendingKey);
+                                if (ironwoodExtdsk != nullptr) {
+                                    auto ironwoodfvkOpt = ironwoodExtdsk->extsk.GetXFVK();
+                                    if (ironwoodfvkOpt) {
+                                        libzcash::IronwoodPaymentAddress pa;
+                                        libzcash::IronwoodIncomingViewingKey ivk;
+                                        ironwoodfvkOpt.value().fvk.DeriveIVK(&ivk);
+                                        if (ivk.DeriveAddress(&pa, ironwoodExtdsk->d)) {
+                                            pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -598,6 +611,16 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                                 extdfvk->extfvk.fvk.DeriveIVK(&ivk);
                                 if (ivk.DeriveAddress(&pa, extdfvk->d)) {
                                     pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                }
+                            } else {
+                                auto ironwoodExtdfvk = std::get_if<libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate>(&diversifiedViewingKey);
+                                if (ironwoodExtdfvk != nullptr) {
+                                    libzcash::IronwoodPaymentAddress pa;
+                                    libzcash::IronwoodIncomingViewingKey ivk;
+                                    ironwoodExtdfvk->extfvk.fvk.DeriveIVK(&ivk);
+                                    if (ivk.DeriveAddress(&pa, ironwoodExtdfvk->d)) {
+                                        pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                    }
                                 }
                             }
                         }

@@ -248,7 +248,7 @@ void WalletModel::importSpendingKey(QString strKey) {
     auto zInfo = std::visit(libzcash::AddressInfoFromSpendingKey{}, sk);
     wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
 
-    updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), "z-sapling", true, "", CT_NEW);
+    updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), QString::fromStdString(zInfo.first), true, "", CT_NEW);
 
     // whenever a key is imported, we need to scan the whole chain
     wallet->nTimeFirstKey = 1;
@@ -342,7 +342,7 @@ void WalletModel::importViewingKey (QString strKey) {
     wallet->SetZAddressBook(zInfo.second, zInfo.first, "");
     // const QString zaddr = QString::fromStdString(EncodePaymentAddress(zInfo.second)),
 
-    updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), "z-sapling", false, "", CT_NEW);
+    updateZAddressBook(QString::fromStdString(EncodePaymentAddress(zInfo.second)), QString::fromStdString(zInfo.first), false, "", CT_NEW);
 
     // whenever a key is imported, we need to scan the whole chain
     wallet->nTimeFirstKey = 1;
