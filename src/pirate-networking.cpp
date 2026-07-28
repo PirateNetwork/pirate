@@ -20,6 +20,24 @@
 // it should not need to first construct any of the state that pirated needs
 // to have working (logging, arg parsing, the data directory, ...).
 
+// QueryFullProcessImageNameW (used below to verify a pid before terminating
+// it) is only declared by windows.h when targeting Vista or later; this
+// project doesn't set a global _WIN32_WINNT, and the mingw-w64 toolchain
+// default isn't guaranteed to be high enough. Scope the requirement to this
+// file rather than raising it project-wide. This must come before *any*
+// other include: mingw's own <cstdint> (and most other standard headers)
+// transitively pulls in <_mingw.h>, which sets a default _WIN32_WINNT of
+// 0x502 the first time anything includes it - defining it afterwards, even
+// right before <windows.h>, is too late to have any effect.
+#ifdef _WIN32
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#endif
+#ifndef WINVER
+#define WINVER 0x0600
+#endif
+#endif
+
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
