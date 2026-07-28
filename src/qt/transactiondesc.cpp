@@ -78,7 +78,7 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
     }
 
-    if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0) {
+    if (arcTx.category == "not found") {
         strHTML += "</font></html>";
         return strHTML;
     }
@@ -91,9 +91,15 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
         strHTML += "<b>" + tr("coinbase") + ":</b> False<br>";
     }
     strHTML += "<b>" + tr("category") + ":</b> " + GUIUtil::HtmlEscape(arcTx.category) + "<br>";
-    strHTML += "<b>" + tr("blockhash") + ":</b> " + GUIUtil::HtmlEscape(arcTx.blockHash.ToString()) + "<br>";
-    strHTML += "<b>" + tr("blockindex") + ":</b> " + QString::number(arcTx.blockIndex) + "<br>";
-    strHTML += "<b>" + tr("blocktime") + ":</b> " + GUIUtil::dateTimeStr(arcTx.nBlockTime)  + "<br>";
+    if (arcTx.blockHash.IsNull()) {
+        strHTML += "<b>" + tr("blockhash") + ":</b> " + tr("Unconfirmed") + "<br>";
+        strHTML += "<b>" + tr("blockindex") + ":</b> " + tr("N/A") + "<br>";
+        strHTML += "<b>" + tr("blocktime") + ":</b> " + tr("N/A") + "<br>";
+    } else {
+        strHTML += "<b>" + tr("blockhash") + ":</b> " + GUIUtil::HtmlEscape(arcTx.blockHash.ToString()) + "<br>";
+        strHTML += "<b>" + tr("blockindex") + ":</b> " + QString::number(arcTx.blockIndex) + "<br>";
+        strHTML += "<b>" + tr("blocktime") + ":</b> " + GUIUtil::dateTimeStr(arcTx.nBlockTime)  + "<br>";
+    }
     strHTML += "<b>" + tr("rawconfirmations") + ":</b> " + QString::number(arcTx.rawconfirmations) + "<br>";
     strHTML += "<b>" + tr("confirmations") + ":</b> " + QString::number(arcTx.confirmations) + "<br>";
     strHTML += "<b>" + tr("expiryHeight") + ":</b> " + QString::number(arcTx.expiryHeight) + "<br>";
