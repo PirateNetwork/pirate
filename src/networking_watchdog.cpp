@@ -105,10 +105,23 @@ bool StartNetworkingWatchdog()
     g_writeHandle = hWrite;
 #else
     int fds[2];
+#ifdef __APPLE__
+    // macOS has no pipe2(); fall back to pipe() + fcntl(), which leaves a
+    // brief window where a concurrent fork() elsewhere in this (threaded)
+    // process could inherit these fds before FD_CLOEXEC is set below. Linux
+    // avoids that race with pipe2()'s atomic O_CLOEXEC.
+    if (pipe(fds) != 0) {
+        LogPrintf("netwatchdog: pipe() failed, errno %d\n", errno);
+        return false;
+    }
+    fcntl(fds[0], F_SETFD, FD_CLOEXEC);
+    fcntl(fds[1], F_SETFD, FD_CLOEXEC);
+#else
     if (pipe2(fds, O_CLOEXEC) != 0) {
         LogPrintf("netwatchdog: pipe() failed, errno %d\n", errno);
         return false;
     }
+#endif
     // Both ends start close-on-exec so neither can ever leak into an
     // unrelated fork+exec (tor's, i2pd's, ...); the read end has CLOEXEC
     // cleared only for the one exec below, and our copy of it is closed
