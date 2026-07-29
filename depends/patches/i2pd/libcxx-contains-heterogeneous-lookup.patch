@@ -1,0 +1,22 @@
+--- a/libi2pd/util.cpp
++++ b/libi2pd/util.cpp
+@@ -315,12 +315,15 @@
+
+ 	bool Mapping::Contains (std::string_view param) const
+ 	{
+-#if __cplusplus >= 202002L // C++20
+-		return m_Options.contains (param);
+-#else
++		// Not std::map::contains(): libc++ shipped with some Xcode/macOS SDK
++		// releases only implements the non-transparent overload
++		// (bool contains(const key_type&)) despite m_Options using
++		// std::less<>, so passing a std::string_view fails to compile there
++		// even under C++20. find() has supported heterogeneous lookup since
++		// C++14 and is already used the same way elsewhere in this file
++		// (see operator[] above), so it works everywhere this is built.
+ 		auto it = m_Options.find (param);
+ 		return it != m_Options.end ();
+-#endif
+ 	}
+
+ 	void Mapping::CleanUp ()

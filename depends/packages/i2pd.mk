@@ -5,14 +5,15 @@ $(package)_download_file=$($(package)_version).tar.gz
 $(package)_file_name=i2pd-$($(package)_version).tar.gz
 $(package)_sha256_hash=ef32100c5ffdf4d23dfe78a2f6c08f65574fd79f992eb2ac8cfea0b6440deabd
 $(package)_dependencies=boost openssl zlib
-$(package)_patches=platform-linking.patch
+$(package)_patches=platform-linking.patch libcxx-contains-heterogeneous-lookup.patch
 
 define $(package)_set_vars
   $(package)_config_opts_mingw32=-DCMAKE_SYSTEM_NAME=Windows
 endef
 
 define $(package)_preprocess_cmds
-  patch -p1 < $($(package)_patch_dir)/platform-linking.patch
+  patch -p1 < $($(package)_patch_dir)/platform-linking.patch && \
+  patch -p1 < $($(package)_patch_dir)/libcxx-contains-heterogeneous-lookup.patch
 endef
 
 # i2pd's CMakeLists.txt lives under build/, with the project's own source tree
