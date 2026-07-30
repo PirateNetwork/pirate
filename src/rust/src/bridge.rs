@@ -34,7 +34,13 @@ use crate::{
     },
     test_harness_ffi::{
         test_only_invalid_sapling_bundle, test_only_replace_sapling_nullifier,
-        test_only_replace_sapling_output_parts,
+        test_only_replace_sapling_output_parts, test_only_replace_sapling_spend_proof,
+        test_only_replace_sapling_output_proof, test_only_corrupt_ironwood_proof,
+        test_only_replace_sapling_spend_cv, test_only_replace_sapling_spend_rk,
+        test_only_replace_sapling_output_cv, test_only_replace_sapling_output_cmu,
+        test_only_replace_ironwood_nullifier,
+        test_only_replace_ironwood_cmx, test_only_replace_ironwood_cv,
+        test_only_replace_ironwood_rk,
     },
 };
 
@@ -216,6 +222,38 @@ pub(crate) mod ffi {
             enc_ciphertext: [u8; 580],
             out_ciphertext: [u8; 80],
         );
+        #[cxx_name = "test_only_replace_spend_proof"]
+        fn test_only_replace_sapling_spend_proof(
+            bundle: &mut SaplingBundle,
+            spend_index: usize,
+            proof: [u8; 192],
+        );
+        #[cxx_name = "test_only_replace_output_proof"]
+        fn test_only_replace_sapling_output_proof(
+            bundle: &mut SaplingBundle,
+            output_index: usize,
+            proof: [u8; 192],
+        );
+        #[cxx_name = "test_only_replace_spend_cv"]
+        fn test_only_replace_sapling_spend_cv(
+            bundle: &mut SaplingBundle,
+            spend_index: usize,
+        );
+        #[cxx_name = "test_only_replace_spend_rk"]
+        fn test_only_replace_sapling_spend_rk(
+            bundle: &mut SaplingBundle,
+            spend_index: usize,
+        );
+        #[cxx_name = "test_only_replace_output_cv"]
+        fn test_only_replace_sapling_output_cv(
+            bundle: &mut SaplingBundle,
+            output_index: usize,
+        );
+        #[cxx_name = "test_only_replace_output_cmu"]
+        fn test_only_replace_sapling_output_cmu(
+            bundle: &mut SaplingBundle,
+            output_index: usize,
+        );
 
         #[rust_name = "SaplingBundleAssembler"]
         type BundleAssembler;
@@ -372,6 +410,28 @@ pub(crate) mod ffi {
         fn proof(self: &IronwoodBundle) -> Vec<u8>;
         fn binding_sig(self: &IronwoodBundle) -> [u8; 64];
         fn coinbase_outputs_are_valid(self: &IronwoodBundle) -> bool;
+        #[cxx_name = "test_only_corrupt_proof"]
+        fn test_only_corrupt_ironwood_proof(bundle: &mut IronwoodBundle);
+        #[cxx_name = "test_only_replace_nullifier"]
+        fn test_only_replace_ironwood_nullifier(
+            bundle: &mut IronwoodBundle,
+            action_index: usize,
+        );
+        #[cxx_name = "test_only_replace_cmx"]
+        fn test_only_replace_ironwood_cmx(
+            bundle: &mut IronwoodBundle,
+            action_index: usize,
+        );
+        #[cxx_name = "test_only_replace_cv"]
+        fn test_only_replace_ironwood_cv(
+            bundle: &mut IronwoodBundle,
+            action_index: usize,
+        );
+        #[cxx_name = "test_only_replace_rk"]
+        fn test_only_replace_ironwood_rk(
+            bundle: &mut IronwoodBundle,
+            action_index: usize,
+        );
     }
 
     #[namespace = "ironwood"]

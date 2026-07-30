@@ -119,8 +119,12 @@ fn pirate_current_ironwood_branch(
 
 /// The Ironwood pool's bundle, carried in the single shielded-Orchard-circuit-pool slot of
 /// a v6 transaction.
+///
+/// The inner field is `pub` (matching `sapling_protocol::Bundle`'s convention) so that
+/// `test_harness_ffi` can reach into an existing, otherwise-valid bundle to corrupt it for
+/// negative test coverage - see `test_only_corrupt_ironwood_proof`.
 #[derive(Clone)]
-pub struct Bundle(Option<orchard::Bundle<Authorized, Amount>>);
+pub struct Bundle(pub Option<orchard::Bundle<Authorized, Amount>>);
 
 pub(crate) fn none_ironwood_bundle() -> Box<Bundle> {
     Box::new(Bundle(None))

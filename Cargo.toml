@@ -33,6 +33,7 @@ libc = "0.2"
 jubjub = "0.10"
 memuse = "0.2"
 orchard = "=0.15.4"
+pasta_curves = "0.5"
 redjubjub = "0.8"
 sapling-crypto = { package = "sapling-crypto", version = "0.7" }
 subtle = "2.2"

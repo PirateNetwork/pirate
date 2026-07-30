@@ -421,6 +421,236 @@ TEST(TransactionBuilder, IronwoodShieldAndSpend)
     EXPECT_TRUE(results2.validationPassed);
 }
 
+// CheckTransactionWithoutProofVerification's own std::set-based duplicate-nullifier
+// check (main.cpp, "bad-spend-description-nullifiers-duplicate") has no direct test
+// coverage anywhere in the suite. Neither the TransactionBuilder nor the underlying
+// (unmodified upstream) sapling-crypto builder rejects adding the same note twice -
+// that's a consensus-level rule, not a builder-level one - so this exercises the
+// actual guard: spend the identical, genuinely-anchored note twice within one
+// transaction (mirroring TransactionBuilder.Invoke's shield-then-spend setup) and
+// confirm CheckTransaction rejects the resulting two-spends-same-nullifier bundle.
+TEST(TransactionBuilder, SaplingDuplicateNullifierWithinTxRejected)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+    auto consensusParams = Params().GetConsensus();
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    SaplingWallet saplingWallet;
+    SaplingMerkleFrontier saplingFrontier;
+    saplingWallet.InitNoteCommitmentTree(saplingFrontier);
+
+    auto sk_from = libzcash::SaplingSpendingKey::random();
+    auto expsk_from = sk_from.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk_from;
+    expsk_from.DeriveFVK(&fvk_from);
+
+    auto sk = libzcash::SaplingSpendingKey::random();
+    auto expsk = sk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
+    libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    SaplingPaymentAddress pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
+
+    libzcash::SaplingExtendedSpendingKey extsk = {};
+    extsk.expsk = expsk;
+
+    // Shielding transaction: transparent -> Sapling output only.
+    auto builder1 = TransactionBuilder(consensusParams, 1, &keystore);
+    builder1.InitializeSapling(uint256());
+    builder1.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder1.AddSaplingOutputRaw(pk, 40000, {});
+    builder1.ConvertRawSaplingOutput(fvk_from.ovk);
+    auto maybe_tx1 = builder1.Build();
+    ASSERT_EQ(maybe_tx1.IsTx(), true);
+    auto tx1 = maybe_tx1.GetTxOrThrow();
+
+    saplingWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
+    auto vOutputs = tx1.GetSaplingOutputs();
+    for (int j = 0; j < vOutputs.size(); j++) {
+        saplingWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vOutputs[j], true);
+    }
+
+    int realOutputIndex = -1;
+    std::optional<libzcash::SaplingNotePlaintext> maybe_pt;
+    for (int j = 0; j < vOutputs.size(); j++) {
+        maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], ivk);
+        if (maybe_pt) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+    auto cmu = uint256::FromRawBytes(vOutputs[realOutputIndex].cmu());
+    auto note = maybe_pt.value().note(ivk).value();
+
+    libzcash::MerklePath saplingMerklePath;
+    ASSERT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), realOutputIndex, saplingMerklePath));
+    uint256 anchor;
+    ASSERT_TRUE(saplingWallet.GetPathRootWithCMU(saplingMerklePath, cmu, anchor));
+
+    // Spend the exact same real, anchored note twice in one transaction.
+    auto builder2 = TransactionBuilder(consensusParams, 2);
+    builder2.InitializeSapling(anchor);
+    ASSERT_TRUE(builder2.AddSaplingSpendRaw(
+        SaplingOutPoint(tx1.GetHash(), realOutputIndex), pk, note.value(), note.rcm(), saplingMerklePath, anchor));
+    ASSERT_TRUE(builder2.AddSaplingSpendRaw(
+        SaplingOutPoint(tx1.GetHash(), realOutputIndex), pk, note.value(), note.rcm(), saplingMerklePath, anchor));
+    ASSERT_TRUE(builder2.ConvertRawSaplingSpend(extsk));
+    ASSERT_TRUE(builder2.AddSaplingOutputRaw(pk, 25000, {}));
+    ASSERT_TRUE(builder2.ConvertRawSaplingOutput(fvk_from.ovk));
+
+    auto maybe_tx2 = builder2.Build();
+    ASSERT_EQ(maybe_tx2.IsTx(), true);
+    auto tx2 = maybe_tx2.GetTxOrThrow();
+    EXPECT_EQ(tx2.GetSaplingSpendsCount(), 2);
+
+    CValidationState state;
+    EXPECT_FALSE(CheckTransactionWithoutProofVerification(0, tx2, state));
+    EXPECT_EQ(state.GetRejectReason(), "bad-spend-description-nullifiers-duplicate");
+}
+
+TEST(TransactionBuilder, IronwoodDuplicateNullifierWithinTxRejected)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+    auto consensusParams = Params().GetConsensus();
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    IronwoodWallet ironwoodWallet;
+    IronwoodMerkleFrontier ironwoodFrontier;
+    ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontier);
+
+    CWallet fromWallet;
+    CKeyingMaterial rawSeed(32, 0);
+    HDSeed seed(rawSeed);
+    fromWallet.LoadHDSeed(seed);
+    auto addr = fromWallet.GenerateNewIronwoodZKey();
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+    ASSERT_TRUE(fromWallet.GetIronwoodExtendedSpendingKey(addr, extsk));
+    libzcash::IronwoodFullViewingKey fvk;
+    ASSERT_TRUE(extsk.sk.DeriveFVK(&fvk));
+    libzcash::IronwoodOutgoingViewingKey ovk;
+    ASSERT_TRUE(fvk.DeriveOVK(&ovk));
+
+    auto builder1 = TransactionBuilder(consensusParams, 1, &keystore);
+    builder1.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder1.InitializeIronwood(/*spendsEnabled=*/false, /*outputsEnabled=*/true, uint256());
+    ASSERT_TRUE(builder1.AddIronwoodOutputRaw(addr, 40000, {}));
+    ASSERT_TRUE(builder1.ConvertRawIronwoodOutput(ovk.ovk));
+    auto maybe_tx1 = builder1.Build();
+    ASSERT_EQ(maybe_tx1.IsTx(), true);
+    auto tx1 = maybe_tx1.GetTxOrThrow();
+
+    const auto& bundleDetails = tx1.GetIronwoodBundle().GetDetails();
+    auto actions = bundleDetails.actions();
+    uint256_t ovkBytes;
+    std::copy(ovk.ovk.begin(), ovk.ovk.end(), ovkBytes.begin());
+    int realActionIndex = -1;
+    uint64_t noteValue = 0;
+    uint256_t noteRho{}, noteRseed{};
+    for (size_t i = 0; i < actions.size(); i++) {
+        uint256_t ock;
+        if (!ironwood::derive_ironwood_ock(actions[i], ovkBytes, ock)) {
+            continue;
+        }
+        uint64_t testValue;
+        std::array<uint8_t, 43> testAddress;
+        std::array<uint8_t, 512> testMemo;
+        uint256_t testRho, testRseed;
+        if (ironwood::try_ironwood_decrypt_action_ock(
+                actions[i], ock, testValue, testAddress, testMemo, testRho, testRseed)) {
+            realActionIndex = (int)i;
+            noteValue = testValue;
+            noteRho = testRho;
+            noteRseed = testRseed;
+            break;
+        }
+    }
+    ASSERT_NE(realActionIndex, -1);
+    uint256 rho = uint256::FromRawBytes(noteRho);
+    uint256 rseed = uint256::FromRawBytes(noteRseed);
+    uint256 cmx = uint256::FromRawBytes(actions[realActionIndex].cmx());
+
+    ironwoodWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
+    for (size_t j = 0; j < actions.size(); j++) {
+        ironwoodWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, (int)j, &actions[j], true);
+    }
+
+    libzcash::MerklePath ironwoodMerklePath;
+    ASSERT_TRUE(ironwoodWallet.GetMerklePathOfNote(tx1.GetHash(), realActionIndex, ironwoodMerklePath));
+    uint256 anchor;
+    ASSERT_TRUE(ironwoodWallet.GetPathRootWithCMU(ironwoodMerklePath, cmx, anchor));
+
+    // Spend the exact same real, anchored note twice in one transaction.
+    auto builder2 = TransactionBuilder(consensusParams, 2);
+    builder2.InitializeIronwood(/*spendsEnabled=*/true, /*outputsEnabled=*/true, anchor);
+    ASSERT_TRUE(builder2.AddIronwoodSpendRaw(
+        IronwoodOutPoint(tx1.GetHash(), realActionIndex), addr, noteValue, rho, rseed, ironwoodMerklePath, anchor));
+    ASSERT_TRUE(builder2.AddIronwoodSpendRaw(
+        IronwoodOutPoint(tx1.GetHash(), realActionIndex), addr, noteValue, rho, rseed, ironwoodMerklePath, anchor));
+    ASSERT_TRUE(builder2.ConvertRawIronwoodSpend(extsk));
+    ASSERT_TRUE(builder2.AddIronwoodOutputRaw(addr, 25000, {}));
+    ASSERT_TRUE(builder2.ConvertRawIronwoodOutput(ovk.ovk));
+
+    auto maybe_tx2 = builder2.Build();
+    ASSERT_EQ(maybe_tx2.IsTx(), true);
+    auto tx2 = maybe_tx2.GetTxOrThrow();
+
+    CValidationState state;
+    EXPECT_FALSE(CheckTransactionWithoutProofVerification(0, tx2, state));
+    EXPECT_EQ(state.GetRejectReason(), "bad-ironwood-nullifiers-duplicate");
+}
+
 TEST(TransactionBuilder, ThrowsOnTransparentInputWithoutKeyStore)
 {
     auto consensusParams = Params().GetConsensus();

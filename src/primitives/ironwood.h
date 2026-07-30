@@ -59,6 +59,12 @@ public:
         return *inner;
     }
 
+    /// @brief Only for tests.
+    /// @return A mutable reference to the Ironwood bundle.
+    ironwood_bundle::IronwoodBundle& GetDetailsMut() {
+        return *inner;
+    }
+
     size_t RecursiveDynamicUsage() const {
         return inner->recursive_dynamic_usage();
     }

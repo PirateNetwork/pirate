@@ -1532,6 +1532,7 @@ dependencies = [
  "metrics",
  "metrics-exporter-prometheus",
  "orchard",
+ "pasta_curves",
  "rand 0.8.6",
  "rand_core 0.6.4",
  "redjubjub",
