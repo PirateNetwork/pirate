@@ -8,7 +8,14 @@ $(package)_dependencies=boost openssl zlib
 $(package)_patches=platform-linking.patch libcxx-contains-heterogeneous-lookup.patch
 
 define $(package)_set_vars
-  $(package)_config_opts_mingw32=-DCMAKE_SYSTEM_NAME=Windows
+  # CMake's own RC-compiler detection doesn't prefix it from
+  # CMAKE_C_COMPILER/CMAKE_CXX_COMPILER the way autoconf's AC_PATH_TOOL does
+  # (see this project's own configure.ac use of it for WINDRES) - left
+  # unset, it falls back to a bare "windres", which doesn't exist in a
+  # cross-compilation environment that only has the $(host)-prefixed
+  # binutils, and Win32/Resource.rc fails to build with "windres: Command
+  # not found".
+  $(package)_config_opts_mingw32=-DCMAKE_SYSTEM_NAME=Windows -DCMAKE_RC_COMPILER=$(host)-windres
 endef
 
 define $(package)_preprocess_cmds
