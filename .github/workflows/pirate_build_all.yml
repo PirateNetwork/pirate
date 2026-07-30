@@ -486,8 +486,8 @@ jobs:
             binutils-aarch64-linux-gnu
       - name: Build QT (AArch64 cross)
         run: |
-          chmod +x zcutil/build-qt-arm.sh
-          ./zcutil/build-qt-arm.sh -j$(nproc)
+          chmod +x zcutil/build-qt-aarch64.sh
+          ./zcutil/build-qt-aarch64.sh -j$(nproc)
       - name: Strip QT (AArch64)
         run: |
           aarch64-linux-gnu-strip --strip-unneeded pirate-qt-arm

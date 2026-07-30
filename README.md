@@ -246,7 +246,7 @@ Build CLI binaries:
 Build the Qt GUI:
 
 ```shell
-./zcutil/build-qt-arm.sh -j$(nproc)
+./zcutil/build-qt-aarch64.sh -j$(nproc)
 ```
 
 Outputs:

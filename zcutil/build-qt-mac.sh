@@ -83,6 +83,20 @@ mkdir -p "$ARTIFACTS_DIR"
 cp -a "${STAGING_DIR}${PREFIX}/." "$ARTIFACTS_DIR/"
 rm -rf "$STAGING_DIR"
 
+# CXXFLAGS above always includes -g, so everything under src/ (including
+# pirate-qt-mac, stripped separately above) is left with full debug info
+# intact for local debugging. Strip only the artifacts/bin/ copies - the
+# binaries a human or a downstream packaging step actually consumes - not
+# the originals.
+STRIP="$(sed -n 's/^STRIP *= *//p' Makefile | head -1)"
+if [ -n "$STRIP" ]; then
+    for f in "$ARTIFACTS_DIR"/bin/*; do
+        if [ -f "$f" ]; then
+            "$STRIP" "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
 # makeReleaseMac.sh bundles daemon binaries by bare name out of $mydir (like
 # pirate-qt-mac above); the embedded tor/i2pd daemons and their crash-safety
 # watchdog only exist under artifacts/bin/ at this point, so pull them out to
@@ -95,3 +109,20 @@ done
 
 #Package as App bundle in a dmg
 ./makeReleaseMac.sh
+
+# makeReleaseMac.sh always writes an unversioned pirate-qt-mac.dmg in the
+# repo root; give it the same <name>-<arch>-<os>-v<version> naming and
+# artifacts/bin/ location as every other build-qt-*.sh's packaging output.
+APP_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+if [ -n "$APP_VERSION" ] && [ -f "$mydir/pirate-qt-mac.dmg" ]; then
+    case "$TRIPLET" in
+        *-apple-darwin*) PLATFORM="${TRIPLET%%-*}-macos" ;;
+        *) PLATFORM="$TRIPLET" ;;
+    esac
+    mkdir -p "$ARTIFACTS_DIR/bin"
+    mv "$mydir/pirate-qt-mac.dmg" "$ARTIFACTS_DIR/bin/pirate-qt-${PLATFORM}-v${APP_VERSION}.dmg"
+fi
+
+# The Qt package is the .dmg app bundle above, not a flat zip of raw
+# binaries - only build the CLI bundle here.
+./zcutil/build-zip.sh "$TRIPLET" cli

@@ -124,4 +124,4 @@ if [ -n "$STRIP" ]; then
 fi
 
 ./zcutil/build-deb.sh "$HOST"
-./zcutil/build-tar.sh "$HOST"
+./zcutil/build-zip.sh "$HOST" both

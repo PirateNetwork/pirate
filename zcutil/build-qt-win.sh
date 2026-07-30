@@ -39,3 +39,17 @@ rm -rf "$ARTIFACTS_DIR"
 mkdir -p "$ARTIFACTS_DIR"
 cp -a "${STAGING_DIR}${PREFIX}/." "$ARTIFACTS_DIR/"
 rm -rf "$STAGING_DIR"
+
+# CXXFLAGS above already has -g0 (no debug info), but strip the
+# artifacts/bin/ copies anyway for consistency with the other build-qt-*.sh
+# scripts - the originals under src/ are left untouched either way.
+STRIP="$(sed -n 's/^STRIP *= *//p' Makefile | head -1)"
+if [ -n "$STRIP" ]; then
+    for f in "$ARTIFACTS_DIR"/bin/*; do
+        if [ -f "$f" ]; then
+            "$STRIP" "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+./zcutil/build-zip.sh "$HOST" both

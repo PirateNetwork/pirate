@@ -6,7 +6,7 @@
 # configured) - from artifacts/bin/ into a .deb, using the control file,
 # icon, and .desktop entry under zcutil/deb/.
 #
-# Called automatically at the end of build-qt-linux.sh and build-qt-arm.sh
+# Called automatically at the end of build-qt-linux.sh and build-qt-aarch64.sh
 # (passing their own $HOST), after their `make install` step has staged
 # those binaries into artifacts/bin/ - not meant to be run standalone
 # against a checkout that hasn't been built yet.
