@@ -38,12 +38,14 @@ then
 fi
 
 # BUG: parameterize the platform/host directory:
-PREFIX="$(pwd)/depends/aarch64-linux-gnu/"
+HOST=aarch64-linux-gnu
+BUILD=x86_64-unknown-linux-gnu
+PREFIX="$(pwd)/depends/$HOST/"
 ARTIFACTS_DIR="$(pwd)/artifacts"
 
-HOST=aarch64-linux-gnu BUILD=x86_64-unknown-linux-gnu make "$@" -C ./depends/ V=1
+HOST="$HOST" BUILD="$BUILD" make "$@" -C ./depends/ V=1
 ./autogen.sh
-CONFIG_SITE="$(pwd)/depends/aarch64-linux-gnu/share/config.site" ./configure --prefix="${PREFIX}" --host=aarch64-linux-gnu --build=x86_64-unknown-linux-gnu --with-gui=qt5 --disable-bip70 --enable-tests=no --enable-online-rust=yes "$HARDENING_ARG" "$LCOV_ARG" CXXFLAGS='-fwrapv -fno-strict-aliasing -g'
+CONFIG_SITE="$(pwd)/depends/$HOST/share/config.site" ./configure --prefix="${PREFIX}" --host="$HOST" --build="$BUILD" --with-gui=qt5 --disable-bip70 --enable-tests=no --enable-online-rust=yes "$HARDENING_ARG" "$LCOV_ARG" CXXFLAGS='-fwrapv -fno-strict-aliasing -g'
 
 make "$@" V=1
 
@@ -59,3 +61,19 @@ rm -rf "$ARTIFACTS_DIR"
 mkdir -p "$ARTIFACTS_DIR"
 cp -a "${STAGING_DIR}${PREFIX}." "$ARTIFACTS_DIR/"
 rm -rf "$STAGING_DIR"
+
+# CXXFLAGS above includes -g, so everything under src/ is left with full
+# debug info intact for local debugging. Strip only the artifacts/bin/
+# copies - the binaries a human or a downstream packaging step (e.g.
+# build-deb.sh) actually consumes - not the originals.
+STRIP="$(sed -n 's/^STRIP *= *//p' Makefile | head -1)"
+if [ -n "$STRIP" ]; then
+    for f in "$ARTIFACTS_DIR"/bin/*; do
+        if [ -f "$f" ]; then
+            "$STRIP" "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+./zcutil/build-deb.sh "$HOST"
+./zcutil/build-tar.sh "$HOST"

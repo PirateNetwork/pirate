@@ -109,3 +109,19 @@ rm -rf "$ARTIFACTS_DIR"
 mkdir -p "$ARTIFACTS_DIR"
 cp -a "${STAGING_DIR}${PREFIX}." "$ARTIFACTS_DIR/"
 rm -rf "$STAGING_DIR"
+
+# This build is always --enable-debug (see above), so everything under
+# src/ is left with full debug info intact for local debugging. Strip only
+# the artifacts/bin/ copies - the binaries a human or a downstream packaging
+# step (e.g. build-deb.sh) actually consumes - not the originals.
+STRIP="$(sed -n 's/^STRIP *= *//p' Makefile | head -1)"
+if [ -n "$STRIP" ]; then
+    for f in "$ARTIFACTS_DIR"/bin/*; do
+        if [ -f "$f" ]; then
+            "$STRIP" "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+./zcutil/build-deb.sh "$HOST"
+./zcutil/build-tar.sh "$HOST"
