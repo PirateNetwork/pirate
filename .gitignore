@@ -100,6 +100,7 @@ linux-build
 win32-build
 qa/pull-tester/run-bitcoind-for-test.sh
 qa/pull-tester/tests-config.sh
+qa/pull-tester/tests_config.ini
 qa/pull-tester/cache/*
 qa/pull-tester/test.*/*
 
@@ -136,6 +137,7 @@ pirate-qt-mac
 pirate-qt-arm
 src/qt/komodo-qt
 src/qt/pirate-qt
+src/qt/pirate-qt.exe
 
 #QT Files
 src/qt/moc_*.cpp
