@@ -194,7 +194,7 @@ namespace
     };
 
     size_t GetSizeForDestination(const CTxDestination& dest) {
-        return boost::apply_visitor(CTransparentSpendSizeVisitor(), dest);
+        return std::visit(CTransparentSpendSizeVisitor(), dest);
     }
 }
 
@@ -321,7 +321,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
             utxoCounter++;
             CAmount nValue = out.tx->vout[out.i].nValue;
             // size_t increase = GetSizeForDestination(address);
-            size_t increase = (boost::get<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE; /* std::get_if */
+            size_t increase = (std::get_if<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE;
             estimatedTxSize += increase;
             COutPoint utxo(out.tx->GetHash(), out.i);
             utxoInputs.emplace_back(utxo, nValue, scriptPubKey);
@@ -361,7 +361,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
                     continue;
                 }
 
-                size_t increase = (boost::get<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE; /* std::get_if */
+                size_t increase = (std::get_if<CScriptID>(&address) != nullptr) ? CTXIN_SPEND_P2SH_SIZE : CTXIN_SPEND_DUST_SIZE;
                 estimatedTxSize += increase;
                 mergedUTXOValue += nValue;
                 utxoCounter++;
