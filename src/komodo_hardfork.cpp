@@ -22,6 +22,9 @@ const int32_t nS8HardforkHeight = 4125988;  // dPoW Season 8, Fri Oct 4 2024 (es
 
 const int32_t nKIP0003Activation = nS8HardforkHeight;
 
+const int32_t nPirateNotaHardforkHeight = 9999999; // TODO: set the real PIRATE activation height before release
+const int32_t nPirateNotaRequiredSigs = 11;        // TODO: set the real requiredSigs value before release
+
 // Era array of pubkeys. Add extra seasons to bottom as requried, after adding appropriate info above. 
 const char *notaries_elected[NUM_KMD_SEASONS][NUM_KMD_NOTARIES][2] =
 {
