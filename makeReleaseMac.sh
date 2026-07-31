@@ -13,7 +13,11 @@ for binary in "${binaries[@]}";
 do
     # do the work in the destination directory
     cp ${binary} ${PACKAGE_DIR}/Contents/MacOS/
-    cp zcutil/res/Info.plist ${PACKAGE_DIR}/Contents/
+    # zcutil/res/Info.plist has RELEASE_VERSION placeholders (see
+    # CFBundleShortVersionString/CFBundleVersion) filled in from $APP_VERSION,
+    # which build-qt-mac.sh exports before calling this script - same
+    # placeholder convention as zcutil/deb/control_amd64/control_aarch64.
+    sed "s/RELEASE_VERSION/${APP_VERSION:-0.0.0}/g" zcutil/res/Info.plist > ${PACKAGE_DIR}/Contents/Info.plist
     cp zcutil/res/PkgInfo ${PACKAGE_DIR}/Contents/
     cp src/qt/res/icons/pirate.icns ${PACKAGE_DIR}/Contents/Resources/logo.icns
     # find the dylibs to copy for komodod

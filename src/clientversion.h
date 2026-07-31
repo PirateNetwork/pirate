@@ -22,6 +22,11 @@
 #define BITCOIN_CLIENTVERSION_H
 
 #if defined(HAVE_CONFIG_H)
+// The real build always takes this branch: config/bitcoin-config.h is
+// autoheader-generated straight from configure.ac's
+// AC_DEFINE(CLIENT_VERSION_MAJOR, _CLIENT_VERSION_MAJOR, ...) etc., so
+// configure.ac is already the single source of truth for every compiled
+// binary's version.
 #include "config/bitcoin-config.h"
 #else
 
@@ -31,6 +36,11 @@
 
 //! These need to be macros, as clientversion.cpp's and bitcoin*-res.rc's voodoo requires it
 
+// Fallback for consumers that don't define HAVE_CONFIG_H - i.e. that never
+// ran ./configure (IDE tooling, static analysis, or any other path that
+// includes this header without the normal autotools build). Not generated,
+// so it must be kept in sync with configure.ac's _CLIENT_VERSION_* macros
+// (top of the file) by hand; the actual build never reads these.
 #define CLIENT_VERSION_MAJOR 6
 #define CLIENT_VERSION_MINOR 0
 #define CLIENT_VERSION_REVISION 0

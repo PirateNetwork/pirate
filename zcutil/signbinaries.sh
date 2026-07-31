@@ -1,5 +1,27 @@
 #!/bin/bash
-export APP_VERSION="6.0.0"
+
+function cmd_pref() {
+    if type -p "$2" > /dev/null; then
+        eval "$1=$2"
+    else
+        eval "$1=$3"
+    fi
+}
+
+# If a g-prefixed version of the command exists, use it preferentially.
+function gprefix() {
+    cmd_pref "$1" "g$2" "$2"
+}
+
+gprefix READLINK readlink
+cd "$(dirname "$("$READLINK" -f "$0")")/.."
+
+# Read the version ./configure already derived from configure.ac's
+# _CLIENT_VERSION_* macros (e.g. "6.0.0-rc2"), rather than hand-maintaining
+# a second copy of it here - same approach as build-deb.sh/build-zip.sh.
+# -v/--version below can still override this.
+APP_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+export APP_VERSION
 
 # Accept the variables as command line arguments as well
 POSITIONAL=()
@@ -21,7 +43,10 @@ esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
-if [ -z $APP_VERSION ]; then echo "APP_VERSION is not set"; exit 1; fi
+if [ -z "$APP_VERSION" ]; then
+    echo "APP_VERSION is not set (could not read PACKAGE_VERSION from ./Makefile - did ./configure run first? or pass -v/--version explicitly)" >&2
+    exit 1
+fi
 
 GPG_ARGS=(--batch)
 if [ -n "${PIRATE_GPG_PASSPHRASE:-}" ]; then

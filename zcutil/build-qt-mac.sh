@@ -107,13 +107,20 @@ for bin in pirate-tor pirate-i2pd pirate-networking; do
     fi
 done
 
+# Read the version ./configure already derived from configure.ac's
+# _CLIENT_VERSION_* macros (e.g. "6.0.0-rc2"), rather than hand-maintaining
+# a second copy of it here - same approach as build-deb.sh/build-zip.sh.
+# Exported so makeReleaseMac.sh can fill it into zcutil/res/Info.plist's
+# RELEASE_VERSION placeholders (CFBundleShortVersionString/CFBundleVersion).
+APP_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+export APP_VERSION
+
 #Package as App bundle in a dmg
 ./makeReleaseMac.sh
 
 # makeReleaseMac.sh always writes an unversioned pirate-qt-mac.dmg in the
 # repo root; give it the same <name>-<arch>-<os>-v<version> naming and
 # artifacts/bin/ location as every other build-qt-*.sh's packaging output.
-APP_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
 if [ -n "$APP_VERSION" ] && [ -f "$mydir/pirate-qt-mac.dmg" ]; then
     case "$TRIPLET" in
         *-apple-darwin*) PLATFORM="${TRIPLET%%-*}-macos" ;;
