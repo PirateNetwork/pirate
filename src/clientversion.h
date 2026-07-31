@@ -44,7 +44,7 @@
 #define CLIENT_VERSION_MAJOR 6
 #define CLIENT_VERSION_MINOR 0
 #define CLIENT_VERSION_REVISION 0
-#define CLIENT_VERSION_BUILD 26
+#define CLIENT_VERSION_BUILD 27
 
 //! Set to true for release, false for prerelease or test build
 #define CLIENT_VERSION_IS_RELEASE true
@@ -78,8 +78,8 @@
 #include <string>
 #include <vector>
 
-static const int MIN_INDEX_VERSION = 6000000;   //Client will reindex if levelDB version below this value
-static const int MIN_WALLET_TX_VERSION = 5080000;  //Wallet will zap transactions and rescan if below this value
+static const int MIN_INDEX_VERSION = 6000027;   //Client will reindex if levelDB version below this value
+static const int MIN_WALLET_TX_VERSION = 6000027;  //Wallet will zap transactions and rescan if below this value
 
 static const int CLIENT_VERSION =
                            1000000 * CLIENT_VERSION_MAJOR
