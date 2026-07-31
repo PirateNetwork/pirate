@@ -44,6 +44,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            cmake \
             m4 \
             g++-multilib \
             autoconf \
@@ -121,6 +122,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            cmake \
             m4 \
             autoconf \
             libtool \
@@ -187,6 +189,7 @@ jobs:
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            cmake \
             m4 \
             autoconf \
             libtool \
@@ -262,7 +265,7 @@ jobs:
             fi
           }
 
-          install_brew_formulae autoconf automake libtool coreutils bison
+          install_brew_formulae autoconf automake libtool coreutils bison cmake
           command -v pkg-config >/dev/null 2>&1 || brew install pkgconf
           command -v python3 >/dev/null 2>&1 || brew install python
           command -v wget >/dev/null 2>&1 || brew install wget
@@ -303,21 +306,13 @@ jobs:
       - name: Ensure parent depends alias
         shell: bash
         run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Set version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            cmake \
             m4 \
             g++-multilib \
             autoconf \
@@ -344,36 +339,14 @@ jobs:
         run: |
           chmod +x zcutil/build-qt-linux.sh
           ./zcutil/build-qt-linux.sh -j$(nproc)
-      - name: Strip QT (Linux)
-        run: |
-          strip --strip-unneeded pirate-qt-linux
       - name: Package QT (Linux)
         run: |
+          # build-qt-linux.sh already strips, versions (from configure.ac,
+          # via the Makefile's PACKAGE_VERSION), and packages this into
+          # artifacts/bin/pirate-qt-*.deb and artifacts/bin/pirate-qt-*.zip -
+          # see zcutil/build-deb.sh, zcutil/build-zip.sh.
           mkdir -p dist
-          zip -j "dist/pirate-qt-ubuntu2404-v${VERSION}.zip" pirate-qt-linux
-          deb_version="${VERSION}"
-          if [[ "${VERSION}" == dev-* ]]; then
-            deb_version="0.0.0~${VERSION}"
-          fi
-          debdir="bin/pirate-qt-ubuntu2404-v${VERSION}"
-          mkdir -p "$debdir/DEBIAN" "$debdir/usr/local/bin" "$debdir/usr/share/pixmaps" "$debdir/usr/share/applications"
-          sed "s/RELEASE_VERSION/${deb_version}/g" zcutil/deb/control_amd64 > "$debdir/DEBIAN/control"
-          cp pirate-qt-linux "$debdir/usr/local/bin/pirate-qt"
-          # Bundle the embedded tor/i2pd daemons and their crash-safety watchdog
-          # as siblings of pirate-qt, so the embedded-onion-routing feature (see
-          # doc/tor.md, doc/i2p.md) works out of the box from this .deb too -
-          # not just from the generic artifacts/bin/ produced by `make install`.
-          for bin in pirate-tor pirate-i2pd pirate-networking; do
-            if [ -f "artifacts/bin/$bin" ]; then
-              cp "artifacts/bin/$bin" "$debdir/usr/local/bin/$bin"
-              chmod +x "$debdir/usr/local/bin/$bin"
-            fi
-          done
-          cp zcutil/deb/pirate.xpm "$debdir/usr/share/pixmaps/"
-          cp zcutil/deb/desktopentry "$debdir/usr/share/applications/pirate-qt.desktop"
-          dpkg-deb --build "$debdir"
-          mv "$debdir.deb" "dist/pirate-qt-ubuntu2404-v${VERSION}.deb"
-          rm -rf bin
+          cp artifacts/bin/pirate-qt-*.deb artifacts/bin/pirate-qt-*.zip dist/
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -388,21 +361,13 @@ jobs:
       - name: Ensure parent depends alias
         shell: bash
         run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Set version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            cmake \
             m4 \
             autoconf \
             libtool \
@@ -426,13 +391,14 @@ jobs:
         run: |
           chmod +x zcutil/build-qt-win.sh
           ./zcutil/build-qt-win.sh -j$(nproc)
-      - name: Strip QT (Windows)
-        run: |
-          x86_64-w64-mingw32-strip --strip-unneeded pirate-qt-win.exe
       - name: Package QT (Windows)
         run: |
+          # build-qt-win.sh already strips, versions (from configure.ac, via
+          # the Makefile's PACKAGE_VERSION), and packages this into
+          # artifacts/bin/pirate-qt-*.zip - see zcutil/build-zip.sh. No .deb
+          # for a Windows target.
           mkdir -p dist
-          zip -j "dist/pirate-qt-windows-v${VERSION}.zip" pirate-qt-win.exe
+          cp artifacts/bin/pirate-qt-*.zip dist/
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -449,21 +415,13 @@ jobs:
         run: ln -sfn "$PWD/depends" "$PWD/../depends"
       - name: Ensure AArch64 host alias
         run: ln -sfn aarch64-linux-gnu depends/aarch64-unknown-linux-gnu
-      - name: Set version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Install build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
             pkg-config \
+            cmake \
             m4 \
             autoconf \
             libtool \
@@ -488,36 +446,15 @@ jobs:
         run: |
           chmod +x zcutil/build-qt-aarch64.sh
           ./zcutil/build-qt-aarch64.sh -j$(nproc)
-      - name: Strip QT (AArch64)
-        run: |
-          aarch64-linux-gnu-strip --strip-unneeded pirate-qt-arm
       - name: Package QT (AArch64)
         run: |
+          # build-qt-aarch64.sh already strips (with the correct
+          # aarch64-linux-gnu-strip), versions (from configure.ac, via the
+          # Makefile's PACKAGE_VERSION), and packages this into
+          # artifacts/bin/pirate-qt-*.deb and artifacts/bin/pirate-qt-*.zip -
+          # see zcutil/build-deb.sh, zcutil/build-zip.sh.
           mkdir -p dist
-          zip -j "dist/pirate-qt-aarch64-v${VERSION}.zip" pirate-qt-arm
-          deb_version="${VERSION}"
-          if [[ "${VERSION}" == dev-* ]]; then
-            deb_version="0.0.0~${VERSION}"
-          fi
-          debdir="bin/pirate-qt-aarch64-v${VERSION}"
-          mkdir -p "$debdir/DEBIAN" "$debdir/usr/local/bin" "$debdir/usr/share/pixmaps" "$debdir/usr/share/applications"
-          sed "s/RELEASE_VERSION/${deb_version}/g" zcutil/deb/control_aarch64 > "$debdir/DEBIAN/control"
-          cp pirate-qt-arm "$debdir/usr/local/bin/pirate-qt"
-          # Bundle the embedded tor/i2pd daemons and their crash-safety watchdog
-          # as siblings of pirate-qt, so the embedded-onion-routing feature (see
-          # doc/tor.md, doc/i2p.md) works out of the box from this .deb too -
-          # not just from the generic artifacts/bin/ produced by `make install`.
-          for bin in pirate-tor pirate-i2pd pirate-networking; do
-            if [ -f "artifacts/bin/$bin" ]; then
-              cp "artifacts/bin/$bin" "$debdir/usr/local/bin/$bin"
-              chmod +x "$debdir/usr/local/bin/$bin"
-            fi
-          done
-          cp zcutil/deb/pirate.xpm "$debdir/usr/share/pixmaps/"
-          cp zcutil/deb/desktopentry "$debdir/usr/share/applications/piratewallet-qt.desktop"
-          dpkg-deb --build "$debdir"
-          mv "$debdir.deb" "dist/pirate-qt-aarch64-v${VERSION}.deb"
-          rm -rf bin
+          cp artifacts/bin/pirate-qt-*.deb artifacts/bin/pirate-qt-*.zip dist/
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -532,15 +469,6 @@ jobs:
       - name: Ensure parent depends alias
         shell: bash
         run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Set version
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Install Homebrew dependencies
         env:
           HOMEBREW_NO_AUTO_UPDATE: 1
@@ -559,7 +487,7 @@ jobs:
             fi
           }
 
-          install_brew_formulae autoconf automake libtool coreutils bison qt@5 create-dmg
+          install_brew_formulae autoconf automake libtool coreutils bison cmake qt@5 create-dmg
           command -v pkg-config >/dev/null 2>&1 || brew install pkgconf
           command -v python3 >/dev/null 2>&1 || brew install python
           command -v wget >/dev/null 2>&1 || brew install wget
@@ -573,8 +501,15 @@ jobs:
           ./zcutil/build-qt-mac.sh -j$(sysctl -n hw.ncpu)
       - name: Package QT (macOS)
         run: |
+          # build-qt-mac.sh (via makeReleaseMac.sh) already versions (from
+          # configure.ac, via the Makefile's PACKAGE_VERSION) and moves the
+          # .dmg into artifacts/bin/pirate-qt-*.dmg. It also produces
+          # artifacts/bin/pirate-cli-*.zip as a side effect (build-zip.sh's
+          # "cli" package - macOS has no separate CLI-only build script this
+          # job could call instead), which is deliberately not picked up
+          # here since the cli-macos job already publishes its own.
           mkdir -p dist
-          mv pirate-qt-mac.dmg "dist/pirate-qt-MacOS-v${VERSION}.dmg"
+          cp artifacts/bin/pirate-qt-*.dmg dist/
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -656,7 +591,11 @@ jobs:
               { print "- " $0 }
             ')"
           fi
-          sha256sum artifacts/pirate-*-v${VERSION}* | sed "s|artifacts/||" | sort -k2,2 > release_hashes.txt
+          # Not filtered to *-v${VERSION}*: qt-*.deb/.zip/.dmg artifacts are
+          # now versioned from configure.ac's PACKAGE_VERSION (see
+          # build-deb.sh/build-zip.sh/build-qt-mac.sh), which won't
+          # generally match this release's own tag-derived version.
+          sha256sum artifacts/pirate-* | sed "s|artifacts/||" | sort -k2,2 > release_hashes.txt
           {
             echo "Pirate ${VERSION}"
             echo

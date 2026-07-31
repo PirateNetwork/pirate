@@ -63,10 +63,15 @@ cd artifacts
 rm -f sha256sum-v$APP_VERSION.txt
 rm -f signatures-v$APP_VERSION.tar.gz
 
-# sha256sum the binaries
-sha256sum *$APP_VERSION* > sha256sum-v$APP_VERSION.txt
+# sha256sum the binaries. Matches every pirate* file here rather than
+# filtering by $APP_VERSION: qt-*.deb/.zip/.dmg release artifacts are now
+# versioned from configure.ac's PACKAGE_VERSION (see build-deb.sh/
+# build-zip.sh/build-qt-mac.sh), which won't generally match this release's
+# own tag-derived --version, so a version-substring filter would silently
+# skip signing them.
+sha256sum pirate* > sha256sum-v$APP_VERSION.txt
 
-for i in $( ls pirate*-v$APP_VERSION* sha256sum-v$APP_VERSION* ); do
+for i in $( ls pirate* sha256sum-v$APP_VERSION* ); do
   echo "Signing" $i
   gpg "${GPG_ARGS[@]}" --output ../release/signatures/$i.sig --detach-sig $i
 done
