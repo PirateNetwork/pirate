@@ -1983,17 +1983,6 @@ void ThreadOpenConnections()
             // do not allow non-default ports, unless after 50 invalid addresses selected already
             if (addr.GetPort() != Params().GetDefaultPort() && nTries < 50)
                 continue;
-                
-            // If we have addnode connections, be more selective with peers.dat addresses
-            // to prioritize maintaining addnode connections
-            {
-                LOCK(cs_vAddedNodes);
-                if (!vAddedNodes.empty() && nTries < 20) {
-                    // Skip peers.dat addresses early if we have addnodes configured
-                    // This gives addnode connections priority over peers.dat
-                    continue;
-                }
-            }
 
             addrConnect = addr;
             break;
