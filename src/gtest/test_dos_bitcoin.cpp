@@ -7,6 +7,7 @@
 // Unit tests for denial-of-service detection/prevention code
 //
 
+#include "addrman.h"
 #include "chainparams.h"
 #include "consensus/upgrades.h"
 #include "hash.h"
@@ -156,6 +157,48 @@ TEST_F(DoS_tests_bitcoin, DoS_AddrSizeCap)
     WriteCompactSize(payload, 1001);
     InjectMessage(&dummyNode, NetMsgType::ADDR, payload);
     EXPECT_EQ(GetMisbehavior(dummyNode.GetId()), 20);
+}
+
+// Regression test found during a networking review: the ADDRV2 handler used
+// to gate storage on IsReachable(addr) ("Do not store addresses outside our
+// network"), so an IPv4-only node (Tor/I2P unreachable) discarded every
+// Tor/I2P/CJDNS address it was ever gossiped, on receipt, before it ever
+// reached addrman - meaning such a node could never learn, and therefore
+// could never re-relay, a single address on those networks. That defeats
+// address propagation for them entirely: addrman.Select()/GetAddr() already
+// filter by reachability at use time (see GetReachabilityFrom() in
+// netaddress.cpp), so gating storage the same way here was pure data loss,
+// not a meaningful protection. Simulate an IPv4-only node (onion explicitly
+// marked unreachable) receiving a real onion address via ADDRV2 and confirm
+// it's actually stored.
+TEST_F(DoS_tests_bitcoin, AddrHandler_StoresNonReachableNetworkAddresses)
+{
+    SetReachable(NET_ONION, false);
+    struct ReachabilityGuard {
+        ~ReachabilityGuard() { SetReachable(NET_ONION, true); }
+    } reachabilityGuard;
+
+    CNetAddr onion;
+    ASSERT_TRUE(onion.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    ASSERT_FALSE(IsReachable(onion)) << "test setup: onion must be unreachable for this test to mean anything";
+
+    CAddress onionAddr(CService(onion, 8233), NODE_NETWORK);
+    onionAddr.nTime = GetTime();
+
+    CAddress peerAddr(ip(0xa0b0c010));
+    CNode dummyNode(INVALID_SOCKET, peerAddr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    WriteCompactSize(payload, 1);
+    payload << onionAddr;
+    InjectMessage(&dummyNode, NetMsgType::ADDRV2, payload);
+
+    std::map<std::string, int64_t> peers;
+    addrman.GetAllPeers(peers);
+    EXPECT_TRUE(peers.count(onionAddr.ToStringIPPort()) > 0)
+        << "an unreachable-network address must still be stored, so it can later be "
+           "relayed to a peer who can actually use it";
 }
 
 // treasurechest_attack_vectors.md #6 / VULN-04: GETBLOCKS locator over

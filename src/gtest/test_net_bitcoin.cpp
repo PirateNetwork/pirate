@@ -619,3 +619,55 @@ TEST_F(net_tests_bitcoin, LocalAddress_BasicLifecycle)
     RemoveLocal(addr);
     EXPECT_EQ(IsLocal(addr), false);
 }
+
+TEST_F(net_tests_bitcoin, GetUnderTargetReachableNetworks_ReturnsUnreachedReachableNetworks)
+{
+    // Every network is reachable by default in this test binary, and with no
+    // outbound connections yet (an empty count map), every interface network
+    // still needs to reach MIN_OUTBOUND_PER_REACHABLE_NETWORK.
+    std::map<Network, int> empty;
+    std::set<Network> underTarget = GetUnderTargetReachableNetworks(empty);
+    EXPECT_EQ(underTarget, (std::set<Network>{NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS}));
+
+    // Networks that already have enough outbound connections drop out of the set.
+    std::map<Network, int> counts{
+        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV6, MIN_OUTBOUND_PER_REACHABLE_NETWORK + 5},
+        {NET_ONION, 0},
+        {NET_I2P, MIN_OUTBOUND_PER_REACHABLE_NETWORK - 1},
+        {NET_CJDNS, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+    };
+    underTarget = GetUnderTargetReachableNetworks(counts);
+    EXPECT_EQ(underTarget, (std::set<Network>{NET_ONION, NET_I2P}));
+
+    // Unreachable networks never appear, no matter their (irrelevant) count.
+    SetReachable(NET_I2P, false);
+    underTarget = GetUnderTargetReachableNetworks(counts);
+    EXPECT_EQ(underTarget, (std::set<Network>{NET_ONION}));
+    SetReachable(NET_I2P, true); // reset - global state shared with every other test in this binary
+}
+
+TEST_F(net_tests_bitcoin, ShouldSkipForNetworkDiversity_Behavior)
+{
+    const std::set<Network> underTarget{NET_ONION, NET_I2P};
+    const int kBudget = 40;
+
+    // Nothing to skip for once every reachable network has already met its target.
+    EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, {}, 0, kBudget));
+
+    // A candidate on an under-target network is never skipped, at any point
+    // in the search.
+    EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_ONION, underTarget, 0, kBudget));
+    EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_I2P, underTarget, kBudget - 1, kBudget));
+
+    // A candidate on an already-satisfied network is skipped while there's
+    // still search budget left, to give the under-target networks a chance...
+    EXPECT_TRUE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, 0, kBudget));
+    EXPECT_TRUE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget - 1, kBudget));
+
+    // ...but accepted once the budget is exhausted, so an under-target
+    // network with no addresses in addrman yet can never starve connections
+    // entirely.
+    EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget, kBudget));
+    EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget + 1, kBudget));
+}

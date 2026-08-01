@@ -38,6 +38,8 @@
 #include "util.h"
 
 #include <deque>
+#include <map>
+#include <set>
 #include <stdint.h>
 
 #ifndef _WIN32
@@ -227,6 +229,38 @@ bool IsReachable(enum Network net);
 /** @returns true if the address is in a reachable network, false otherwise */
 bool IsReachable(const CNetAddr& addr);
 CAddress GetLocalAddress(const CNetAddr *paddrPeer = NULL);
+
+//! Minimum number of outbound connections ThreadOpenConnections tries to keep
+//! on every currently-reachable network (IPv4/IPv6/Tor/I2P/CJDNS), so a
+//! multi-interface node doesn't end up with all its outbound slots on
+//! whichever network happens to be best represented in addrman.
+static const int MIN_OUTBOUND_PER_REACHABLE_NETWORK = 2;
+
+//! How many candidates ThreadOpenConnections will search through while
+//! restricting itself to under-target networks before giving up on the
+//! diversity target for this pass and accepting any reachable candidate -
+//! prevents starving all connections when an under-represented network
+//! genuinely has no usable addresses in addrman yet.
+static const int DIVERSITY_TRY_BUDGET = 40;
+
+/**
+ * Given the current outbound connection count per network, return the set of
+ * currently-reachable networks (IPv4/IPv6/Tor/I2P/CJDNS) that haven't yet
+ * reached MIN_OUTBOUND_PER_REACHABLE_NETWORK outbound connections.
+ */
+std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& outboundCountByNetwork,
+                                                   int nMinPerNetwork = MIN_OUTBOUND_PER_REACHABLE_NETWORK);
+
+/**
+ * Whether a connection candidate on `net` should be skipped this attempt in
+ * favor of giving under-represented reachable networks a chance to reach
+ * their target first. Always false once `underTargetNetworks` is empty (every
+ * reachable network already met its target) or `nTries` has exceeded the
+ * diversity search budget (give up enforcing rather than find no candidate
+ * at all).
+ */
+bool ShouldSkipForNetworkDiversity(Network net, const std::set<Network>& underTargetNetworks,
+                                    int nTries, int nDiversityTryBudget = DIVERSITY_TRY_BUDGET);
 
 
 extern bool fDiscover;

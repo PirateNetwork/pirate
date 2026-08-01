@@ -430,6 +430,32 @@ bool IsReachable(const CNetAddr& addr)
     return IsReachable(net);
 }
 
+std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& outboundCountByNetwork,
+                                                   int nMinPerNetwork)
+{
+    static const Network kInterfaceNetworks[] = {NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS};
+
+    std::set<Network> underTarget;
+    for (Network net : kInterfaceNetworks) {
+        if (!IsReachable(net)) continue;
+
+        int nCount = 0;
+        const auto it = outboundCountByNetwork.find(net);
+        if (it != outboundCountByNetwork.end()) nCount = it->second;
+
+        if (nCount < nMinPerNetwork) underTarget.insert(net);
+    }
+    return underTarget;
+}
+
+bool ShouldSkipForNetworkDiversity(Network net, const std::set<Network>& underTargetNetworks,
+                                    int nTries, int nDiversityTryBudget)
+{
+    if (underTargetNetworks.empty()) return false;
+    if (nTries >= nDiversityTryBudget) return false;
+    return underTargetNetworks.count(net) == 0;
+}
+
 void AddressCurrentlyConnected(const CService& addr)
 {
     addrman.Add(CAddress(addr),addr); //Add address if not alread in addrman (picks up addnodes)
@@ -1941,15 +1967,24 @@ void ThreadOpenConnections()
         // Do this here so we don't have to critsect vNodes inside mapAddresses critsect.
         int nOutbound = 0;
         set<vector<unsigned char> > setConnected;
+        map<Network, int> outboundCountByNetwork;
         {
             LOCK(cs_vNodes);
             BOOST_FOREACH(CNode* pnode, vNodes) {
                 if (!pnode->fInbound) {
                     setConnected.insert(pnode->addr.GetGroup(addrman.m_asmap));
+                    outboundCountByNetwork[pnode->addr.GetNetwork()]++;
                     nOutbound++;
                 }
             }
         }
+
+        // On a multi-interface node, keep a minimum spread of outbound
+        // connections across every currently-reachable network rather than
+        // letting whichever network is best represented in addrman (usually
+        // IPv4) claim every outbound slot - see GetUnderTargetReachableNetworks.
+        const std::set<Network> underTargetNetworks =
+            GetUnderTargetReachableNetworks(outboundCountByNetwork);
 
         int64_t nANow = GetTime();
 
@@ -1973,6 +2008,16 @@ void ThreadOpenConnections()
                 break;
 
             if (!IsReachable(addr)) {
+                continue;
+            }
+
+            // Give under-represented reachable networks priority until they
+            // catch up to MIN_OUTBOUND_PER_REACHABLE_NETWORK, or until we've
+            // spent DIVERSITY_TRY_BUDGET attempts looking (whichever comes
+            // first - an under-target network may simply have no usable
+            // addresses in addrman yet, and this must not starve connections
+            // entirely while waiting for one to show up).
+            if (ShouldSkipForNetworkDiversity(addr.GetNetwork(), underTargetNetworks, nTries, DIVERSITY_TRY_BUDGET)) {
                 continue;
             }
 

@@ -8589,8 +8589,17 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
                         ((*mi).second)->PushAddress(addr);
                 }
             }
-            // Do not store addresses outside our network
-            if (fReachable)
+            // Store every routable address regardless of whether we can
+            // currently reach that network ourselves. addrman.Select()/
+            // GetAddr() already filter by reachability at use time (see
+            // GetReachabilityFrom()/IsReachable() in netaddress.cpp/net.cpp);
+            // gating storage on local reachability here means an IPv4-only
+            // node can never learn - or ever re-gossip - a single Tor/I2P/
+            // CJDNS address, since it would discard every one on receipt.
+            // That breaks address propagation for those networks entirely:
+            // an IPv4 relay can't hand out addresses it was never allowed to
+            // remember in the first place.
+            if (addr.IsRoutable())
                 vAddrOk.push_back(addr);
             pfrom->m_addr_processed += num_proc;
             pfrom->m_addr_rate_limited += num_rate_limit;
