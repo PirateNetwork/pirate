@@ -230,7 +230,7 @@ bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
             throw std::runtime_error("Invalid session id");
         }
 
-        if (result == "CANT_REACH_PEER" || result == "TIMEOUT" || "KEY_NOT_FOUND") {
+        if (result == "CANT_REACH_PEER" || result == "TIMEOUT" || result == "KEY_NOT_FOUND") {
             proxy_error = false;
         }
 

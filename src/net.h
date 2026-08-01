@@ -295,6 +295,8 @@ public:
     std::string addrLocal;
     uint64_t m_addr_processed{0};
     uint64_t m_addr_rate_limited{0};
+    // Network the peer's address belongs to (ipv4, ipv6, onion, i2p, ...)
+    std::string m_network;
     // Address of this peer
     CAddress addr;
     // Bind address of our side of the connection

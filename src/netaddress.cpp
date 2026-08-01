@@ -868,42 +868,35 @@ int CNetAddr::GetReachabilityFrom(const CNetAddr *paddrPartner) const
     int theirNet = GetExtNetwork(paddrPartner);
     bool fTunnel = IsRFC3964() || IsRFC6052() || IsRFC6145();
 
-    switch(theirNet) {
-    case NET_IPV4:
-        switch(ourNet) {
-        default:       return REACH_DEFAULT;
-        case NET_IPV4: return REACH_IPV4;
-        }
-    case NET_IPV6:
-        switch(ourNet) {
-        default:         return REACH_DEFAULT;
-        case NET_TEREDO: return REACH_TEREDO;
-        case NET_IPV4:   return REACH_IPV4;
-        case NET_IPV6:   return fTunnel ? REACH_IPV6_WEAK : REACH_IPV6_STRONG; // only prefer giving our IPv6 address if it's not tunnelled
-        }
+    // Every network only ever offers an address on that exact same network -
+    // never a fallback to a different one (IPv4<->IPv6, Teredo<->IPv6, or any
+    // pairing involving Tor/I2P/CJDNS). This used to be a tiered preference
+    // (an IPv6 peer would fall back to our IPv4 address, or to a Tor/I2P/
+    // CJDNS address if that was all we had, before those were fixed to be
+    // REACH_UNREACHABLE), but any such fallback still links two identities
+    // together for the anonymity networks, and simply isn't useful for
+    // IPv4/IPv6 anyway - a peer that only speaks IPv4 can't dial an IPv6
+    // address regardless of how "preferred" it's scored. GetLocal() (net.cpp)
+    // treats REACH_UNREACHABLE as a hard skip, not just a low preference, so
+    // this is an actual guarantee against cross-network address disclosure,
+    // not merely a tie-breaker.
+    if (ourNet != theirNet) {
+        return REACH_UNREACHABLE;
+    }
+
+    switch (ourNet) {
+    case NET_IPV4:   return REACH_IPV4;
+    case NET_IPV6:   return fTunnel ? REACH_IPV6_WEAK : REACH_IPV6_STRONG; // prefer a native address over a tunnelled one among our own IPv6 candidates
     case NET_ONION:
-        switch(ourNet) {
-        default:         return REACH_DEFAULT;
-        case NET_IPV4:   return REACH_IPV4; // Tor users can connect to IPv4 as well
-        case NET_ONION:    return REACH_PRIVATE;
-        }
-    case NET_TEREDO:
-        switch(ourNet) {
-        default:          return REACH_DEFAULT;
-        case NET_TEREDO:  return REACH_TEREDO;
-        case NET_IPV6:    return REACH_IPV6_WEAK;
-        case NET_IPV4:    return REACH_IPV4;
-        }
-    case NET_UNKNOWN:
-    case NET_UNROUTABLE:
-    default:
-        switch(ourNet) {
-        default:          return REACH_DEFAULT;
-        case NET_TEREDO:  return REACH_TEREDO;
-        case NET_IPV6:    return REACH_IPV6_WEAK;
-        case NET_IPV4:    return REACH_IPV4;
-        case NET_ONION:     return REACH_PRIVATE; // either from Tor, or don't care about our address
-        }
+    case NET_I2P:
+    case NET_CJDNS:  return REACH_PRIVATE;
+    case NET_TEREDO: return REACH_TEREDO;
+    // NET_UNKNOWN (paddrPartner == nullptr) or NET_UNROUTABLE can only reach
+    // this point if `this` itself somehow reported one of those as its own
+    // network, which IsRoutable()/IsInternal() above already rules out for
+    // any address that made it into mapLocalHost via AddLocal() - kept as an
+    // explicit, defensive REACH_UNREACHABLE rather than left to fall through.
+    default:         return REACH_UNREACHABLE;
     }
 }
 

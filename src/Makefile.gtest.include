@@ -93,6 +93,8 @@ pirate_gtest_SOURCES += \
 	gtest/test_equihash_bitcoin.cpp \
 	gtest/test_bip32.cpp \
 	gtest/test_torcontrol.cpp \
+	gtest/mock_line_server.h \
+	gtest/test_i2p.cpp \
 	gtest/test_key_bitcoin.cpp \
 	gtest/test_uint256_bitcoin.cpp \
 	gtest/test_base58.cpp \

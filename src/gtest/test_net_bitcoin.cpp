@@ -446,6 +446,107 @@ TEST_F(net_tests_bitcoin, LimitedAndReachable_NetworkCaseUnroutableAndInternal)
     EXPECT_EQ(IsReachable(NET_INTERNAL), true);
 }
 
+TEST_F(net_tests_bitcoin, GetReachabilityFrom_OnlySameNetworkOrUnreachable)
+{
+    // Regression test for a privacy leak, hardened in three stages:
+    //
+    // 1. GetReachabilityFrom() originally had no case for NET_I2P or
+    //    NET_CJDNS in its outer switch(theirNet), so an I2P/CJDNS peer fell
+    //    through to the same default branch used for unroutable/unknown
+    //    peers, which scored our own IPv4/IPv6 address (REACH_IPV4/
+    //    REACH_IPV6_WEAK) higher than our own I2P/CJDNS address. Since
+    //    GetLocal()/GetLocalAddress() pick the highest-scoring local address
+    //    for a given peer, and CNode::PushVersion() sends that address
+    //    unconditionally to every peer in the VERSION handshake, a real IPv4
+    //    address could be sent directly to an I2P peer.
+    // 2. Fixing that to a lower-but-nonzero score wasn't enough either: a
+    //    low score still gets returned by GetLocal() as a last-resort
+    //    fallback when nothing better is available (see
+    //    GetLocal_NeverFallsBackToCrossNetworkAddress below for the other
+    //    half of this fix, in net.cpp's GetLocal(), which treats
+    //    REACH_UNREACHABLE specifically as a hard skip).
+    // 3. The final policy: every network (IPv4, IPv6, Tor, I2P, CJDNS,
+    //    Teredo) only ever offers an address on that exact same network to a
+    //    matching peer, or REACH_UNREACHABLE otherwise - no cross-network
+    //    fallback at all, not even IPv4<->IPv6. Revealing an address on one
+    //    network to a peer on a different network links whatever identity
+    //    that network represents to the peer; for the anonymity networks
+    //    that's a direct deanonymization risk, and for IPv4/IPv6 it isn't
+    //    useful anyway since the peer can't dial an address on a network it
+    //    doesn't speak. Checked in both directions: neither side may ever be
+    //    offered the other's address unless the networks match exactly.
+    CNetAddr torPeer, torOurs, i2pPeer, i2pOurs, ipv4Ours, ipv6Ours, ipv4Peer;
+    ASSERT_TRUE(torPeer.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    ASSERT_TRUE(torOurs.SetSpecial("kpgvmscirrdqpekbqjsvw5teanhatztpp2gl6eee4zkowvwfxwenqaid.onion"));
+    ASSERT_TRUE(i2pPeer.SetSpecial("ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p"));
+    ASSERT_TRUE(i2pOurs.SetSpecial("ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p"));
+    ASSERT_TRUE(LookupHost("12.34.56.78", ipv4Ours, false));
+    ASSERT_TRUE(LookupHost("1122:3344:5566:7788:9900:aabb:ccdd:eeff", ipv6Ours, false));
+    ASSERT_TRUE(LookupHost("87.65.43.21", ipv4Peer, false));
+
+    EXPECT_EQ(ipv4Ours.GetReachabilityFrom(&torPeer), 0)
+        << "a Tor peer must never be offered our IPv4 address";
+    EXPECT_EQ(ipv6Ours.GetReachabilityFrom(&torPeer), 0)
+        << "a Tor peer must never be offered our IPv6 address";
+    EXPECT_GT(torOurs.GetReachabilityFrom(&torPeer), 0)
+        << "a Tor peer may still be offered our own onion address";
+    EXPECT_EQ(torOurs.GetReachabilityFrom(&ipv4Peer), 0)
+        << "an IPv4 peer must never be offered our onion address";
+
+    EXPECT_EQ(ipv4Ours.GetReachabilityFrom(&i2pPeer), 0)
+        << "an I2P peer must never be offered our IPv4 address";
+    EXPECT_EQ(ipv6Ours.GetReachabilityFrom(&i2pPeer), 0)
+        << "an I2P peer must never be offered our IPv6 address";
+    EXPECT_GT(i2pOurs.GetReachabilityFrom(&i2pPeer), 0)
+        << "an I2P peer may still be offered our own I2P address";
+    EXPECT_EQ(i2pOurs.GetReachabilityFrom(&ipv4Peer), 0)
+        << "an IPv4 peer must never be offered our I2P address";
+
+    // CJDNS has no SetSpecial()-style string constructor; build addresses via
+    // the BIP155 wire format, same as cnetaddr_unserialize_v2 does above.
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+    s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+    CNetAddr cjdnsPeer, cjdnsOurs;
+    s << MakeSpan(ParseHex("06"                               // network type (CJDNS)
+                           "10"                               // address length
+                           "fc000001000200030004000500060007" // address
+                           ));
+    s >> cjdnsPeer;
+    ASSERT_TRUE(cjdnsPeer.IsCJDNS());
+    s << MakeSpan(ParseHex("06"
+                           "10"
+                           "fc000001000200030004000500060008"));
+    s >> cjdnsOurs;
+    ASSERT_TRUE(cjdnsOurs.IsCJDNS());
+
+    EXPECT_EQ(ipv4Ours.GetReachabilityFrom(&cjdnsPeer), 0)
+        << "a CJDNS peer must never be offered our IPv4 address";
+    EXPECT_GT(cjdnsOurs.GetReachabilityFrom(&cjdnsPeer), 0)
+        << "a CJDNS peer may still be offered our own CJDNS address";
+    EXPECT_EQ(cjdnsOurs.GetReachabilityFrom(&ipv4Peer), 0)
+        << "an IPv4 peer must never be offered our CJDNS address";
+
+    // Cross-anonymity-network pairings must also be unreachable: a Tor peer
+    // must never be offered our I2P/CJDNS address, and vice versa.
+    EXPECT_EQ(i2pOurs.GetReachabilityFrom(&torPeer), 0)
+        << "a Tor peer must never be offered our I2P address";
+    EXPECT_EQ(cjdnsOurs.GetReachabilityFrom(&torPeer), 0)
+        << "a Tor peer must never be offered our CJDNS address";
+    EXPECT_EQ(torOurs.GetReachabilityFrom(&i2pPeer), 0)
+        << "an I2P peer must never be offered our onion address";
+    EXPECT_EQ(torOurs.GetReachabilityFrom(&cjdnsPeer), 0)
+        << "a CJDNS peer must never be offered our onion address";
+
+    // Sanity check: a same-network match still works, and IPv4/IPv6 no
+    // longer fall back to each other either - the "own network or
+    // unreachable" rule applies uniformly, not just to the anonymity
+    // networks.
+    EXPECT_GT(ipv4Ours.GetReachabilityFrom(&ipv4Peer), 0)
+        << "an IPv4 peer must still be offered our IPv4 address";
+    EXPECT_EQ(ipv6Ours.GetReachabilityFrom(&ipv4Peer), 0)
+        << "an IPv4 peer must never be offered our IPv6 address";
+}
+
 static CNetAddr UtilBuildAddress(unsigned char p1, unsigned char p2, unsigned char p3, unsigned char p4)
 {
     unsigned char ip[] = {p1, p2, p3, p4};
@@ -454,6 +555,42 @@ static CNetAddr UtilBuildAddress(unsigned char p1, unsigned char p2, unsigned ch
     memset(&sa, 0, sizeof(sockaddr_in)); // initialize the memory block
     memcpy(&(sa.sin_addr), &ip, sizeof(ip));
     return CNetAddr(sa.sin_addr);
+}
+
+TEST_F(net_tests_bitcoin, GetLocal_NeverFallsBackToCrossNetworkAddress)
+{
+    // The other half of the fix above: GetReachabilityFrom() returning
+    // REACH_UNREACHABLE only matters if GetLocal() (net.cpp) actually treats
+    // it as a hard skip rather than just the bottom of a preference ordering.
+    // Before this fix, GetLocal()'s loop started at nBestReachability = -1,
+    // so even a REACH_UNREACHABLE (0) candidate would still "win" and be
+    // returned whenever it was the only address configured - a low score
+    // meant "least preferred", not "never". This test proves the actual,
+    // end-to-end guarantee: with only an IPv4 address registered, a Tor/I2P
+    // peer gets nothing back at all (GetLocal returns false), which is what
+    // makes GetLocalAddress() fall back to the unspecified/unroutable
+    // placeholder instead of ever handing out that IPv4 address.
+    CService ipv4Local = CService(UtilBuildAddress(0x005, 0x001, 0x001, 0x001), 2000); // 5.1.1.1:2000
+    SetReachable(NET_IPV4, true);
+    ASSERT_TRUE(AddLocal(ipv4Local, LOCAL_MANUAL));
+
+    CNetAddr torPeer, i2pPeer, ipv4Peer;
+    ASSERT_TRUE(torPeer.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    ASSERT_TRUE(i2pPeer.SetSpecial("ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p"));
+    ipv4Peer = UtilBuildAddress(0x006, 0x001, 0x001, 0x001);
+
+    CService result;
+    EXPECT_FALSE(GetLocal(result, &torPeer))
+        << "a Tor peer must get nothing back, not a fallback IPv4 address";
+    EXPECT_FALSE(GetLocal(result, &i2pPeer))
+        << "an I2P peer must get nothing back, not a fallback IPv4 address";
+
+    // Sanity check: the same address is still offered to a plain IPv4 peer -
+    // this isn't a general "never return anything" regression.
+    EXPECT_TRUE(GetLocal(result, &ipv4Peer));
+    EXPECT_EQ(result, ipv4Local);
+
+    RemoveLocal(ipv4Local);
 }
 
 TEST_F(net_tests_bitcoin, LimitedAndReachable_CNetAddr)

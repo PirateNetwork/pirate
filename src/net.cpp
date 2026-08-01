@@ -249,6 +249,14 @@ bool GetLocal(CService& addr, const CNetAddr *paddrPeer)
         {
             int nScore = (*it).second.nScore;
             int nReachability = (*it).first.GetReachabilityFrom(paddrPeer);
+            // REACH_UNREACHABLE (0): for a Tor/I2P/CJDNS peer, this means the
+            // candidate is on a *different* network than the peer (see
+            // GetReachabilityFrom's NET_ONION/NET_I2P/NET_CJDNS cases) - skip
+            // it entirely rather than falling back to it as a last resort,
+            // so those peers are never handed an address outside their own
+            // network even when it's the only local address configured.
+            if (nReachability <= 0)
+                continue;
             if (nReachability > nBestReachability || (nReachability == nBestReachability && nScore > nBestScore))
             {
                 addr = CService((*it).first, (*it).second.nPort);
@@ -913,6 +921,7 @@ void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
     stats.nodeid = this->GetId();
     stats.nServices = nServices;
     stats.addr = addr;
+    stats.m_network = GetNetworkName(addr.GetNetwork());
     // stats.addrBind = addrBind;
     stats.m_mapped_as = addr.GetMappedAS(m_asmap);
     stats.nLastSend = nLastSend;
