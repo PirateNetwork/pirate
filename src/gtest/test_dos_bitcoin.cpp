@@ -201,6 +201,78 @@ TEST_F(DoS_tests_bitcoin, AddrHandler_StoresNonReachableNetworkAddresses)
            "relayed to a peer who can actually use it";
 }
 
+// Once Ironwood activates, a GETADDR from a peer that never sent SENDADDRV2
+// is a request for legacy version-1 addresses - obsolete post-hardfork, so
+// such peers must be disconnected rather than served. Protocol-version
+// number can't be used for this instead: forks like Komodo keep bumping
+// their own protocol version independently while staying legacy-ADDR-only,
+// so a high version number doesn't prove ADDRv2 support. The GETADDR
+// handler's own GetHeight() (main.cpp, anonymous-namespace, not reachable
+// from here) returns 0 with no blocks connected in this fixture, so
+// komodo_setironwood(0) makes Ironwood unconditionally active for it, and a
+// large height makes it unconditionally inactive - no need to actually mine
+// a chain to the real activation height for this.
+class AddrV2RequiredPostIronwood_tests : public DoS_tests_bitcoin {
+protected:
+    int origIronwoodHeight;
+    void SetUp() override {
+        DoS_tests_bitcoin::SetUp();
+        origIronwoodHeight = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight;
+    }
+    void TearDown() override {
+        komodo_setironwood(origIronwoodHeight);
+        DoS_tests_bitcoin::TearDown();
+    }
+};
+
+TEST_F(AddrV2RequiredPostIronwood_tests, DisconnectsLegacyGetAddrAfterActivation)
+{
+    komodo_setironwood(0);
+
+    CAddress peerAddr(ip(0xa0b0c011));
+    CNode dummyNode(INVALID_SOCKET, peerAddr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+    dummyNode.m_wants_addrv2 = false; // never sent SENDADDRV2 - a legacy-only peer
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    InjectMessage(&dummyNode, NetMsgType::GETADDR, payload);
+
+    EXPECT_TRUE(dummyNode.fDisconnect)
+        << "a legacy (non-ADDRv2) GETADDR must be disconnected once Ironwood is active";
+}
+
+TEST_F(AddrV2RequiredPostIronwood_tests, AllowsLegacyGetAddrBeforeActivation)
+{
+    komodo_setironwood(1000000);
+
+    CAddress peerAddr(ip(0xa0b0c012));
+    CNode dummyNode(INVALID_SOCKET, peerAddr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+    dummyNode.m_wants_addrv2 = false;
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    InjectMessage(&dummyNode, NetMsgType::GETADDR, payload);
+
+    EXPECT_FALSE(dummyNode.fDisconnect)
+        << "legacy GETADDR is still fine before Ironwood activates";
+}
+
+TEST_F(AddrV2RequiredPostIronwood_tests, NeverDisconnectsAddrV2PeerAfterActivation)
+{
+    komodo_setironwood(0);
+
+    CAddress peerAddr(ip(0xa0b0c013));
+    CNode dummyNode(INVALID_SOCKET, peerAddr, "", true);
+    dummyNode.nVersion = PROTOCOL_VERSION;
+    dummyNode.m_wants_addrv2 = true; // did send SENDADDRV2
+
+    CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+    InjectMessage(&dummyNode, NetMsgType::GETADDR, payload);
+
+    EXPECT_FALSE(dummyNode.fDisconnect)
+        << "an ADDRv2-capable peer must never be disconnected by this check";
+}
+
 // treasurechest_attack_vectors.md #6 / VULN-04: GETBLOCKS locator over
 // MAX_LOCATOR_SZ=101 entries must be rejected (Misbehaving+20).
 TEST_F(DoS_tests_bitcoin, DoS_GetBlocksLocatorCap)

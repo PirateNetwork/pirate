@@ -8707,6 +8707,22 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
     // the getaddr message mitigates the attack.
     else if ((strCommand == NetMsgType::GETADDR) && (pfrom->fInbound))
     {
+        // Once Ironwood is active, a peer that never sent SENDADDRV2 is
+        // asking for (and can only accept) legacy version-1 addresses -
+        // obsolete post-hardfork, so disconnect rather than serve them.
+        // Protocol-version number can't be used to detect this instead:
+        // diverged forks (e.g. Komodo) keep bumping their own protocol
+        // version while still speaking only legacy ADDR, so a high version
+        // number doesn't imply ADDRv2 support the way it would for an
+        // in-family client - the GETADDR itself, from a peer that hasn't
+        // negotiated ADDRv2, is the actual unambiguous signal.
+        if (NetworkUpgradeActive(GetHeight(), Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) &&
+            !pfrom->m_wants_addrv2) {
+            LogPrint("net", "peer=%d requested legacy (non-ADDRv2) addresses after Ironwood activation; disconnecting\n", pfrom->id);
+            pfrom->fDisconnect = true;
+            return true;
+        }
+
         // Only send one GetAddr response per connection to reduce resource waste
         //  and discourage addr stamping of INV announcements.
         if (pfrom->fSentAddr) {
