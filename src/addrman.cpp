@@ -427,7 +427,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvTried[nKBucket][nKBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
-            if (info.IsReachableNetwork()) {
+            if (!info.IsReachableNetwork()) {
                 //deprioritize unreachable networks
                 fReachableFactor = 0.25;
             }
@@ -462,7 +462,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvNew[nUBucket][nUBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
-            if (info.IsReachableNetwork()) {
+            if (!info.IsReachableNetwork()) {
                 //deprioritize unreachable networks
                 fReachableFactor = 0.25;
             }
@@ -586,7 +586,15 @@ void CAddrMan::GetAddr_(std::vector<CAddress>& vAddr, bool wants_addrv2)
 
         if (!ai.IsTerrible()) {
             if (!wants_addrv2) {
-                vAddr.push_back(ai);
+                // Legacy (pre-BIP155) peers can't represent Tor v3/I2P/CJDNS
+                // addresses on the wire - CService::Serialize() falls back to
+                // an all-zero placeholder for those (see
+                // CNetAddr::IsAddrV1Compatible()/SerializeV1Array()) - so
+                // sending them here would just burn a slot in the capped
+                // response on a useless 0.0.0.0-equivalent entry.
+                if (ai.IsAddrV1Compatible()) {
+                    vAddr.push_back(ai);
+                }
             } else {
                 if (ai.IsIPv4() && ipv4Nodes <= addrv2Nodes) {
                     vAddr.push_back(ai);

@@ -13,10 +13,13 @@
 #include "random.h"
 #include "util/asmap.h"
 
+#include "net.h"
 #include "netbase.h"
 #include "chainparams.h"
+#include "streams.h"
 #include "tinyformat.h"
 #include "util/strencodings.h"
+#include "version.h"
 
 // Tests for CAddrMan, the peer address database backing GetAddr() replies and
 // outbound peer selection: Add/Select/Find/Create/Delete, ASMAP-based bucket
@@ -108,6 +111,17 @@ class CAddrManTest : public CAddrMan
         CAddrInfo* Find(const CNetAddr& addr, int* pnId = NULL)
         {
             return CAddrMan::Find(addr, pnId);
+        }
+
+        // Direct access to GetAddr_, bypassing GetAddr()'s 23%-of-total
+        // sampling cap - that cap makes it impractical to reliably exercise
+        // GetAddr_'s per-address filtering logic (what this test file's
+        // addrman_getaddr_v1_excludes_incompatible_networks needs) without a
+        // huge and slow addrman, since the sampled subset's exact membership
+        // otherwise depends on the internal random shuffle.
+        void GetAddrRaw(std::vector<CAddress>& vAddr, bool wants_addrv2)
+        {
+            CAddrMan::GetAddr_(vAddr, wants_addrv2);
         }
 
         CAddrInfo* Create(const CAddress& addr, const CNetAddr& addrSource, int* pnId = NULL)
@@ -971,6 +985,147 @@ namespace TestAddrmanTests {
         std::pair<int, int> bucketAndEntry_asmap1_deser_addr2 = addrman_asmap1.GetBucketAndEntry(addr2);
         ASSERT_TRUE(bucketAndEntry_asmap1_deser_addr1.first == bucketAndEntry_asmap1_deser_addr2.first);
         ASSERT_TRUE(bucketAndEntry_asmap1_deser_addr1.second != bucketAndEntry_asmap1_deser_addr2.second);
+    }
+
+    // Regression test for a connectivity bug found during a networking
+    // review: Select_()'s reachability deprioritization was inverted -
+    // `if (info.IsReachableNetwork())` reduced the acceptance weight of
+    // *reachable* candidates by 4x, leaving addresses on networks we can't
+    // actually dial (e.g. stored Tor addresses with no proxy configured) at
+    // full weight. The bug didn't cause bad connection attempts (net.cpp's
+    // ThreadOpenConnections has its own IsReachable() guard before dialing
+    // anything Select() returns), but it meant Select() - and therefore
+    // ThreadOpenConnections's bounded 100-attempt search - spent a
+    // disproportionate share of its budget on addresses that can never be
+    // used, directly degrading how fast the node finds a usable peer.
+    // Covers both the "tried" and "new" table code paths, since the bug was
+    // duplicated identically in each.
+    TEST(TestAddrmanTests, addrman_select_deprioritizes_unreachable_network)
+    {
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        CNetAddr reachableIp;
+        LookupHost("250.1.1.1", reachableIp, false);
+        CService reachableAddr(reachableIp, 8233);
+
+        CNetAddr unreachableOnion;
+        ASSERT_TRUE(unreachableOnion.SetSpecial(
+            "pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+        CService unreachableAddr(unreachableOnion, 8233);
+
+        // Simulate a node with no Tor proxy configured: onion addresses are
+        // stored (gossip doesn't care whether we can use them) but not
+        // currently reachable. Restore afterwards - this is process-global
+        // state shared with every other test in this binary.
+        SetReachable(NET_ONION, false);
+        struct ReachabilityGuard {
+            ~ReachabilityGuard() { SetReachable(NET_ONION, true); }
+        } reachabilityGuard;
+
+        const int kIterations = 500;
+
+        auto countSelections = [&](bool newOnlyForSelect) {
+            // One addrman instance reused across every draw: CAddrManTest's
+            // deterministic RandomInt() is a hash chain seeded from a fixed
+            // starting state in its constructor (regardless of whether
+            // MakeDeterministic() is called), so recreating the object each
+            // iteration would replay the exact same "random" decision every
+            // time - not a statistical sample at all, just one outcome
+            // repeated kIterations times. Select() itself doesn't mutate the
+            // entries it scores (no Attempt() call in there), so reusing one
+            // instance doesn't bias GetChance()/IsJustTried() between draws.
+            CAddrManTest addrman;
+            addrman.Add(CAddress(reachableAddr, NODE_NONE), source);
+            addrman.Add(CAddress(unreachableAddr, NODE_NONE), source);
+            if (!newOnlyForSelect) {
+                addrman.Good(reachableAddr);
+                addrman.Good(unreachableAddr);
+            }
+
+            int reachableCount = 0;
+            int unreachableCount = 0;
+            for (int i = 0; i < kIterations; i++) {
+                CAddrInfo picked = addrman.Select(newOnlyForSelect);
+                if (picked.ToString() == reachableAddr.ToString()) {
+                    reachableCount++;
+                } else if (picked.ToString() == unreachableAddr.ToString()) {
+                    unreachableCount++;
+                }
+            }
+            return std::make_pair(reachableCount, unreachableCount);
+        };
+
+        {
+            const auto counts = countSelections(/*newOnlyForSelect=*/false);
+            EXPECT_GT(counts.first, counts.second)
+                << "Select() (tried table) must prefer the reachable-network address: "
+                << "reachable picked " << counts.first << " times, unreachable picked "
+                << counts.second << " times";
+        }
+        {
+            const auto counts = countSelections(/*newOnlyForSelect=*/true);
+            EXPECT_GT(counts.first, counts.second)
+                << "Select(newOnly=true) (new table) must prefer the reachable-network "
+                << "address: reachable picked " << counts.first << " times, unreachable "
+                << "picked " << counts.second << " times";
+        }
+    }
+
+    // Regression test for a privacy/waste bug: GetAddr_()'s legacy
+    // (non-ADDRv2) branch used to push every non-terrible address
+    // unconditionally, regardless of network, relying entirely on
+    // CService::Serialize() to silently zero out Tor v3/I2P/CJDNS addresses
+    // on the wire (see CNetAddr::IsAddrV1Compatible()/SerializeV1Array()).
+    // That meant legacy peers burned slots in their capped GetAddr response
+    // on useless 0.0.0.0-equivalent placeholder entries instead of getting
+    // real addresses. The addrv2 branch already filtered by network; the
+    // legacy branch now does too, via IsAddrV1Compatible().
+    TEST(TestAddrmanTests, addrman_getaddr_v1_excludes_incompatible_networks)
+    {
+        CAddrManTest addrman;
+        addrman.MakeDeterministic();
+
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        // A generous, mostly-onion pool so the legacy branch would almost
+        // certainly have included at least one V1-incompatible address
+        // before the fix (verified directly by reverting the fix locally).
+        // Built via the raw BIP155 wire format (network id 0x04 = TORv3,
+        // length 0x20 = 32 bytes), same as test_net_bitcoin.cpp's
+        // cnetaddr_unserialize_v2 - CNetAddr::SetTor() is private and only
+        // accepts real checksummed ".onion" strings, so this is the
+        // straightforward way to generate many distinct valid TORv3
+        // addresses without needing 30 real onion hostnames.
+        for (int i = 1; i <= 30; i++) {
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+            s << MakeSpan(ParseHex(strprintf("0420%064x", i)));
+            CNetAddr onion;
+            s >> onion;
+            ASSERT_TRUE(onion.IsTor()) << "iteration " << i;
+            CAddress addr(CService(onion, 8233), NODE_NONE);
+            addr.nTime = GetTime();
+            addrman.Add(addr, source);
+        }
+        for (int i = 1; i <= 10; i++) {
+            std::string strAddr = strprintf("250.%d.%d.23", i, i);
+            CNetAddr ipv4;
+            LookupHost(strAddr.c_str(), ipv4, false);
+            CAddress addr(CService(ipv4, 8233), NODE_NONE);
+            addr.nTime = GetTime();
+            addrman.Add(addr, source);
+        }
+
+        std::vector<CAddress> vAddrLegacy;
+        addrman.GetAddrRaw(vAddrLegacy, /*wants_addrv2=*/false);
+        ASSERT_GT(vAddrLegacy.size(), 0u) << "test setup didn't produce any sampled addresses";
+        for (const CAddress& addr : vAddrLegacy) {
+            EXPECT_TRUE(addr.IsAddrV1Compatible())
+                << "legacy GetAddr() response must never include a V1-incompatible "
+                   "address (got " << addr.ToString() << ")";
+        }
     }
 
 }
