@@ -94,6 +94,10 @@ static const size_t SETASKFOR_MAX_SZ = 2 * MAX_INV_SZ;
 static const unsigned int DEFAULT_MAX_PEER_CONNECTIONS = 384;
 /** The default maximum number of inbound connections accepted from a single source IP (eclipse-attack mitigation). Does not apply to peers accepted via the dedicated Tor listener - see ShouldRejectForInboundFromIPCap. */
 static const int DEFAULT_MAX_INBOUND_FROMIP = 2;
+/** Whether locally-originated transactions are relayed only to outbound Tor/I2P peers by default, to avoid a clearnet IP address being the first observed source of a transaction. Falls back to relaying via all peers if no such peer is currently connected - see ShouldRestrictRelayToPrivacyPeers. */
+static const bool DEFAULT_PRIVATE_TX_RELAY = true;
+/** Whether -privatetxrelay is allowed to fall back to relaying via all peers when no privacy peer is currently connected. If disabled, a locally-originated transaction simply isn't relayed this round when no privacy peer is available (it will still be retried automatically once one connects, or via the wallet's periodic rebroadcast) rather than ever touching a clearnet peer. */
+static const bool DEFAULT_PRIVATE_TX_RELAY_FALLBACK = true;
 /** The period before a network upgrade activates, where connections to upgrading peers are preferred (in blocks). */
 static const int NETWORK_UPGRADE_PEER_PREFERENCE_BLOCK_PERIOD = 24 * 24 * 3;
 
@@ -290,6 +294,10 @@ extern int nMaxConnections;
 extern bool bOverrideMaxConnections;
 /** Maximum number of inbound connections accepted from a single source IP - see DEFAULT_MAX_INBOUND_FROMIP. */
 extern int nMaxInboundFromIP;
+/** Whether to restrict relay of locally-originated transactions to outbound Tor/I2P peers - see DEFAULT_PRIVATE_TX_RELAY. */
+extern bool fPrivateTxRelay;
+/** Whether -privatetxrelay may fall back to clearnet peers - see DEFAULT_PRIVATE_TX_RELAY_FALLBACK. */
+extern bool fPrivateTxRelayFallback;
 
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
@@ -905,8 +913,36 @@ int GetAddNodeConnectionCount();
 bool IsAddNodeAddress(const CService& addr);
 
 class CTransaction;
-void RelayTransaction(const CTransaction& tx);
-void RelayTransaction(const CTransaction& tx, const CDataStream& ss);
+//! fLocalOrigin: true if this transaction was created by this node (wallet
+//! send, sendrawtransaction, a CC module, etc.) rather than received from a
+//! peer. Locally-originated transactions are, by default, relayed only to
+//! outbound Tor/I2P peers - see ShouldRestrictRelayToPrivacyPeers. Leave
+//! false (the default) when relaying a transaction that arrived from a
+//! peer, so it continues to propagate to all peers as before.
+void RelayTransaction(const CTransaction& tx, bool fLocalOrigin = false);
+void RelayTransaction(const CTransaction& tx, const CDataStream& ss, bool fLocalOrigin = false);
+//! Whether a connection counts as a "privacy" peer - i.e. one we can relay
+//! our own transactions to without exposing our clearnet IP address as the
+//! observed source. Tor and I2P work differently here: an inbound Tor
+//! connection always arrives loopback-forwarded from the local Tor daemon
+//! (see ShouldRejectForInboundFromIPCap), so its addr is never a real,
+//! checkable .onion address - only outbound Tor peers qualify. I2P inbound
+//! connections, by contrast, carry the real remote I2P address (via SAM's
+//! STREAM ACCEPT), so both inbound and outbound I2P peers qualify.
+bool IsPrivacyPeer(bool fInbound, const CNetAddr& addr);
+//! Number of currently-connected privacy peers - see IsPrivacyPeer.
+int GetPrivacyPeerCount();
+//! Whether a relay of a locally-originated transaction should be
+//! restricted to privacy peers only. False whenever the transaction isn't
+//! locally-originated or the feature is disabled. True whenever there's at
+//! least one privacy peer connected. When there are currently zero privacy
+//! peers: true (still restrict - i.e. relay to nobody this round) unless
+//! fAllowFallback is set, in which case false, so the caller falls back to
+//! relaying via all peers rather than never propagating the transaction at
+//! all. Either way, an unrelayed transaction isn't lost - it's retried
+//! automatically once a privacy peer connects, or via the wallet's
+//! periodic rebroadcast.
+bool ShouldRestrictRelayToPrivacyPeers(bool fLocalOrigin, bool fPrivateTxRelayEnabled, int nPrivacyPeers, bool fAllowFallback);
 
 /** Access to the (IP) address database (peers.dat) */
 class CAddrDB

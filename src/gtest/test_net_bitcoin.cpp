@@ -754,3 +754,61 @@ TEST_F(net_tests_bitcoin, ShouldRejectLocalNonOnionInbound_Behavior)
     EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(nonLocal, /* fOnionListener */ false, /* fAllowLocalIp */ false));
     EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(nonLocal, /* fOnionListener */ true, /* fAllowLocalIp */ false));
 }
+
+TEST_F(net_tests_bitcoin, IsPrivacyPeer_Behavior)
+{
+    CNetAddr clearnet;
+    ASSERT_TRUE(LookupHost("203.0.113.5", clearnet, false));
+
+    CNetAddr tor;
+    ASSERT_TRUE(tor.SetSpecial("pg6mmjiyjmcrsslvykfwnntlaru7p5svn6y2ymmju6nubxndf4pscryd.onion"));
+    ASSERT_TRUE(tor.IsTor());
+
+    CNetAddr i2p;
+    CDataStream s(SER_NETWORK, PROTOCOL_VERSION | ADDRV2_FORMAT);
+    s << MakeSpan(ParseHex("05"                               // network type (I2P)
+                           "20"                               // address length
+                           "a2894dabaec08c0051a481a6dac88b64" // address
+                           "f98232ae42d4b6fd2fa81952dfe36a87"));
+    s >> i2p;
+    ASSERT_TRUE(i2p.IsI2P());
+
+    // Outbound Tor and outbound I2P both count as privacy peers; outbound
+    // clearnet doesn't. Inbound Tor never counts - inbound Tor connections
+    // always arrive over loopback (see ShouldRejectForInboundFromIPCap), so
+    // an inbound connection's claimed Tor address can never be trusted as
+    // real. Inbound I2P, unlike inbound Tor, DOES count - I2P inbound
+    // connections carry the real remote address via SAM's STREAM ACCEPT,
+    // so there's no loopback-forwarding ambiguity to worry about there.
+    EXPECT_TRUE(IsPrivacyPeer(/* fInbound */ false, tor));
+    EXPECT_TRUE(IsPrivacyPeer(/* fInbound */ false, i2p));
+    EXPECT_FALSE(IsPrivacyPeer(/* fInbound */ false, clearnet));
+    EXPECT_FALSE(IsPrivacyPeer(/* fInbound */ true, tor));
+    EXPECT_TRUE(IsPrivacyPeer(/* fInbound */ true, i2p));
+    EXPECT_FALSE(IsPrivacyPeer(/* fInbound */ true, clearnet));
+}
+
+// A transaction relayed on our own peer's behalf (received from another
+// peer, fLocalOrigin=false) must never be restricted, regardless of
+// anything else - only locally-originated transactions get the privacy
+// treatment, and even then only when there's an eligible peer to send them
+// to, or -privatetxrelayfallback is disabled (see net.h/net.cpp).
+TEST_F(net_tests_bitcoin, ShouldRestrictRelayToPrivacyPeers_Behavior)
+{
+    EXPECT_FALSE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ false, /* fEnabled */ true, /* nPeers */ 5, /* fAllowFallback */ true));
+    EXPECT_FALSE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ false, /* fEnabled */ true, /* nPeers */ 0, /* fAllowFallback */ false));
+    EXPECT_FALSE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ true, /* fEnabled */ false, /* nPeers */ 5, /* fAllowFallback */ true));
+
+    // At least one privacy peer connected: always restrict, regardless of
+    // the fallback setting - there's no need to fall back to clearnet.
+    EXPECT_TRUE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ true, /* fEnabled */ true, /* nPeers */ 1, /* fAllowFallback */ true));
+    EXPECT_TRUE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ true, /* fEnabled */ true, /* nPeers */ 5, /* fAllowFallback */ false));
+
+    // Zero privacy peers connected: fall open (don't restrict, so the
+    // caller relays via all peers) only if fallback is allowed...
+    EXPECT_FALSE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ true, /* fEnabled */ true, /* nPeers */ 0, /* fAllowFallback */ true));
+
+    // ...but stay restricted (relay to nobody this round, rather than ever
+    // touching a clearnet peer) when fallback has been explicitly disabled.
+    EXPECT_TRUE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ true, /* fEnabled */ true, /* nPeers */ 0, /* fAllowFallback */ false));
+}

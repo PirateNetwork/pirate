@@ -757,6 +757,9 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"localservices\": \"xxxxxxxxxxxxxxxx\", (string) the services we offer to the network\n"
             "  \"timeoffset\": xxxxx,                   (numeric) the time offset\n"
             "  \"connections\": xxxxx,                  (numeric) the number of connections\n"
+            "  \"privatetxrelay\": true|false,          (boolean) whether locally-originated transactions are relayed only to privacy peers when any are connected (see -privatetxrelay)\n"
+            "  \"privatetxrelayfallback\": true|false,  (boolean) whether relay falls back to all peers when no privacy peer is connected, or isn't relayed that round instead (see -privatetxrelayfallback)\n"
+            "  \"privacypeers\": xxxxx,                 (numeric) the number of currently-connected privacy peers (outbound Tor, or inbound/outbound I2P)\n"
             "  \"networks\": [                          (array) information per network\n"
             "  {\n"
             "    \"name\": \"xxx\",                     (string) network (ipv4, ipv6 or onion)\n"
@@ -791,6 +794,9 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("localservices",       strprintf("%016x", nLocalServices)));
     obj.push_back(Pair("timeoffset",    0));
     obj.push_back(Pair("connections",   (int)vNodes.size()));
+    obj.push_back(Pair("privatetxrelay", fPrivateTxRelay));
+    obj.push_back(Pair("privatetxrelayfallback", fPrivateTxRelayFallback));
+    obj.push_back(Pair("privacypeers", GetPrivacyPeerCount()));
     obj.push_back(Pair("networks",      GetNetworksInfo()));
     obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
     UniValue localAddresses(UniValue::VARR);

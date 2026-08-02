@@ -484,6 +484,8 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-listenonion", strprintf(_("Automatically create Tor hidden service (default: %d)"), DEFAULT_LISTEN_ONION));
     strUsage += HelpMessageOpt("-maxconnections=<n>", strprintf(_("Maintain at most <n> connections to peers (default: %u)"), DEFAULT_MAX_PEER_CONNECTIONS));
     strUsage += HelpMessageOpt("-maxinboundfromip=<n>", strprintf(_("Maximum number of inbound connections accepted from a single source IP; does not apply to peers connecting via a Tor hidden service (default: %d)"), DEFAULT_MAX_INBOUND_FROMIP));
+    strUsage += HelpMessageOpt("-privatetxrelay", strprintf(_("Relay locally-originated transactions only to privacy peers (outbound Tor, inbound/outbound I2P), to avoid a clearnet IP being observed as a transaction's source (default: %d)"), DEFAULT_PRIVATE_TX_RELAY));
+    strUsage += HelpMessageOpt("-privatetxrelayfallback", strprintf(_("When -privatetxrelay is enabled and no privacy peer is currently connected, fall back to relaying locally-originated transactions via all peers instead of not relaying them this round (default: %d)"), DEFAULT_PRIVATE_TX_RELAY_FALLBACK));
     strUsage += HelpMessageOpt("-maxreceivebuffer=<n>", strprintf(_("Maximum per-connection receive buffer, <n>*1000 bytes (default: %u)"), 5000));
     strUsage += HelpMessageOpt("-maxsendbuffer=<n>", strprintf(_("Maximum per-connection send buffer, <n>*1000 bytes (default: %u)"), 1000));
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
@@ -1352,6 +1354,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     nMaxConnections = GetArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS);
     //fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
     nMaxInboundFromIP = std::max(0, (int)GetArg("-maxinboundfromip", DEFAULT_MAX_INBOUND_FROMIP));
+    fPrivateTxRelay = GetBoolArg("-privatetxrelay", DEFAULT_PRIVATE_TX_RELAY);
+    fPrivateTxRelayFallback = GetBoolArg("-privatetxrelayfallback", DEFAULT_PRIVATE_TX_RELAY_FALLBACK);
     nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS)), 0);
     int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS);
     //fprintf(stderr,"nMaxConnections %d FD_SETSIZE.%d nBind.%d expr.%d \n",nMaxConnections,FD_SETSIZE,nBind,(int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS));

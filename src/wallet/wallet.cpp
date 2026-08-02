@@ -9959,7 +9959,7 @@ bool CWalletTx::RelayWalletTransaction()
         {
             // if tx is expired, dont relay
             LogPrintf("Relaying wtx %s\n", GetHash().ToString());
-            RelayTransaction((CTransaction)*this);
+            RelayTransaction((CTransaction)*this, /* fLocalOrigin */ true);
             return true;
         }
     }

@@ -757,7 +757,7 @@ int32_t NSPV_sendrawtransaction(struct NSPV_broadcastresp *ptr,uint8_t *data,int
             //for (i=0; i<n; i++)
             //    fprintf(stderr,"%02x",data[i]);
             fprintf(stderr," relay transaction %s retcode.%d\n",ptr->txid.GetHex().c_str(),ptr->retcode);
-            RelayTransaction(tx);
+            RelayTransaction(tx, /* fLocalOrigin */ true);
         } else ptr->retcode = -3;
 
     } else ptr->retcode = -1;

@@ -339,7 +339,7 @@ UniValue games_rawtxresult(UniValue &result,std::string rawtx,int32_t broadcastf
         if ( DecodeHexTx(tx,rawtx) != 0 )
         {
             if ( broadcastflag != 0 && myAddtomempool(tx) != 0 )
-                RelayTransaction(tx);
+                RelayTransaction(tx, /* fLocalOrigin */ true);
             result.push_back(Pair("txid",tx.GetHash().ToString()));
             result.push_back(Pair("result","success"));
         } else result.push_back(Pair("error","decode hex"));

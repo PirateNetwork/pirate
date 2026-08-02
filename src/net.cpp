@@ -112,6 +112,8 @@ CAddrMan addrman;
 int nMaxConnections = DEFAULT_MAX_PEER_CONNECTIONS;
 bool bOverrideMaxConnections=false;
 int nMaxInboundFromIP = DEFAULT_MAX_INBOUND_FROMIP;
+bool fPrivateTxRelay = DEFAULT_PRIVATE_TX_RELAY;
+bool fPrivateTxRelayFallback = DEFAULT_PRIVATE_TX_RELAY_FALLBACK;
 bool fAddressesInitialized = false;
 TLSManager tlsmanager = TLSManager();
 std::atomic<bool> fNetworkActive = { true };
@@ -209,6 +211,17 @@ int GetTotalOutboundConnectionCount()
             nOutboundConnections++;
     }
     return nOutboundConnections;
+}
+
+int GetPrivacyPeerCount()
+{
+    LOCK(cs_vNodes);
+    int nPrivacyPeers = 0;
+    BOOST_FOREACH(CNode* pnode, vNodes) {
+        if (IsPrivacyPeer(pnode->fInbound, pnode->addr))
+            nPrivacyPeers++;
+    }
+    return nPrivacyPeers;
 }
 
 int GetTotalInboundConnectionCount()
@@ -441,6 +454,33 @@ bool ShouldRejectForInboundFromIPCap(int nInboundThisIP, int nMaxInboundFromIP, 
 bool ShouldRejectLocalNonOnionInbound(const CNetAddr& addr, bool fOnionListener, bool fAllowLocalIp)
 {
     return addr.IsLocal() && !fOnionListener && !fAllowLocalIp;
+}
+
+bool IsPrivacyPeer(bool fInbound, const CNetAddr& addr)
+{
+    // Inbound Tor connections always arrive loopback-forwarded from the
+    // local Tor daemon (see ShouldRejectForInboundFromIPCap), so there's no
+    // real .onion address to check on the inbound side - only outbound Tor
+    // peers qualify. I2P inbound connections carry the real remote I2P
+    // address (via SAM's STREAM ACCEPT), so both directions qualify there.
+    if (addr.IsI2P())
+        return true;
+    return !fInbound && addr.IsTor();
+}
+
+//! See net.h for the fail-open-by-default rationale, and -privatetxrelayfallback
+//! for opting into strict fail-closed behavior instead.
+bool ShouldRestrictRelayToPrivacyPeers(bool fLocalOrigin, bool fPrivateTxRelayEnabled, int nPrivacyPeers, bool fAllowFallback)
+{
+    if (!fLocalOrigin || !fPrivateTxRelayEnabled)
+        return false;
+    if (nPrivacyPeers > 0)
+        return true;
+    // No privacy peers currently connected. Restricting anyway (rather than
+    // returning false here) means the caller's peer loop will match no one
+    // and the transaction simply isn't relayed this round - unless the
+    // operator has explicitly allowed falling back to clearnet peers.
+    return !fAllowFallback;
 }
 
 /** check whether a given address is potentially local */
@@ -2835,15 +2875,15 @@ public:
 }
 instance_of_cnetcleanup;
 
-void RelayTransaction(const CTransaction& tx)
+void RelayTransaction(const CTransaction& tx, bool fLocalOrigin)
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss.reserve(10000);
     ss << tx;
-    RelayTransaction(tx, ss);
+    RelayTransaction(tx, ss, fLocalOrigin);
 }
 
-void RelayTransaction(const CTransaction& tx, const CDataStream& ss)
+void RelayTransaction(const CTransaction& tx, const CDataStream& ss, bool fLocalOrigin)
 {
     CInv inv(MSG_TX, tx.GetHash());
     {
@@ -2863,8 +2903,27 @@ void RelayTransaction(const CTransaction& tx, const CDataStream& ss)
         vRelayExpiration.push_back(std::make_pair(GetTime() + 15 * 60, inv));
     }
     LOCK(cs_vNodes);
+
+    // For a transaction we created ourselves, prefer relaying only to
+    // privacy peers (outbound Tor, inbound or outbound I2P - see
+    // IsPrivacyPeer), so a clearnet-monitoring adversary can't use "which
+    // node's IP first announced this tx" to deanonymize the sender. Falls
+    // back to relaying via all peers if there's currently no privacy peer
+    // to relay to - see ShouldRestrictRelayToPrivacyPeers.
+    int nPrivacyPeers = (fLocalOrigin && fPrivateTxRelay) ? GetPrivacyPeerCount() : 0;
+    bool fRestrictToPrivacyPeers = ShouldRestrictRelayToPrivacyPeers(fLocalOrigin, fPrivateTxRelay, nPrivacyPeers, fPrivateTxRelayFallback);
+    if (fLocalOrigin && fPrivateTxRelay && nPrivacyPeers == 0) {
+        if (fRestrictToPrivacyPeers) {
+            LogPrintf("RelayTransaction: no privacy peers connected; not relaying locally-originated transaction %s this round (will retry once a privacy peer connects; see -privatetxrelayfallback)\n", tx.GetHash().ToString());
+        } else {
+            LogPrintf("RelayTransaction: no privacy peers connected; relaying locally-originated transaction %s via all peers (privacy degraded)\n", tx.GetHash().ToString());
+        }
+    }
+
     BOOST_FOREACH(CNode* pnode, vNodes)
     {
+        if (fRestrictToPrivacyPeers && !IsPrivacyPeer(pnode->fInbound, pnode->addr))
+            continue;
         if(!pnode->fRelayTxes)
             continue;
         LOCK(pnode->cs_filter);

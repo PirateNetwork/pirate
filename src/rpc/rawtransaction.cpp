@@ -1838,7 +1838,7 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
         } else if (fHaveChain) {
             throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
         }
-        RelayTransaction(tx);
+        RelayTransaction(tx, /* fLocalOrigin */ true);
     }
     else
     {
