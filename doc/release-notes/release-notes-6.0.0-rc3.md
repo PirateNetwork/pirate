@@ -75,6 +75,49 @@ wallet, supervised by a new `pirate-networking` watchdog. The bundled
 system-installed copies, and a header-sync stall caused by
 `mapBlocksInFlight`-based throttling was fixed.
 
+Peer-to-peer networking and transaction privacy
+---------------------------------------------------
+
+- Locally-originated transactions (wallet sends, `sendrawtransaction`, the
+  nSPV broadcaster, and CC module transactions) are now relayed only to
+  privacy peers by default — outbound Tor, or inbound/outbound I2P — so a
+  network of clearnet-monitoring nodes can no longer correlate a
+  transaction back to the sending node's IP address by observing which
+  peer first announced it. Transactions relayed on behalf of another peer
+  are unaffected and continue going to all peers as before. Falls back to
+  relaying via all peers if no privacy peer is currently connected, unless
+  that fallback is explicitly disabled.
+- ADDRv2 is now required from peers once Ironwood activates: a peer that
+  requests addresses without ever having negotiated ADDRv2 support is
+  disconnected instead of served a downgraded, pre-BIP155 response that
+  can't represent Tor v3/I2P addresses.
+- Tor hidden-service connections now use a dedicated internal listening
+  socket, separate from the main clearnet listener, so inbound Tor peers
+  can be reliably distinguished from other loopback-sourced connections.
+  This fixed a latent bug where the per-source-IP inbound connection cap
+  never actually worked (it compared against an uninitialized buffer) —
+  fixing that in isolation would otherwise have collapsed every inbound
+  Tor peer into "the same source" and capped the node to just two
+  concurrent inbound Tor connections. Inbound connections from local
+  addresses that aren't genuinely Tor-forwarded are now rejected outright.
+- Outbound connection selection now targets a diversified spread across
+  reachable networks (IPv4/IPv6/Tor/I2P/CJDNS) instead of letting
+  whichever network is best represented in the address database claim
+  every outbound slot.
+- Fixed an address-manager bug that discarded every Tor/I2P/CJDNS address
+  gossiped to a node before it was ever stored, regardless of the
+  receiving node's own network configuration — breaking propagation of
+  those addresses through the wider gossip network. Also fixed inverted
+  reachability weighting in address selection, and a legacy `GETADDR`
+  response leak that could return addresses on networks a pre-ADDRv2 peer
+  could never use.
+- Fixed I2P proxy-error misclassification that caused genuine SAM-proxy
+  failures to be reported as ordinary peer-unreachable errors.
+- `getpeerinfo` gained `network`, `addrfrompeer`, and `inbound_onion`
+  fields for diagnosing peer connectivity and Tor/I2P status directly, and
+  `getnetworkinfo` gained `privatetxrelay`, `privatetxrelayfallback`, and
+  `privacypeers` fields.
+
 Test suite consolidation
 --------------------------
 
@@ -140,6 +183,73 @@ Dependency updates
 - Updated `libsodium` to 1.0.22.
 - Updated the `cxx` crate and regenerated `native_cxxbridge`.
 
+New configuration flags
+---------------------------
+
+The following flags are new relative to the master branch.
+
+**Peer-to-peer networking and privacy:**
+
+- `-privatetxrelay` (default: 1) — relay locally-originated transactions
+  only to privacy peers (outbound Tor, or inbound/outbound I2P).
+- `-privatetxrelayfallback` (default: 1) — when `-privatetxrelay` is
+  enabled and no privacy peer is connected, fall back to relaying via all
+  peers instead of not relaying that round. Disable for strict,
+  fail-closed behavior.
+- `-maxinboundfromip=<n>` (default: 2) — maximum inbound connections
+  accepted from a single source IP; previously a hardcoded constant, and
+  does not apply to peers connecting via the dedicated Tor listener.
+- `-allowlocalip` (default: 0) — allow `-addnode` connections to local
+  addresses (127.x.x.x, ::1), and allow inbound connections from local
+  addresses other than via a Tor hidden service. For testing only.
+
+**Bundled Tor and I2P process management:**
+
+- `-torautostart` (default: 1) — automatically launch and manage a
+  bundled Tor daemon so Tor works without a separately running instance.
+- `-torpath=<path>` — path to the `tor` binary to use instead of
+  auto-detection.
+- `-i2pdautostart` (default: 1) — automatically launch and manage a
+  bundled I2P (`i2pd`) daemon so I2P works without a separately running
+  router.
+- `-i2pdpath=<path>` — path to the `i2pd` binary to use instead of
+  auto-detection.
+
+**Mempool tuning:**
+
+- `-maxmempool=<n>` (default: 300) — keep the transaction mempool below
+  `<n>` megabytes.
+- `-mempoolexpiry=<n>` (default: 1) — do not keep transactions in the
+  mempool longer than `<n>` hours.
+- `-maxorphanperpeer=<n>` (default: 5) — maximum orphan transactions
+  accepted from a single peer.
+
+**Sapling/Ironwood consolidation and sweep**, replacing the old
+pool-agnostic `-consolidation*`/`-sweep*` options. This is a breaking
+change for existing configs: `-consolidation`, `-consolidationtxfee`,
+`-consolidateaddress`, `-sweepsaplingaddress`, and `-sweepironwoodaddress`
+are no longer accepted at all — the node will refuse to start with an
+error naming the replacement option, rather than silently aliasing to it:
+
+- `-saplingconsolidation`, `-saplingconsolidationtxfee` (default: 10000
+  satoshis), `-saplingconsolidationinterval=<n>` (default: 10080 blocks,
+  ~1 week) — replace `-consolidation`/`-consolidationtxfee`.
+- `-ironwoodconsolidation`, `-ironwoodconsolidationtxfee` (default: 10000
+  satoshis), `-ironwoodconsolidationinterval=<n>` (default: 10080 blocks,
+  ~1 week)
+- `-consolidatesaplingaddress=<zaddr>` and
+  `-consolidateironwoodaddress=<zaddr>` — per-protocol address to
+  consolidate (default: all), replacing `-consolidateaddress`; must match
+  the sweep address when sweep is enabled.
+- `-sweepaddress=<zaddr>` — sweep target address, supports both Sapling
+  and Ironwood addresses, replacing `-sweepsaplingaddress`/
+  `-sweepironwoodaddress`.
+
+**Other:**
+
+- `-usedpowconfs` (default: 1) — use dPoW confirmation count instead of
+  raw chain depth when filtering notes.
+
 Upgrade notes
 -------------
 
@@ -152,6 +262,25 @@ Changelog
 =========
 
 Cryptoforge:
+  Default -usedpowconfs to true. (a65769b05)
+  Restrict locally-originated transaction relay to privacy peers.
+  (c89cea655)
+  Fix inbound Tor connection handling and add related diagnostics.
+  (7c640f14f)
+  Disconnect legacy (non-ADDRv2) peers once Ironwood activates.
+  (b1664e9c5)
+  Add outbound network diversity, fix ADDR handler address-storage bug.
+  (ca6d04515)
+  Remove ineffective addnode-priority throttle in ThreadOpenConnections.
+  (cd0363a75)
+  Fix addrman: inverted reachability weighting, legacy GetAddr leak.
+  (4127f0873)
+  Enforce strict same-network reachability, fix I2P error classification.
+  (1ac884bc1)
+  Fix signbinaries.sh: sign from artifacts/release, not artifacts.
+  (181b15117)
+  Fix notaries.cpp build: CTxDestination is std::variant, not
+  boost::variant. (3ac1addc0)
   Fix CI: missing cmake, qt-macos breakage, switch qt-* jobs to zcutil
   packaging. (6571b106f)
   Derive release-artifact versions from configure.ac instead of
