@@ -501,7 +501,22 @@ void TorController::auth_cb(TorControlConnection& conn, const TorControlReply& r
         // Request hidden service, redirect port.
         // Note that the 'virtual' port doesn't have to be the same as our internal port, but this is just a convenient
         // choice.  TODO; refactor the shutdown sequence some day.
-        conn.Command(strprintf("ADD_ONION %s Port=%i,127.0.0.1:%i", private_key, GetListenPort(), GetListenPort()),
+        //
+        // Forward to the dedicated Tor listener (BindOnionListenPort in
+        // net.cpp) rather than the main listen port, so inbound onion
+        // connections can be told apart from other loopback connections and
+        // exempted from the per-source-IP inbound cap (see
+        // ShouldRejectForInboundFromIPCap). Falls back to the main listen
+        // port if that dedicated listener failed to bind, so the hidden
+        // service still works - just without the cap exemption.
+        unsigned short onionForwardPort = GetOnionListenPort();
+        if (onionForwardPort == 0) {
+            LogPrintf("tor: dedicated Tor listener not bound; forwarding to the main "
+                      "listen port instead (inbound Tor peers will be subject to the "
+                      "regular per-IP connection cap)\n");
+            onionForwardPort = GetListenPort();
+        }
+        conn.Command(strprintf("ADD_ONION %s Port=%i,127.0.0.1:%i", private_key, GetListenPort(), onionForwardPort),
             boost::bind(&TorController::add_onion_cb, this, std::placeholders::_1, std::placeholders::_2));
     } else {
         LogPrintf("tor: Authentication failed\n");

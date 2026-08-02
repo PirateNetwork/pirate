@@ -123,6 +123,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  {\n"
             "    \"id\": n,                   (numeric) Peer index\n"
             "    \"addr\":\"host:port\",      (string) The ip address and port of the peer\n"
+            "    \"addrfrompeer\":\"host:port\",  (string) The peer's self-reported address from its version message (unauthenticated; omitted if unavailable)\n"
             "    \"network\":\"xxx\",         (string) network the peer's address belongs to (ipv4, ipv6, onion, i2p)\n"
             "    \"addrlocal\":\"ip:port\",   (string) local address\n"
             "    \"services\":\"xxxxxxxxxxxxxxxx\",   (string) The services offered\n"
@@ -139,6 +140,7 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "    \"version\": v,              (numeric) The peer version, such as 170002\n"
             "    \"subver\": \"/MagicBean:x.y.z[-v]/\",  (string) The string version\n"
             "    \"inbound\": true|false,     (boolean) Inbound (true) or Outbound (false)\n"
+            "    \"inbound_onion\": true|false, (boolean, only for inbound peers) Whether this connection was accepted on the dedicated Tor listener, i.e. is a verified Tor hidden-service peer\n"
             "    \"startingheight\": n,       (numeric) The starting height (block) of the peer\n"
             "    \"banscore\": n,             (numeric) The ban score\n"
             "    \"synced_headers\": n,       (numeric) The last header we have in common with this peer\n"
@@ -168,6 +170,8 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         bool fStateStats = GetNodeStateStats(stats.nodeid, statestats);
         obj.push_back(Pair("id", stats.nodeid));
         obj.push_back(Pair("addr", stats.addrName));
+        if (!(stats.addrFromPeer.empty()))
+            obj.push_back(Pair("addrfrompeer", stats.addrFromPeer));
         obj.push_back(Pair("network", stats.m_network));
         if (!(stats.addrLocal.empty()))
             obj.push_back(Pair("addrlocal", stats.addrLocal));
@@ -195,6 +199,8 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("subver", stats.cleanSubVer));
         obj.push_back(Pair("addrv2", stats.m_wants_addrv2));
         obj.push_back(Pair("inbound", stats.fInbound));
+        if (stats.fInbound)
+            obj.push_back(Pair("inbound_onion", stats.m_inbound_onion));
         obj.push_back(Pair("startingheight", stats.nStartingHeight));
         if (fStateStats) {
             obj.push_back(Pair("banscore", statestats.nMisbehavior));

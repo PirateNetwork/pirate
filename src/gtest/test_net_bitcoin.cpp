@@ -671,3 +671,86 @@ TEST_F(net_tests_bitcoin, ShouldSkipForNetworkDiversity_Behavior)
     EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget, kBudget));
     EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget + 1, kBudget));
 }
+
+// Regression test for CreateNodeFromAcceptedSocket's MAX_INBOUND_FROMIP
+// check (net.cpp): it used to build a raw sockaddr for the *new* connection
+// that was never actually populated from that connection's address (an
+// uninitialized local variable compared via memcmp() against real peers'
+// addresses), and even a correctly-populated version would have compared
+// full IP:port instead of IP alone - every new inbound TCP connection gets a
+// fresh ephemeral source port even from a repeat IP, so a port-inclusive
+// comparison could never consider two real connections from the same source
+// to match. Both bugs meant the per-IP inbound cap (added specifically to
+// resist eclipse attacks) never actually triggered for a real repeat source.
+TEST_F(net_tests_bitcoin, SameNetAddr_ComparesIPOnlyIgnoringPort)
+{
+    CNetAddr ipA, ipB;
+    ASSERT_TRUE(LookupHost("203.0.113.5", ipA, false));
+    ASSERT_TRUE(LookupHost("203.0.113.6", ipB, false));
+
+    // Same IP, different ports (as every distinct inbound TCP connection
+    // from one source naturally would be) must still count as the same source.
+    EXPECT_TRUE(SameNetAddr(CService(ipA, 45452), CService(ipA, 55164)));
+    EXPECT_TRUE(SameNetAddr(CService(ipA, 8233), CService(ipA, 8233)));
+
+    // Different IPs must never be considered the same source, regardless of port.
+    EXPECT_FALSE(SameNetAddr(CService(ipA, 45452), CService(ipB, 45452)));
+    EXPECT_FALSE(SameNetAddr(CService(ipA, 8233), CService(ipB, 8233)));
+}
+
+// Regression test: fixing SameNetAddr (above) made MAX_INBOUND_FROMIP
+// actually enforce per-source-IP counting for the first time - which
+// exposed a second, latent bug. Tor forwards every inbound onion-service
+// connection to our own loopback address, so once the per-IP cap actually
+// worked, all real (and distinct) inbound Tor peers collided against each
+// other as "the same source", capping the node to MAX_INBOUND_FROMIP
+// inbound Tor peers total. Connections accepted on the dedicated
+// Tor-forwarding listener (BindOnionListenPort) must be exempt from this
+// cap; connections accepted anywhere else - including a plain loopback
+// connection from some other local process - must still be capped, since
+// only the dedicated listener can be trusted to mean "this is really Tor".
+TEST_F(net_tests_bitcoin, ShouldRejectForInboundFromIPCap_ExemptsOnionListenerOnly)
+{
+    const int kCap = 2;
+
+    // Under the cap: never rejected, Tor listener or not.
+    EXPECT_FALSE(ShouldRejectForInboundFromIPCap(0, kCap, /* fOnionListener */ true));
+    EXPECT_FALSE(ShouldRejectForInboundFromIPCap(0, kCap, /* fOnionListener */ false));
+
+    // At/over the cap: a connection not accepted via the dedicated Tor
+    // listener is rejected - this includes plain loopback connections from
+    // some other local process, not just remote IPs.
+    EXPECT_TRUE(ShouldRejectForInboundFromIPCap(kCap, kCap, /* fOnionListener */ false));
+    EXPECT_TRUE(ShouldRejectForInboundFromIPCap(kCap + 5, kCap, /* fOnionListener */ false));
+
+    // ...but connections accepted via the dedicated Tor listener are exempt,
+    // however many are already connected.
+    EXPECT_FALSE(ShouldRejectForInboundFromIPCap(kCap, kCap, /* fOnionListener */ true));
+    EXPECT_FALSE(ShouldRejectForInboundFromIPCap(kCap + 5, kCap, /* fOnionListener */ true));
+}
+
+// A local (loopback) inbound connection that did NOT arrive via the
+// dedicated Tor listener must be hard-rejected unless the operator opted in
+// with -allowlocalip; a genuine Tor peer or a non-local address must
+// never be rejected by this check regardless of that flag.
+TEST_F(net_tests_bitcoin, ShouldRejectLocalNonOnionInbound_Behavior)
+{
+    CNetAddr loopback, nonLocal;
+    ASSERT_TRUE(LookupHost("127.0.0.1", loopback, false));
+    ASSERT_TRUE(LookupHost("203.0.113.5", nonLocal, false));
+
+    // Local, not via the Tor listener, opt-in not set: rejected.
+    EXPECT_TRUE(ShouldRejectLocalNonOnionInbound(loopback, /* fOnionListener */ false, /* fAllowLocalIp */ false));
+
+    // Local, not via the Tor listener, but opted in: allowed.
+    EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(loopback, /* fOnionListener */ false, /* fAllowLocalIp */ true));
+
+    // Local, but via the dedicated Tor listener: always allowed, opt-in or not.
+    EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(loopback, /* fOnionListener */ true, /* fAllowLocalIp */ false));
+    EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(loopback, /* fOnionListener */ true, /* fAllowLocalIp */ true));
+
+    // Non-local address: never rejected by this check, regardless of the
+    // other flags - that's what ShouldRejectForInboundFromIPCap is for.
+    EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(nonLocal, /* fOnionListener */ false, /* fAllowLocalIp */ false));
+    EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(nonLocal, /* fOnionListener */ true, /* fAllowLocalIp */ false));
+}

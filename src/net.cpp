@@ -86,17 +86,17 @@ int MAX_ADDNODE_CONNECTIONS = 8;  // Reserve slots for addnode connections
 int MAX_REGULAR_OUTBOUND_CONNECTIONS = MAX_OUTBOUND_CONNECTIONS - MAX_ADDNODE_CONNECTIONS;
 
 namespace {
-    // Reduced from 5 to 2. At 5 connections per IP, only 64 distinct IPs
-    // were needed to fill all 320 inbound slots, enabling eclipse attacks with a small
-    // botnet. At 2, an attacker needs 160 distinct IPs — a 2.5x increase in resources.
-    const int MAX_INBOUND_FROMIP = 2;
-
     struct ListenSocket {
         SOCKET socket;
         bool whitelisted;
+        // Whether this socket is the dedicated Tor-forwarding listener (see
+        // BindOnionListenPort), as opposed to a regular clearnet listener.
+        bool onion;
 
-        ListenSocket(SOCKET _socket, bool _whitelisted) : socket(_socket), whitelisted(_whitelisted) {}
+        ListenSocket(SOCKET _socket, bool _whitelisted, bool _onion = false) : socket(_socket), whitelisted(_whitelisted), onion(_onion) {}
     };
+
+    unsigned short nOnionListenPort = 0;
 }
 
 bool fDiscover = true;
@@ -111,6 +111,7 @@ static std::vector<ListenSocket> vhListenSocket;
 CAddrMan addrman;
 int nMaxConnections = DEFAULT_MAX_PEER_CONNECTIONS;
 bool bOverrideMaxConnections=false;
+int nMaxInboundFromIP = DEFAULT_MAX_INBOUND_FROMIP;
 bool fAddressesInitialized = false;
 TLSManager tlsmanager = TLSManager();
 std::atomic<bool> fNetworkActive = { true };
@@ -401,6 +402,47 @@ bool SeenLocal(const CService& addr)
 }
 
 
+//! Whether two addresses share the same underlying IP (ignoring port). Used
+//! to count same-source-IP inbound connections for MAX_INBOUND_FROMIP -
+//! deliberately compares as CNetAddr, not CService/CAddress, since every new
+//! inbound TCP connection gets a fresh ephemeral source port even from a
+//! repeat IP, so a port-inclusive comparison would never consider two real
+//! connections from the same source to match at all.
+bool SameNetAddr(const CNetAddr& a, const CNetAddr& b)
+{
+    return a == b;
+}
+
+//! Whether a new inbound connection should be rejected by the per-source-IP
+//! inbound cap. Connections accepted on the dedicated Tor-forwarding
+//! listener (see BindOnionListenPort) are exempt: Tor forwards every inbound
+//! onion-service connection to our own loopback address, so distinct real
+//! Tor peers are indistinguishable from each other by source IP and would
+//! otherwise collide against each other here, capping the node to
+//! nMaxInboundFromIP inbound Tor peers total regardless of how many real
+//! clients connect. The exemption is scoped to that specific listener
+//! (rather than to loopback addresses generally) so a non-Tor process
+//! connecting via loopback is still subject to the cap. The overall
+//! total-inbound cap still bounds Tor-sourced connections either way.
+bool ShouldRejectForInboundFromIPCap(int nInboundThisIP, int nMaxInboundFromIP, bool fOnionListener)
+{
+    return nInboundThisIP >= nMaxInboundFromIP && !fOnionListener;
+}
+
+//! Whether a new inbound connection should be rejected outright for being a
+//! local (loopback) connection that did not arrive via the dedicated Tor
+//! listener. As with ShouldRejectForInboundFromIPCap, fOnionListener (not
+//! the address) is what identifies a genuine Tor peer, since Tor-forwarded
+//! and other loopback-sourced connections are otherwise indistinguishable.
+//! Unlike the IP cap, this is a hard block, not a count - it exists so a
+//! node isn't unexpectedly reachable from other local processes/testing
+//! setups unless the operator opts in with -allowlocalip (the same
+//! flag that already permits -addnode to target local addresses).
+bool ShouldRejectLocalNonOnionInbound(const CNetAddr& addr, bool fOnionListener, bool fAllowLocalIp)
+{
+    return addr.IsLocal() && !fOnionListener && !fAllowLocalIp;
+}
+
 /** check whether a given address is potentially local */
 bool IsLocal(const CService& addr)
 {
@@ -531,7 +573,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode)
 {
     if (pszDest == NULL) {
         // Allow local connections for addnode if the option is enabled
-        if (IsLocal(addrConnect) && !(fAddNode && GetBoolArg("-allowlocaladdnode", false)))
+        if (IsLocal(addrConnect) && !(fAddNode && GetBoolArg("-allowlocalip", false)))
             return NULL;
 
         // Look for an existing connection
@@ -986,6 +1028,12 @@ void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
     // Leave string empty if addrLocal invalid (not filled in yet)
     stats.addrLocal = addrLocal.IsValid() ? addrLocal.ToString() : "";
 
+    // Leave string empty if addrFromPeer invalid (not filled in yet, e.g.
+    // before the VERSION message has been received)
+    stats.addrFromPeer = addrFromPeer.IsValid() ? addrFromPeer.ToString() : "";
+
+    stats.m_inbound_onion = m_inbound_onion;
+
     // If ssl != NULL it means TLS connection was established successfully
     {
         LOCK(cs_hSocket);
@@ -1407,31 +1455,41 @@ static void AcceptConnection(const ListenSocket& hListenSocket) {
 
     bool whitelisted = hListenSocket.whitelisted || CNode::IsWhitelistedRange(addr);
 
-    CreateNodeFromAcceptedSocket(hSocket, whitelisted, addr_bind, addr);
+    CreateNodeFromAcceptedSocket(hSocket, whitelisted, addr_bind, addr, hListenSocket.onion);
 }
 
 void CreateNodeFromAcceptedSocket(SOCKET hSocket,
                                             bool whitelisted,
                                             const CAddress& addr_bind,
-                                            const CAddress& addr)
+                                            const CAddress& addr,
+                                            bool fOnionListener)
 {
-    struct sockaddr_storage sockaddr;
-    socklen_t len = sizeof(sockaddr);
     int nInboundThisIP = 0;
     int nInbound = 0;
     int nMaxInbound = nMaxConnections - MAX_OUTBOUND_CONNECTIONS;
 
-
     {
         LOCK(cs_vNodes);
-        struct sockaddr_storage tmpsockaddr;
-        socklen_t tmplen = sizeof(sockaddr);
         BOOST_FOREACH(CNode* pnode, vNodes)
         {
             if (pnode->fInbound)
             {
                 nInbound++;
-                if (pnode->addr.GetSockAddr((struct sockaddr*)&tmpsockaddr, &tmplen) && (tmplen == len) && (memcmp(&sockaddr, &tmpsockaddr, tmplen) == 0))
+                // Compare as CNetAddr (address only, no port): this counts
+                // connections sharing a source IP regardless of source port,
+                // which is what MAX_INBOUND_FROMIP is meant to limit (every
+                // new inbound TCP connection gets a fresh ephemeral source
+                // port even from a repeat IP, so a port-inclusive comparison
+                // would never match two real connections from the same
+                // source at all). This used to build a raw sockaddr via
+                // CService::GetSockAddr() (which includes the port) and
+                // memcmp() it against an *uninitialized* local sockaddr that
+                // was never populated from `addr` in the first place - so
+                // MAX_INBOUND_FROMIP (the eclipse-attack mitigation reduced
+                // from 5 to 2 connections per IP) never actually triggered
+                // for a real repeat source, on top of comparing the wrong
+                // granularity even if it had.
+                if (SameNetAddr(pnode->addr, addr))
                     nInboundThisIP++;
             }
         }
@@ -1463,6 +1521,13 @@ void CreateNodeFromAcceptedSocket(SOCKET hSocket,
         return;
     }
 
+    if (ShouldRejectLocalNonOnionInbound(addr, fOnionListener, GetBoolArg("-allowlocalip", false)))
+    {
+        LogPrint("net", "connection from %s dropped: local (non-Tor) inbound connections are disabled; set -allowlocalip to allow\n", addr.ToString());
+        CloseSocket(hSocket);
+        return;
+    }
+
     if (nInbound >= nMaxInbound)
     {
         if (!AttemptToEvictConnection(whitelisted)) {
@@ -1473,7 +1538,7 @@ void CreateNodeFromAcceptedSocket(SOCKET hSocket,
         }
     }
 
-    if (nInboundThisIP >= MAX_INBOUND_FROMIP)
+    if (ShouldRejectForInboundFromIPCap(nInboundThisIP, nMaxInboundFromIP, fOnionListener))
     {
         // No connection to evict, disconnect the new connection
         LogPrint("net", "too many connections from %s, connection refused\n", addr.ToString());
@@ -1574,6 +1639,7 @@ SetSocketNonBlocking(hSocket, true);
     CNode* pnode = new CNode(hSocket, addr, "", true, ssl);
     pnode->AddRef();
     pnode->fWhitelisted = whitelisted;
+    pnode->m_inbound_onion = fOnionListener;
 
     LogPrint("net", "connection from %s accepted\n", addr.ToString());
 
@@ -2174,7 +2240,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     }
 
     if (!pszDest) {
-        if ((IsLocal(addrConnect) && !(fAddNode && GetBoolArg("-allowlocaladdnode", false))) ||
+        if ((IsLocal(addrConnect) && !(fAddNode && GetBoolArg("-allowlocalip", false))) ||
             FindNode(static_cast<CNetAddr>(addrConnect)) || CNode::IsBanned(addrConnect) ||
             FindNode(addrConnect.ToStringIPPort()))
             return false;
@@ -2357,7 +2423,8 @@ void ThreadI2PAcceptIncoming()
         }
 
         CreateNodeFromAcceptedSocket(conn.sock->Release(), false,
-                                     CAddress{conn.me, NODE_NETWORK}, CAddress{conn.peer, NODE_NETWORK});
+                                     CAddress{conn.me, NODE_NETWORK}, CAddress{conn.peer, NODE_NETWORK},
+                                     /* fOnionListener */ false);
     }
 }
 
@@ -2446,6 +2513,94 @@ bool BindListenPort(const CService &addrBind, string& strError, bool fWhiteliste
     if (addrBind.IsRoutable() && fDiscover && !fWhitelisted)
         AddLocal(addrBind, LOCAL_BIND);
 
+    return true;
+}
+
+unsigned short GetOnionListenPort()
+{
+    return nOnionListenPort;
+}
+
+// Binds a dedicated, loopback-only listening socket used exclusively as the
+// local forwarding target for Tor's onion-service connections (see
+// torcontrol.cpp's ADD_ONION command). This lets inbound connections
+// accepted on it be reliably identified as genuinely Tor-sourced -
+// otherwise, since Tor forwards hidden-service traffic to our own loopback
+// address, every distinct remote Tor peer would be indistinguishable from
+// any other loopback-connecting process (or from each other) by source IP
+// alone. Binds an OS-assigned ephemeral port, since nothing outside this
+// process ever needs to know it. Must be called during single-threaded
+// startup, before ThreadSocketHandler begins iterating vhListenSocket -
+// concurrent pushes from a later Tor-control callback would race that scan.
+bool BindOnionListenPort(string& strError)
+{
+    if (nOnionListenPort != 0)
+        return true;
+
+    strError = "";
+    CService addrBind(LookupNumeric("127.0.0.1", 0));
+    struct sockaddr_storage sockaddr;
+    socklen_t len = sizeof(sockaddr);
+    if (!addrBind.GetSockAddr((struct sockaddr*)&sockaddr, &len))
+    {
+        strError = "Error: Could not construct loopback bind address for the Tor listener";
+        LogPrintf("%s\n", strError);
+        return false;
+    }
+
+    SOCKET hListenSocket = socket(((struct sockaddr*)&sockaddr)->sa_family, SOCK_STREAM, IPPROTO_TCP);
+    if (hListenSocket == INVALID_SOCKET)
+    {
+        strError = strprintf("Error: Couldn't open socket for the Tor listener (socket returned error %s)", NetworkErrorString(WSAGetLastError()));
+        LogPrintf("%s\n", strError);
+        return false;
+    }
+
+    if (!IsSelectableSocket(hListenSocket))
+    {
+        strError = "Error: Couldn't create a listenable socket for the Tor listener";
+        LogPrintf("%s\n", strError);
+        CloseSocket(hListenSocket);
+        return false;
+    }
+
+    if (!SetSocketNonBlocking(hListenSocket, true)) {
+        strError = strprintf("BindOnionListenPort: Setting listening socket to non-blocking failed, error %s\n", NetworkErrorString(WSAGetLastError()));
+        LogPrintf("%s\n", strError);
+        CloseSocket(hListenSocket);
+        return false;
+    }
+
+    if (::bind(hListenSocket, (struct sockaddr*)&sockaddr, len) == SOCKET_ERROR)
+    {
+        strError = strprintf(_("Unable to bind the Tor listener to 127.0.0.1 (bind returned error %s)"), NetworkErrorString(WSAGetLastError()));
+        LogPrintf("%s\n", strError);
+        CloseSocket(hListenSocket);
+        return false;
+    }
+
+    if (listen(hListenSocket, SOMAXCONN) == SOCKET_ERROR)
+    {
+        strError = strprintf(_("Error: Listening for Tor connections failed (listen returned error %s)"), NetworkErrorString(WSAGetLastError()));
+        LogPrintf("%s\n", strError);
+        CloseSocket(hListenSocket);
+        return false;
+    }
+
+    struct sockaddr_storage boundAddr;
+    socklen_t boundLen = sizeof(boundAddr);
+    if (getsockname(hListenSocket, (struct sockaddr*)&boundAddr, &boundLen) != 0) {
+        strError = "Error: Could not determine the bound port for the Tor listener";
+        LogPrintf("%s\n", strError);
+        CloseSocket(hListenSocket);
+        return false;
+    }
+    CService boundService;
+    boundService.SetSockAddr((struct sockaddr*)&boundAddr);
+    nOnionListenPort = boundService.GetPort();
+
+    vhListenSocket.push_back(ListenSocket(hListenSocket, false, true));
+    LogPrint("tor", "Bound dedicated Tor-forwarding listener to 127.0.0.1:%d\n", nOnionListenPort);
     return true;
 }
 

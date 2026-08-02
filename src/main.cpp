@@ -8407,6 +8407,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
 
+        // Record the peer's self-reported address as sent in its VERSION
+        // message, for display/debugging (getpeerinfo). This is never used
+        // for addrman/trust decisions: it is unauthenticated, and for
+        // inbound Tor/I2P peers it is unrecoverably zeroed on the wire
+        // anyway, since VERSION's address fields always use the pre-ADDRv2
+        // (V1) encoding, which cannot represent TORv3/I2P addresses.
+        pfrom->addrFromPeer = addrFrom;
+
         // Relay alerts
         {
             LOCK(cs_mapAlerts);

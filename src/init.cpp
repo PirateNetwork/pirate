@@ -469,7 +469,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-spentindex", strprintf(_("Maintain a full spent index, used to query the spending txid and input index for an outpoint (default: %u)"), DEFAULT_SPENTINDEX));
     strUsage += HelpMessageGroup(_("Connection options:"));
     strUsage += HelpMessageOpt("-addnode=<ip>", _("Add a node to connect to and attempt to keep the connection open"));
-    strUsage += HelpMessageOpt("-allowlocaladdnode", _("Allow addnode connections to local addresses (127.x.x.x, ::1) for testing (default: 0)"));
+    strUsage += HelpMessageOpt("-allowlocalip", _("Allow addnode connections to local addresses (127.x.x.x, ::1), and allow inbound connections from local addresses other than via a Tor hidden service, for testing (default: 0)"));
     strUsage += HelpMessageOpt("-asmap=<file>", strprintf("Specify asn mapping used for bucketing of the peers (default: %s). Relative paths will be prefixed by the net-specific datadir location.", DEFAULT_ASMAP_FILENAME));
     strUsage += HelpMessageOpt("-banscore=<n>", strprintf(_("Threshold for disconnecting misbehaving peers (default: %u)"), 100));
     strUsage += HelpMessageOpt("-bantime=<n>", strprintf(_("Number of seconds to keep misbehaving peers from reconnecting (default: %u)"), 86400));
@@ -483,6 +483,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-listen", _("Accept connections from outside (default: 1 if no -proxy or -connect)"));
     strUsage += HelpMessageOpt("-listenonion", strprintf(_("Automatically create Tor hidden service (default: %d)"), DEFAULT_LISTEN_ONION));
     strUsage += HelpMessageOpt("-maxconnections=<n>", strprintf(_("Maintain at most <n> connections to peers (default: %u)"), DEFAULT_MAX_PEER_CONNECTIONS));
+    strUsage += HelpMessageOpt("-maxinboundfromip=<n>", strprintf(_("Maximum number of inbound connections accepted from a single source IP; does not apply to peers connecting via a Tor hidden service (default: %d)"), DEFAULT_MAX_INBOUND_FROMIP));
     strUsage += HelpMessageOpt("-maxreceivebuffer=<n>", strprintf(_("Maximum per-connection receive buffer, <n>*1000 bytes (default: %u)"), 5000));
     strUsage += HelpMessageOpt("-maxsendbuffer=<n>", strprintf(_("Maximum per-connection send buffer, <n>*1000 bytes (default: %u)"), 1000));
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
@@ -1350,6 +1351,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     int nBind = std::max((int)mapArgs.count("-bind") + (int)mapArgs.count("-whitebind"), 1);
     nMaxConnections = GetArg("-maxconnections", DEFAULT_MAX_PEER_CONNECTIONS);
     //fprintf(stderr,"nMaxConnections %d\n",nMaxConnections);
+    nMaxInboundFromIP = std::max(0, (int)GetArg("-maxinboundfromip", DEFAULT_MAX_INBOUND_FROMIP));
     nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS)), 0);
     int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS);
     //fprintf(stderr,"nMaxConnections %d FD_SETSIZE.%d nBind.%d expr.%d \n",nMaxConnections,FD_SETSIZE,nBind,(int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS));
@@ -3004,6 +3006,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #if ENABLE_EMBEDDED_TOR
         StartEmbeddedTor();
 #endif
+        // Must happen here, before StartNode() below starts ThreadSocketHandler
+        // scanning vhListenSocket - binding this later (e.g. lazily from a Tor
+        // control callback, which runs on its own thread) would race that scan.
+        std::string strOnionBindError;
+        if (!BindOnionListenPort(strOnionBindError)) {
+            LogPrintf("Warning: %s -- Tor hidden service inbound peers will be "
+                      "subject to the regular per-IP connection cap.\n", strOnionBindError);
+        }
         StartTorControl(threadGroup, scheduler);
     }
 

@@ -92,6 +92,8 @@ static const size_t MAPASKFOR_MAX_SZ = MAX_INV_SZ;
 static const size_t SETASKFOR_MAX_SZ = 2 * MAX_INV_SZ;
 /** The maximum number of peer connections to maintain. */
 static const unsigned int DEFAULT_MAX_PEER_CONNECTIONS = 384;
+/** The default maximum number of inbound connections accepted from a single source IP (eclipse-attack mitigation). Does not apply to peers accepted via the dedicated Tor listener - see ShouldRejectForInboundFromIPCap. */
+static const int DEFAULT_MAX_INBOUND_FROMIP = 2;
 /** The period before a network upgrade activates, where connections to upgrading peers are preferred (in blocks). */
 static const int NETWORK_UPGRADE_PEER_PREFERENCE_BLOCK_PERIOD = 24 * 24 * 3;
 
@@ -140,7 +142,13 @@ void SweepBanned();
 void CreateNodeFromAcceptedSocket(SOCKET hSocket,
                                             bool whitelisted,
                                             const CAddress& addr_bind,
-                                            const CAddress& addr);
+                                            const CAddress& addr,
+                                            bool fOnionListener = false);
+//! Binds a dedicated, loopback-only listening socket used exclusively as the
+//! local forwarding target for Tor's onion-service connections - see net.cpp.
+bool BindOnionListenPort(std::string& strError);
+//! Port bound by BindOnionListenPort, or 0 if it hasn't been called/succeeded.
+unsigned short GetOnionListenPort();
 typedef int NodeId;
 
 enum NumConnections {
@@ -211,6 +219,15 @@ enum
     LOCAL_MAX
 };
 
+//! Whether two addresses share the same underlying IP, ignoring port - see
+//! net.cpp for why this must not compare ports.
+bool SameNetAddr(const CNetAddr& a, const CNetAddr& b);
+//! Whether a new inbound connection should be rejected by the per-source-IP
+//! inbound cap - see net.cpp for the dedicated-Tor-listener exemption.
+bool ShouldRejectForInboundFromIPCap(int nInboundThisIP, int nMaxInboundFromIP, bool fOnionListener);
+//! Whether a new inbound connection should be hard-rejected for being a
+//! local (loopback), non-Tor connection - see net.cpp.
+bool ShouldRejectLocalNonOnionInbound(const CNetAddr& addr, bool fOnionListener, bool fAllowLocalIp);
 bool IsPeerAddrLocalGood(CNode *pnode);
 void AdvertizeLocal(CNode *pnode);
 bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
@@ -271,6 +288,8 @@ extern CAddrMan addrman;
 /** Maximum number of connections to simultaneously allow (aka connection slots) */
 extern int nMaxConnections;
 extern bool bOverrideMaxConnections;
+/** Maximum number of inbound connections accepted from a single source IP - see DEFAULT_MAX_INBOUND_FROMIP. */
+extern int nMaxInboundFromIP;
 
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
@@ -327,6 +346,12 @@ public:
     double dPingWait;
     double dMinPing;
     std::string addrLocal;
+    std::string addrFromPeer;
+    // Whether this inbound connection was accepted on the dedicated
+    // Tor-forwarding listener (see BindOnionListenPort in net.cpp) - i.e.
+    // is verifiably a Tor onion-service peer, as opposed to just having a
+    // loopback addr for some other reason.
+    bool m_inbound_onion{false};
     uint64_t m_addr_processed{0};
     uint64_t m_addr_rate_limited{0};
     // Network the peer's address belongs to (ipv4, ipv6, onion, i2p, ...)
@@ -439,6 +464,10 @@ public:
     // const CAddress addrBind; // https://github.com/bitcoin/bitcoin/commit/a7e3c2814c8e49197889a4679461be42254e5c51
     std::string addrName;
     CService addrLocal;
+    // Peer's self-reported address, as sent in its VERSION message's
+    // addrFrom field. Unauthenticated (self-reported) - never used for
+    // addrman/trust decisions, only for display/debugging.
+    CService addrFromPeer;
     int nVersion;
     int lasthdrsreq,sendhdrsreq;
     /** Timestamps (seconds) of the last GETBLOCKS and GETHEADERS received from this peer,
@@ -477,6 +506,14 @@ public:
      * messages, implying a preference to receive ADDRv2 instead of ADDR ones.
      */
     bool m_wants_addrv2{false};
+
+    /**
+     * Whether this inbound connection was accepted on the dedicated
+     * Tor-forwarding listener (see BindOnionListenPort in net.cpp), i.e. is
+     * genuinely a Tor onion-service peer rather than some other process
+     * connecting via loopback. Always false for outbound connections.
+     */
+    bool m_inbound_onion{false};
 
 protected:
 
