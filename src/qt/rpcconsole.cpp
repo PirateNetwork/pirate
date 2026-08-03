@@ -1118,6 +1118,12 @@ void RPCConsole::updateNodeDetail(const CNodeCombinedStats *stats)
     ui->peerHeight->setText(QString("%1").arg(QString::number(stats->nodeStats.nStartingHeight)));
     ui->peerWhitelisted->setText(stats->nodeStats.fWhitelisted ? tr("Yes") : tr("No"));
     ui->peerMappedAS->setText(stats->nodeStats.m_mapped_as != 0 ? QString::number(stats->nodeStats.m_mapped_as) : tr("N/A"));
+    if (stats->nodeStats.m_network != "i2p")
+        ui->peerI2PIdentity->setText(tr("N/A"));
+    else if (stats->nodeStats.m_i2p_pool_idx >= 0)
+        ui->peerI2PIdentity->setText(tr("Relay pool #%1").arg(stats->nodeStats.m_i2p_pool_idx));
+    else
+        ui->peerI2PIdentity->setText(tr("Primary"));
 
     // This check fails for example if the lock was busy and
     // nodeStateStats couldn't be fetched.

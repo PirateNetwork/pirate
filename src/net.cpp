@@ -38,6 +38,8 @@
 #include "komodo_globals.h"
 #include "notaries_staked.h"
 
+#include <limits>
+
 #ifdef _WIN32
 #include <string.h>
 #else
@@ -114,6 +116,9 @@ bool bOverrideMaxConnections=false;
 int nMaxInboundFromIP = DEFAULT_MAX_INBOUND_FROMIP;
 bool fPrivateTxRelay = DEFAULT_PRIVATE_TX_RELAY;
 bool fPrivateTxRelayFallback = DEFAULT_PRIVATE_TX_RELAY_FALLBACK;
+bool fI2PIdentityRotation = DEFAULT_I2P_IDENTITY_ROTATION;
+int nI2PPoolMinReserve = DEFAULT_I2P_POOL_MIN_RESERVE;
+int nI2PPoolMaxSize = DEFAULT_I2P_POOL_MAX_SIZE;
 bool fAddressesInitialized = false;
 TLSManager tlsmanager = TLSManager();
 std::atomic<bool> fNetworkActive = { true };
@@ -127,6 +132,15 @@ std::string strSubVersion;
  * Used to accept incoming and make outgoing I2P connections.
  */
 std::unique_ptr<i2p::sam::Session> m_i2p_sam_session;
+
+/**
+ * Burn-after-use I2P relay-pool identities, used only for relaying our own
+ * (locally-originated) transactions - separate from m_i2p_sam_session
+ * (the node's normal, permanent I2P identity), which is never used for
+ * that purpose and never rotates.
+ */
+std::vector<I2PPoolIdentitySlot> g_i2p_relay_pool;
+CCriticalSection cs_i2p_relay_pool;
 
 vector<CNode*> vNodes;
 CCriticalSection cs_vNodes;
@@ -442,6 +456,30 @@ bool ShouldRejectForInboundFromIPCap(int nInboundThisIP, int nMaxInboundFromIP, 
     return nInboundThisIP >= nMaxInboundFromIP && !fOnionListener;
 }
 
+//! Whether an existing inbound peer sharing a source address with a new
+//! connection attempt should count toward that source's MAX_INBOUND_FROMIP
+//! total. I2P is the only network where this node presents more than one
+//! local address: the primary identity plus each relay-pool slot (see
+//! g_i2p_relay_pool) each run their own independent SAM session/listener,
+//! and are meant to look like unrelated destinations to the outside world.
+//! A remote peer that discovers and connects to two or more of our local
+//! identities is exactly the behavior the pool design wants - without this
+//! scoping, that legitimate second connection would trip the same-IP cap
+//! against the first, artificially starving pool slots of the peers they
+//! need to reach READY. So for I2P, the cap is scoped per (source address,
+//! local identity) instead of per source address alone; every other network
+//! has exactly one local identity, so this preserves the existing global
+//! per-remote-address behavior there unchanged. Compares both pool index and
+//! generation, matching ShouldDisconnectForI2PPoolRotation's reasoning: once
+//! a slot index is retired and reused for a new identity, a lingering peer
+//! from the old generation must not be conflated with the new one.
+bool ShouldCountTowardInboundFromIPCap(bool fIsI2P, int existingPoolIdx, uint32_t existingPoolGeneration, int newPoolIdx, uint32_t newPoolGeneration)
+{
+    if (!fIsI2P)
+        return true;
+    return existingPoolIdx == newPoolIdx && existingPoolGeneration == newPoolGeneration;
+}
+
 //! Whether a new inbound connection should be rejected outright for being a
 //! local (loopback) connection that did not arrive via the dedicated Tor
 //! listener. As with ShouldRejectForInboundFromIPCap, fOnionListener (not
@@ -481,6 +519,82 @@ bool ShouldRestrictRelayToPrivacyPeers(bool fLocalOrigin, bool fPrivateTxRelayEn
     // and the transaction simply isn't relayed this round - unless the
     // operator has explicitly allowed falling back to clearnet peers.
     return !fAllowFallback;
+}
+
+int64_t ComputeI2PPoolStaggeredExpiry(int64_t nNow, const std::vector<int64_t>& vOtherExpiries, int64_t nRandSource)
+{
+    const int64_t nMin = nNow + I2P_POOL_MIN_LIFETIME;
+    const int64_t nMax = nNow + I2P_POOL_MAX_LIFETIME;
+    const int64_t nRange = I2P_POOL_MAX_LIFETIME - I2P_POOL_MIN_LIFETIME;
+    int64_t candidate = nMin + (int64_t)((uint64_t)nRandSource % (uint64_t)nRange);
+
+    // Push away from any neighbor within the stagger margin. Single pass
+    // over the neighbor list: with a small pool and a stagger margin much
+    // smaller than the lifetime window, a push reintroducing a collision
+    // with an already-checked neighbor is exceedingly unlikely, and this
+    // function is a defense-in-depth measure alongside the separate
+    // peer-count/READY gating, not the only thing standing between the
+    // pool and a simultaneous-expiry outage.
+    for (int64_t nOther : vOtherExpiries) {
+        if (nOther <= 0)
+            continue; // no constraint from an unset/bootstrap expiry
+        int64_t nDist = candidate - nOther;
+        if (nDist < 0)
+            nDist = -nDist;
+        if (nDist >= I2P_POOL_MIN_STAGGER)
+            continue; // already safe from this neighbor
+        candidate = (candidate <= nOther) ? (nOther - I2P_POOL_MIN_STAGGER) : (nOther + I2P_POOL_MIN_STAGGER);
+    }
+
+    // The lifetime floor/ceiling takes priority if satisfying the stagger
+    // margin would otherwise push the candidate out of range.
+    if (candidate < nMin)
+        candidate = nMin;
+    if (candidate > nMax)
+        candidate = nMax;
+    return candidate;
+}
+
+int SelectI2PPoolIdentityForRelay(const std::vector<I2PPoolSlotSelectionInfo>& vSlots, uint32_t nRoundRobinCounter)
+{
+    std::vector<int> vReadyWithPeers;
+    for (size_t i = 0; i < vSlots.size(); i++) {
+        if (vSlots[i].state == I2PPoolIdentityState::READY && vSlots[i].nPeerCount > 0)
+            vReadyWithPeers.push_back((int)i);
+    }
+    if (!vReadyWithPeers.empty())
+        return vReadyWithPeers[nRoundRobinCounter % vReadyWithPeers.size()];
+
+    // Degrade to reusing the least-recently-activated ACTIVE slot with
+    // peers (smallest drain deadline => activated first => drains
+    // soonest), rather than starving the relay entirely.
+    int nBestIdx = -1;
+    int64_t nBestDeadline = std::numeric_limits<int64_t>::max();
+    for (size_t i = 0; i < vSlots.size(); i++) {
+        if (vSlots[i].state == I2PPoolIdentityState::ACTIVE && vSlots[i].nPeerCount > 0 &&
+            vSlots[i].nDrainDeadline < nBestDeadline) {
+            nBestDeadline = vSlots[i].nDrainDeadline;
+            nBestIdx = (int)i;
+        }
+    }
+    return nBestIdx;
+}
+
+bool ShouldRetireI2PPoolIdentity(I2PPoolIdentityState state, int64_t nHardExpiryTime, int64_t nDrainDeadline, int64_t nNow)
+{
+    if (nNow >= nHardExpiryTime)
+        return true;
+    return state == I2PPoolIdentityState::ACTIVE && nNow >= nDrainDeadline;
+}
+
+bool ShouldPromoteI2PPoolIdentityToReady(int64_t nWarmupDeadline, int nPeerCount, int64_t nNow, int nMinPeersForReady)
+{
+    return nNow >= nWarmupDeadline && nPeerCount >= nMinPeersForReady;
+}
+
+bool ShouldDisconnectForI2PPoolRotation(int nodePoolIdx, uint32_t nodePoolGeneration, int rotatingIdx, uint32_t nCurrentGeneration)
+{
+    return nodePoolIdx == rotatingIdx && nodePoolGeneration == nCurrentGeneration;
 }
 
 /** check whether a given address is potentially local */
@@ -609,7 +723,7 @@ static CAddress GetBindAddress(SOCKET sock)
     return addr_bind;
 }
 
-CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode)
+CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int i2p_pool_idx)
 {
     if (pszDest == NULL) {
         // Allow local connections for addnode if the option is enabled
@@ -635,6 +749,10 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode)
     bool proxyConnectionFailed = false;
     bool connected = false;
     std::unique_ptr<Sock> sock;
+    // Only set when this connection was dialed through an I2P relay-pool
+    // slot (i2p_pool_idx >= 0) rather than the node's normal/permanent I2P
+    // identity - used to tag the resulting CNode below.
+    uint32_t nUsedI2PPoolGeneration = 0;
 
     if (!addrConnect.IsValid()) {
         return NULL;
@@ -647,13 +765,29 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode)
     // Use shorter timeout for addnode connections (15 seconds instead of default 60)
     int connectTimeout = fAddNode ? 15000 : nConnectTimeout;
     
-    if (addrConnect.GetNetwork() == NET_I2P && m_i2p_sam_session.get() != nullptr) {
-            i2p::Connection conn;
-            if (m_i2p_sam_session->Connect(addrConnect, conn, proxyConnectionFailed)) {
-                connected = true;
-                sock = std::move(conn.sock);
-                hSocket = sock->Release();
-                // addr_bind = CAddress{conn.me, NODE_NONE};
+    if (addrConnect.GetNetwork() == NET_I2P) {
+            i2p::sam::Session* session = nullptr;
+            if (i2p_pool_idx >= 0) {
+                // Dial through a specific I2P relay-pool identity, e.g. to
+                // help a WARMING slot accumulate the peers it needs to
+                // reach READY, or (later) to relay a locally-originated
+                // transaction through the identity selected for it.
+                LOCK(cs_i2p_relay_pool);
+                if ((size_t)i2p_pool_idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[i2p_pool_idx].session) {
+                    session = g_i2p_relay_pool[i2p_pool_idx].session.get();
+                    nUsedI2PPoolGeneration = g_i2p_relay_pool[i2p_pool_idx].nGeneration;
+                }
+            } else if (m_i2p_sam_session.get() != nullptr) {
+                session = m_i2p_sam_session.get();
+            }
+            if (session != nullptr) {
+                i2p::Connection conn;
+                if (session->Connect(addrConnect, conn, proxyConnectionFailed)) {
+                    connected = true;
+                    sock = std::move(conn.sock);
+                    hSocket = sock->Release();
+                    // addr_bind = CAddress{conn.me, NODE_NONE};
+                }
             }
     } else if (pszDest) {
         connected = ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), connectTimeout, &proxyConnectionFailed);
@@ -755,6 +889,13 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode)
         // Add node
         CNode* pnode = new CNode(hSocket, addrConnect, pszDest ? pszDest : "", false, ssl);
         pnode->AddRef();
+        if (i2p_pool_idx >= 0 && addrConnect.GetNetwork() == NET_I2P) {
+            pnode->m_i2p_pool_idx = i2p_pool_idx;
+            pnode->m_i2p_pool_generation = nUsedI2PPoolGeneration;
+            LOCK(cs_i2p_relay_pool);
+            if ((size_t)i2p_pool_idx < g_i2p_relay_pool.size())
+                g_i2p_relay_pool[i2p_pool_idx].nPeerCount++;
+        }
 
         {
             LOCK(cs_vNodes);
@@ -1073,6 +1214,8 @@ void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
     stats.addrFromPeer = addrFromPeer.IsValid() ? addrFromPeer.ToString() : "";
 
     stats.m_inbound_onion = m_inbound_onion;
+    stats.m_i2p_pool_idx = m_i2p_pool_idx;
+    stats.m_i2p_pool_generation = m_i2p_pool_generation;
 
     // If ssl != NULL it means TLS connection was established successfully
     {
@@ -1502,7 +1645,9 @@ void CreateNodeFromAcceptedSocket(SOCKET hSocket,
                                             bool whitelisted,
                                             const CAddress& addr_bind,
                                             const CAddress& addr,
-                                            bool fOnionListener)
+                                            bool fOnionListener,
+                                            int i2p_pool_idx,
+                                            uint32_t i2p_pool_generation)
 {
     int nInboundThisIP = 0;
     int nInbound = 0;
@@ -1529,7 +1674,9 @@ void CreateNodeFromAcceptedSocket(SOCKET hSocket,
                 // from 5 to 2 connections per IP) never actually triggered
                 // for a real repeat source, on top of comparing the wrong
                 // granularity even if it had.
-                if (SameNetAddr(pnode->addr, addr))
+                if (SameNetAddr(pnode->addr, addr) &&
+                    ShouldCountTowardInboundFromIPCap(addr.IsI2P(), pnode->m_i2p_pool_idx, pnode->m_i2p_pool_generation,
+                                                       i2p_pool_idx, i2p_pool_generation))
                     nInboundThisIP++;
             }
         }
@@ -1680,6 +1827,13 @@ SetSocketNonBlocking(hSocket, true);
     pnode->AddRef();
     pnode->fWhitelisted = whitelisted;
     pnode->m_inbound_onion = fOnionListener;
+    pnode->m_i2p_pool_idx = i2p_pool_idx;
+    pnode->m_i2p_pool_generation = i2p_pool_generation;
+    if (i2p_pool_idx >= 0) {
+        LOCK(cs_i2p_relay_pool);
+        if ((size_t)i2p_pool_idx < g_i2p_relay_pool.size())
+            g_i2p_relay_pool[i2p_pool_idx].nPeerCount++;
+    }
 
     LogPrint("net", "connection from %s accepted\n", addr.ToString());
 
@@ -1721,6 +1875,14 @@ void ThreadSocketHandler()
                 {
                     // remove from vNodes
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
+
+                    if (pnode->m_i2p_pool_idx >= 0) {
+                        LOCK(cs_i2p_relay_pool);
+                        size_t idx = (size_t)pnode->m_i2p_pool_idx;
+                        if (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].nGeneration == pnode->m_i2p_pool_generation &&
+                            g_i2p_relay_pool[idx].nPeerCount > 0)
+                            g_i2p_relay_pool[idx].nPeerCount--;
+                    }
 
                     // release outbound grant (if any)
                     pnode->grantOutbound.Release();
@@ -2265,7 +2427,7 @@ void ThreadOpenAddedConnections()
 }
 
 // if successful, this moves the passed grant to the constructed node
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound, const char *pszDest, bool fOneShot, bool fAddNode)
+bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound, const char *pszDest, bool fOneShot, bool fAddNode, int i2p_pool_idx)
 {
     //
     // Initiate outbound network connection
@@ -2287,7 +2449,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
     } else if (FindNode(std::string(pszDest)))
         return false;
 
-    CNode* pnode = ConnectNode(addrConnect, pszDest, fAddNode);
+    CNode* pnode = ConnectNode(addrConnect, pszDest, fAddNode, i2p_pool_idx);
     boost::this_thread::interruption_point();
 
 #if defined(USE_TLS)
@@ -2306,7 +2468,7 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
             if (tlsmanager.isNonTLSAddr(strDest, vNonTLSNodesOutbound, cs_vNonTLSNodesOutbound))
             {
                 // Attempt to reconnect in non-TLS mode
-                pnode = ConnectNode(addrConnect, pszDest, fAddNode);
+                pnode = ConnectNode(addrConnect, pszDest, fAddNode, i2p_pool_idx);
                 boost::this_thread::interruption_point();
             }
         }
@@ -2465,6 +2627,326 @@ void ThreadI2PAcceptIncoming()
         CreateNodeFromAcceptedSocket(conn.sock->Release(), false,
                                      CAddress{conn.me, NODE_NETWORK}, CAddress{conn.peer, NODE_NETWORK},
                                      /* fOnionListener */ false);
+    }
+}
+
+//! Bind (or rebind) I2P relay-pool slot idx to a fresh Session, staggering
+//! its backstop expiry against every other currently-active slot. Caller
+//! must hold cs_i2p_relay_pool. Does not touch nGeneration - retirement
+//! (which reuses a slot index across identities) bumps it explicitly
+//! before calling this; first-time activation of a never-used slot leaves
+//! it at its default of 0.
+static void ActivateI2PPoolSlot(size_t idx, int64_t nNow)
+{
+    proxyType i2p_sam_pool;
+    if (!GetProxy(NET_I2P, i2p_sam_pool))
+        return;
+
+    I2PPoolIdentitySlot& slot = g_i2p_relay_pool[idx];
+    slot.session = std::unique_ptr<i2p::sam::Session>(new i2p::sam::Session(
+        GetDataDir() / strprintf("i2p_relay_pool_key_%d", idx), i2p_sam_pool.proxy));
+    slot.state = I2PPoolIdentityState::WARMING;
+    slot.nWarmupDeadline = nNow + I2P_POOL_WARMUP_PERIOD;
+    slot.nDrainDeadline = 0;
+    slot.nLocalRelayCount = 0;
+    slot.nPeerCount = 0;
+    slot.lastAdvertisedAddr = CService();
+
+    std::vector<int64_t> vOtherExpiries;
+    for (size_t j = 0; j < g_i2p_relay_pool.size(); j++) {
+        if (j != idx && g_i2p_relay_pool[j].session != nullptr)
+            vOtherExpiries.push_back(g_i2p_relay_pool[j].nHardExpiryTime);
+    }
+    slot.nHardExpiryTime = ComputeI2PPoolStaggeredExpiry(nNow, vOtherExpiries, GetRand(std::numeric_limits<int64_t>::max()));
+
+    LogPrint("net", "I2P pool: slot %d activated (WARMING), warmup deadline in %ds, hard expiry in %ds\n",
+             (int)idx, (int)(slot.nWarmupDeadline - nNow), (int)(slot.nHardExpiryTime - nNow));
+}
+
+//! Periodic maintenance for the I2P relay pool (retirement, warmup
+//! promotion, reserve replenishment) - registered via
+//! scheduler.scheduleEvery() in StartNode(), following the same pattern as
+//! DumpAddresses. See net.h's I2PPoolIdentitySlot/I2P_POOL_* constants and
+//! the "Rotating burn-after-use I2P identities for transaction relay"
+//! design for the full rationale.
+void TickI2PRelayPool()
+{
+    if (!fI2PIdentityRotation)
+        return;
+
+    LOCK(cs_i2p_relay_pool);
+    const int64_t nNow = GetTime();
+
+    // 1. Retire any slot past its expiry/drain deadline.
+    for (size_t idx = 0; idx < g_i2p_relay_pool.size(); idx++) {
+        I2PPoolIdentitySlot& slot = g_i2p_relay_pool[idx];
+        if (slot.session == nullptr)
+            continue;
+        if (!ShouldRetireI2PPoolIdentity(slot.state, slot.nHardExpiryTime, slot.nDrainDeadline, nNow))
+            continue;
+
+        const uint32_t nRetiringGeneration = slot.nGeneration;
+        int nDisconnected = 0;
+        {
+            LOCK(cs_vNodes);
+            for (CNode* pnode : vNodes) {
+                if (ShouldDisconnectForI2PPoolRotation(pnode->m_i2p_pool_idx, pnode->m_i2p_pool_generation, (int)idx, nRetiringGeneration)) {
+                    pnode->fDisconnect = true;
+                    pnode->CloseSocketDisconnect();
+                    nDisconnected++;
+                }
+            }
+        }
+
+        if (slot.lastAdvertisedAddr.IsValid())
+            RemoveLocal(slot.lastAdvertisedAddr);
+
+        // Destroy and regenerate: deleting the on-disk key file first
+        // means the next Session's CreateIfNotCreatedAlready()
+        // (i2p.cpp, unmodified) falls through to GenerateAndSavePrivateKey()
+        // and produces a genuinely fresh DEST GENERATE keypair.
+        slot.session.reset();
+        boost::system::error_code ec;
+        boost::filesystem::remove(GetDataDir() / strprintf("i2p_relay_pool_key_%d", idx), ec);
+
+        LogPrint("net", "I2P pool: retiring slot %d (generation %u -> %u), disconnected %d peer(s), %u local relay(s) served\n",
+                 (int)idx, nRetiringGeneration, nRetiringGeneration + 1, nDisconnected, slot.nLocalRelayCount);
+
+        slot.nGeneration = nRetiringGeneration + 1;
+        ActivateI2PPoolSlot(idx, nNow);
+    }
+
+    // 2. Promote WARMING -> READY.
+    for (size_t idx = 0; idx < g_i2p_relay_pool.size(); idx++) {
+        I2PPoolIdentitySlot& slot = g_i2p_relay_pool[idx];
+        if (slot.session == nullptr || slot.state != I2PPoolIdentityState::WARMING)
+            continue;
+        if (ShouldPromoteI2PPoolIdentityToReady(slot.nWarmupDeadline, slot.nPeerCount, nNow, I2P_POOL_MIN_PEERS_FOR_READY)) {
+            slot.state = I2PPoolIdentityState::READY;
+            LogPrint("net", "I2P pool: slot %d promoted WARMING -> READY (%d peers)\n", (int)idx, slot.nPeerCount);
+        }
+    }
+
+    // 3. Replenish the reserve: activate previously-inactive slots (up to
+    // nI2PPoolMaxSize, i.e. g_i2p_relay_pool.size()) until the count of
+    // WARMING+READY slots reaches nI2PPoolMinReserve.
+    int nReserve = 0;
+    for (const auto& slot : g_i2p_relay_pool) {
+        if (slot.session != nullptr && (slot.state == I2PPoolIdentityState::WARMING || slot.state == I2PPoolIdentityState::READY))
+            nReserve++;
+    }
+    for (size_t idx = 0; idx < g_i2p_relay_pool.size() && nReserve < nI2PPoolMinReserve; idx++) {
+        if (g_i2p_relay_pool[idx].session != nullptr)
+            continue;
+        ActivateI2PPoolSlot(idx, nNow);
+        if (g_i2p_relay_pool[idx].session != nullptr) {
+            nReserve++;
+            LogPrint("net", "I2P pool: activated slot %d to replenish reserve (now %d/%d)\n", (int)idx, nReserve, nI2PPoolMinReserve);
+        }
+    }
+}
+
+//! Parameterized worker serving I2P relay-pool slot idx's inbound
+//! connections - one thread per slot (see the design doc for why: Accept()
+//! is a blocking per-session call, so one thread per identity avoids
+//! serializing accept latency across slots). Structurally identical to
+//! ThreadI2PAcceptIncoming() above, but re-resolves its Session pointer
+//! from g_i2p_relay_pool every loop iteration (rather than capturing one
+//! at spawn time) so a rotation can swap the slot's Session out from under
+//! this thread without needing to restart it, and tracks generation
+//! changes to know when to stop advertising a just-retired slot's address.
+void ThreadI2PPoolAcceptIncoming(size_t idx)
+{
+    const int64_t err_wait_begin = 1000;
+    const int64_t err_wait_cap = 1000 * 60 * 5;
+    auto err_wait = err_wait_begin;
+
+    bool advertising_listen_addr = false;
+    uint32_t nLastGeneration = 0;
+    i2p::Connection conn;
+
+    while (true) {
+        boost::this_thread::interruption_point();
+
+        i2p::sam::Session* session = nullptr;
+        uint32_t generation = 0;
+        {
+            LOCK(cs_i2p_relay_pool);
+            if (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].session) {
+                session = g_i2p_relay_pool[idx].session.get();
+                generation = g_i2p_relay_pool[idx].nGeneration;
+            }
+        }
+
+        if (session == nullptr || generation != nLastGeneration) {
+            // No session active yet, or the slot was rotated out from
+            // under us since our last iteration (new Session, bumped
+            // generation) - stop advertising whatever we were advertising
+            // and start fresh.
+            if (advertising_listen_addr && conn.me.IsValid())
+                RemoveLocal(conn.me);
+            advertising_listen_addr = false;
+            nLastGeneration = generation;
+            if (session == nullptr) {
+                MilliSleep(err_wait);
+                continue;
+            }
+        }
+
+        if (!session->Listen(conn)) {
+            if (advertising_listen_addr && conn.me.IsValid()) {
+                RemoveLocal(conn.me);
+                advertising_listen_addr = false;
+            }
+            MilliSleep(err_wait);
+            if (err_wait < err_wait_cap) {
+                err_wait *= 2;
+            }
+            continue;
+        }
+        err_wait = err_wait_begin;
+
+        if (!advertising_listen_addr) {
+            AddLocal(conn.me, LOCAL_MANUAL);
+            advertising_listen_addr = true;
+            LOCK(cs_i2p_relay_pool);
+            if (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].nGeneration == generation)
+                g_i2p_relay_pool[idx].lastAdvertisedAddr = conn.me;
+        }
+
+        if (!session->Accept(conn)) {
+            continue;
+        }
+
+        CreateNodeFromAcceptedSocket(conn.sock->Release(), false,
+                                     CAddress{conn.me, NODE_NETWORK}, CAddress{conn.peer, NODE_NETWORK},
+                                     /* fOnionListener */ false,
+                                     /* i2p_pool_idx */ (int)idx,
+                                     /* i2p_pool_generation */ generation);
+    }
+}
+
+//! Pool-slot analog of ThreadI2PCheck() - used instead of
+//! ThreadI2PPoolAcceptIncoming() when -i2pacceptincoming=0 (outbound-only
+//! I2P operation).
+void ThreadI2PPoolCheck(size_t idx)
+{
+    const int64_t wait_time = 5000;
+    const int64_t err_wait_cap = wait_time * 60;
+    auto err_wait = wait_time;
+
+    while (true) {
+        MilliSleep(wait_time);
+        boost::this_thread::interruption_point();
+
+        i2p::sam::Session* session;
+        {
+            LOCK(cs_i2p_relay_pool);
+            session = (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].session) ? g_i2p_relay_pool[idx].session.get() : nullptr;
+        }
+        if (session == nullptr)
+            continue;
+
+        if (!session->Check()) {
+            MilliSleep(err_wait);
+            if (err_wait < err_wait_cap) {
+                err_wait *= 2;
+            }
+        } else {
+            err_wait = wait_time;
+        }
+    }
+}
+
+//! Dedicated thread that proactively dials out through under-peered I2P
+//! relay-pool slots (WARMING or READY, below I2P_POOL_MIN_PEERS_FOR_READY
+//! live connections), so a slot doesn't have to rely on inbound accepts
+//! alone to reach READY. Deliberately a separate thread from
+//! TickI2PRelayPool() (a lightweight scheduler callback) since a SAM
+//! Connect() call can block for a real connection attempt - doing this
+//! work on the scheduler thread would stall other scheduled tasks (e.g.
+//! DumpAddresses). Shares the regular outbound-connection semaphore
+//! (semOutbound) rather than a dedicated budget, so this can never exceed
+//! the node's overall outbound connection cap; ThreadOpenConnections()'s
+//! own diversity bookkeeping is untouched by this - it's a separate,
+//! smaller, targeted dialing effort alongside it, not a modification to
+//! the main outbound-connection loop.
+void ThreadI2PPoolTopUp()
+{
+    while (true) {
+        MilliSleep(30 * 1000);
+        boost::this_thread::interruption_point();
+
+        if (!fI2PIdentityRotation)
+            continue;
+
+        std::vector<size_t> vNeedsPeers;
+        {
+            LOCK(cs_i2p_relay_pool);
+            for (size_t idx = 0; idx < g_i2p_relay_pool.size(); idx++) {
+                const I2PPoolIdentitySlot& slot = g_i2p_relay_pool[idx];
+                if (slot.session != nullptr &&
+                    (slot.state == I2PPoolIdentityState::WARMING || slot.state == I2PPoolIdentityState::READY) &&
+                    slot.nPeerCount < I2P_POOL_MIN_PEERS_FOR_READY) {
+                    vNeedsPeers.push_back(idx);
+                }
+            }
+        }
+
+        // Randomize processing order each tick. vNeedsPeers is otherwise
+        // always built in ascending index order, which - when the known
+        // I2P address pool is small relative to the number of under-peered
+        // slots - would let lower-indexed slots systematically win every
+        // scarce candidate first, permanently starving higher-indexed
+        // slots rather than just being unlucky once. A simple
+        // Fisher-Yates shuffle gives every under-peered slot a fair shot
+        // each tick instead.
+        for (size_t i = vNeedsPeers.size(); i > 1; i--) {
+            size_t j = (size_t)(GetRand((uint64_t)i));
+            std::swap(vNeedsPeers[i - 1], vNeedsPeers[j]);
+        }
+
+        for (size_t idx : vNeedsPeers) {
+            boost::this_thread::interruption_point();
+
+            if (semOutbound == nullptr)
+                break;
+
+            CAddress addrConnect;
+            bool fFound = false;
+            for (int nTries = 0; nTries < 50 && !fFound; nTries++) {
+                CAddrInfo addr = addrman.Select();
+                if (!addr.IsValid() || addr.GetNetwork() != NET_I2P || IsLocal(addr))
+                    continue;
+                bool fAlreadyConnected = false;
+                {
+                    LOCK(cs_vNodes);
+                    for (CNode* pnode : vNodes) {
+                        if (static_cast<CService>(pnode->addr) == static_cast<CService>(addr)) {
+                            fAlreadyConnected = true;
+                            break;
+                        }
+                    }
+                }
+                if (fAlreadyConnected)
+                    continue;
+                addrConnect = addr;
+                fFound = true;
+            }
+            if (!fFound) {
+                LogPrint("net", "I2P pool: top-up for slot %d found no usable candidate this tick (50 tries)\n", (int)idx);
+                continue;
+            }
+
+            CSemaphoreGrant grant(*semOutbound, /* fTry */ true);
+            if (!grant) {
+                LogPrint("net", "I2P pool: top-up for slot %d found %s but no free outbound slot\n", (int)idx, addrConnect.ToString());
+                continue;
+            }
+
+            LogPrint("net", "I2P pool: top-up dialing %s for slot %d\n", addrConnect.ToString(), (int)idx);
+            OpenNetworkConnection(addrConnect, &grant, nullptr, /* fOneShot */ false, /* fAddNode */ false, (int)idx);
+        }
     }
 }
 
@@ -2723,6 +3205,19 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (GetProxy(NET_I2P, i2p_sam)) {
         m_i2p_sam_session = std::unique_ptr<i2p::sam::Session>(new i2p::sam::Session(GetDataDir() / "i2p_private_key",
                                                                 i2p_sam.proxy));
+
+        // I2P relay pool: burn-after-use identities used only for
+        // relaying our own transactions, separate from the identity just
+        // created above. See TickI2PRelayPool()/ActivateI2PPoolSlot() for
+        // the lifecycle this feeds.
+        if (fI2PIdentityRotation) {
+            LOCK(cs_i2p_relay_pool);
+            g_i2p_relay_pool.resize(nI2PPoolMaxSize);
+            const int64_t nNow = GetTime();
+            for (int idx = 0; idx < nI2PPoolMinReserve; idx++) {
+                ActivateI2PPoolSlot((size_t)idx, nNow);
+            }
+        }
     }
 
     if (semOutbound == NULL) {
@@ -2785,6 +3280,35 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         } else {
             threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pcheck", &ThreadI2PCheck));
         }
+
+        // I2P relay pool: one accept-or-check thread per slot, mirroring
+        // the primary identity's own -i2pacceptincoming choice above. Each
+        // thread polls g_i2p_relay_pool[idx] for a live session rather
+        // than requiring one to exist at spawn time, so the full
+        // nI2PPoolMaxSize thread set can be spawned up front even though
+        // only nI2PPoolMinReserve slots start out active (see
+        // ActivateI2PPoolSlot/TickI2PRelayPool) - avoids ever needing to
+        // spawn new threads at runtime as the pool grows.
+        if (fI2PIdentityRotation) {
+            bool fAcceptIncoming = GetBoolArg("-i2pacceptincoming", true);
+            for (size_t idx = 0; idx < (size_t)nI2PPoolMaxSize; idx++) {
+                // TraceThread<Callable> invokes func() with no arguments,
+                // so idx must be bound in first - CScheduler::Function
+                // (boost::function<void()>) is reused here purely for its
+                // type (net.cpp already includes scheduler.h for it),
+                // matching the pattern already used for the scheduler's
+                // own thread in init.cpp.
+                if (fAcceptIncoming) {
+                    CScheduler::Function boundAccept = boost::bind(&ThreadI2PPoolAcceptIncoming, idx);
+                    threadGroup.create_thread(boost::bind(&TraceThread<CScheduler::Function>, "i2ppoolaccept", boundAccept));
+                } else {
+                    CScheduler::Function boundCheck = boost::bind(&ThreadI2PPoolCheck, idx);
+                    threadGroup.create_thread(boost::bind(&TraceThread<CScheduler::Function>, "i2ppoolcheck", boundCheck));
+                }
+            }
+            scheduler.scheduleEvery(&TickI2PRelayPool, I2P_POOL_TICK_INTERVAL);
+            threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2ppooltopup", &ThreadI2PPoolTopUp));
+        }
     }
     // Initiate outbound connections from -addnode FIRST (prioritized)
     LogPrintf("Starting addnode connection thread with reserved %d slots\n", MAX_ADDNODE_CONNECTIONS);
@@ -2826,6 +3350,11 @@ bool StopNode()
     // The I2P SAM session is never otherwise torn down explicitly; without this it
     // only gets destroyed implicitly at process exit via the CNetCleanup static.
     m_i2p_sam_session.reset();
+    {
+        LOCK(cs_i2p_relay_pool);
+        for (auto& slot : g_i2p_relay_pool)
+            slot.session.reset();
+    }
 
     if (KOMODO_NSPV_FULLNODE && fAddressesInitialized)
     {
@@ -2875,6 +3404,50 @@ public:
 }
 instance_of_cnetcleanup;
 
+//! Select an I2P relay-pool identity to relay a locally-originated
+//! transaction through (burn-after-use - see the "Rotating burn-after-use
+//! I2P identities for transaction relay" design), and mark it ACTIVE with
+//! a fresh drain deadline if it was READY. Returns the selected index, or
+//! -1 if no pool identity currently has a usable peer. Does not touch
+//! cs_vNodes - callers must not hold that lock across this call, to avoid
+//! acquiring cs_i2p_relay_pool/cs_vNodes in the opposite order from
+//! TickI2PRelayPool's retirement step (which locks cs_i2p_relay_pool then
+//! nests cs_vNodes inside it).
+static int SelectAndActivateI2PPoolIdentityForRelay()
+{
+    static std::atomic<uint32_t> s_nI2PPoolRoundRobin{0};
+
+    LOCK(cs_i2p_relay_pool);
+    std::vector<I2PPoolSlotSelectionInfo> vSlots;
+    vSlots.reserve(g_i2p_relay_pool.size());
+    for (const auto& slot : g_i2p_relay_pool) {
+        if (slot.session == nullptr) {
+            // Inactive slot - push a never-eligible placeholder so indices
+            // still line up 1:1 with g_i2p_relay_pool.
+            vSlots.push_back({I2PPoolIdentityState::WARMING, 0, 0});
+            continue;
+        }
+        vSlots.push_back({slot.state, slot.nPeerCount, slot.nDrainDeadline});
+    }
+
+    int idx = SelectI2PPoolIdentityForRelay(vSlots, s_nI2PPoolRoundRobin.fetch_add(1));
+    if (idx < 0) {
+        LogPrint("net", "I2P pool: no usable identity for locally-originated relay (no READY or ACTIVE slot with peers)\n");
+        return -1;
+    }
+
+    I2PPoolIdentitySlot& slot = g_i2p_relay_pool[(size_t)idx];
+    if (slot.state == I2PPoolIdentityState::READY) {
+        slot.state = I2PPoolIdentityState::ACTIVE;
+        slot.nDrainDeadline = GetTime() + I2P_POOL_DRAIN_PERIOD;
+        LogPrint("net", "I2P pool: slot %d selected for local relay, READY -> ACTIVE, draining in %ds\n", idx, (int)I2P_POOL_DRAIN_PERIOD);
+    } else {
+        LogPrint("net", "I2P pool: slot %d reused for local relay (already ACTIVE, %u prior local relay(s))\n", idx, slot.nLocalRelayCount);
+    }
+    slot.nLocalRelayCount++;
+    return idx;
+}
+
 void RelayTransaction(const CTransaction& tx, bool fLocalOrigin)
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
@@ -2902,15 +3475,33 @@ void RelayTransaction(const CTransaction& tx, const CDataStream& ss, bool fLocal
         mapRelay.insert(std::make_pair(inv, ss));
         vRelayExpiration.push_back(std::make_pair(GetTime() + 15 * 60, inv));
     }
-    LOCK(cs_vNodes);
-
     // For a transaction we created ourselves, prefer relaying only to
-    // privacy peers (outbound Tor, inbound or outbound I2P - see
-    // IsPrivacyPeer), so a clearnet-monitoring adversary can't use "which
-    // node's IP first announced this tx" to deanonymize the sender. Falls
-    // back to relaying via all peers if there's currently no privacy peer
-    // to relay to - see ShouldRestrictRelayToPrivacyPeers.
-    int nPrivacyPeers = (fLocalOrigin && fPrivateTxRelay) ? GetPrivacyPeerCount() : 0;
+    // privacy peers: outbound Tor peers (any of them), plus I2P peers -
+    // but for I2P specifically, only those on a single burn-after-use
+    // relay-pool identity selected for this transaction, never the node's
+    // primary/permanent I2P identity (see IsPrivacyPeer,
+    // SelectAndActivateI2PPoolIdentityForRelay, and the "Rotating
+    // burn-after-use I2P identities" design). This is so a
+    // clearnet-monitoring adversary can't use "which node's IP first
+    // announced this tx" to deanonymize the sender, and so a single I2P
+    // peer can't link multiple transactions to one persistent identity
+    // over time. Falls back to relaying via all peers if there's
+    // currently no usable privacy peer - see ShouldRestrictRelayToPrivacyPeers.
+    int nOutboundTorPeers = 0;
+    if (fLocalOrigin && fPrivateTxRelay) {
+        LOCK(cs_vNodes);
+        for (CNode* pnode : vNodes) {
+            if (!pnode->fInbound && ((CNetAddr)pnode->addr).IsTor())
+                nOutboundTorPeers++;
+        }
+    }
+    // Must not be called while cs_vNodes is held - see the function's own
+    // comment for the lock-ordering reason (it locks cs_i2p_relay_pool,
+    // and TickI2PRelayPool locks cs_i2p_relay_pool before nesting
+    // cs_vNodes, so this function must never nest the other way).
+    int nSelectedI2PPoolIdx = (fLocalOrigin && fPrivateTxRelay) ? SelectAndActivateI2PPoolIdentityForRelay() : -1;
+
+    int nPrivacyPeers = nOutboundTorPeers + (nSelectedI2PPoolIdx >= 0 ? 1 : 0);
     bool fRestrictToPrivacyPeers = ShouldRestrictRelayToPrivacyPeers(fLocalOrigin, fPrivateTxRelay, nPrivacyPeers, fPrivateTxRelayFallback);
     if (fLocalOrigin && fPrivateTxRelay && nPrivacyPeers == 0) {
         if (fRestrictToPrivacyPeers) {
@@ -2920,10 +3511,21 @@ void RelayTransaction(const CTransaction& tx, const CDataStream& ss, bool fLocal
         }
     }
 
+    LOCK(cs_vNodes);
     BOOST_FOREACH(CNode* pnode, vNodes)
     {
-        if (fRestrictToPrivacyPeers && !IsPrivacyPeer(pnode->fInbound, pnode->addr))
-            continue;
+        if (fRestrictToPrivacyPeers) {
+            if (!IsPrivacyPeer(pnode->fInbound, pnode->addr))
+                continue;
+            // I2P is further restricted to the one pool identity selected
+            // above - excludes peers on the primary I2P identity
+            // (m_i2p_pool_idx stays -1 for those) and peers on any other
+            // pool slot. Tor peers are unaffected here; IsPrivacyPeer()
+            // already scoped them to outbound-only.
+            if (((CNetAddr)pnode->addr).IsI2P() &&
+                (nSelectedI2PPoolIdx < 0 || pnode->m_i2p_pool_idx != nSelectedI2PPoolIdx))
+                continue;
+        }
         if(!pnode->fRelayTxes)
             continue;
         LOCK(pnode->cs_filter);

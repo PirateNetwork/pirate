@@ -98,6 +98,25 @@ static const int DEFAULT_MAX_INBOUND_FROMIP = 2;
 static const bool DEFAULT_PRIVATE_TX_RELAY = true;
 /** Whether -privatetxrelay is allowed to fall back to relaying via all peers when no privacy peer is currently connected. If disabled, a locally-originated transaction simply isn't relayed this round when no privacy peer is available (it will still be retried automatically once one connects, or via the wallet's periodic rebroadcast) rather than ever touching a clearnet peer. */
 static const bool DEFAULT_PRIVATE_TX_RELAY_FALLBACK = true;
+/** Whether to maintain a pool of short-lived, burn-after-use I2P identities (see g_i2p_relay_pool) used only for relaying locally-originated transactions, separate from the node's normal permanent I2P identity (m_i2p_sam_session), to prevent a peer from linking multiple transactions to one persistent I2P destination over time. When disabled, locally-originated relay falls back to using the normal I2P identity like any other privacy peer. */
+static const bool DEFAULT_I2P_IDENTITY_ROTATION = true;
+/** Minimum number of warmed, ready-with-peers I2P relay-pool identities to keep in reserve - see g_i2p_relay_pool. */
+static const int DEFAULT_I2P_POOL_MIN_RESERVE = 12;
+/** Maximum number of concurrent I2P relay-pool identities. */
+static const int DEFAULT_I2P_POOL_MAX_SIZE = 16;
+/** Seconds a newly-generated I2P relay-pool identity is given to warm up (build tunnels/publish its leaseset) before it's eligible to transition WARMING -> READY. */
+static const int64_t I2P_POOL_WARMUP_PERIOD = 3 * 60;
+/** Minimum number of connected peers a WARMING I2P relay-pool identity must have before it can transition to READY - tunnels being built isn't enough on its own, it needs someone to actually relay to. */
+static const int I2P_POOL_MIN_PEERS_FOR_READY = 2;
+/** Seconds an I2P relay-pool identity is kept alive after being selected for a locally-originated transaction relay, before being retired - long enough for the peer's GETDATA round-trip to complete, comfortably inside the mapRelay cache TTL (15 minutes) so nothing is lost by keeping this shorter. */
+static const int64_t I2P_POOL_DRAIN_PERIOD = 10 * 60;
+/** Minimum and maximum lifespan, in seconds, for an I2P relay-pool identity's backstop expiry (enforced even if the identity is never used for a relay). The 24h span between them is sized to fit DEFAULT_I2P_POOL_MAX_SIZE identities' backstop expiries at least I2P_POOL_MIN_STAGGER apart without any two being forced to collide at the window's edge (span / stagger + 1 must stay >= the largest pool size expected to run this - see ComputeI2PPoolStaggeredExpiry). */
+static const int64_t I2P_POOL_MIN_LIFETIME = 6 * 60 * 60;
+static const int64_t I2P_POOL_MAX_LIFETIME = 30 * 60 * 60;
+/** Minimum separation, in seconds, enforced between any two I2P relay-pool identities' backstop expiry times, so the pool never has all (or, for a single-interface I2P-only node, its only) identities expire close together. */
+static const int64_t I2P_POOL_MIN_STAGGER = 60 * 60;
+/** How often the I2P relay-pool maintenance scheduler task runs (retirement, warmup transitions, replenishment). */
+static const int64_t I2P_POOL_TICK_INTERVAL = 60;
 /** The period before a network upgrade activates, where connections to upgrading peers are preferred (in blocks). */
 static const int NETWORK_UPGRADE_PEER_PREFERENCE_BLOCK_PERIOD = 24 * 24 * 3;
 
@@ -112,8 +131,12 @@ CNode* FindNode(const CNetAddr& ip);
 CNode* FindNode(const CSubNet& subNet);
 CNode* FindNode(const std::string& addrName);
 CNode* FindNode(const CService& ip);
-CNode* ConnectNode(CAddress addrConnect, const char *pszDest = NULL, bool fAddNode = false);
-bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false, bool fAddNode = false);
+//! i2p_pool_idx: when >= 0 and addrConnect is an I2P address, dial through
+//! that index into g_i2p_relay_pool instead of the node's normal/permanent
+//! I2P identity (m_i2p_sam_session). Ignored for non-I2P addresses.
+CNode* ConnectNode(CAddress addrConnect, const char *pszDest = NULL, bool fAddNode = false, int i2p_pool_idx = -1);
+//! i2p_pool_idx: see ConnectNode().
+bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOutbound = NULL, const char *strDest = NULL, bool fOneShot = false, bool fAddNode = false, int i2p_pool_idx = -1);
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError, bool fWhitelisted = false);
 void LoadPeers();
@@ -147,7 +170,9 @@ void CreateNodeFromAcceptedSocket(SOCKET hSocket,
                                             bool whitelisted,
                                             const CAddress& addr_bind,
                                             const CAddress& addr,
-                                            bool fOnionListener = false);
+                                            bool fOnionListener = false,
+                                            int i2p_pool_idx = -1,
+                                            uint32_t i2p_pool_generation = 0);
 //! Binds a dedicated, loopback-only listening socket used exclusively as the
 //! local forwarding target for Tor's onion-service connections - see net.cpp.
 bool BindOnionListenPort(std::string& strError);
@@ -229,6 +254,10 @@ bool SameNetAddr(const CNetAddr& a, const CNetAddr& b);
 //! Whether a new inbound connection should be rejected by the per-source-IP
 //! inbound cap - see net.cpp for the dedicated-Tor-listener exemption.
 bool ShouldRejectForInboundFromIPCap(int nInboundThisIP, int nMaxInboundFromIP, bool fOnionListener);
+//! Whether an existing inbound peer should count toward the per-source-IP
+//! cap for a new connection attempt - see net.cpp for the I2P per-identity
+//! scoping rationale.
+bool ShouldCountTowardInboundFromIPCap(bool fIsI2P, int existingPoolIdx, uint32_t existingPoolGeneration, int newPoolIdx, uint32_t newPoolGeneration);
 //! Whether a new inbound connection should be hard-rejected for being a
 //! local (loopback), non-Tor connection - see net.cpp.
 bool ShouldRejectLocalNonOnionInbound(const CNetAddr& addr, bool fOnionListener, bool fAllowLocalIp);
@@ -298,6 +327,10 @@ extern int nMaxInboundFromIP;
 extern bool fPrivateTxRelay;
 /** Whether -privatetxrelay may fall back to clearnet peers - see DEFAULT_PRIVATE_TX_RELAY_FALLBACK. */
 extern bool fPrivateTxRelayFallback;
+/** Whether to maintain the I2P relay pool - see DEFAULT_I2P_IDENTITY_ROTATION. */
+extern bool fI2PIdentityRotation;
+extern int nI2PPoolMinReserve;
+extern int nI2PPoolMaxSize;
 
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;
@@ -316,6 +349,51 @@ extern SSL_CTX *tls_ctx_server;
 extern SSL_CTX *tls_ctx_client;
 
 extern std::unique_ptr<i2p::sam::Session> m_i2p_sam_session;
+
+//! State machine for a single I2P relay-pool identity slot - see
+//! g_i2p_relay_pool below and net.cpp for the lifecycle this drives.
+enum class I2PPoolIdentityState : uint8_t { WARMING, READY, ACTIVE };
+
+//! A single burn-after-use I2P identity used only for relaying our own
+//! (locally-originated) transactions - never for general P2P duty, and
+//! never the same identity as m_i2p_sam_session (the node's normal,
+//! permanent I2P identity). See the "Rotating burn-after-use I2P
+//! identities for transaction relay" design: an identity here is generated
+//! fresh, given time to warm up and acquire peers, used for at most one
+//! locally-originated transaction relay, then retired and replaced.
+struct I2PPoolIdentitySlot {
+    std::unique_ptr<i2p::sam::Session> session;
+    I2PPoolIdentityState state{I2PPoolIdentityState::WARMING};
+    //! WARMING -> READY becomes possible once now() >= nWarmupDeadline
+    //! (subject also to having enough peers - see HasEnoughPeersForReady).
+    int64_t nWarmupDeadline{0};
+    //! Backstop retirement time, enforced regardless of state - covers a
+    //! slot that warms up but is never selected for use.
+    int64_t nHardExpiryTime{0};
+    //! Set when the slot transitions to ACTIVE (selected for a locally-
+    //! originated transaction relay); the slot is retired once now() is
+    //! past this AND state == ACTIVE. Meaningless while WARMING/READY.
+    int64_t nDrainDeadline{0};
+    //! Number of locally-originated transactions relayed through this
+    //! slot since it was last (re)generated. 0 while READY; becomes 1 the
+    //! moment the slot is selected (burn-after-use).
+    uint32_t nLocalRelayCount{0};
+    //! Bumped every time this slot index is retired and regenerated, so a
+    //! CNode tagged with a stale (idx, generation) pair from before a
+    //! rotation is never confused with the slot's current identity.
+    uint32_t nGeneration{0};
+    //! Address this slot is currently advertising via AddLocal (if any),
+    //! tracked here (rather than re-querying the Session) so retirement
+    //! can RemoveLocal() it without needing new Session accessors.
+    CService lastAdvertisedAddr;
+    //! Number of currently-connected peers (inbound accepted or outbound
+    //! dialed) tied to this slot - maintained by the accept/dial paths,
+    //! consulted by the WARMING->READY transition and by relay selection.
+    int nPeerCount{0};
+};
+
+extern std::vector<I2PPoolIdentitySlot> g_i2p_relay_pool;
+extern CCriticalSection cs_i2p_relay_pool;
 
 /** Subversion as sent to the P2P network in `version` messages */
 extern std::string strSubVersion;
@@ -360,6 +438,11 @@ public:
     // is verifiably a Tor onion-service peer, as opposed to just having a
     // loopback addr for some other reason.
     bool m_inbound_onion{false};
+    // Index into g_i2p_relay_pool this connection is tied to, or -1 if
+    // this isn't an I2P relay-pool connection (either not I2P at all, or
+    // I2P via the node's normal/permanent identity rather than the pool).
+    int m_i2p_pool_idx{-1};
+    uint32_t m_i2p_pool_generation{0};
     uint64_t m_addr_processed{0};
     uint64_t m_addr_rate_limited{0};
     // Network the peer's address belongs to (ipv4, ipv6, onion, i2p, ...)
@@ -522,6 +605,18 @@ public:
      * connecting via loopback. Always false for outbound connections.
      */
     bool m_inbound_onion{false};
+
+    /**
+     * Index into g_i2p_relay_pool this connection (inbound or outbound) is
+     * tied to, or -1 if this isn't an I2P relay-pool connection - either
+     * not I2P at all, or I2P via the node's normal/permanent identity
+     * (m_i2p_sam_session) rather than the burn-after-use pool. Peers
+     * tagged here are only ever used as relay targets for locally-
+     * originated transactions, never for general P2P duty differently
+     * than any other peer.
+     */
+    int m_i2p_pool_idx{-1};
+    uint32_t m_i2p_pool_generation{0};
 
 protected:
 
@@ -943,6 +1038,59 @@ int GetPrivacyPeerCount();
 //! automatically once a privacy peer connects, or via the wallet's
 //! periodic rebroadcast.
 bool ShouldRestrictRelayToPrivacyPeers(bool fLocalOrigin, bool fPrivateTxRelayEnabled, int nPrivacyPeers, bool fAllowFallback);
+
+//! Compute a new backstop-expiry timestamp for an I2P relay-pool identity
+//! being (re)generated at nNow, drawn from [nNow + I2P_POOL_MIN_LIFETIME,
+//! nNow + I2P_POOL_MAX_LIFETIME] using nRandSource, then pushed out if
+//! necessary so it lands at least I2P_POOL_MIN_STAGGER seconds from every
+//! entry in vOtherExpiries (the current expiry of every other live pool
+//! slot) - actively enforced, not left to chance, so the pool can never
+//! have multiple identities expire close together. If satisfying the
+//! stagger margin would push the result outside the lifetime window, the
+//! lifetime floor/ceiling takes priority (documented trade-off - see
+//! net.cpp). nRandSource is an injected random value (not read internally)
+//! so this function is pure and deterministic for testing.
+int64_t ComputeI2PPoolStaggeredExpiry(int64_t nNow, const std::vector<int64_t>& vOtherExpiries, int64_t nRandSource);
+
+//! Per-slot info consulted by SelectI2PPoolIdentityForRelay(); mirrors the
+//! fields of I2PPoolIdentitySlot that matter for selection, so the
+//! selection algorithm can be tested without constructing real slots.
+struct I2PPoolSlotSelectionInfo {
+    I2PPoolIdentityState state;
+    int nPeerCount;
+    //! Only meaningful when state == ACTIVE; used to find the
+    //! least-recently-activated slot under degradation (smallest deadline
+    //! drained soonest, i.e. was activated first).
+    int64_t nDrainDeadline;
+};
+
+//! Select which I2P relay-pool slot (by index into vSlots) a locally-
+//! originated transaction should be relayed through. Prefers a READY slot
+//! with at least one peer (round-robin among ties via nRoundRobinCounter);
+//! if none is available, degrades to the least-recently-activated ACTIVE
+//! slot with at least one peer (reuse rather than starve); returns -1 if
+//! the whole pool currently has no usable slot (caller falls through to
+//! the existing ShouldRestrictRelayToPrivacyPeers()/fallback logic).
+int SelectI2PPoolIdentityForRelay(const std::vector<I2PPoolSlotSelectionInfo>& vSlots, uint32_t nRoundRobinCounter);
+
+//! Whether an I2P relay-pool identity should be retired now: either its
+//! hard backstop expiry has passed (regardless of state - covers a slot
+//! that warmed up but was never selected), or it's ACTIVE and past its
+//! post-selection drain deadline.
+bool ShouldRetireI2PPoolIdentity(I2PPoolIdentityState state, int64_t nHardExpiryTime, int64_t nDrainDeadline, int64_t nNow);
+
+//! Whether a WARMING I2P relay-pool identity has satisfied both conditions
+//! to become READY: its warmup deadline has passed, and it has
+//! accumulated enough peers to actually be useful for a relay.
+bool ShouldPromoteI2PPoolIdentityToReady(int64_t nWarmupDeadline, int nPeerCount, int64_t nNow, int nMinPeersForReady);
+
+//! Whether a CNode tagged with (nodePoolIdx, nodePoolGeneration) should be
+//! disconnected as part of retiring pool slot rotatingIdx at its current
+//! generation nCurrentGeneration. The generation check (beyond just the
+//! index match) documents intent and guards against a CNode carrying a
+//! stale tag from a slot's previous lifetime being mismatched with its
+//! current one.
+bool ShouldDisconnectForI2PPoolRotation(int nodePoolIdx, uint32_t nodePoolGeneration, int rotatingIdx, uint32_t nCurrentGeneration);
 
 /** Access to the (IP) address database (peers.dat) */
 class CAddrDB

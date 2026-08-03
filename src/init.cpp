@@ -486,6 +486,9 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-maxinboundfromip=<n>", strprintf(_("Maximum number of inbound connections accepted from a single source IP; does not apply to peers connecting via a Tor hidden service (default: %d)"), DEFAULT_MAX_INBOUND_FROMIP));
     strUsage += HelpMessageOpt("-privatetxrelay", strprintf(_("Relay locally-originated transactions only to privacy peers (outbound Tor, inbound/outbound I2P), to avoid a clearnet IP being observed as a transaction's source (default: %d)"), DEFAULT_PRIVATE_TX_RELAY));
     strUsage += HelpMessageOpt("-privatetxrelayfallback", strprintf(_("When -privatetxrelay is enabled and no privacy peer is currently connected, fall back to relaying locally-originated transactions via all peers instead of not relaying them this round (default: %d)"), DEFAULT_PRIVATE_TX_RELAY_FALLBACK));
+    strUsage += HelpMessageOpt("-i2pidentityrotation", strprintf(_("Maintain a pool of short-lived, burn-after-use I2P identities for relaying locally-originated transactions, separate from the node's normal (permanent) I2P identity, to prevent long-term transaction linkability (default: %d)"), DEFAULT_I2P_IDENTITY_ROTATION));
+    strUsage += HelpMessageOpt("-i2pidentitypoolmin=<n>", strprintf(_("Minimum number of warmed, ready I2P relay identities to keep in reserve (default: %d)"), DEFAULT_I2P_POOL_MIN_RESERVE));
+    strUsage += HelpMessageOpt("-i2pidentitypoolmax=<n>", strprintf(_("Maximum number of concurrent I2P relay identities (default: %d)"), DEFAULT_I2P_POOL_MAX_SIZE));
     strUsage += HelpMessageOpt("-maxreceivebuffer=<n>", strprintf(_("Maximum per-connection receive buffer, <n>*1000 bytes (default: %u)"), 5000));
     strUsage += HelpMessageOpt("-maxsendbuffer=<n>", strprintf(_("Maximum per-connection send buffer, <n>*1000 bytes (default: %u)"), 1000));
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
@@ -1356,6 +1359,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     nMaxInboundFromIP = std::max(0, (int)GetArg("-maxinboundfromip", DEFAULT_MAX_INBOUND_FROMIP));
     fPrivateTxRelay = GetBoolArg("-privatetxrelay", DEFAULT_PRIVATE_TX_RELAY);
     fPrivateTxRelayFallback = GetBoolArg("-privatetxrelayfallback", DEFAULT_PRIVATE_TX_RELAY_FALLBACK);
+    fI2PIdentityRotation = GetBoolArg("-i2pidentityrotation", DEFAULT_I2P_IDENTITY_ROTATION);
+    nI2PPoolMinReserve = std::max(0, (int)GetArg("-i2pidentitypoolmin", DEFAULT_I2P_POOL_MIN_RESERVE));
+    nI2PPoolMaxSize = std::max(1, (int)GetArg("-i2pidentitypoolmax", DEFAULT_I2P_POOL_MAX_SIZE));
+    if (nI2PPoolMinReserve > nI2PPoolMaxSize)
+        nI2PPoolMinReserve = nI2PPoolMaxSize;
     nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS)), 0);
     int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS);
     //fprintf(stderr,"nMaxConnections %d FD_SETSIZE.%d nBind.%d expr.%d \n",nMaxConnections,FD_SETSIZE,nBind,(int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS));

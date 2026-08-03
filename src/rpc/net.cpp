@@ -141,6 +141,8 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "    \"subver\": \"/MagicBean:x.y.z[-v]/\",  (string) The string version\n"
             "    \"inbound\": true|false,     (boolean) Inbound (true) or Outbound (false)\n"
             "    \"inbound_onion\": true|false, (boolean, only for inbound peers) Whether this connection was accepted on the dedicated Tor listener, i.e. is a verified Tor hidden-service peer\n"
+            "    \"i2p_identity\": \"xxx\",     (string, only for I2P peers) Which local I2P identity this connection is tied to: \"primary\" (the node's permanent identity) or \"pool-N\" (burn-after-use relay-pool slot N, used only for locally-originated transaction relay)\n"
+            "    \"i2p_pool_idx\": n,         (numeric, only present for I2P relay-pool peers) Index of the burn-after-use I2P identity this connection is tied to; absent for peers on the node's normal I2P identity or any non-I2P peer\n"
             "    \"startingheight\": n,       (numeric) The starting height (block) of the peer\n"
             "    \"banscore\": n,             (numeric) The ban score\n"
             "    \"synced_headers\": n,       (numeric) The last header we have in common with this peer\n"
@@ -201,6 +203,10 @@ UniValue getpeerinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("inbound", stats.fInbound));
         if (stats.fInbound)
             obj.push_back(Pair("inbound_onion", stats.m_inbound_onion));
+        if (stats.m_network == "i2p")
+            obj.push_back(Pair("i2p_identity", stats.m_i2p_pool_idx >= 0 ? strprintf("pool-%d", stats.m_i2p_pool_idx) : "primary"));
+        if (stats.m_i2p_pool_idx >= 0)
+            obj.push_back(Pair("i2p_pool_idx", stats.m_i2p_pool_idx));
         obj.push_back(Pair("startingheight", stats.nStartingHeight));
         if (fStateStats) {
             obj.push_back(Pair("banscore", statestats.nMisbehavior));

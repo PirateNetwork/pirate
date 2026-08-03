@@ -729,6 +729,44 @@ TEST_F(net_tests_bitcoin, ShouldRejectForInboundFromIPCap_ExemptsOnionListenerOn
     EXPECT_FALSE(ShouldRejectForInboundFromIPCap(kCap + 5, kCap, /* fOnionListener */ true));
 }
 
+// Non-I2P connections must count toward the per-source-IP cap exactly as
+// before - one local identity, one global per-remote-address total,
+// regardless of whatever pool index/generation values happen to be passed
+// (which for a non-I2P peer are always the "not pool" defaults anyway).
+TEST_F(net_tests_bitcoin, ShouldCountTowardInboundFromIPCap_NonI2PAlwaysCounts)
+{
+    EXPECT_TRUE(ShouldCountTowardInboundFromIPCap(false, -1, 0, -1, 0));
+    EXPECT_TRUE(ShouldCountTowardInboundFromIPCap(false, 3, 7, 5, 2));
+}
+
+// I2P connections must be scoped per local identity: an existing peer only
+// counts against a new connection attempt if both are on the same pool slot
+// (primary identity is idx -1) *and* the same generation of that slot - a
+// remote peer already connected to our primary identity, or to a different
+// pool slot, must not count against a new connection to some other local
+// I2P identity, since that's exactly the multi-identity behavior the
+// relay-pool design depends on.
+TEST_F(net_tests_bitcoin, ShouldCountTowardInboundFromIPCap_I2PScopedPerIdentity)
+{
+    // Same identity (both primary, idx -1): counts.
+    EXPECT_TRUE(ShouldCountTowardInboundFromIPCap(true, -1, 0, -1, 0));
+    // Same pool slot, same generation: counts.
+    EXPECT_TRUE(ShouldCountTowardInboundFromIPCap(true, 0, 4, 0, 4));
+
+    // Existing peer on primary, new connection targeting a pool slot: does
+    // not count against each other.
+    EXPECT_FALSE(ShouldCountTowardInboundFromIPCap(true, -1, 0, 0, 0));
+    EXPECT_FALSE(ShouldCountTowardInboundFromIPCap(true, 0, 0, -1, 0));
+
+    // Different pool slots: does not count.
+    EXPECT_FALSE(ShouldCountTowardInboundFromIPCap(true, 0, 0, 1, 0));
+
+    // Same slot index but different generation - the old identity was
+    // retired and the index reused for a brand new identity; a lingering
+    // peer from the old generation must not count against the new one.
+    EXPECT_FALSE(ShouldCountTowardInboundFromIPCap(true, 2, 1, 2, 2));
+}
+
 // A local (loopback) inbound connection that did NOT arrive via the
 // dedicated Tor listener must be hard-rejected unless the operator opted in
 // with -allowlocalip; a genuine Tor peer or a non-local address must
@@ -811,4 +849,198 @@ TEST_F(net_tests_bitcoin, ShouldRestrictRelayToPrivacyPeers_Behavior)
     // ...but stay restricted (relay to nobody this round, rather than ever
     // touching a clearnet peer) when fallback has been explicitly disabled.
     EXPECT_TRUE(ShouldRestrictRelayToPrivacyPeers(/* fLocalOrigin */ true, /* fEnabled */ true, /* nPeers */ 0, /* fAllowFallback */ false));
+}
+
+// I2P relay pool: burn-after-use identities used only for relaying
+// locally-originated transactions - see the "Rotating burn-after-use I2P
+// identities for transaction relay" design. These tests cover the pure
+// scheduling/selection algorithms in isolation; the actual pool lifecycle
+// (real SAM sessions, sockets, threads) is exercised by running a node,
+// not by gtest - see net.cpp for how these functions are used.
+
+static int64_t AbsDiff(int64_t a, int64_t b)
+{
+    return a >= b ? a - b : b - a;
+}
+
+TEST_F(net_tests_bitcoin, ComputeI2PPoolStaggeredExpiry_Bootstrap)
+{
+    const int64_t nNow = 1000000;
+    const int64_t nMin = nNow + I2P_POOL_MIN_LIFETIME;
+    const int64_t nMax = nNow + I2P_POOL_MAX_LIFETIME;
+
+    // No other identities yet (pool startup): result is unconstrained
+    // except by the lifetime window itself, for any random draw.
+    for (int64_t nRandSource : {(int64_t)0, (int64_t)10000, (int64_t)21599}) {
+        int64_t result = ComputeI2PPoolStaggeredExpiry(nNow, {}, nRandSource);
+        EXPECT_GE(result, nMin);
+        EXPECT_LE(result, nMax);
+    }
+}
+
+TEST_F(net_tests_bitcoin, ComputeI2PPoolStaggeredExpiry_AlreadySafeIsUnmodified)
+{
+    const int64_t nNow = 1000000;
+    const int64_t nMin = nNow + I2P_POOL_MIN_LIFETIME;
+
+    // candidate = nMin + 10800; nearest neighbor is far enough away already.
+    int64_t nOther = nMin;
+    int64_t result = ComputeI2PPoolStaggeredExpiry(nNow, {nOther}, /* nRandSource */ 10800);
+    EXPECT_EQ(result, nMin + 10800);
+}
+
+TEST_F(net_tests_bitcoin, ComputeI2PPoolStaggeredExpiry_PushesAwayFromCollision)
+{
+    const int64_t nNow = 1000000;
+    const int64_t nMin = nNow + I2P_POOL_MIN_LIFETIME;
+
+    // Push downward: candidate (nMin+5000) collides with a neighbor just
+    // above it; must be pushed below the neighbor by exactly the margin.
+    {
+        int64_t nOther = nMin + 5400; // distance from raw candidate = 400
+        int64_t result = ComputeI2PPoolStaggeredExpiry(nNow, {nOther}, /* nRandSource */ 5000);
+        EXPECT_EQ(result, nOther - I2P_POOL_MIN_STAGGER);
+        EXPECT_GE(AbsDiff(result, nOther), I2P_POOL_MIN_STAGGER);
+    }
+
+    // Push upward: candidate (nMin+10000) collides with a neighbor just
+    // below it; must be pushed above the neighbor by exactly the margin.
+    {
+        int64_t nOther = nMin + 8400; // distance from raw candidate = 1600
+        int64_t result = ComputeI2PPoolStaggeredExpiry(nNow, {nOther}, /* nRandSource */ 10000);
+        EXPECT_EQ(result, nOther + I2P_POOL_MIN_STAGGER);
+        EXPECT_GE(AbsDiff(result, nOther), I2P_POOL_MIN_STAGGER);
+    }
+}
+
+TEST_F(net_tests_bitcoin, ComputeI2PPoolStaggeredExpiry_LifetimeFloorTakesPriority)
+{
+    const int64_t nNow = 1000000;
+    const int64_t nMin = nNow + I2P_POOL_MIN_LIFETIME;
+    const int64_t nMax = nNow + I2P_POOL_MAX_LIFETIME;
+
+    // Raw candidate lands exactly at the floor; a neighbor just above it
+    // would normally push the candidate below the floor - the floor must
+    // win instead (documented trade-off: see net.cpp).
+    int64_t nOther = nMin + 1000;
+    int64_t result = ComputeI2PPoolStaggeredExpiry(nNow, {nOther}, /* nRandSource */ 0);
+    EXPECT_EQ(result, nMin);
+    EXPECT_GE(result, nMin);
+    EXPECT_LE(result, nMax);
+}
+
+TEST_F(net_tests_bitcoin, ComputeI2PPoolStaggeredExpiry_MultipleNeighbors)
+{
+    const int64_t nNow = 1000000;
+    const int64_t nMin = nNow + I2P_POOL_MIN_LIFETIME;
+
+    // Candidate collides with the first neighbor in the list; after being
+    // pushed away from it, must still respect the margin against the
+    // second (unrelated) neighbor too.
+    std::vector<int64_t> vOthers = {nMin + 5400, nMin + 50000};
+    int64_t result = ComputeI2PPoolStaggeredExpiry(nNow, vOthers, /* nRandSource */ 5000);
+    for (int64_t nOther : vOthers) {
+        EXPECT_GE(AbsDiff(result, nOther), I2P_POOL_MIN_STAGGER)
+            << "result " << result << " too close to neighbor " << nOther;
+    }
+}
+
+TEST_F(net_tests_bitcoin, SelectI2PPoolIdentityForRelay_Behavior)
+{
+    using State = I2PPoolIdentityState;
+
+    // Nothing usable at all.
+    {
+        std::vector<I2PPoolSlotSelectionInfo> vSlots = {
+            {State::WARMING, 5, 0},
+            {State::READY, 0, 0},   // READY but no peers - not eligible
+            {State::ACTIVE, 0, 100}, // ACTIVE but no peers - not eligible
+        };
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 0), -1);
+    }
+
+    // A single READY-with-peers slot is selected.
+    {
+        std::vector<I2PPoolSlotSelectionInfo> vSlots = {
+            {State::WARMING, 5, 0},
+            {State::READY, 3, 0},
+        };
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 0), 1);
+    }
+
+    // Multiple READY-with-peers slots: round-robin via the counter.
+    {
+        std::vector<I2PPoolSlotSelectionInfo> vSlots = {
+            {State::READY, 1, 0},
+            {State::READY, 1, 0},
+            {State::READY, 1, 0},
+        };
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 0), 0);
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 1), 1);
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 2), 2);
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 3), 0); // wraps around
+    }
+
+    // READY-with-peers is always preferred over ACTIVE-with-peers, even if
+    // the ACTIVE slot has an earlier (more urgent-looking) drain deadline.
+    {
+        std::vector<I2PPoolSlotSelectionInfo> vSlots = {
+            {State::ACTIVE, 5, /* nDrainDeadline */ 1},
+            {State::READY, 5, 0},
+        };
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 0), 1);
+    }
+
+    // No READY-with-peers slot: degrade to the least-recently-activated
+    // (smallest drain deadline) ACTIVE-with-peers slot.
+    {
+        std::vector<I2PPoolSlotSelectionInfo> vSlots = {
+            {State::ACTIVE, 2, /* nDrainDeadline */ 500},
+            {State::ACTIVE, 2, /* nDrainDeadline */ 100},
+            {State::ACTIVE, 2, /* nDrainDeadline */ 300},
+        };
+        EXPECT_EQ(SelectI2PPoolIdentityForRelay(vSlots, 0), 1);
+    }
+}
+
+TEST_F(net_tests_bitcoin, ShouldRetireI2PPoolIdentity_Behavior)
+{
+    using State = I2PPoolIdentityState;
+    const int64_t nNow = 1000000;
+
+    // Hard expiry is a backstop enforced regardless of state.
+    EXPECT_TRUE(ShouldRetireI2PPoolIdentity(State::WARMING, /* nHardExpiryTime */ nNow - 1, /* nDrainDeadline */ 0, nNow));
+    EXPECT_TRUE(ShouldRetireI2PPoolIdentity(State::READY, /* nHardExpiryTime */ nNow - 1, /* nDrainDeadline */ 0, nNow));
+    EXPECT_FALSE(ShouldRetireI2PPoolIdentity(State::WARMING, /* nHardExpiryTime */ nNow + 1, /* nDrainDeadline */ 0, nNow));
+
+    // Drain deadline only matters (and only retires) while ACTIVE.
+    EXPECT_TRUE(ShouldRetireI2PPoolIdentity(State::ACTIVE, /* nHardExpiryTime */ nNow + 1000, /* nDrainDeadline */ nNow - 1, nNow));
+    EXPECT_FALSE(ShouldRetireI2PPoolIdentity(State::ACTIVE, /* nHardExpiryTime */ nNow + 1000, /* nDrainDeadline */ nNow + 1, nNow));
+    // A READY slot's stale/irrelevant drain deadline must never trigger
+    // retirement on its own - only the hard expiry applies to it.
+    EXPECT_FALSE(ShouldRetireI2PPoolIdentity(State::READY, /* nHardExpiryTime */ nNow + 1000, /* nDrainDeadline */ nNow - 1, nNow));
+}
+
+TEST_F(net_tests_bitcoin, ShouldPromoteI2PPoolIdentityToReady_Behavior)
+{
+    const int64_t nNow = 1000000;
+    const int nMinPeers = 2;
+
+    EXPECT_FALSE(ShouldPromoteI2PPoolIdentityToReady(/* nWarmupDeadline */ nNow + 1, /* nPeerCount */ 5, nNow, nMinPeers))
+        << "warmup not yet elapsed, even with plenty of peers";
+    EXPECT_FALSE(ShouldPromoteI2PPoolIdentityToReady(/* nWarmupDeadline */ nNow - 1, /* nPeerCount */ 1, nNow, nMinPeers))
+        << "warmup elapsed but not enough peers yet";
+    EXPECT_TRUE(ShouldPromoteI2PPoolIdentityToReady(/* nWarmupDeadline */ nNow - 1, /* nPeerCount */ 2, nNow, nMinPeers));
+    EXPECT_TRUE(ShouldPromoteI2PPoolIdentityToReady(/* nWarmupDeadline */ nNow, /* nPeerCount */ 5, nNow, nMinPeers));
+}
+
+TEST_F(net_tests_bitcoin, ShouldDisconnectForI2PPoolRotation_Behavior)
+{
+    EXPECT_TRUE(ShouldDisconnectForI2PPoolRotation(/* nodeIdx */ 2, /* nodeGen */ 5, /* rotatingIdx */ 2, /* curGen */ 5));
+    EXPECT_FALSE(ShouldDisconnectForI2PPoolRotation(/* nodeIdx */ 2, /* nodeGen */ 4, /* rotatingIdx */ 2, /* curGen */ 5))
+        << "stale generation from before this slot's current lifetime must not match";
+    EXPECT_FALSE(ShouldDisconnectForI2PPoolRotation(/* nodeIdx */ 1, /* nodeGen */ 5, /* rotatingIdx */ 2, /* curGen */ 5))
+        << "different slot index must never match";
+    EXPECT_FALSE(ShouldDisconnectForI2PPoolRotation(/* nodeIdx */ -1, /* nodeGen */ 0, /* rotatingIdx */ 2, /* curGen */ 5))
+        << "non-pool (primary identity or non-I2P) connection must never match";
 }
