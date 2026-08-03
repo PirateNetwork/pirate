@@ -5,6 +5,8 @@
 
 #include "util.h"
 
+#include "komodo_bitcoind.h"
+
 #include "clientversion.h"
 #include "primitives/transaction.h"
 #include "random.h"
@@ -13,6 +15,7 @@
 #include "utilmoneystr.h"
 #include "gtest/gtestutils.h"
 
+#include <cstring>
 #include <stdint.h>
 #include <vector>
 
@@ -501,5 +504,40 @@ TEST_F(util_tests_bitcoin, test_ParseFixedPoint)
     EXPECT_TRUE(!ParseFixedPoint("1.1e", 8, &amount));
     EXPECT_TRUE(!ParseFixedPoint("1.1e-", 8, &amount));
     EXPECT_TRUE(!ParseFixedPoint("1.", 8, &amount));
+}
+
+TEST_F(util_tests_bitcoin, init_string_InitializesEmptyNullTerminatedString)
+{
+    struct return_string s;
+    init_string(&s);
+    EXPECT_EQ(s.len, 0);
+    ASSERT_NE(s.ptr, nullptr);
+    EXPECT_EQ(s.ptr[0], '\0');
+    free(s.ptr);
+}
+
+// accumulatebytes is wired up as a libcurl CURLOPT_WRITEFUNCTION callback
+// (see komodo_bitcoind.cpp) and is called once per received chunk, so it
+// must correctly append (not overwrite) across multiple calls and keep the
+// buffer null-terminated throughout - both real requirements for how curl
+// actually drives this function, not just a synthetic single-shot check.
+TEST_F(util_tests_bitcoin, accumulatebytes_AppendsAcrossMultipleCallsAndNullTerminates)
+{
+    struct return_string s;
+    init_string(&s);
+
+    const char chunk1[] = "hello ";
+    size_t ret1 = accumulatebytes((void*)chunk1, 1, strlen(chunk1), &s);
+    EXPECT_EQ(ret1, strlen(chunk1));
+    EXPECT_EQ(s.len, strlen(chunk1));
+    EXPECT_STREQ(s.ptr, "hello ");
+
+    const char chunk2[] = "world";
+    size_t ret2 = accumulatebytes((void*)chunk2, 1, strlen(chunk2), &s);
+    EXPECT_EQ(ret2, strlen(chunk2));
+    EXPECT_EQ(s.len, strlen(chunk1) + strlen(chunk2));
+    EXPECT_STREQ(s.ptr, "hello world");
+
+    free(s.ptr);
 }
 

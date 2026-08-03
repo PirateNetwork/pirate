@@ -75,6 +75,7 @@ size_t accumulatebytes(void *ptr,size_t size,size_t nmemb,struct return_string *
     {
         fprintf(stderr, "accumulate realloc() failed\n");
         StartShutdown();
+        return 0;
     }
     memcpy(s->ptr+s->len,ptr,size*nmemb);
     s->ptr[new_len] = '\0';
