@@ -117,6 +117,27 @@ Peer-to-peer networking and transaction privacy
   fields for diagnosing peer connectivity and Tor/I2P status directly, and
   `getnetworkinfo` gained `privatetxrelay`, `privatetxrelayfallback`, and
   `privacypeers` fields.
+- Locally-originated transactions relayed over I2P now use a rotating pool
+  of short-lived, burn-after-use identities separate from the node's
+  permanent I2P identity, so a colluding I2P peer can no longer link
+  multiple transactions to the same persistent destination over time. Each
+  identity is warmed (tunnels built, peers accumulated) before it's ever
+  selected, is retired shortly after relaying one transaction, and carries
+  a staggered backstop expiry so it isn't kept alive indefinitely if never
+  used. The node's existing permanent I2P identity is untouched and
+  continues to serve general connectivity; it is never used to relay a
+  locally-originated transaction. See
+  `doc/privacy-network-layer-whitepaper.md` for the full design and a
+  comparison against how other privacy-focused projects address the same
+  problem.
+- Fixed the per-source-IP inbound connection cap to be scoped per local
+  I2P identity rather than shared globally across all of a node's I2P
+  identities — a remote peer connecting to both the primary identity and
+  a pool identity is expected multi-identity behavior, not abuse, and no
+  longer counts against itself.
+- `getpeerinfo` and the Qt Peers detail pane gained an `i2p_identity`
+  field (`primary` or `pool-N`) showing which local I2P identity a
+  connection belongs to.
 
 Test suite consolidation
 --------------------------
@@ -202,6 +223,13 @@ The following flags are new relative to the master branch.
 - `-allowlocalip` (default: 0) — allow `-addnode` connections to local
   addresses (127.x.x.x, ::1), and allow inbound connections from local
   addresses other than via a Tor hidden service. For testing only.
+- `-i2pidentityrotation` (default: 1) — maintain a pool of short-lived,
+  burn-after-use I2P identities for relaying locally-originated
+  transactions, separate from the node's normal permanent I2P identity.
+- `-i2pidentitypoolmin=<n>` (default: 12) — minimum number of warmed,
+  ready I2P relay identities to keep in reserve.
+- `-i2pidentitypoolmax=<n>` (default: 16) — maximum number of concurrent
+  I2P relay identities.
 
 **Bundled Tor and I2P process management:**
 
@@ -262,6 +290,8 @@ Changelog
 =========
 
 Cryptoforge:
+  Add rotating burn-after-use I2P identities for local tx relay.
+  (b80ebffb3)
   Default -usedpowconfs to true. (a65769b05)
   Restrict locally-originated transaction relay to privacy peers.
   (c89cea655)
