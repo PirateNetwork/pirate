@@ -169,6 +169,21 @@ CCriticalSection cs_nLastNodeId;
 
 static CSemaphore *semOutbound = NULL;
 static CSemaphore *semAddNodeOutbound = NULL;
+//! Dedicated outbound-connection budget for the I2P relay pool's top-up
+//! dialing (see ThreadI2PPoolTopUp), separate from the regular outbound
+//! semaphore (semOutbound). ThreadOpenConnections() holds a *blocking*
+//! wait on semOutbound and runs on a much tighter cadence than the pool's
+//! 30s tick with only a non-blocking (fTry) grant attempt, so on a
+//! healthy, well-peered node it can starve the pool's own dialing
+//! indefinitely by winning every freed slot first - reserving a separate
+//! budget guarantees the pool can always attempt to dial regardless of
+//! how saturated ordinary peer discovery is, mirroring the existing
+//! semAddNodeOutbound precedent for -addnode connections.
+static CSemaphore *semI2PPoolOutbound = NULL;
+//! Actual capacity semI2PPoolOutbound was constructed with, recorded so
+//! StopNode() posts back exactly that many rather than recomputing the
+//! sizing formula a second time and risking the two drifting apart.
+static int nI2PPoolOutboundReserved = 0;
 static boost::condition_variable messageHandlerCondition;
 
 // Denial-of-service detection/prevention
@@ -2865,10 +2880,13 @@ void ThreadI2PPoolCheck(size_t idx)
 //! TickI2PRelayPool() (a lightweight scheduler callback) since a SAM
 //! Connect() call can block for a real connection attempt - doing this
 //! work on the scheduler thread would stall other scheduled tasks (e.g.
-//! DumpAddresses). Shares the regular outbound-connection semaphore
-//! (semOutbound) rather than a dedicated budget, so this can never exceed
-//! the node's overall outbound connection cap; ThreadOpenConnections()'s
-//! own diversity bookkeeping is untouched by this - it's a separate,
+//! DumpAddresses). Draws from its own dedicated semaphore
+//! (semI2PPoolOutbound) rather than the regular outbound one (semOutbound)
+//! - ThreadOpenConnections() holds a blocking wait on semOutbound and
+//! polls far more often than this thread's 30s tick, so sharing it would
+//! let ordinary peer discovery win every freed slot first and starve pool
+//! warmup on any well-connected node; ThreadOpenConnections()'s own
+//! diversity bookkeeping is untouched by this - it's a separate,
 //! smaller, targeted dialing effort alongside it, not a modification to
 //! the main outbound-connection loop.
 void ThreadI2PPoolTopUp()
@@ -2880,7 +2898,7 @@ void ThreadI2PPoolTopUp()
         if (!fI2PIdentityRotation)
             continue;
 
-        std::vector<size_t> vNeedsPeers;
+        std::vector<std::pair<size_t, uint32_t>> vNeedsPeers;
         {
             LOCK(cs_i2p_relay_pool);
             for (size_t idx = 0; idx < g_i2p_relay_pool.size(); idx++) {
@@ -2888,7 +2906,7 @@ void ThreadI2PPoolTopUp()
                 if (slot.session != nullptr &&
                     (slot.state == I2PPoolIdentityState::WARMING || slot.state == I2PPoolIdentityState::READY) &&
                     slot.nPeerCount < I2P_POOL_MIN_PEERS_FOR_READY) {
-                    vNeedsPeers.push_back(idx);
+                    vNeedsPeers.push_back({idx, slot.nGeneration});
                 }
             }
         }
@@ -2906,10 +2924,12 @@ void ThreadI2PPoolTopUp()
             std::swap(vNeedsPeers[i - 1], vNeedsPeers[j]);
         }
 
-        for (size_t idx : vNeedsPeers) {
+        for (const auto& needsPeers : vNeedsPeers) {
+            size_t idx = needsPeers.first;
+            uint32_t generation = needsPeers.second;
             boost::this_thread::interruption_point();
 
-            if (semOutbound == nullptr)
+            if (semI2PPoolOutbound == nullptr)
                 break;
 
             CAddress addrConnect;
@@ -2918,11 +2938,21 @@ void ThreadI2PPoolTopUp()
                 CAddrInfo addr = addrman.Select();
                 if (!addr.IsValid() || addr.GetNetwork() != NET_I2P || IsLocal(addr))
                     continue;
+                // Only exclude this candidate if it's already connected to
+                // *this same slot's current generation* - a remote address
+                // already connected via the primary identity, or via a
+                // different pool slot, is not "already connected" from
+                // this slot's perspective. Dialing it anyway is exactly
+                // the multi-identity behavior the pool exists for, and
+                // excluding it here would needlessly compound I2P address
+                // scarcity (mirrors ShouldCountTowardInboundFromIPCap's
+                // reasoning for the inbound per-source-IP cap).
                 bool fAlreadyConnected = false;
                 {
                     LOCK(cs_vNodes);
                     for (CNode* pnode : vNodes) {
-                        if (static_cast<CService>(pnode->addr) == static_cast<CService>(addr)) {
+                        if (static_cast<CService>(pnode->addr) == static_cast<CService>(addr) &&
+                            ShouldDisconnectForI2PPoolRotation(pnode->m_i2p_pool_idx, pnode->m_i2p_pool_generation, (int)idx, generation)) {
                             fAlreadyConnected = true;
                             break;
                         }
@@ -2938,9 +2968,15 @@ void ThreadI2PPoolTopUp()
                 continue;
             }
 
-            CSemaphoreGrant grant(*semOutbound, /* fTry */ true);
+            // Randomized delay before actually dialing - see
+            // I2P_POOL_TOPUP_DIAL_JITTER_MIN_MS/MAX_MS for why this can't
+            // just fire back-to-back for every needy slot in this tick.
+            MilliSleep(I2P_POOL_TOPUP_DIAL_JITTER_MIN_MS + GetRand(I2P_POOL_TOPUP_DIAL_JITTER_MAX_MS - I2P_POOL_TOPUP_DIAL_JITTER_MIN_MS));
+            boost::this_thread::interruption_point();
+
+            CSemaphoreGrant grant(*semI2PPoolOutbound, /* fTry */ true);
             if (!grant) {
-                LogPrint("net", "I2P pool: top-up for slot %d found %s but no free outbound slot\n", (int)idx, addrConnect.ToString());
+                LogPrint("net", "I2P pool: top-up for slot %d found %s but no free I2P pool outbound slot\n", (int)idx, addrConnect.ToString());
                 continue;
             }
 
@@ -3220,16 +3256,43 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
     }
 
+    // Every pool identity needs I2P_POOL_MIN_PEERS_FOR_READY (2) live peers
+    // to reach READY, and in the worst case (poor inbound reach) both have
+    // to come from outbound dialing - so this reserves headroom for two
+    // connections per configured slot, not one. Deliberately additive
+    // alongside the regular outbound allowance rather than carved out of
+    // it (contrast MAX_ADDNODE_CONNECTIONS, which is carved out of
+    // MAX_OUTBOUND_CONNECTIONS): at current defaults, carving a 16-slot
+    // pool's worst-case reservation (32) out of a 56-slot regular budget
+    // would nearly halve the node's regular outbound peer capacity just
+    // to guarantee I2P pool dialing - trading pool starvation for
+    // degraded general connectivity/network diversity instead. Bounded by
+    // nMaxConnections so an operator running with a very small
+    // -maxconnections doesn't get a reservation request larger than the
+    // node's entire connection budget.
+    int nI2PPoolReserved = fI2PIdentityRotation
+        ? std::max(0, std::min(nI2PPoolMaxSize * I2P_POOL_MIN_PEERS_FOR_READY, nMaxConnections))
+        : 0;
+
     if (semOutbound == NULL) {
         // initialize semaphore
         int nMaxOutbound = min(MAX_REGULAR_OUTBOUND_CONNECTIONS, nMaxConnections - MAX_ADDNODE_CONNECTIONS);
         semOutbound = new CSemaphore(nMaxOutbound);
     }
-    
+
     if (semAddNodeOutbound == NULL) {
         // initialize separate semaphore for addnode connections
         int nMaxAddNodeOutbound = min(MAX_ADDNODE_CONNECTIONS, nMaxConnections);
         semAddNodeOutbound = new CSemaphore(nMaxAddNodeOutbound);
+    }
+
+    if (semI2PPoolOutbound == NULL) {
+        // initialize separate semaphore for I2P relay-pool top-up dialing,
+        // sized for every configured slot to reach READY via outbound
+        // dialing alone if it has to, so it never competes with regular
+        // peer discovery for a connection slot
+        nI2PPoolOutboundReserved = nI2PPoolReserved;
+        semI2PPoolOutbound = new CSemaphore(nI2PPoolReserved);
     }
 
     if (pnodeLocalHost == NULL) {
@@ -3347,6 +3410,10 @@ bool StopNode()
         for (int i=0; i<MAX_ADDNODE_CONNECTIONS; i++)
             semAddNodeOutbound->post();
 
+    if (semI2PPoolOutbound)
+        for (int i=0; i<nI2PPoolOutboundReserved; i++)
+            semI2PPoolOutbound->post();
+
     // The I2P SAM session is never otherwise torn down explicitly; without this it
     // only gets destroyed implicitly at process exit via the CNetCleanup static.
     m_i2p_sam_session.reset();
@@ -3393,6 +3460,8 @@ public:
         semOutbound = NULL;
         delete semAddNodeOutbound;
         semAddNodeOutbound = NULL;
+        delete semI2PPoolOutbound;
+        semI2PPoolOutbound = NULL;
         delete pnodeLocalHost;
         pnodeLocalHost = NULL;
 

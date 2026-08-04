@@ -117,6 +117,9 @@ static const int64_t I2P_POOL_MAX_LIFETIME = 30 * 60 * 60;
 static const int64_t I2P_POOL_MIN_STAGGER = 60 * 60;
 /** How often the I2P relay-pool maintenance scheduler task runs (retirement, warmup transitions, replenishment). */
 static const int64_t I2P_POOL_TICK_INTERVAL = 60;
+/** Minimum and maximum random delay, in milliseconds, inserted before each outbound dial attempt the I2P relay-pool top-up thread makes. Per-slot candidate selection is no longer globally deduplicated across identities (see ShouldDisconnectForI2PPoolRotation's use in ThreadI2PPoolTopUp) - the same well-known remote address can legitimately be selected by several different pool slots in one tick, and without this they'd all connect to it back-to-back with no delay. That's both impolite to the remote peer and a real signal for an adversary watching for several nominally-unrelated identities connecting within the same instant. */
+static const int64_t I2P_POOL_TOPUP_DIAL_JITTER_MIN_MS = 1000;
+static const int64_t I2P_POOL_TOPUP_DIAL_JITTER_MAX_MS = 6000;
 /** The period before a network upgrade activates, where connections to upgrading peers are preferred (in blocks). */
 static const int NETWORK_UPGRADE_PEER_PREFERENCE_BLOCK_PERIOD = 24 * 24 * 3;
 
