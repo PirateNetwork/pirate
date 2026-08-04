@@ -138,6 +138,34 @@ Peer-to-peer networking and transaction privacy
 - `getpeerinfo` and the Qt Peers detail pane gained an `i2p_identity`
   field (`primary` or `pool-N`) showing which local I2P identity a
   connection belongs to.
+- Fixed the I2P relay pool's outbound dialing being starved on
+  well-connected nodes: it previously shared the regular outbound
+  connection semaphore with ordinary peer discovery, which polls far
+  more aggressively and could win every freed connection slot first,
+  even when plenty of overall outbound capacity was available. The
+  pool now has its own dedicated reservation, sized for two
+  connections per configured identity rather than one, kept additive
+  alongside the regular outbound budget so it can't come at the cost
+  of general peer connectivity.
+- I2P relay-pool outbound dialing no longer excludes a candidate
+  address just because a different local identity (the primary
+  identity, or another pool slot) is already connected to it — a
+  remote peer connecting to several of a node's local identities is
+  the intended multi-identity behavior, and the old global check
+  needlessly compounded I2P address scarcity. Since the same address
+  can now legitimately be selected by more than one pool identity in
+  a given cycle, a randomized 1-6 second delay was added before each
+  dial attempt so they don't all connect to that peer back-to-back.
+- Address-manager entries that are effectively unusable (never seen
+  within a 30-day horizon, a zero or bogus timestamp, or repeated
+  connection failures with no success) are no longer selected as
+  outbound dial candidates at anywhere near the same rate as good
+  ones, and are now actively swept out of the address table on an
+  hourly schedule instead of only being evicted lazily on a bucket
+  collision that might never happen.
+- Orphaned `peers.dat.XXXX` temporary files (left behind if the
+  process is killed or crashes mid-write to the address database) are
+  now cleaned up automatically on startup.
 
 Test suite consolidation
 --------------------------
@@ -290,6 +318,11 @@ Changelog
 =========
 
 Cryptoforge:
+  Stop selecting and stop keeping terrible addrman entries.
+  (01a7ac72e)
+  Fix I2P relay-pool outbound dialing being starved. (61875fafa)
+  Fix NULL-deref crash on realloc failure in accumulatebytes.
+  (ef6df9c4a)
   Add rotating burn-after-use I2P identities for local tx relay.
   (b80ebffb3)
   Default -usedpowconfs to true. (a65769b05)
