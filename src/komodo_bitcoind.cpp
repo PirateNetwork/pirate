@@ -36,6 +36,7 @@ void init_string(struct return_string *s)
     {
         fprintf(stderr,"init_string malloc() failed\n");
         StartShutdown();
+        return;
     }
     s->ptr[0] = '\0';
 }
