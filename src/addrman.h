@@ -787,6 +787,35 @@ public:
         return fRet;
     }
 
+    //! Remove every address IsTerrible() currently flags (never seen
+    //! within ADDRMAN_HORIZON_DAYS, a zero/bogus timestamp, or repeated
+    //! failures with no success) rather than leaving them to sit in the
+    //! table indefinitely waiting for a lazy, collision-triggered
+    //! eviction that may never come for a sparsely-populated bucket.
+    //! Select_() already skips these when picking a dial candidate (see
+    //! addrman.cpp), but that alone still leaves them occupying table
+    //! space and being handed out via GetAddr_() forever. Safe to run at
+    //! any time, including on a mostly-empty or all-terrible table: an
+    //! address that's still genuinely alive gets re-added with a fresh
+    //! timestamp the next time it's seen via ADDR gossip or a direct
+    //! connection, and the fixed/DNS seed fallback in
+    //! ThreadOpenConnections already exists to repopulate the table from
+    //! scratch if it were ever emptied out entirely.
+    void SweepTerrible()
+    {
+        LOCK(cs);
+        Check();
+        const int64_t nNow = GetTime();
+        std::vector<CService> vTerrible;
+        for (const auto& entry : mapInfo) {
+            if (entry.second.IsTerrible(nNow))
+                vTerrible.push_back(entry.second);
+        }
+        Check();
+        for (const CService& addr : vTerrible)
+            Remove(addr);
+    }
+
 };
 
 #endif // BITCOIN_ADDRMAN_H

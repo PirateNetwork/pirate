@@ -398,9 +398,23 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
     const int kMaxRetries = 200000;         // magic number so unit tests can pass
     const int kRetriesBetweenSleep = 1000;
     const int kRetrySleepInterval = 100;    // milliseconds
+    // Bounded budget for skipping IsTerrible() entries outright before
+    // falling back to the existing probabilistic weighting below. Bounded
+    // rather than an unconditional hard skip because, unlike the
+    // fChanceFactor-escalating probability check, a plain "continue past
+    // every terrible entry" has no mechanism to guarantee termination if
+    // the entire table happened to be terrible - this caps how many
+    // times that can happen before falling through to the path that *is*
+    // guaranteed to terminate. In any table with a reasonable fraction of
+    // non-terrible entries this is effectively a hard exclusion; it only
+    // degrades to the old soft-preference behavior in the degenerate
+    // case where the table is almost entirely terrible.
+    const int kMaxTerribleSkips = 50;
 
     if (newOnly && nNew == 0)
         return CAddrInfo();
+
+    const int64_t nNow = GetTime();
 
     // Use a 50% chance for choosing between tried and new table entries.
     if (!newOnly &&
@@ -409,6 +423,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
         double fChanceFactor = 1.0;
         double fReachableFactor = 1.0;
         double fJustTried = 1.0;
+        int nTerribleSkips = 0;
         while (1) {
             if (ShutdownRequested()) //break loop on shutdown request
                 return CAddrInfo();
@@ -427,6 +442,10 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvTried[nKBucket][nKBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
+            if (info.IsTerrible(nNow) && nTerribleSkips < kMaxTerribleSkips) {
+                nTerribleSkips++;
+                continue;
+            }
             if (!info.IsReachableNetwork()) {
                 //deprioritize unreachable networks
                 fReachableFactor = 0.25;
@@ -444,6 +463,7 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
         double fChanceFactor = 1.0;
         double fReachableFactor = 1.0;
         double fJustTried = 1.0;
+        int nTerribleSkips = 0;
         while (1) {
             if (ShutdownRequested()) //break loop on shutdown request
                 return CAddrInfo();
@@ -462,6 +482,10 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
             int nId = vvNew[nUBucket][nUBucketPos];
             assert(mapInfo.count(nId) == 1);
             CAddrInfo& info = mapInfo[nId];
+            if (info.IsTerrible(nNow) && nTerribleSkips < kMaxTerribleSkips) {
+                nTerribleSkips++;
+                continue;
+            }
             if (!info.IsReachableNetwork()) {
                 //deprioritize unreachable networks
                 fReachableFactor = 0.25;

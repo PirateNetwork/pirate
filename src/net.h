@@ -143,7 +143,14 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 unsigned short GetListenPort();
 bool BindListenPort(const CService &bindAddr, std::string& strError, bool fWhitelisted = false);
 void LoadPeers();
+//! Whether a filename matches CAddrDB::Write()'s orphaned temp-file
+//! pattern (peers.dat.XXXX, 4 hex digits) - see LoadPeers()'s startup
+//! cleanup for why these can accumulate.
+bool IsStalePeersDatTempFilename(const std::string& filename);
 void DumpAddresses();
+//! Remove terrible (stale/never-successful) addresses from addrman - see
+//! CAddrMan::SweepTerrible() for what qualifies.
+void SweepTerribleAddresses();
 void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
 bool StopNode();
 void SocketSendData(CNode *pnode);

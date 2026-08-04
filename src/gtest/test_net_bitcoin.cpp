@@ -1044,3 +1044,24 @@ TEST_F(net_tests_bitcoin, ShouldDisconnectForI2PPoolRotation_Behavior)
     EXPECT_FALSE(ShouldDisconnectForI2PPoolRotation(/* nodeIdx */ -1, /* nodeGen */ 0, /* rotatingIdx */ 2, /* curGen */ 5))
         << "non-pool (primary identity or non-I2P) connection must never match";
 }
+
+TEST_F(net_tests_bitcoin, IsStalePeersDatTempFilename_Behavior)
+{
+    // Real orphaned temp files - see CAddrDB::Write()'s strprintf("peers.dat.%04x", ...).
+    EXPECT_TRUE(IsStalePeersDatTempFilename("peers.dat.a3f2"));
+    EXPECT_TRUE(IsStalePeersDatTempFilename("peers.dat.0000"));
+    EXPECT_TRUE(IsStalePeersDatTempFilename("peers.dat.ffff"));
+
+    // The real, current peers.dat itself must never match.
+    EXPECT_FALSE(IsStalePeersDatTempFilename("peers.dat"));
+
+    // Wrong length in either direction.
+    EXPECT_FALSE(IsStalePeersDatTempFilename("peers.dat.a3f"));
+    EXPECT_FALSE(IsStalePeersDatTempFilename("peers.dat.a3f22"));
+
+    // Unrelated files, including ones that merely start similarly, must
+    // never match.
+    EXPECT_FALSE(IsStalePeersDatTempFilename("banlist.dat"));
+    EXPECT_FALSE(IsStalePeersDatTempFilename("mempeers.dat.a3f2"));
+    EXPECT_FALSE(IsStalePeersDatTempFilename(""));
+}

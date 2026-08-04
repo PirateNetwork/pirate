@@ -222,7 +222,13 @@ namespace TestAddrmanTests {
         // Test 2: Does Addrman::Add work as expected.
         LookupHost("250.1.1.1", test_addr, false);
         CService addr1 = CService(test_addr, 8333);
-        addrman.Add(CAddress(addr1, NODE_NONE), source);
+        // Realistic (non-zero) nTime - an unset nTime defaults to 0, which
+        // IsTerrible() treats as "never seen" and Select_() now actively
+        // skips over (see addrman.cpp), unlike production addresses which
+        // always have a sane nTime by the time they reach addrman.
+        CAddress addr1_ca(addr1, NODE_NONE);
+        addr1_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr1_ca, source);
         ASSERT_TRUE(addrman.size() == 1);
         CAddrInfo addr_ret1 = addrman.Select();
         ASSERT_TRUE(addr_ret1.ToString() == "250.1.1.1:8333");
@@ -264,7 +270,11 @@ namespace TestAddrmanTests {
         // Test 7; Addr with same IP but diff port does not replace existing addr.
         LookupHost("250.1.1.1", test_addr, false);
         CService addr1 = CService(test_addr, 8333);
-        addrman.Add(CAddress(addr1, NODE_NONE), source);
+        // Realistic nTime - see addrman_simple for why an unset (0) one
+        // now matters with Select_()'s terrible-address skip.
+        CAddress addr1_ca(addr1, NODE_NONE);
+        addr1_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr1_ca, source);
         ASSERT_TRUE(addrman.size() == 1);
 
         LookupHost("250.1.1.1", test_addr, false);
@@ -297,7 +307,11 @@ namespace TestAddrmanTests {
         // Test 9: Select from new with 1 addr in new.
         LookupHost("250.1.1.1", test_addr, false);
         CService addr1 = CService(test_addr, 8333);
-        addrman.Add(CAddress(addr1, NODE_NONE), source);
+        // Realistic nTime - see addrman_simple for why an unset (0) one
+        // now matters with Select_()'s terrible-address skip.
+        CAddress addr1_ca(addr1, NODE_NONE);
+        addr1_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr1_ca, source);
         ASSERT_TRUE(addrman.size() == 1);
 
         bool newOnly = true;
@@ -317,6 +331,10 @@ namespace TestAddrmanTests {
 
 
         // Add three addresses to new table.
+        // Realistic nTime throughout (see Test 9 above) - both for
+        // correctness-realism and so Select()'s terrible-address skip
+        // doesn't burn its retry budget on every single one of the 1000
+        // Select() calls below.
         LookupHost("250.3.1.1", test_addr, false);
         CService addr2 = CService(test_addr, 8333);
         LookupHost("250.3.2.2", test_addr, false);
@@ -325,11 +343,17 @@ namespace TestAddrmanTests {
         CService addr4 = CService(test_addr, 9999);
 
         LookupHost("250.4.1.1", test_addr, false);
-        addrman.Add(CAddress(addr2, NODE_NONE), CService(test_addr, 8333));
+        CAddress addr2_ca(addr2, NODE_NONE);
+        addr2_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr2_ca, CService(test_addr, 8333));
         LookupHost("250.4.2.2", test_addr, false);
-        addrman.Add(CAddress(addr3, NODE_NONE), CService(test_addr, 8333));
+        CAddress addr3_ca(addr3, NODE_NONE);
+        addr3_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr3_ca, CService(test_addr, 8333));
         LookupHost("250.4.3.3", test_addr, false);
-        addrman.Add(CAddress(addr4, NODE_NONE), CService(test_addr, 8333));
+        CAddress addr4_ca(addr4, NODE_NONE);
+        addr4_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr4_ca, CService(test_addr, 8333));
 
         // Add three addresses to tried table.
         LookupHost("250.3.4.4", test_addr, false);
@@ -340,13 +364,19 @@ namespace TestAddrmanTests {
         CService addr7 = CService(test_addr, 8333);
 
         LookupHost("250.4.4.4", test_addr, false);
-        addrman.Add(CAddress(addr5, NODE_NONE), CService(test_addr, 8333));
+        CAddress addr5_ca(addr5, NODE_NONE);
+        addr5_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr5_ca, CService(test_addr, 8333));
         addrman.Good(CAddress(addr5, NODE_NONE));
         LookupHost("250.4.5.5", test_addr, false);
-        addrman.Add(CAddress(addr6, NODE_NONE), CService(test_addr, 8333));
+        CAddress addr6_ca(addr6, NODE_NONE);
+        addr6_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr6_ca, CService(test_addr, 8333));
         addrman.Good(CAddress(addr6, NODE_NONE));
         LookupHost("250.4.6.6", test_addr, false);
-        addrman.Add(CAddress(addr7, NODE_NONE), CService(test_addr, 8333));
+        CAddress addr7_ca(addr7, NODE_NONE);
+        addr7_ca.nTime = (unsigned int)GetTime();
+        addrman.Add(addr7_ca, CService(test_addr, 8333));
         addrman.Good(CAddress(addr7, NODE_NONE));
 
         // Test 11: 6 addrs + 1 addr from last test = 7.
@@ -1036,8 +1066,19 @@ namespace TestAddrmanTests {
             // entries it scores (no Attempt() call in there), so reusing one
             // instance doesn't bias GetChance()/IsJustTried() between draws.
             CAddrManTest addrman;
-            addrman.Add(CAddress(reachableAddr, NODE_NONE), source);
-            addrman.Add(CAddress(unreachableAddr, NODE_NONE), source);
+            // Give both a realistic (non-zero, non-stale) nTime - a real
+            // addrman entry's nTime is essentially never 0 in practice
+            // (set by sanitization on ADDR receipt, or GetTime() at every
+            // other insertion site), and leaving it unset here would make
+            // both addresses IsTerrible() under GetChance()'s staleness
+            // penalty, swamping the reachability signal this test is
+            // actually isolating.
+            CAddress reachableCAddr(reachableAddr, NODE_NONE);
+            reachableCAddr.nTime = (unsigned int)GetTime();
+            CAddress unreachableCAddr(unreachableAddr, NODE_NONE);
+            unreachableCAddr.nTime = (unsigned int)GetTime();
+            addrman.Add(reachableCAddr, source);
+            addrman.Add(unreachableCAddr, source);
             if (!newOnlyForSelect) {
                 addrman.Good(reachableAddr);
                 addrman.Good(unreachableAddr);
@@ -1070,6 +1111,91 @@ namespace TestAddrmanTests {
                 << "address: reachable picked " << counts.first << " times, unreachable "
                 << "picked " << counts.second << " times";
         }
+    }
+
+    // Regression test: GetChance() previously gave a "terrible" address
+    // (IsTerrible() == true - never seen within ADDRMAN_HORIZON_DAYS, a
+    // zero/bogus nTime, or repeated failures with no success) the exact
+    // same selection weight as a fresh, never-tried address. Select()
+    // itself never calls IsTerrible() at all, so nothing stopped an
+    // ancient or bogus-timestamp entry from being handed out and dialed
+    // just as readily as a good one - only GetChance()'s weighting can
+    // fix this, since it's the only signal Select() actually consults.
+    TEST(TestAddrmanTests, addrman_select_deprioritizes_terrible_address)
+    {
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        CNetAddr freshIp;
+        LookupHost("250.1.1.1", freshIp, false);
+        CAddress freshAddr(CService(freshIp, 8233), NODE_NONE);
+        freshAddr.nTime = (unsigned int)GetTime();
+
+        CNetAddr terribleIp;
+        LookupHost("250.1.1.2", terribleIp, false);
+        CAddress terribleAddr(CService(terribleIp, 8233), NODE_NONE);
+        // Well beyond ADDRMAN_HORIZON_DAYS (30) - IsTerrible() must be true.
+        terribleAddr.nTime = (unsigned int)(GetTime() - 400 * 24 * 60 * 60);
+
+        const int kIterations = 500;
+
+        CAddrManTest addrman;
+        addrman.Add(freshAddr, source);
+        addrman.Add(terribleAddr, source);
+
+        int freshCount = 0;
+        int terribleCount = 0;
+        for (int i = 0; i < kIterations; i++) {
+            CAddrInfo picked = addrman.Select(/*newOnly=*/true);
+            if (picked.ToString() == CService(freshIp, 8233).ToString()) {
+                freshCount++;
+            } else if (picked.ToString() == CService(terribleIp, 8233).ToString()) {
+                terribleCount++;
+            }
+        }
+
+        EXPECT_GT(freshCount, terribleCount)
+            << "Select() must strongly prefer a fresh address over a terrible one: "
+            << "fresh picked " << freshCount << " times, terrible picked "
+            << terribleCount << " times";
+    }
+
+    // SweepTerrible() must actually remove terrible entries from the table
+    // (not just deprioritize them at selection time - see the two tests
+    // above), leaving good entries untouched, so bad addresses don't sit
+    // in addrman indefinitely waiting for a lazy, collision-triggered
+    // eviction that may never come for a sparsely-populated bucket.
+    TEST(TestAddrmanTests, addrman_sweep_terrible_removes_only_terrible)
+    {
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        CNetAddr freshIp;
+        LookupHost("250.1.1.1", freshIp, false);
+        CAddress freshAddr(CService(freshIp, 8233), NODE_NONE);
+        freshAddr.nTime = (unsigned int)GetTime();
+
+        CNetAddr terribleIp;
+        LookupHost("250.1.1.2", terribleIp, false);
+        CAddress terribleAddr(CService(terribleIp, 8233), NODE_NONE);
+        terribleAddr.nTime = (unsigned int)(GetTime() - 400 * 24 * 60 * 60);
+
+        CAddrManTest addrman;
+        addrman.Add(freshAddr, source);
+        addrman.Add(terribleAddr, source);
+        ASSERT_EQ(addrman.size(), 2);
+
+        addrman.SweepTerrible();
+
+        EXPECT_EQ(addrman.size(), 1)
+            << "SweepTerrible() should have removed exactly the terrible address";
+
+        int nId = -1;
+        CAddrInfo* pFresh = addrman.Find(freshAddr, &nId);
+        EXPECT_NE(pFresh, nullptr) << "the fresh address must survive the sweep";
+
+        CAddrInfo* pTerrible = addrman.Find(terribleAddr, &nId);
+        EXPECT_EQ(pTerrible, nullptr) << "the terrible address must be gone after the sweep";
     }
 
     // Regression test for a privacy/waste bug: GetAddr_()'s legacy

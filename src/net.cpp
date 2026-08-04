@@ -57,6 +57,11 @@ using namespace tls;
 
 // Dump addresses to peers.dat every 15 minutes (900s)
 #define DUMP_ADDRESSES_INTERVAL 900
+// Purge terrible (stale/never-successful) addresses from addrman every hour.
+// ADDRMAN_HORIZON_DAYS (30 days) sets the timescale "terrible" operates on,
+// so this doesn't need to run often - it's background hygiene, not a race
+// against anything.
+#define SWEEP_TERRIBLE_ADDRESSES_INTERVAL 3600
 
 #if !defined(HAVE_MSG_NOSIGNAL) && !defined(MSG_NOSIGNAL)
 #define MSG_NOSIGNAL 0
@@ -2160,6 +2165,17 @@ void DumpAddresses()
            addrman.size(), GetTimeMillis() - nStart);
 }
 
+void SweepTerribleAddresses()
+{
+    int64_t nStart = GetTimeMillis();
+    int nBefore = addrman.size();
+
+    addrman.SweepTerrible();
+
+    LogPrint("net", "Swept %d terrible addresses from addrman (%d -> %d)  %dms\n",
+           nBefore - addrman.size(), nBefore, addrman.size(), GetTimeMillis() - nStart);
+}
+
 void static ProcessOneShot()
 {
     string strDest;
@@ -3213,8 +3229,58 @@ void static Discover(boost::thread_group& threadGroup)
 #endif
 }
 
+//! CAddrDB::Write() writes to a randomly-named peers.dat.XXXX (4 hex
+//! digits) temp file, then renames it over the real peers.dat for a
+//! crash-safe atomic write - see CAddrDB::Write(). If the process is
+//! killed or crashes in the narrow window between the temp file being
+//! written and the rename completing, that temp file is orphaned:
+//! nothing else ever revisits it, so repeated non-graceful shutdowns
+//! (the periodic dump runs every DUMP_ADDRESSES_INTERVAL) leave these
+//! accumulating in the datadir indefinitely. Each one is a stale
+//! snapshot that never got promoted to be the real peers.dat and is
+//! safe to discard outright.
+bool IsStalePeersDatTempFilename(const std::string& filename)
+{
+    static const std::string prefix = "peers.dat.";
+    if (filename.length() != prefix.length() + 4)
+        return false;
+    return filename.compare(0, prefix.length(), prefix) == 0;
+}
+
+static void CleanupStalePeersDatTempFiles()
+{
+    using namespace boost::filesystem;
+    const path datadir = GetDataDir();
+
+    // Collect matches in a first, read-only pass before deleting anything.
+    // Removing an entry while directory_iterator is still actively
+    // scanning the same directory isn't guaranteed to be safe across every
+    // filesystem/iterator implementation - some can skip not-yet-visited
+    // entries when the directory is mutated mid-scan, silently leaving
+    // some stale files behind instead of removing all of them.
+    std::vector<path> vStale;
+    for (directory_iterator it(datadir); it != directory_iterator(); it++) {
+        if (!is_regular_file(*it))
+            continue;
+        if (IsStalePeersDatTempFilename(it->path().filename().string()))
+            vStale.push_back(it->path());
+    }
+
+    for (const path& stalePath : vStale) {
+        boost::system::error_code ec;
+        remove(stalePath, ec);
+        if (ec)
+            LogPrintf("Failed to remove stale address-database temp file %s: %s\n",
+                       stalePath.filename().string(), ec.message());
+        else
+            LogPrint("net", "Removed stale address-database temp file %s\n",
+                       stalePath.filename().string());
+    }
+}
+
 void LoadPeers() {
       uiInterface.InitMessage(_("Loading addresses..."));
+      CleanupStalePeersDatTempFiles();
       // Load addresses for peers.dat
       int64_t nStart = GetTimeMillis();
       {
@@ -3397,6 +3463,9 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // Dump network addresses
     scheduler.scheduleEvery(&DumpAddresses, DUMP_ADDRESSES_INTERVAL);
+
+    // Purge terrible addresses from addrman
+    scheduler.scheduleEvery(&SweepTerribleAddresses, SWEEP_TERRIBLE_ADDRESSES_INTERVAL);
 }
 
 bool StopNode()
