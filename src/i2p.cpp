@@ -121,6 +121,18 @@ Session::Session(const fs::path& private_key_file,
 
 Session::~Session()
 {
+    // A blocking SAM round trip (Hello() / SendRequestAndGetReply(), which do
+    // raw, non-interruptible socket I/O) can hold cs_i2p for minutes. If
+    // another thread is still inside one of those calls when this object is
+    // destroyed - which shutdown ordering does not otherwise guarantee
+    // against; see StopNode() in net.cpp - destroying cs_i2p out from under
+    // it is undefined behavior (pthread_mutex_destroy on a locked mutex
+    // aborts the process). Taking the lock here first waits out any such
+    // in-flight call: by the time anything resets/destroys a Session,
+    // shutdown has already been signaled, so whichever thread was mid-call
+    // will see that at its next loop check and stop before it can acquire
+    // cs_i2p again - it cannot re-enter after we release it below.
+    LOCK(cs_i2p);
 }
 
 bool Session::Check()

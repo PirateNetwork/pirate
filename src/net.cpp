@@ -2310,6 +2310,14 @@ void ThreadOpenConnections()
                 continue;
             }
 
+            // I2P peers are dialed by the dedicated ThreadOpenI2PConnections()
+            // thread instead of here - see that thread's doc comment for why
+            // (a slow/unresponsive I2P SAM proxy must never be able to block
+            // clearnet/Tor dialing on this thread).
+            if (addr.GetNetwork() == NET_I2P) {
+                continue;
+            }
+
             // Give under-represented reachable networks priority until they
             // catch up to MIN_OUTBOUND_PER_REACHABLE_NETWORK, or until we've
             // spent DIVERSITY_TRY_BUDGET attempts looking (whichever comes
@@ -2333,6 +2341,77 @@ void ThreadOpenConnections()
         }
 
         if (addrConnect.IsValid())
+            OpenNetworkConnection(addrConnect, &grant, nullptr, false, false);
+    }
+}
+
+//! Dedicated thread for dialing regular (non-pool) I2P peers selected from
+//! addrman - the I2P counterpart of the clearnet/Tor dialing done by
+//! ThreadOpenConnections() above, which deliberately skips NET_I2P
+//! addresses so this thread is the only one that ever calls
+//! i2p::sam::Session::Connect() for the primary identity's outbound peers.
+//!
+//! Split out for the same reason ThreadI2PPoolTopUp() is split from
+//! TickI2PRelayPool() (see that thread's doc comment): each SAM round trip
+//! inside Session::Connect() (HELLO / NAMING LOOKUP / STREAM CONNECT) can
+//! block for up to 3 minutes if the I2P client/proxy is slow or
+//! unresponsive (see i2p.cpp's SendRequestAndGetReply()), and Connect() can
+//! make several of these calls in sequence. Doing that on the same thread
+//! that also dials clearnet/Tor peers would freeze those too for however
+//! long I2P stays unresponsive - that used to be the actual thread this
+//! code ran on, and was the cause of the node appearing to hang whenever
+//! the I2P client was slow to answer.
+//!
+//! Shares semOutbound with ThreadOpenConnections() (rather than a separate
+//! semaphore like the relay pool's semI2PPoolOutbound) since I2P peers
+//! dialed here still count toward the same overall outbound connection
+//! budget they always did - only which thread performs the dial has
+//! changed, not how many I2P connections are allowed.
+void ThreadOpenI2PConnections()
+{
+    while (true)
+    {
+        if (ShutdownRequested())
+            break;
+
+        MilliSleep(1000);
+        boost::this_thread::interruption_point();
+
+        if (m_i2p_sam_session.get() == nullptr || semOutbound == nullptr)
+            continue;
+
+        CSemaphoreGrant grant(*semOutbound, /* fTry */ true);
+        if (!grant)
+            continue;
+
+        std::set<std::vector<unsigned char> > setConnected;
+        {
+            LOCK(cs_vNodes);
+            BOOST_FOREACH(CNode* pnode, vNodes) {
+                if (!pnode->fInbound)
+                    setConnected.insert(pnode->addr.GetGroup(addrman.m_asmap));
+            }
+        }
+
+        const int64_t nANow = GetTime();
+        CAddress addrConnect;
+        bool fFound = false;
+        for (int nTries = 0; nTries < 50 && !fFound; nTries++) {
+            CAddrInfo addr = addrman.Select();
+            if (!addr.IsValid() || addr.GetNetwork() != NET_I2P)
+                continue;
+            if (setConnected.count(addr.GetGroup(addrman.m_asmap)) || IsLocal(addr))
+                continue;
+            if (!IsReachable(addr))
+                continue;
+            // only consider very recently tried nodes after 30 failed attempts
+            if (nANow - addr.nLastTry < 600 && nTries < 30)
+                continue;
+            addrConnect = addr;
+            fFound = true;
+        }
+
+        if (fFound)
             OpenNetworkConnection(addrConnect, &grant, nullptr, false, false);
     }
 }
@@ -3409,6 +3488,11 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         } else {
             threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pcheck", &ThreadI2PCheck));
         }
+
+        // Dial outbound I2P peers on a dedicated thread, separate from the
+        // clearnet/Tor dialing in ThreadOpenConnections() - see
+        // ThreadOpenI2PConnections()'s doc comment for why.
+        threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2popencon", &ThreadOpenI2PConnections));
 
         // I2P relay pool: one accept-or-check thread per slot, mirroring
         // the primary identity's own -i2pacceptincoming choice above. Each

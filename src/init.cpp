@@ -3016,7 +3016,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     if (GetBoolArg("-listenonion", DEFAULT_LISTEN_ONION)) {
 #if ENABLE_EMBEDDED_TOR
-        StartEmbeddedTor();
+        StartEmbeddedTor(threadGroup);
 #endif
         // Must happen here, before StartNode() below starts ThreadSocketHandler
         // scanning vhListenSocket - binding this later (e.g. lazily from a Tor
@@ -3030,7 +3030,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
 #if ENABLE_EMBEDDED_I2PD
-    StartEmbeddedI2Pd();
+    StartEmbeddedI2Pd(threadGroup);
 #endif
 
     StartNode(threadGroup, scheduler);

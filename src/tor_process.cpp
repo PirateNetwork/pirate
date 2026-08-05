@@ -12,6 +12,8 @@
 #include "util.h"
 #include "util/readwritefile.h"
 
+#include <boost/bind.hpp>
+
 namespace {
 
 CManagedProcess g_torProcess;
@@ -21,14 +23,26 @@ static const int TOR_STARTUP_TIMEOUT_MS = 180000;
 /** How long to give tor to shut down cleanly before killing it. */
 static const int TOR_STOP_TIMEOUT_MS = 5000;
 
+/** Set by StartEmbeddedTor() just before spawning ThreadWaitTorReady(). */
+CService g_torControlTarget;
+
 fs::path TorDataDir()
 {
     return GetDataDir() / "tor";
 }
 
+//! Polls g_torControlTarget for readiness off the main init thread - see
+//! StartEmbeddedTor()'s doc comment for why this doesn't block startup.
+void ThreadWaitTorReady()
+{
+    if (!g_torProcess.WaitUntilReady(g_torControlTarget, TOR_STARTUP_TIMEOUT_MS)) {
+        LogPrintf("tor: embedded tor daemon did not become ready within %d ms\n", TOR_STARTUP_TIMEOUT_MS);
+    }
+}
+
 } // namespace
 
-bool StartEmbeddedTor()
+bool StartEmbeddedTor(boost::thread_group& threadGroup)
 {
     if (!GetBoolArg("-torautostart", DEFAULT_TOR_AUTOSTART)) return false;
 
@@ -94,10 +108,12 @@ bool StartEmbeddedTor()
     // process it's about to terminate by comparing against this same name.
     NotifyNetworkingWatchdog(binary.stem().string(), g_torProcess.GetProcessId());
 
-    if (!g_torProcess.WaitUntilReady(torControlTarget, TOR_STARTUP_TIMEOUT_MS)) {
-        LogPrintf("tor: embedded tor daemon did not become ready within %d ms\n", TOR_STARTUP_TIMEOUT_MS);
-        // Leave it running; torcontrol.cpp's own reconnect logic may still pick it up later.
-    }
+    // Leave it running regardless of how long it takes to become ready;
+    // torcontrol.cpp's own reconnect logic picks up the connection whenever
+    // the ControlPort actually comes up. ThreadWaitTorReady() just logs a
+    // warning off the main thread if it takes unusually long.
+    g_torControlTarget = torControlTarget;
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "torready", &ThreadWaitTorReady));
 
     return true;
 }

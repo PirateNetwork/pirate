@@ -76,22 +76,29 @@ void LogLine(const std::string& s)
  * so a pid recycled by the OS after the daemon already exited on its own
  * doesn't get killed by mistake. Only implemented where /proc is available;
  * elsewhere this always returns true (best effort, no verification).
+ *
+ * Checks /proc/<pid>/exe (a symlink to the actual executed binary) rather
+ * than /proc/<pid>/comm: comm is just the kernel's default label, and a
+ * process is free to overwrite it at runtime via prctl(PR_SET_NAME, ...) -
+ * i2pd does exactly that (renames itself to "i2pd-daemon"), which used to
+ * make this check fail for the bundled i2pd's own pid and left it running
+ * orphaned after a pirated crash. exe isn't affected by that - it always
+ * reflects the binary that was actually exec'd - and also has no
+ * TASK_COMM_LEN-style truncation to work around.
  */
 bool ProcessLooksLike(int64_t pid, const std::string& name)
 {
 #ifdef __linux__
     char path[64];
-    std::snprintf(path, sizeof(path), "/proc/%lld/comm", (long long)pid);
-    FILE* f = std::fopen(path, "r");
-    if (!f) return false; // pid doesn't exist at all anymore
-    char buf[64] = {0};
-    size_t n = std::fread(buf, 1, sizeof(buf) - 1, f);
-    std::fclose(f);
-    while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) buf[--n] = '\0';
-    // Linux truncates /proc/pid/comm to 15 chars + NUL (TASK_COMM_LEN=16); an
-    // arbitrarily-named external binary (-torpath/-i2pdpath) can be longer than
-    // that, so compare against the same truncation rather than the full name.
-    return name.substr(0, 15) == buf;
+    std::snprintf(path, sizeof(path), "/proc/%lld/exe", (long long)pid);
+    char linkBuf[4096];
+    ssize_t len = readlink(path, linkBuf, sizeof(linkBuf) - 1);
+    if (len <= 0) return false; // pid doesn't exist (or exe unreadable) anymore
+    linkBuf[len] = '\0';
+    std::string exePath(linkBuf);
+    size_t slash = exePath.find_last_of('/');
+    std::string exeName = (slash == std::string::npos) ? exePath : exePath.substr(slash + 1);
+    return exeName == name;
 #else
     (void)pid; (void)name;
     return true;

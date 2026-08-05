@@ -11,6 +11,8 @@
 #include "util.h"
 #include "util/readwritefile.h"
 
+#include <boost/bind.hpp>
+
 namespace {
 
 CManagedProcess g_i2pdProcess;
@@ -20,14 +22,26 @@ static const int I2PD_STARTUP_TIMEOUT_MS = 180000;
 /** How long to give i2pd to shut down cleanly before killing it. */
 static const int I2PD_STOP_TIMEOUT_MS = 5000;
 
+/** Set by StartEmbeddedI2Pd() just before spawning ThreadWaitI2PdReady(). */
+CService g_i2pdSamTarget;
+
 fs::path I2PdDataDir()
 {
     return GetDataDir() / "i2pd";
 }
 
+//! Polls g_i2pdSamTarget for readiness off the main init thread - see
+//! StartEmbeddedI2Pd()'s doc comment for why this doesn't block startup.
+void ThreadWaitI2PdReady()
+{
+    if (!g_i2pdProcess.WaitUntilReady(g_i2pdSamTarget, I2PD_STARTUP_TIMEOUT_MS)) {
+        LogPrintf("i2p: embedded i2pd daemon did not become ready within %d ms\n", I2PD_STARTUP_TIMEOUT_MS);
+    }
+}
+
 } // namespace
 
-bool StartEmbeddedI2Pd()
+bool StartEmbeddedI2Pd(boost::thread_group& threadGroup)
 {
     if (!GetBoolArg("-i2pdautostart", DEFAULT_I2PD_AUTOSTART)) return false;
 
@@ -103,10 +117,13 @@ bool StartEmbeddedI2Pd()
     // process it's about to terminate by comparing against this same name.
     NotifyNetworkingWatchdog(binary.stem().string(), g_i2pdProcess.GetProcessId());
 
-    if (!g_i2pdProcess.WaitUntilReady(samTarget, I2PD_STARTUP_TIMEOUT_MS)) {
-        LogPrintf("i2p: embedded i2pd daemon did not become ready within %d ms\n", I2PD_STARTUP_TIMEOUT_MS);
-        // Leave it running; i2p.cpp's own session-creation retry logic may still pick it up later.
-    }
+    // Leave it running regardless of how long it takes to become ready;
+    // i2p.cpp's own session-creation retry logic (ThreadI2PCheck) picks up
+    // the connection whenever the SAM port actually comes up.
+    // ThreadWaitI2PdReady() just logs a warning off the main thread if it
+    // takes unusually long.
+    g_i2pdSamTarget = samTarget;
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pdready", &ThreadWaitI2PdReady));
 
     return true;
 }
