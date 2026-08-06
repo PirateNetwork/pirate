@@ -1689,98 +1689,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("Using at most %i connections (%i file descriptors available)\n", nMaxConnections, nFD);
     std::ostringstream strErrors;
 
-    // Initialize the validity caches. We currently have three:
-    // - Transparent signature validity.
-    // - Sapling bundle validity.
-    // - Ironwood bundle validity.
-    // Assign half of the cap to transparent signatures, and split the rest
-    // between Sapling and Ironwood bundles.
-    size_t nMaxCacheSize = GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE) * ((size_t) 1 << 20);
-    if (nMaxCacheSize <= 0) {
-        return InitError(strprintf(_("-maxsigcachesize must be at least 1")));
-    }
-    InitSignatureCache(nMaxCacheSize / 2);
-    bundlecache::init(nMaxCacheSize / 4);
-
-    LogPrintf("Using %u threads for script verification\n", nScriptCheckThreads);
-    if (nScriptCheckThreads) {
-        for (int i=0; i<nScriptCheckThreads-1; i++)
-            threadGroup.create_thread(&ThreadScriptCheck);
-    }
-
-    // Start the lightweight task scheduler thread
-    CScheduler::Function serviceLoop = boost::bind(&CScheduler::serviceQueue, &scheduler);
-    threadGroup.create_thread(boost::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
-
-    // Count uptime
-    MarkStartTime();
-
-    if ((chainparams.NetworkIDString() != "regtest") &&
-            GetBoolArg("-showmetrics", 0) &&
-            !fPrintToConsole && !GetBoolArg("-daemon", false)) {
-        // Start the persistent metrics interface
-        ConnectMetricsScreen();
-        threadGroup.create_thread(&ThreadShowMetricsScreen);
-    }
-
-    if ( KOMODO_NSPV_FULLNODE )
-    {
-        // Initialize Zcash circuit parameters
-        uiInterface.InitMessage(_("Verifying Params..."));
-        initalizeMapParam();
-        bool paramsVerified = checkParams();
-        if(!paramsVerified) {
-            downloadFiles("Network Params");
-        }
-        if (fRequestShutdown)
-        {
-            LogPrintf("Shutdown requested. Exiting.\n");
-            return false;
-        }
-
-        ZC_LoadParams(chainparams, paramsVerified);
-    }
-
-    if (fRequestShutdown)
-    {
-        LogPrintf("Shutdown requested. Exiting.\n");
-        return false;
-    }
-
-    /* Start the RPC server already.  It will be started in "warmup" mode
-     * and not really process calls already (but it will signify connections
-     * that the server is there and will be ready later).  Warmup mode will
-     * be disabled when initialisation is finished.
-     */
-    if (fServer)
-    {
-        uiInterface.InitMessage.connect(SetRPCWarmupStatus);
-        if (!AppInitServers(threadGroup))
-            return InitError(_("Unable to start HTTP server. See debug log for details."));
-    }
-
-    int64_t nStart = GetTimeMillis();
-
-    // ********************************************************* Step 5: verify wallet database integrity
-#ifdef ENABLE_WALLET
-    if (!fDisableWallet) {
-        LogPrintf("Using wallet %s\n", strWalletFile);
-        uiInterface.InitMessage(_("Verifying wallet..."));
-
-        std::string warningString;
-        std::string errorString;
-
-        if (!CWallet::Verify(strWalletFile, warningString, errorString))
-            return false;
-
-        if (!warningString.empty())
-            InitWarning(warningString);
-        if (!errorString.empty())
-            return InitError(warningString);
-
-    } // (!fDisableWallet)
-#endif // ENABLE_WALLET
     // ********************************************************* Step 6: network initialization
+    //
+    // Moved here - immediately after the datadir lock, before script-check
+    // threads, the scheduler thread, Sapling param loading, and
+    // AppInitServers() (the HTTP/RPC server) are started - so that a P2P
+    // bind failure ("Failed to listen on any port", "Cannot resolve
+    // -bind/-whitebind address") fails fast, before any of that has been
+    // stood up and needs tearing down again. Previously this ran much later
+    // (after Step 5's wallet verification), by which point a full thread
+    // pool and the entire HTTP/RPC server stack were already live: a blocked
+    // port meant Shutdown() had to unwind all of it just to report a bind()
+    // failure, slow enough to trip an external process supervisor's restart
+    // timeout. Nothing below depends on anything from the steps this now
+    // runs ahead of - it only needs parsed args and the reachability tables
+    // it sets up itself.
 
     RegisterNodeSignals(GetNodeSignals());
 
@@ -1916,6 +1839,103 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (!fBound)
             return InitError(_("Failed to listen on any port. Use -listen=0 if you want this."));
     }
+
+    // Initialize the validity caches. We currently have three:
+    // - Transparent signature validity.
+    // - Sapling bundle validity.
+    // - Ironwood bundle validity.
+    // Assign half of the cap to transparent signatures, and split the rest
+    // between Sapling and Ironwood bundles.
+    size_t nMaxCacheSize = GetArg("-maxsigcachesize", DEFAULT_MAX_SIG_CACHE_SIZE) * ((size_t) 1 << 20);
+    if (nMaxCacheSize <= 0) {
+        return InitError(strprintf(_("-maxsigcachesize must be at least 1")));
+    }
+    InitSignatureCache(nMaxCacheSize / 2);
+    bundlecache::init(nMaxCacheSize / 4);
+
+    LogPrintf("Using %u threads for script verification\n", nScriptCheckThreads);
+    if (nScriptCheckThreads) {
+        for (int i=0; i<nScriptCheckThreads-1; i++)
+            threadGroup.create_thread(&ThreadScriptCheck);
+    }
+
+    // Start the lightweight task scheduler thread
+    CScheduler::Function serviceLoop = boost::bind(&CScheduler::serviceQueue, &scheduler);
+    threadGroup.create_thread(boost::bind(&TraceThread<CScheduler::Function>, "scheduler", serviceLoop));
+
+    // Count uptime
+    MarkStartTime();
+
+    if ((chainparams.NetworkIDString() != "regtest") &&
+            GetBoolArg("-showmetrics", 0) &&
+            !fPrintToConsole && !GetBoolArg("-daemon", false)) {
+        // Start the persistent metrics interface
+        ConnectMetricsScreen();
+        threadGroup.create_thread(&ThreadShowMetricsScreen);
+    }
+
+    if ( KOMODO_NSPV_FULLNODE )
+    {
+        // Initialize Zcash circuit parameters
+        uiInterface.InitMessage(_("Verifying Params..."));
+        initalizeMapParam();
+        bool paramsVerified = checkParams();
+        if(!paramsVerified) {
+            downloadFiles("Network Params");
+        }
+        if (fRequestShutdown)
+        {
+            LogPrintf("Shutdown requested. Exiting.\n");
+            return false;
+        }
+
+        ZC_LoadParams(chainparams, paramsVerified);
+    }
+
+    if (fRequestShutdown)
+    {
+        LogPrintf("Shutdown requested. Exiting.\n");
+        return false;
+    }
+
+    /* Start the RPC server already.  It will be started in "warmup" mode
+     * and not really process calls already (but it will signify connections
+     * that the server is there and will be ready later).  Warmup mode will
+     * be disabled when initialisation is finished.
+     */
+    if (fServer)
+    {
+        uiInterface.InitMessage.connect(SetRPCWarmupStatus);
+        if (!AppInitServers(threadGroup))
+            return InitError(_("Unable to start HTTP server. See debug log for details."));
+    }
+
+    int64_t nStart = GetTimeMillis();
+
+    // ********************************************************* Step 5: verify wallet database integrity
+#ifdef ENABLE_WALLET
+    if (!fDisableWallet) {
+        LogPrintf("Using wallet %s\n", strWalletFile);
+        uiInterface.InitMessage(_("Verifying wallet..."));
+
+        std::string warningString;
+        std::string errorString;
+
+        if (!CWallet::Verify(strWalletFile, warningString, errorString))
+            return false;
+
+        if (!warningString.empty())
+            InitWarning(warningString);
+        if (!errorString.empty())
+            return InitError(warningString);
+
+    } // (!fDisableWallet)
+#endif // ENABLE_WALLET
+    // Step 6 (network reachability setup + P2P listen bind) now runs earlier -
+    // immediately after the datadir lock, before script-check threads, the
+    // scheduler thread, Sapling param loading, and the HTTP/RPC server are
+    // started - so a bind failure fails fast instead of needing all of that
+    // torn down again. See the comment there for why.
 
     if (mapArgs.count("-externalip")) {
         BOOST_FOREACH(const std::string& strAddr, mapMultiArgs["-externalip"]) {
