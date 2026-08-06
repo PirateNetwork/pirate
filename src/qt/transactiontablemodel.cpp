@@ -2566,7 +2566,14 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case LabelRole:
         return walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(rec->address));
     case AmountRole:
-        return qint64(rec->credit + rec->debit);
+        // Parent records must report netChange, not credit+debit: for a send
+        // (debit=totalOutputs, credit=-totalInputs), credit+debit reduces to
+        // just the fee (totalOutputs-totalInputs), not the wallet's actual
+        // balance change (walletOutputs-totalInputs). This role feeds the
+        // Overview tab's amount column and the transaction list's min-amount
+        // filter directly, so getting it wrong understated every outbound
+        // transaction's displayed/filtered amount down to its fee.
+        return qint64(rec->isParent ? rec->netChange : (rec->credit + rec->debit));
     case TxIDRole:
         return rec->getTxID();
     case TxHashRole:
