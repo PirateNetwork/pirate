@@ -787,6 +787,13 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
     
     if (addrConnect.GetNetwork() == NET_I2P) {
             i2p::sam::Session* session = nullptr;
+            // Keeps a pool identity's Session object alive for the duration of
+            // the blocking Connect() call below even if TickI2PRelayPool()
+            // concurrently retires this exact slot - see I2PPoolIdentitySlot::
+            // session's doc comment in net.h for why a raw pointer isn't safe
+            // here. Not needed for the primary identity (m_i2p_sam_session),
+            // which is never rotated during normal operation.
+            std::shared_ptr<i2p::sam::Session> poolSessionPin;
             if (i2p_pool_idx >= 0) {
                 // Dial through a specific I2P relay-pool identity, e.g. to
                 // help a WARMING slot accumulate the peers it needs to
@@ -794,7 +801,8 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
                 // transaction through the identity selected for it.
                 LOCK(cs_i2p_relay_pool);
                 if ((size_t)i2p_pool_idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[i2p_pool_idx].session) {
-                    session = g_i2p_relay_pool[i2p_pool_idx].session.get();
+                    poolSessionPin = g_i2p_relay_pool[i2p_pool_idx].session;
+                    session = poolSessionPin.get();
                     nUsedI2PPoolGeneration = g_i2p_relay_pool[i2p_pool_idx].nGeneration;
                 }
             } else if (m_i2p_sam_session.get() != nullptr) {
@@ -2753,8 +2761,8 @@ static void ActivateI2PPoolSlot(size_t idx, int64_t nNow)
         return;
 
     I2PPoolIdentitySlot& slot = g_i2p_relay_pool[idx];
-    slot.session = std::unique_ptr<i2p::sam::Session>(new i2p::sam::Session(
-        GetDataDir() / strprintf("i2p_relay_pool_key_%d", idx), i2p_sam_pool.proxy));
+    slot.session = std::make_shared<i2p::sam::Session>(
+        GetDataDir() / strprintf("i2p_relay_pool_key_%d", idx), i2p_sam_pool.proxy);
     slot.state = I2PPoolIdentityState::WARMING;
     slot.nWarmupDeadline = nNow + I2P_POOL_WARMUP_PERIOD;
     slot.nDrainDeadline = 0;
@@ -2878,12 +2886,16 @@ void ThreadI2PPoolAcceptIncoming(size_t idx)
     while (true) {
         boost::this_thread::interruption_point();
 
-        i2p::sam::Session* session = nullptr;
+        // A shared_ptr copy, not a raw pointer: pins the Session object alive
+        // through the Listen()/Accept() calls below (each potentially
+        // blocking for minutes) even if TickI2PRelayPool() retires this slot
+        // concurrently. See I2PPoolIdentitySlot::session's doc comment.
+        std::shared_ptr<i2p::sam::Session> session;
         uint32_t generation = 0;
         {
             LOCK(cs_i2p_relay_pool);
             if (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].session) {
-                session = g_i2p_relay_pool[idx].session.get();
+                session = g_i2p_relay_pool[idx].session;
                 generation = g_i2p_relay_pool[idx].nGeneration;
             }
         }
@@ -2949,10 +2961,13 @@ void ThreadI2PPoolCheck(size_t idx)
         MilliSleep(wait_time);
         boost::this_thread::interruption_point();
 
-        i2p::sam::Session* session;
+        // Shared_ptr copy, not a raw pointer - see I2PPoolIdentitySlot::
+        // session's doc comment: pins the object alive through Check() below
+        // even if TickI2PRelayPool() retires this slot concurrently.
+        std::shared_ptr<i2p::sam::Session> session;
         {
             LOCK(cs_i2p_relay_pool);
-            session = (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].session) ? g_i2p_relay_pool[idx].session.get() : nullptr;
+            session = (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].session) ? g_i2p_relay_pool[idx].session : nullptr;
         }
         if (session == nullptr)
             continue;

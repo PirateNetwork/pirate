@@ -372,7 +372,22 @@ enum class I2PPoolIdentityState : uint8_t { WARMING, READY, ACTIVE };
 //! fresh, given time to warm up and acquire peers, used for at most one
 //! locally-originated transaction relay, then retired and replaced.
 struct I2PPoolIdentitySlot {
-    std::unique_ptr<i2p::sam::Session> session;
+    //! shared_ptr, not unique_ptr: every reader (ThreadI2PPoolAcceptIncoming,
+    //! ThreadI2PPoolCheck, OpenNetworkConnection's pool-dial path) briefly
+    //! locks cs_i2p_relay_pool just to obtain this, then calls a
+    //! long-running Session method (Listen/Accept/Check/Connect, each
+    //! potentially blocking for minutes) without holding the lock - holding
+    //! cs_i2p_relay_pool for the full call would freeze every other slot's
+    //! threads and TickI2PRelayPool() itself for as long as one slot's SAM
+    //! round trip takes. A raw pointer captured that way goes dangling if
+    //! TickI2PRelayPool()'s retirement step (slot.session.reset(), then
+    //! immediately ActivateI2PPoolSlot() allocating a new Session - likely
+    //! reusing the same freed memory) runs in the gap between the pointer
+    //! being captured and being used. Readers copy this shared_ptr (not
+    //! .get()) while holding the lock, which pins the actual Session object
+    //! alive for as long as their copy exists, regardless of the slot's own
+    //! reference being reset out from under them meanwhile.
+    std::shared_ptr<i2p::sam::Session> session;
     I2PPoolIdentityState state{I2PPoolIdentityState::WARMING};
     //! WARMING -> READY becomes possible once now() >= nWarmupDeadline
     //! (subject also to having enough peers - see HasEnoughPeersForReady).
