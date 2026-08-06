@@ -31,6 +31,7 @@
 #include "deprecation.h"
 #include "tls/utiltls.h"
 #include "komodo_defs.h"
+#include "torcontrol.h"
 
 #include <boost/foreach.hpp>
 
@@ -771,10 +772,11 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "    \"name\": \"xxx\",                     (string) network (ipv4, ipv6 or onion)\n"
             "    \"limited\": true|false,               (boolean) is the network limited using -onlynet?\n"
             "    \"reachable\": true|false,             (boolean) is the network reachable?\n"
-            "    \"proxy\": \"host:port\"               (string) the proxy that is used for this network, or empty if none\n"
+            "    \"proxy\": \"host:port\"               (string) the proxy that is used for this network, or empty if none. For \"i2p\", this is the I2P SAM API address - use it, rather than -i2psam, since -i2psam's port may have been reassigned at startup if the configured one was already in use.\n"
             "  }\n"
             "  ,...\n"
             "  ],\n"
+            "  \"torcontrol\": \"host:port\",            (string) the Tor ControlPort address currently in use. May differ from -torcontrol: if the configured port was already in use at startup, the embedded tor daemon picks another one and this reflects the actual address rather than the requested one.\n"
             "  \"relayfee\": x.xxxxxxxx,                (numeric) minimum relay fee for non-free transactions in " + CURRENCY_UNIT + "/kB\n"
             "  \"localaddresses\": [                    (array) list of local addresses\n"
             "  {\n"
@@ -804,6 +806,10 @@ UniValue getnetworkinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("privatetxrelayfallback", fPrivateTxRelayFallback));
     obj.push_back(Pair("privacypeers", GetPrivacyPeerCount()));
     obj.push_back(Pair("networks",      GetNetworksInfo()));
+    // Reflects PickAvailablePort()'s runtime reassignment (tor_process.cpp)
+    // when the configured -torcontrol port was already taken; GetArg picks
+    // up that override because it's written into mapArgs directly.
+    obj.push_back(Pair("torcontrol",    GetArg("-torcontrol", DEFAULT_TOR_CONTROL)));
     obj.push_back(Pair("relayfee",      ValueFromAmount(::minRelayTxFee.GetFeePerK())));
     UniValue localAddresses(UniValue::VARR);
     {
