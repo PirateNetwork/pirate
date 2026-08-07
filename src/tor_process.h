@@ -23,6 +23,12 @@ static const bool DEFAULT_TOR_AUTOSTART = true;
  * up the connection whenever the port becomes available, so nothing else
  * needs to wait on this.
  *
+ * A second background thread (also in `threadGroup`) supervises the child for
+ * the life of the process and relaunches it with backoff if it ever exits on
+ * its own (crash, OOM-kill) - see ThreadSuperviseTor() in tor_process.cpp.
+ * Without that, StartTorControl's reconnect logic would just keep failing
+ * forever against a ControlPort nothing is listening on anymore.
+ *
  * No-op (returns true) if `-torautostart` is disabled.
  */
 bool StartEmbeddedTor(boost::thread_group& threadGroup);

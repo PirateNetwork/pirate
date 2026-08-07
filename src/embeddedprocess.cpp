@@ -167,7 +167,7 @@ void AppendQuotedArg(std::wstring& out, const std::wstring& arg)
 
 CManagedProcess::~CManagedProcess()
 {
-    if (m_running) Stop(2000);
+    if (IsRunning()) Stop(2000);
 }
 
 fs::path CManagedProcess::FindBinary(const std::string& name, const fs::path& explicitPath,
@@ -229,6 +229,7 @@ fs::path CManagedProcess::FindBinary(const std::string& name, const fs::path& ex
 bool CManagedProcess::Spawn(const fs::path& binary, const std::vector<std::string>& args,
                             const fs::path& stdoutLog, const fs::path& stderrLog)
 {
+    boost::lock_guard<boost::mutex> lock(m_mutex);
     if (m_running) return false;
 
 #ifdef _WIN32
@@ -306,12 +307,35 @@ bool CManagedProcess::Spawn(const fs::path& binary, const std::vector<std::strin
 
 int64_t CManagedProcess::GetProcessId() const
 {
+    boost::lock_guard<boost::mutex> lock(m_mutex);
     if (!m_running) return 0;
 #ifdef _WIN32
     return static_cast<int64_t>(m_procInfo.dwProcessId);
 #else
     return static_cast<int64_t>(m_pid);
 #endif
+}
+
+bool CManagedProcess::IsRunning()
+{
+    boost::lock_guard<boost::mutex> lock(m_mutex);
+    if (!m_running) return false;
+
+#ifdef _WIN32
+    DWORD exitCode = STILL_ACTIVE;
+    if (!GetExitCodeProcess(m_procInfo.hProcess, &exitCode) || exitCode != STILL_ACTIVE) {
+        CloseHandle(m_procInfo.hProcess);
+        m_procInfo = PROCESS_INFORMATION{};
+        m_running = false;
+    }
+#else
+    int status = 0;
+    if (waitpid(m_pid, &status, WNOHANG) == m_pid) {
+        m_pid = -1;
+        m_running = false;
+    }
+#endif
+    return m_running;
 }
 
 bool CManagedProcess::WaitUntilReady(const CService& target, int timeoutMs) const
@@ -329,6 +353,7 @@ bool CManagedProcess::WaitUntilReady(const CService& target, int timeoutMs) cons
 
 void CManagedProcess::Stop(int termWaitMs)
 {
+    boost::lock_guard<boost::mutex> lock(m_mutex);
     if (!m_running) return;
 
 #ifdef _WIN32

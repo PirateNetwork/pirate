@@ -10,6 +10,9 @@
 #include "networking_watchdog.h"
 #include "util.h"
 #include "util/readwritefile.h"
+#include "utiltime.h"
+
+#include <atomic>
 
 #include <boost/bind/bind.hpp>
 
@@ -23,9 +26,27 @@ CManagedProcess g_i2pdProcess;
 static const int I2PD_STARTUP_TIMEOUT_MS = 180000;
 /** How long to give i2pd to shut down cleanly before killing it. */
 static const int I2PD_STOP_TIMEOUT_MS = 5000;
+/** How often ThreadSuperviseI2Pd() polls whether the child is still alive. */
+static const int64_t I2PD_SUPERVISE_INTERVAL_MS = 5000;
+/** Respawn backoff cap, mirroring ThreadI2PCheck()'s SAM-reconnect backoff cap in net.cpp. */
+static const int64_t I2PD_RESPAWN_BACKOFF_CAP_MS = 300000;
 
 /** Set by StartEmbeddedI2Pd() just before spawning ThreadWaitI2PdReady(). */
 CService g_i2pdSamTarget;
+
+// Spawn parameters, resolved once by StartEmbeddedI2Pd() (binary lookup,
+// port picking, conf file) and reused by ThreadSuperviseI2Pd() to relaunch
+// i2pd if the child dies mid-run - see that function's doc comment for why
+// that's needed at all.
+fs::path g_i2pdBinary;
+std::string g_i2pdConfArg;
+std::string g_i2pdDataDirArg;
+fs::path g_i2pdStdoutLog;
+fs::path g_i2pdStderrLog;
+
+/** Set by StopEmbeddedI2Pd() so ThreadSuperviseI2Pd() knows an exit it
+ *  observes right afterward was requested, not a crash to relaunch from. */
+std::atomic<bool> g_i2pdStopping{false};
 
 fs::path I2PdDataDir()
 {
@@ -38,6 +59,52 @@ void ThreadWaitI2PdReady()
 {
     if (!g_i2pdProcess.WaitUntilReady(g_i2pdSamTarget, I2PD_STARTUP_TIMEOUT_MS)) {
         LogPrintf("i2p: embedded i2pd daemon did not become ready within %d ms\n", I2PD_STARTUP_TIMEOUT_MS);
+    }
+}
+
+//! Launch i2pd using the parameters StartEmbeddedI2Pd() already resolved.
+//! Used both for the initial launch and by ThreadSuperviseI2Pd() to relaunch
+//! it after it dies.
+bool SpawnI2Pd()
+{
+    LogPrintf("i2p: launching embedded i2pd daemon from '%s'\n", g_i2pdBinary.string());
+    if (!g_i2pdProcess.Spawn(g_i2pdBinary, {g_i2pdConfArg, g_i2pdDataDirArg}, g_i2pdStdoutLog, g_i2pdStderrLog)) {
+        LogPrintf("i2p: failed to launch embedded i2pd daemon\n");
+        return false;
+    }
+    // Report the actual binary basename (not a fixed "i2pd" label): -i2pdpath can point
+    // at an arbitrarily-named external binary, and pirate-networking identifies the
+    // process it's about to terminate by comparing against this same name.
+    NotifyNetworkingWatchdog(g_i2pdBinary.stem().string(), g_i2pdProcess.GetProcessId());
+    return true;
+}
+
+//! Watches the embedded i2pd child for the life of the process and relaunches
+//! it (with backoff) if it exits on its own - a crash or an OOM-kill, say.
+//! Nothing else in this codebase notices that: ThreadI2PCheck() (net.cpp)
+//! only retries the SAM *connection*, which stays dead forever if the
+//! process behind the port is gone, since i2pd is never told to come back.
+void ThreadSuperviseI2Pd()
+{
+    int64_t backoff = I2PD_SUPERVISE_INTERVAL_MS;
+    while (true) {
+        MilliSleep(I2PD_SUPERVISE_INTERVAL_MS);
+        boost::this_thread::interruption_point();
+
+        if (g_i2pdStopping) return;
+
+        if (g_i2pdProcess.IsRunning()) {
+            backoff = I2PD_SUPERVISE_INTERVAL_MS;
+            continue;
+        }
+
+        LogPrintf("i2p: embedded i2pd daemon is no longer running, relaunching\n");
+        if (SpawnI2Pd()) {
+            backoff = I2PD_SUPERVISE_INTERVAL_MS;
+        } else {
+            MilliSleep(backoff);
+            if (backoff < I2PD_RESPAWN_BACKOFF_CAP_MS) backoff *= 2;
+        }
     }
 }
 
@@ -106,18 +173,13 @@ bool StartEmbeddedI2Pd(boost::thread_group& threadGroup)
         return false;
     }
 
-    LogPrintf("i2p: launching embedded i2pd daemon from '%s'\n", binary.string());
-    const std::string confArg = "--conf=" + confPath.string();
-    const std::string dataDirArg = "--datadir=" + (dataDir / "data").string();
-    if (!g_i2pdProcess.Spawn(binary, {confArg, dataDirArg},
-                             dataDir / "i2pd.stdout.log", dataDir / "i2pd.stderr.log")) {
-        LogPrintf("i2p: failed to launch embedded i2pd daemon\n");
-        return false;
-    }
-    // Report the actual binary basename (not a fixed "i2pd" label): -i2pdpath can point
-    // at an arbitrarily-named external binary, and pirate-networking identifies the
-    // process it's about to terminate by comparing against this same name.
-    NotifyNetworkingWatchdog(binary.stem().string(), g_i2pdProcess.GetProcessId());
+    g_i2pdBinary = binary;
+    g_i2pdConfArg = "--conf=" + confPath.string();
+    g_i2pdDataDirArg = "--datadir=" + (dataDir / "data").string();
+    g_i2pdStdoutLog = dataDir / "i2pd.stdout.log";
+    g_i2pdStderrLog = dataDir / "i2pd.stderr.log";
+
+    if (!SpawnI2Pd()) return false;
 
     // Leave it running regardless of how long it takes to become ready;
     // i2p.cpp's own session-creation retry logic (ThreadI2PCheck) picks up
@@ -126,11 +188,13 @@ bool StartEmbeddedI2Pd(boost::thread_group& threadGroup)
     // takes unusually long.
     g_i2pdSamTarget = samTarget;
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pdready", &ThreadWaitI2PdReady));
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "i2pdsupervise", &ThreadSuperviseI2Pd));
 
     return true;
 }
 
 void StopEmbeddedI2Pd()
 {
+    g_i2pdStopping = true;
     g_i2pdProcess.Stop(I2PD_STOP_TIMEOUT_MS);
 }

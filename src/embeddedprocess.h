@@ -8,6 +8,8 @@
 #include "fs.h"
 #include "netaddress.h"
 
+#include <boost/thread.hpp>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -31,8 +33,15 @@ public:
     CManagedProcess(const CManagedProcess&) = delete;
     CManagedProcess& operator=(const CManagedProcess&) = delete;
 
-    /** True if a child process is currently believed to be running. */
-    bool IsRunning() const { return m_running; }
+    /**
+     * True if the child process is currently running. Non-blocking: if it has
+     * exited since the last call, this reaps it (so it doesn't linger as a
+     * zombie, and so a recycled pid is never mistaken for it later) and
+     * returns false. Safe to poll repeatedly from a supervisor thread - see
+     * i2pd_process.cpp / tor_process.cpp's ThreadSupervise*() - concurrently
+     * with Spawn()/Stop() on another thread.
+     */
+    bool IsRunning();
 
     /**
      * OS process id of the currently running child, or 0 if not running.
@@ -90,6 +99,12 @@ public:
     void Stop(int termWaitMs);
 
 private:
+    // Guards every field below: Spawn()/Stop()/GetProcessId() are called from
+    // the owning subsystem's init/shutdown code, while IsRunning() is now
+    // also polled from a background supervisor thread (see the ThreadSupervise*()
+    // functions in i2pd_process.cpp / tor_process.cpp) that can run concurrently
+    // with either.
+    mutable boost::mutex m_mutex;
     bool m_running{false};
 #ifdef _WIN32
     PROCESS_INFORMATION m_procInfo{};

@@ -24,6 +24,12 @@ static const bool DEFAULT_I2PD_AUTOSTART = true;
  * actually picks up the connection whenever the SAM port becomes available,
  * so nothing else needs to wait on this.
  *
+ * A second background thread (also in `threadGroup`) supervises the child for
+ * the life of the process and relaunches it with backoff if it ever exits on
+ * its own (crash, OOM-kill) - see ThreadSuperviseI2Pd() in i2pd_process.cpp.
+ * Without that, ThreadI2PCheck's retries would just keep failing forever
+ * against a SAM port nothing is listening on anymore.
+ *
  * No-op (returns true) if `-i2pdautostart` is disabled, or if no I2P SAM
  * target ends up configured. Must be called before the i2p::sam::Session is
  * constructed (net.cpp, StartNode()).

@@ -11,6 +11,9 @@
 #include "torcontrol.h"
 #include "util.h"
 #include "util/readwritefile.h"
+#include "utiltime.h"
+
+#include <atomic>
 
 #include <boost/bind/bind.hpp>
 
@@ -24,9 +27,25 @@ CManagedProcess g_torProcess;
 static const int TOR_STARTUP_TIMEOUT_MS = 180000;
 /** How long to give tor to shut down cleanly before killing it. */
 static const int TOR_STOP_TIMEOUT_MS = 5000;
+/** How often ThreadSuperviseTor() polls whether the child is still alive. */
+static const int64_t TOR_SUPERVISE_INTERVAL_MS = 5000;
+/** Respawn backoff cap; mirrors i2pd_process.cpp's I2PD_RESPAWN_BACKOFF_CAP_MS. */
+static const int64_t TOR_RESPAWN_BACKOFF_CAP_MS = 300000;
 
 /** Set by StartEmbeddedTor() just before spawning ThreadWaitTorReady(). */
 CService g_torControlTarget;
+
+// Spawn parameters, resolved once by StartEmbeddedTor() (binary lookup, port
+// picking, torrc) and reused by ThreadSuperviseTor() to relaunch tor if the
+// child dies mid-run - see that function's doc comment for why that's needed.
+fs::path g_torBinary;
+fs::path g_torrcPath;
+fs::path g_torStdoutLog;
+fs::path g_torStderrLog;
+
+/** Set by StopEmbeddedTor() so ThreadSuperviseTor() knows an exit it
+ *  observes right afterward was requested, not a crash to relaunch from. */
+std::atomic<bool> g_torStopping{false};
 
 fs::path TorDataDir()
 {
@@ -39,6 +58,52 @@ void ThreadWaitTorReady()
 {
     if (!g_torProcess.WaitUntilReady(g_torControlTarget, TOR_STARTUP_TIMEOUT_MS)) {
         LogPrintf("tor: embedded tor daemon did not become ready within %d ms\n", TOR_STARTUP_TIMEOUT_MS);
+    }
+}
+
+//! Launch tor using the parameters StartEmbeddedTor() already resolved. Used
+//! both for the initial launch and by ThreadSuperviseTor() to relaunch it
+//! after it dies.
+bool SpawnTor()
+{
+    LogPrintf("tor: launching embedded tor daemon from '%s'\n", g_torBinary.string());
+    if (!g_torProcess.Spawn(g_torBinary, {"-f", g_torrcPath.string()}, g_torStdoutLog, g_torStderrLog)) {
+        LogPrintf("tor: failed to launch embedded tor daemon\n");
+        return false;
+    }
+    // Report the actual binary basename (not a fixed "tor" label): -torpath can point
+    // at an arbitrarily-named external binary, and pirate-networking identifies the
+    // process it's about to terminate by comparing against this same name.
+    NotifyNetworkingWatchdog(g_torBinary.stem().string(), g_torProcess.GetProcessId());
+    return true;
+}
+
+//! Watches the embedded tor child for the life of the process and relaunches
+//! it (with backoff) if it exits on its own (crash, OOM-kill) - see
+//! ThreadSuperviseI2Pd() in i2pd_process.cpp for the equivalent i2pd gap this
+//! closes: torcontrol.cpp's own reconnect logic only retries the
+//! ControlPort connection, which stays dead forever if tor itself is gone.
+void ThreadSuperviseTor()
+{
+    int64_t backoff = TOR_SUPERVISE_INTERVAL_MS;
+    while (true) {
+        MilliSleep(TOR_SUPERVISE_INTERVAL_MS);
+        boost::this_thread::interruption_point();
+
+        if (g_torStopping) return;
+
+        if (g_torProcess.IsRunning()) {
+            backoff = TOR_SUPERVISE_INTERVAL_MS;
+            continue;
+        }
+
+        LogPrintf("tor: embedded tor daemon is no longer running, relaunching\n");
+        if (SpawnTor()) {
+            backoff = TOR_SUPERVISE_INTERVAL_MS;
+        } else {
+            MilliSleep(backoff);
+            if (backoff < TOR_RESPAWN_BACKOFF_CAP_MS) backoff *= 2;
+        }
     }
 }
 
@@ -99,16 +164,12 @@ bool StartEmbeddedTor(boost::thread_group& threadGroup)
         return false;
     }
 
-    LogPrintf("tor: launching embedded tor daemon from '%s'\n", binary.string());
-    if (!g_torProcess.Spawn(binary, {"-f", torrcPath.string()},
-                            dataDir / "tor.stdout.log", dataDir / "tor.stderr.log")) {
-        LogPrintf("tor: failed to launch embedded tor daemon\n");
-        return false;
-    }
-    // Report the actual binary basename (not a fixed "tor" label): -torpath can point
-    // at an arbitrarily-named external binary, and pirate-networking identifies the
-    // process it's about to terminate by comparing against this same name.
-    NotifyNetworkingWatchdog(binary.stem().string(), g_torProcess.GetProcessId());
+    g_torBinary = binary;
+    g_torrcPath = torrcPath;
+    g_torStdoutLog = dataDir / "tor.stdout.log";
+    g_torStderrLog = dataDir / "tor.stderr.log";
+
+    if (!SpawnTor()) return false;
 
     // Leave it running regardless of how long it takes to become ready;
     // torcontrol.cpp's own reconnect logic picks up the connection whenever
@@ -116,11 +177,13 @@ bool StartEmbeddedTor(boost::thread_group& threadGroup)
     // warning off the main thread if it takes unusually long.
     g_torControlTarget = torControlTarget;
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "torready", &ThreadWaitTorReady));
+    threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "torsupervise", &ThreadSuperviseTor));
 
     return true;
 }
 
 void StopEmbeddedTor()
 {
+    g_torStopping = true;
     g_torProcess.Stop(TOR_STOP_TIMEOUT_MS);
 }
