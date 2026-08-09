@@ -5972,6 +5972,12 @@ CKeyingMaterial CWallet::SerializeForEncryptionInput(WalletObject1 &wObj1) {
     return vchSecret;
 }
 
+// wallet.cpp is the only translation unit that defines this template, and at
+// -O2 the compiler inlines away its only in-TU caller (WriteHDChainToDisk)
+// without leaving a linkable out-of-line copy. Callers outside this file
+// (pirate-gtest) need one, so force it here.
+template CKeyingMaterial CWallet::SerializeForEncryptionInput<CHDChain>(CHDChain&);
+
 /**
  * @brief Serialize two wallet objects for encryption
  * @tparam WalletObject1 Type of the first wallet object
