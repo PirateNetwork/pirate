@@ -504,6 +504,7 @@ bool IronwoodSpendingKey::DeriveFVK(IronwoodFullViewingKey* fvk) const
     // Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); // sending stream
     CDataStream rs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
+    CDataStream fs(SER_NETWORK, PROTOCOL_VERSION); // returning stream
 
     // Transfer Data
     IronwoodFullViewingKey_FFI_t fvk_t;
@@ -524,10 +525,13 @@ bool IronwoodSpendingKey::DeriveFVK(IronwoodFullViewingKey* fvk) const
     if (rustCompleted) {
         rustCompleted = ironwood_keys::fvk_to_ivk(fvk_t, ivk_t);
         if (rustCompleted) {
-            uint256 ivk;
-            std::copy(ivk_t.begin(), ivk_t.end(), ivk.begin());
-            rustCompleted = !ivk.IsNull();
-            memory_cleanse(ivk.begin(), ivk.size());
+            IronwoodIncomingViewingKey ivk;
+            fs << ivk_t;
+            fs >> ivk;
+            rustCompleted = !ivk.ivk.IsNull();
+            memory_cleanse(ivk.ivk.begin(), ivk.ivk.size());
+            memory_cleanse(ivk.dk.begin(), ivk.dk.size());
+            
         }
     }
 
@@ -540,6 +544,7 @@ bool IronwoodSpendingKey::DeriveFVK(IronwoodFullViewingKey* fvk) const
     // Cleanse the memory of the transfer and serialization objects
     memory_cleanse(ss.data(), ss.size());
     memory_cleanse(rs.data(), rs.size());
+    memory_cleanse(fs.data(), fs.size());
     memory_cleanse(fvk_t.data(), fvk_t.size());
     memory_cleanse(sk_t.data(), sk_t.size());
     memory_cleanse(ivk_t.data(), ivk_t.size());
