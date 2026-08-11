@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2018-2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1892,6 +1893,13 @@ void ThreadSocketHandler()
         //
         // Disconnect nodes
         //
+        // Pool slots whose nPeerCount needs decrementing for nodes
+        // disconnected this pass - applied after cs_vNodes is released
+        // below. Must not lock cs_i2p_relay_pool while still holding
+        // cs_vNodes here: TickI2PRelayPool() locks cs_i2p_relay_pool first
+        // and nests cs_vNodes inside it (see that function's own comment),
+        // so nesting the other way around here would deadlock against it.
+        std::vector<std::pair<size_t, uint32_t>> vDisconnectedPoolSlots;
         {
             LOCK(cs_vNodes);
             // Disconnect unused nodes
@@ -1905,11 +1913,7 @@ void ThreadSocketHandler()
                     vNodes.erase(remove(vNodes.begin(), vNodes.end(), pnode), vNodes.end());
 
                     if (pnode->m_i2p_pool_idx >= 0) {
-                        LOCK(cs_i2p_relay_pool);
-                        size_t idx = (size_t)pnode->m_i2p_pool_idx;
-                        if (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].nGeneration == pnode->m_i2p_pool_generation &&
-                            g_i2p_relay_pool[idx].nPeerCount > 0)
-                            g_i2p_relay_pool[idx].nPeerCount--;
+                        vDisconnectedPoolSlots.push_back({(size_t)pnode->m_i2p_pool_idx, pnode->m_i2p_pool_generation});
                     }
 
                     // release outbound grant (if any)
@@ -1923,6 +1927,15 @@ void ThreadSocketHandler()
                         pnode->Release();
                     vNodesDisconnected.push_back(pnode);
                 }
+            }
+        }
+        if (!vDisconnectedPoolSlots.empty()) {
+            LOCK(cs_i2p_relay_pool);
+            for (const auto& slot : vDisconnectedPoolSlots) {
+                size_t idx = slot.first;
+                if (idx < g_i2p_relay_pool.size() && g_i2p_relay_pool[idx].nGeneration == slot.second &&
+                    g_i2p_relay_pool[idx].nPeerCount > 0)
+                    g_i2p_relay_pool[idx].nPeerCount--;
             }
         }
         {
