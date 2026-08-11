@@ -1,3 +1,6 @@
+// Copyright (c) 2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -1062,9 +1065,18 @@ void komodo_args(char *argv0)
     bool fTestNet = GetBoolArg("-testnet", false);
     bool fRegTest = GetBoolArg("-regtest", false);
     if (!fTestNet && !fRegTest) {
-        SoftSetArg("-addnode", std::string("zero.kolo.supernet.org"));
-        vector<string> PIRATEnodes = {"pirate1.cryptoforge.cc,pirate2.cryptoforge.cc,pirate3.cryptoforge.cc,explorer.piratechain.com","78.63.47.105","46.4.67.239","139.99.145.129","94.130.32.156","173.212.200.221","66.248.204.186","91.206.15.138","217.69.15.197","38.91.101.236","49.12.83.114","158.69.26.155","51.81.56.52","84.38.184.139" };
-        mapMultiArgs["-addnode"] = PIRATEnodes;
+        // Fixed peers - not real DNS seeds (see vSeeds for dnsseed1-4.cryptoforge.cc,
+        // the actual pirate-seeder instances). Pruned 2026-08-11 to hosts that
+        // were at least reachable on 45452 at check time, or otherwise worth
+        // keeping around; the rest (explorer.piratechain.com, explorer.cryptoforge.cc,
+        // and a batch of unresponsive third-party IPs) were dropped.
+        mapMultiArgs["-addnode"].push_back("pirate1.cryptoforge.cc");
+        mapMultiArgs["-addnode"].push_back("pirate2.cryptoforge.cc");
+        mapMultiArgs["-addnode"].push_back("pirate3.cryptoforge.cc");
+        mapMultiArgs["-addnode"].push_back("pirate4.cryptoforge.cc");
+        mapMultiArgs["-addnode"].push_back("seed.dexstats.info");
+        mapMultiArgs["-addnode"].push_back("seed.komodostats.com");
+        mapMultiArgs["-addnode"].push_back("bootstrap.arrr.black");
     }
 	  std::string name = GetArg("-ac_name","");
     if ( argv0 != 0 )

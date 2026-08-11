@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -190,16 +191,10 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
 
-        vSeeds.push_back(CDNSSeedData("Forge1", "pirate1.cryptoforge.cc")); // Forge
-        vSeeds.push_back(CDNSSeedData("Forge2", "pirate2.cryptoforge.cc")); // Forge
-        vSeeds.push_back(CDNSSeedData("Forge3", "pirate3.cryptoforge.cc")); // Forge
-        vSeeds.push_back(CDNSSeedData("ForgeExporer", "explorer.cryptoforge.cc")); // Forge
-        vSeeds.push_back(CDNSSeedData("Explorer","explorer.piratechain.com")); // Explorer tls enabled chmex
-        vSeeds.push_back(CDNSSeedData("Dexstats","seed.dexstats.info")); // Dexstats chmex
-        vSeeds.push_back(CDNSSeedData("Komodostats","seed.komodostats.com")); // komodostats webworker01
-        vSeeds.push_back(CDNSSeedData("Bootstrap","bootstrap.arrr.black")); // geo optimized routing enabled chmex
-
-        // TODO: we need more seed crawlers from other community members
+        vSeeds.push_back(CDNSSeedData("Forge1", "dnsseed1.cryptoforge.cc")); // Forge - pirate-seeder
+        vSeeds.push_back(CDNSSeedData("Forge2", "dnsseed2.cryptoforge.cc")); // Forge - pirate-seeder
+        vSeeds.push_back(CDNSSeedData("Forge3", "dnsseed3.cryptoforge.cc")); // Forge - pirate-seeder
+        vSeeds.push_back(CDNSSeedData("Forge4", "dnsseed4.cryptoforge.cc")); // Forge - pirate-seeder
         base58Prefixes[PUBKEY_ADDRESS] = {60};
         base58Prefixes[SCRIPT_ADDRESS] = {85};
         base58Prefixes[SECRET_KEY] =     {188};
