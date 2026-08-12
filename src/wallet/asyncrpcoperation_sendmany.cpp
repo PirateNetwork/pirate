@@ -525,6 +525,35 @@ bool AsyncRPCOperation_sendmany::main_impl()
         return false;
     }
 
+    // Honor a configured change-address override (-changeaddress), if any, in place
+    // of the auto-derived ZIP-32 internal address. Applies regardless of which pool
+    // was spent from — there is no consensus rule tying a change output's pool to
+    // the spend's pool, so a Sapling source can send change to an Ironwood address
+    // and vice versa. Uses this send's own ovk (already the one used for every
+    // other output above, cross-pool or not) so the sending wallet can still
+    // recognize this change note as its own.
+    if (pwalletMain->configuredChangeAddress.has_value()) {
+        const auto& changeAddress = pwalletMain->configuredChangeAddress.value();
+        if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
+            // STEP 4 only initializes the Sapling builder when spending from Sapling
+            // or when Sapling outputs were already queued. A Sapling change address
+            // on an Ironwood-only send (no Sapling spend, no Sapling outputs) would
+            // otherwise reach Build() with no Sapling builder to add the change to
+            // — mirror STEP 4's own "outputs only" fallback here for that case.
+            if (!isFromSaplingAddress_ && saplingOutputs_.empty()) {
+                builder_.InitializeSapling(uint256());
+            }
+            builder_.SendChangeTo(*saplingChangeAddr, ovk);
+        } else if (auto ironwoodChangeAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress)) {
+            // Mirror of the above for STEP 5 / an Ironwood change address on a
+            // Sapling-only send.
+            if (!isFromIronwoodAddress_ && ironwoodOutputs_.empty()) {
+                builder_.InitializeIronwood(false, true, uint256());
+            }
+            builder_.SendChangeTo(*ironwoodChangeAddr, ovk);
+        }
+    }
+
     // STEP 6: Add outputs to the transaction.
     // Process Sapling outputs
     for (const auto& [recipientAddress, outputValue, hexMemo] : saplingOutputs_) {

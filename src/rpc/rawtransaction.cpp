@@ -1922,6 +1922,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   uint256 ovk;
 
   //Sapling
+  bool saplingInitialized = false;
   if (tb.vSaplingSpends.size() > 0) {
       LogPrintf("Adding Sapling Spends\n");
       libzcash::SaplingExtendedSpendingKey primarySaplingKey;
@@ -1961,6 +1962,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
 
       //Create a new sapling bulider before converting the store sapling notes
       tb.InitializeSapling(primaryAnchor);
+      saplingInitialized = true;
 
       //Add the stored sapling notes to the sapling builder
       if (!tb.ConvertRawSaplingSpend(primarySaplingKey))
@@ -2038,10 +2040,16 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key failed to produce a non-null outgoing viewing key.");
   }
 
-  //Initialize the sapling builder if there are sapling outputs but no sapling spends.
-  //This can happen when spending from Ironwood and sending to a Sapling address (cross-pool send).
-  if (tb.vSaplingSpends.size() == 0 && tb.vSaplingOutputs.size() > 0) {
+  //Initialize the sapling builder if there are sapling outputs but the sapling builder has not
+  //already been initialized. This can happen when spending from Ironwood and sending to a
+  //Sapling address (cross-pool send). Guarded on saplingInitialized rather than
+  //tb.vSaplingSpends.size() == 0 — ConvertRawSaplingSpend above already cleared that vector on
+  //success, so checking its size here can't distinguish "never had spends" from "had spends,
+  //already converted" and would otherwise re-initialize (and silently discard) an
+  //already-populated Sapling builder for an ordinary same-pool Sapling-to-Sapling send.
+  if (!saplingInitialized && tb.vSaplingOutputs.size() > 0) {
       tb.InitializeSapling(uint256());
+      saplingInitialized = true;
   }
 
   //Add the stored outputs to the sapling builder
@@ -2053,11 +2061,34 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   //This can happen when there are no ironwood spends but there are ironwood outputs
   if(ironwoodInitialized == false && tb.vIronwoodOutputs.size() > 0) {
       tb.InitializeIronwood(false, true, uint256());
+      ironwoodInitialized = true;
   }
 
   //Add the stored outputs to the ironwood builder
   if (tb.vIronwoodOutputs.size() > 0 && !tb.ConvertRawIronwoodOutput(ovk)) {
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Ironwood Outputs failed.");
+  }
+
+  //Honor a configured change-address override (-changeaddress), if any, in place of the
+  //auto-derived ZIP-32 internal address. Applies regardless of which pool was spent from —
+  //see asyncrpcoperation_sendmany.cpp's identical override for the cross-pool rationale.
+  //Reuses this send's own ovk (already used for every output above) so the sending wallet can
+  //still recognize this change note as its own. Must run after the output-conversion calls
+  //above (not before): those are what would otherwise be the pool's only initializer, and
+  //initializing twice for the same pool would hit the same discard-the-builder bug just fixed.
+  if (pwalletMain->configuredChangeAddress.has_value()) {
+      const auto& changeAddress = pwalletMain->configuredChangeAddress.value();
+      if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
+          if (!saplingInitialized) {
+              tb.InitializeSapling(uint256());
+          }
+          tb.SendChangeTo(*saplingChangeAddr, ovk);
+      } else if (auto ironwoodChangeAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress)) {
+          if (!ironwoodInitialized) {
+              tb.InitializeIronwood(false, true, uint256());
+          }
+          tb.SendChangeTo(*ironwoodChangeAddr, ovk);
+      }
   }
 
   //Build and sign transaction
@@ -2074,9 +2105,9 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
  * @brief RPC command to create transaction builder instructions for offline shielded transactions
  * 
  * Generates hex-encoded transaction builder data for constructing shielded transactions
- * offline. Supports transparent and shielded inputs with automatic change handling
- * and coinbase UTXO spending restrictions for enhanced privacy workflows.
- * 
+ * offline. Sources are Sapling or Ironwood only (a transparent fromaddress is rejected)
+ * with automatic change handling for enhanced privacy workflows.
+ *
  * @param params RPC parameters: [fromaddress, amounts, minconf, fee]
  * @param fHelp Whether to display help information
  * @param mypk Public key for authentication (unused)
@@ -2088,15 +2119,14 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "z_createbuildinstructions \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
           "\nCreate transaction builder instructions for offline shielded transaction construction.\n"
           "Generates hex-encoded builder data that can be used to create shielded transactions\n"
-          "from transparent or shielded addresses to shielded (Sapling/Ironwood) addresses.\n"
-          "Change generated from a transparent address flows to a new transparent address,\n"
-          "while change generated from a shielded address returns to itself.\n"
-          "\nWhen sending coinbase UTXOs to a shielded address, change is not allowed.\n"
-          "The entire value of the UTXO(s) must be consumed.\n"
+          "from a Sapling or Ironwood address to shielded (Sapling/Ironwood) addresses.\n"
+          "Change returns to the wallet's internal (ZIP-32) change address derived from the\n"
+          "spending key, unless the -changeaddress config option is set, in which case it is\n"
+          "routed there instead (applies to both Sapling and Ironwood sources).\n"
 
           + HelpRequiringPassphrase() + "\n"
           "\nArguments:\n"
-          "1. \"fromaddress\"         (string, required) The transparent or shielded address to send funds from\n"
+          "1. \"fromaddress\"         (string, required) The Sapling or Ironwood address to send funds from\n"
           "2. \"amounts\"             (array, required) Array of output destinations and amounts\n"
           "    [{\n"
           "      \"address\":address  (string, required) The Sapling or Ironwood shielded address\n"
@@ -2247,7 +2277,7 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
       auto res = DecodePaymentAddress(fromaddress);
       if (!IsValidPaymentAddress(res)) {
           // invalid
-          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr, sapling or ironwood.");
+          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a sapling or ironwood.");
       }
 
       // Remember whether this is Sapling address

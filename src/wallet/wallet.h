@@ -1104,6 +1104,14 @@ public:
     int nextIronwoodConsolidation = 0;
     int targetIronwoodConsolidationQty = 100;
 
+    // Configured shielded change address override (-changeaddress). When set,
+    // z_sendmany routes change here regardless of which pool (Sapling or
+    // Ironwood) the send spent from — there is no consensus rule tying a
+    // change output's pool to the spend's pool, so one address covers both.
+    // Validated at startup (init.cpp) to be a Sapling or Ironwood address
+    // this wallet holds the spending key for, before being set here.
+    std::optional<libzcash::PaymentAddress> configuredChangeAddress;
+
     // Use dPoW confirmation count for note depth filtering
     // Use dPoW (delayed Proof-of-Work) notarisation confirmation count instead of
     // raw GetDepthInMainChain() when filtering notes in GetFilteredNotes.  When true,

@@ -546,6 +546,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling address to consolidate (default: all). Must match sweep address when sweep is enabled."));
     strUsage += HelpMessageOpt("-consolidateironwoodaddress=<zaddr>", _("Specify Ironwood address to consolidate (default: all). Must match sweep address when sweep is enabled."));
     strUsage += HelpMessageOpt("-consolidationtargetqty=<n>", strprintf(_("Minimum number of notes an address must have before auto-consolidation processes it (default: %i, minimum: 2)"), 100));
+    strUsage += HelpMessageOpt("-changeaddress=<zaddr>", _("Route all z_sendmany change (from either a Sapling or Ironwood source address) to this Sapling or Ironwood address instead of the auto-derived internal address. Wallet must hold the spending key for it."));
 
     // Deprecated consolidation commands
     strUsage += HelpMessageOpt("-consolidation", _("(DEPRECATED) Use -saplingconsolidation instead"));
@@ -2670,6 +2671,28 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             if (!hasSpendingKey) {
                 return InitError("Wallet must have the spending key for Ironwood consolidation address: " + vironwoodaddresses[i]);
             }
+        }
+
+        // Validate a configured shielded change address override. One address
+        // covers change for sends from either pool — a Sapling-input send's
+        // change is just another Sapling/Ironwood output, and there is no
+        // consensus rule requiring it to stay in the pool that was spent from.
+        // Must be a Sapling or Ironwood address (Sprout is disabled) this
+        // wallet holds the spending key for, so change can never be silently
+        // routed to funds this wallet doesn't control.
+        if (mapArgs.count("-changeaddress")) {
+            const std::string& strChangeAddress = mapArgs["-changeaddress"];
+            auto changeAddress = DecodePaymentAddress(strChangeAddress);
+            bool isShielded = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress) ||
+                               std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress);
+            if (!IsValidPaymentAddress(changeAddress) || !isShielded) {
+                return InitError("-changeaddress must be a valid Sapling or Ironwood address: " + strChangeAddress);
+            }
+            if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), changeAddress)) {
+                return InitError("Wallet must have the spending key for -changeaddress: " + strChangeAddress);
+            }
+            pwalletMain->configuredChangeAddress = changeAddress;
+            LogPrintf("Change address override: %s\n", strChangeAddress);
         }
 
         //Set Sweep Configuration
