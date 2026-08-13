@@ -53,6 +53,16 @@ layers:
   duplicate-nullifier acceptance gap.
 - Sapling anchor lookups are cached per transaction to reduce redundant
   validation work.
+- Fixed a NULL-pointer-write crash in `init_string()` on allocation
+  failure (mirroring an existing fix already applied to
+  `accumulatebytes()` in the same file).
+- P2P listen-socket binding now happens immediately after the datadir
+  lock, before script-check threads, the scheduler, Sapling parameter
+  loading, or the RPC/HTTP server are started. A bind failure (blocked
+  port, bad `-bind`/`-whitebind`) now fails fast in milliseconds instead
+  of after standing up — and then having to tear back down — the full
+  service stack, avoiding spurious restart-timeout trips under an
+  external process supervisor.
 
 Wallet security
 ----------------
@@ -74,6 +84,44 @@ wallet, supervised by a new `pirate-networking` watchdog. The bundled
 `tor`/`i2pd` binaries were renamed to avoid collisions with any
 system-installed copies, and a header-sync stall caused by
 `mapBlocksInFlight`-based throttling was fixed.
+
+- The embedded daemons are now automatically restarted (with backoff) if
+  either crashes or is OOM-killed mid-run. `pirate-networking`'s
+  liveness check previously matched a tracked pid against
+  `/proc/<pid>/comm`, which always failed for i2pd — it renames its own
+  comm to `i2pd-daemon` at runtime — leaving a crashed i2pd as an
+  unreaped zombie still holding the SAM port and blocking any restart.
+  It now matches against `/proc/<pid>/exe` instead, which reflects the
+  actually-exec'd binary regardless of any later self-renaming.
+- Startup no longer blocks for up to 180 seconds per daemon waiting for
+  Tor/I2P's control or SAM port to come up; that wait now runs on its
+  own thread instead of stalling the entire node's initialization.
+- Outbound I2P dialing now runs on its own dedicated thread. Previously
+  it shared `ThreadOpenConnections()` with ordinary clearnet/Tor
+  dialing, so a slow or unresponsive I2P client — each SAM round trip
+  inside `Connect()` can block up to 3 minutes, and `Connect()` can make
+  several in sequence — froze clearnet and Tor dialing for the same
+  duration.
+- Fixed a shutdown crash: an in-flight I2P SAM call could still be
+  holding a `Session`'s lock at the exact moment shutdown destroyed that
+  `Session`, aborting the process. The destructor now waits for any
+  in-flight call to finish before letting member destruction proceed.
+- Fixed a deadlock between the peer list and the I2P relay pool
+  (`cs_vNodes`/`cs_i2p_relay_pool`, locked in opposite order by the
+  socket handler's disconnect loop and the pool's own identity-retirement
+  logic) that could freeze all network processing while leaving the node
+  responsive only to a shutdown command.
+- Fixed a use-after-free crash in I2P relay-pool identity rotation:
+  routine rotation on a long-running node could free a slot's `Session`
+  out from under another thread still using it. The slot now holds a
+  `shared_ptr` instead of a `unique_ptr`, so a reader pins the object
+  alive for as long as it's actually in use.
+- `getnetworkinfo` gained a `torcontrol` field reporting the Tor control
+  port actually in use — the embedded daemon reassigns it at startup if
+  the configured port is taken, without ever updating `PIRATE.conf` — so
+  a sibling process (e.g. lightwalletd, publishing its own hidden
+  service via the same Tor daemon) can discover the real value instead
+  of trusting a possibly-stale configured/default one.
 
 Peer-to-peer networking and transaction privacy
 ---------------------------------------------------
@@ -166,6 +214,10 @@ Peer-to-peer networking and transaction privacy
 - Orphaned `peers.dat.XXXX` temporary files (left behind if the
   process is killed or crashes mid-write to the address database) are
   now cleaned up automatically on startup.
+- Default DNS seeds and fallback `-addnode` peers were updated to the
+  new `dnsseed1-4.cryptoforge.cc` pirate-seeder instances, replacing
+  hostnames that predated the pirate-seeder rewrite; the fallback
+  addnode list was also pruned to hosts confirmed reachable.
 
 Test suite consolidation
 --------------------------
@@ -176,7 +228,9 @@ folded into gtest, retiring `pirate-test` and `pirate-ktest` respectively.
 The consolidated suite was hardened with bug fixes, closed Sapling/Ironwood
 coverage gaps, and gained new coverage for shielded duplicate-nullifier
 rejection and real Sapling/Ironwood proof verification across the mempool
-and `ConnectBlock` paths.
+and `ConnectBlock` paths. A link failure in the consolidated suite (an
+out-of-line template instantiation dropped by inlining, breaking only
+the test binary) was also fixed.
 
 Wallet UI improvements
 ------------------------
@@ -190,6 +244,10 @@ Wallet UI improvements
 - Added BIP39 wordlist language options.
 - The new-address dialog was updated, and transaction detail popup
   contents are now shown before confirmation.
+- Fixed the Overview tab showing a transaction's fee instead of the
+  actual amount deducted from the wallet balance for outbound sends,
+  and a related bug where the transaction list's minimum-amount filter
+  compared against the fee instead of the real transaction size.
 
 RPC and wallet API changes
 -----------------------------
@@ -198,6 +256,13 @@ RPC and wallet API changes
 - Sapling change addresses are now supported.
 - Consolidation and Sweep now have Orchard/Ironwood variants alongside the
   existing Sapling implementations.
+- Added a `-changeaddress` configuration option letting a user route all
+  shielded change to a chosen Sapling or Ironwood address instead of the
+  auto-derived internal one, regardless of which pool a send actually
+  spent from — there is no consensus rule tying a change output's pool
+  to the spend's pool. Applies to `z_sendmany` and to
+  `z_createbuildinstructions`/`z_createbuildinstructionscoincontrol`'s
+  offline builder-instruction workflow alike.
 
 Notary requiredSigs and Notaries RPC tools
 ---------------------------------------------
@@ -225,6 +290,9 @@ Build and packaging infrastructure
   windres.
 - Patched i2pd's `Mapping::Contains()` for libc++'s incomplete
   `map::contains()`.
+- `fetch-params.sh`/`fetch-params.bat` now pull the Sapling/Sprout
+  trusted-setup parameters from a GitHub release instead of
+  `bootstrap.arrr.black`.
 
 Dependency updates
 ---------------------
@@ -301,6 +369,13 @@ error naming the replacement option, rather than silently aliasing to it:
   and Ironwood addresses, replacing `-sweepsaplingaddress`/
   `-sweepironwoodaddress`.
 
+**Wallet:**
+
+- `-changeaddress=<zaddr>` — route all shielded change to this Sapling or
+  Ironwood address instead of the auto-derived internal address,
+  regardless of which pool a send spent from. Must be an address this
+  wallet holds the spending key for.
+
 **Other:**
 
 - `-usedpowconfs` (default: 1) — use dPoW confirmation count instead of
@@ -318,6 +393,32 @@ Changelog
 =========
 
 Cryptoforge:
+  Add -changeaddress override for z_sendmany and offline builder
+  instructions. (de33e1284)
+  Replace stale DNS seeds with pirate-seeder hosts, prune dead
+  addnodes. (f9fe33fb7)
+  Update Cargo.toml comments to reflect librustzcash/orchard main.
+  (812506a0c)
+  Fix deadlock between cs_vNodes and cs_i2p_relay_pool. (4ea6c6676)
+  Fix stack buffer overflow in Ironwood DeriveFVK's degenerate-IVK
+  guard. (dd81bd4c1)
+  Fix undefined reference to SerializeForEncryptionInput<CHDChain> in
+  pirate-gtest. (467fbd2fa)
+  Auto-restart embedded i2pd/tor if either daemon dies mid-run.
+  (3581dc678)
+  Fix deprecated boost/bind.hpp warning in tor_process/i2pd_process.
+  (be1d5f98b)
+  Expose actual Tor control port via getnetworkinfo. (ae525e189)
+  Fix use-after-free crash in I2P relay-pool identity rotation.
+  (332daa36d)
+  Move P2P bind to run before script-check threads, scheduler, and RPC
+  server. (049466bb2)
+  Fix Overview tab showing fee instead of net amount for outbound
+  transactions. (fc0c53289)
+  Fix I2P/Tor startup stalls, dialing hangs, watchdog reaping, and a
+  shutdown crash. (9fbef780e)
+  Fix NULL-deref crash in init_string() on allocation failure.
+  (492dabe7e)
   Stop selecting and stop keeping terrible addrman entries.
   (01a7ac72e)
   Fix I2P relay-pool outbound dialing being starved. (61875fafa)
@@ -529,6 +630,8 @@ Cryptoforge:
   set the chain back to PIRATE and deactivate orchard. (7a235688e)
 
 Øswald Kardingson:
+  Use GitHub release for Zcash parameters. (733ad676a)
+  Update security.md email. (1fc1c1ec9)
   Point CI at dev branch. (2263697a6)
   Fix bundled Tor builds across CI targets. (6c35fc56a)
 
@@ -546,3 +649,6 @@ DeckerSU:
 
 Olexandr88:
   Update README.md. (eb3c68e38)
+
+riskrole:
+  chore: fix some comments. (9c33682c7)
