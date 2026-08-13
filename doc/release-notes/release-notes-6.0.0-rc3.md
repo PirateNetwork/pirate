@@ -29,6 +29,15 @@ were updated to rebased forks tracking upstream, including a pull of the
 fix for the Orchard double-spend exploit identified upstream in Zcash
 0.14.0.
 
+The Ironwood network upgrade's mainnet activation is now set for Sat Oct
+3 2026, 12:00 PM PDT (19:00 UTC) — two weeks after the notary
+`requiredSigs` update (see "Notary requiredSigs and Notaries RPC tools"
+below). Unlike that height-based activation, Ironwood activates from a
+real-world timestamp: each node independently derives the actual
+activation height at runtime, from the first block whose timestamp
+crosses this threshold, so no specific height needs to be agreed on in
+advance.
+
 Security hardening and DoS mitigation
 --------------------------------------
 
@@ -268,9 +277,11 @@ Notary requiredSigs and Notaries RPC tools
 ---------------------------------------------
 
 Notarization `requiredSigs` is now a constant, active from a fixed block
-height, rather than a runtime-computed value. New `nn_getwalletinfo` and
-`nn_split` Notaries RPC tools were added, along with an `nn_makenota` test
-RPC for exercising notarization end-to-end.
+height, rather than a runtime-computed value: `requiredSigs` is 6,
+active from height 4141650 (~Sat Sep 19 2026 12:00 PM PDT / 19:00 UTC,
+estimated from the chain tip at the 60s/block target spacing). New
+`nn_getwalletinfo` and `nn_split` Notaries RPC tools were added, along
+with an `nn_makenota` test RPC for exercising notarization end-to-end.
 
 Build and packaging infrastructure
 -------------------------------------
@@ -389,10 +400,19 @@ upgrade and bumps `MIN_INDEX_VERSION`, forcing a reindex on upgrade. All
 node operators should upgrade and allow the reindex to complete before
 resuming normal operation.
 
+Ironwood mainnet activation is targeted for Sat Oct 3 2026, 12:00 PM PDT
+(19:00 UTC); the notary `requiredSigs` update activates two weeks
+earlier, at height 4141650 (~Sat Sep 19 2026 12:00 PM PDT / 19:00 UTC).
+Upgrade before both dates.
+
 Changelog
 =========
 
 Cryptoforge:
+  Set PIRATE dPoW requiredSigs, activation height, and Ironwood date.
+  (a923ed6ec)
+  Isolate PIRATETST/other asset chains from PIRATE's mainnet peer
+  sources. (cbf91de83)
   Add -changeaddress override for z_sendmany and offline builder
   instructions. (de33e1284)
   Replace stale DNS seeds with pirate-seeder hosts, prune dead
