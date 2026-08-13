@@ -191,10 +191,6 @@ public:
         vFixedSeeds.clear();
         vSeeds.clear();
 
-        vSeeds.push_back(CDNSSeedData("Forge1", "dnsseed1.cryptoforge.cc")); // Forge - pirate-seeder
-        vSeeds.push_back(CDNSSeedData("Forge2", "dnsseed2.cryptoforge.cc")); // Forge - pirate-seeder
-        vSeeds.push_back(CDNSSeedData("Forge3", "dnsseed3.cryptoforge.cc")); // Forge - pirate-seeder
-        vSeeds.push_back(CDNSSeedData("Forge4", "dnsseed4.cryptoforge.cc")); // Forge - pirate-seeder
         base58Prefixes[PUBKEY_ADDRESS] = {60};
         base58Prefixes[SCRIPT_ADDRESS] = {85};
         base58Prefixes[SECRET_KEY] =     {188};
@@ -223,9 +219,6 @@ public:
         bech32HRPs[IRONWOOD_EXTENDED_SPEND_KEY]                = "pirate-secret-extended-key";
         bech32HRPs[IRONWOOD_DIVERSIFIED_EXTENDED_SPEND_KEY]    = "pirate-secret-diversified-6extended-key";
         bech32HRPs[IRONWOOD_OUTPUT_DISCLOSURE]                 = "pirate-ironwood-payment-disclosure";
-
-
-        vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
         fMiningRequiresPeers = true;
         fDefaultConsistencyChecks = false;
@@ -718,190 +711,6 @@ const CChainParams::CCheckpointData GetACCheckPoints()
         return checkpointDataDefault;
     }
 
-    /* CCL */
-    const CChainParams::CCheckpointData checkpointDataCCL = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	100000,	uint256S("0x00b774a53512dc7ae3239e4df46bfac0fabac49522377c1dcac27b4093a3aab7"))
-                (	200000,	uint256S("0x003b5d9c1bf4995eaf34799bec27ca707b0878340f5ba60f18f038ec0d4a36e6"))
-                (	300000,	uint256S("0x0137fb3dc8ce3f53b9cabf2f503e0e61152c5e78ded9e6c191263ba107d75bcb"))
-                (	400000,	uint256S("0x0221af5d6daafe322e083b23e3854776689fda3c6b1df68811257cd03ae88c10"))
-                (	500000,	uint256S("0x020816b4eb6efc1d58990458b71c45df5191633fb8d1761e506dddccc956c2d5"))
-                (	600000,	uint256S("0x00f6ca970821e94c4b4d7d177024898ec24b906abe9577fa41b0cf1c28ed2ab3"))
-                (	700000,	uint256S("0x0948abb30b3d2f475585518abdd2f439e632a1ee1f10068f758b2be25b8db607"))
-                (	800000,	uint256S("0x0945fd336f8d046bd2a21a04cf40ec47cc2ff78d0cca5d6ee41f40d01aca17f4"))
-                (	900000,	uint256S("0x0ab6d14dd52de403552414ee83952bd2194cb620a7d2143b784f4947b8644a86"))
-                (	1000000,	uint256S("0x00c6debdd76815713c0b778de89cb60fbb722403ae8109b878c44d3bb677ce03"))
-                (	1100000,	uint256S("0x009a4babe02e2029792363b1126d91e883ef74b1a23e5cfa5166021e669d30f4"))
-                (	1200000,	uint256S("0x02d8cebeadebfb37cc493df4d245ab8d97ccc355853eb191918ec0fc70a02962"))
-                (	1300000,	uint256S("0x022b8fe2410f78e136d6ecf6b9076c3f7d128306d5a76e8f71c56e2dacb0406b"))
-                (	1400000,	uint256S("0x00cd39f10bbb7e8514ffbff317acc665ced790f31f5d67d3bb73164f9c5d6a62"))
-                (	1500000,	uint256S("0x00409256fdbbca1b6d9ed2687dcfc98f0fc4b94a872c3a63878015496f17ed2f"))
-                (	1600000,	uint256S("0x01123bb5be90a0a602f5c18355184dd099ebd19a64c72eee476cdcbd0e8781f0"))
-                (	1700000,	uint256S("0x00a1856b8c7efb60d5be9fff5face4b7e79eb77ede83c9cf0f79656089bc9e2c"))
-                (	1714336,	uint256S("0x00e2d16eb526024c4e597d54a19c0a11c04fb1ca07254c1c50ab85cd00f19a5a")),
-                1708625294,     // * UNIX timestamp of last checkpoint block
-                2474803,       // * total number of transactions between genesis and last checkpoint (1708625294)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* CLC */
-    const CChainParams::CCheckpointData checkpointDataCLC = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	100000,	uint256S("0x0000053f20f1c77739f396be83657fa35c2d2bcaa6fa07becd006426a261e325"))
-                (	200000,	uint256S("0x00380a7afe22013d8d4abe54fac00dfabab4db397e0b7312d890c97eadf91afe"))
-                (	300000,	uint256S("0x0041a2ce54c05526a736357d99063a096596b6aa62dbc013c59dc503ff742c0f"))
-                (	400000,	uint256S("0x0050265ce8ca282a15e3a45c1a71f4eb52ff64a0651cf4de9524b05648438623"))
-                (	500000,	uint256S("0x00000b53432fda224b5091e42d228e35ff1ac34be900b453bd1a6ae041c1d5a7"))
-                (	600000,	uint256S("0x00000aeceebe3741bc9fadc7fa18b613824015c4ce60518e73b7f726189021d3"))
-                (	700000,	uint256S("0x0000093e819d49105ef4984eca60de2a3302e047c93bb92a89eab65ff6c8f938"))
-                (	800000,	uint256S("0x000014c7ec17d7caeae8ba8ae9e653cab227cc800845e9123024cb586ee4c3c3"))
-                (	855889,	uint256S("0x00003d809a88bfa42bd775b22a086c9d84d8f3064583a6e066c9280c2bbbf821")),
-                1708625259,     // * UNIX timestamp of last checkpoint block
-                1185905,       // * total number of transactions between genesis and last checkpoint (1708625259)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* DOC */
-    const CChainParams::CCheckpointData checkpointDataDOC = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	99985,	uint256S("0x0006acd728efa7959a634ee929fbc4c62aebdd94bf8ce1d7b0d496d1c7f51341"))
-                (	199985,	uint256S("0x0003a7fd826164539f6edf4af4121720ca0bc1b76c5bed433470f596dcc6a8c1"))
-                (	299966,	uint256S("0x000060b74e3a11be4e7664737e9854a1279794710afd534d4b26533aa728bb71"))
-                (	399934,	uint256S("0x00058ce89982e6a32f25796ac334f6ae1ac61645380facb58aaca67417cc7857"))
-                (	438259,	uint256S("0x00007ae89f7565de2be160621f547c3d37535065cb98596ed5bef799a9ab6f49")),
-                1708620228,     // * UNIX timestamp of last checkpoint block
-                744432,       // * total number of transactions between genesis and last checkpoint (1708625348)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* GLEEC */
-    const CChainParams::CCheckpointData checkpointDataGLEEC = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	97090,	uint256S("0x00008075af58a2d0a52ac480b31a74beb6b2f1261ae2984d29b8429ee4d86f9a"))
-                (	197090,	uint256S("0x060c9061e48564a7c52547dcbd2a11f8ebfa69c54b438e6a28376c728ff394a8"))
-                (	297090,	uint256S("0x034a9119f0ccf8d451670153322c9e9f0a6ee2218a46d68d718aae7ac04fc4b8"))
-                (	397090,	uint256S("0x01aecb98552df137ca2a87ec5da9ddde39c440ab01a53487f14339a73af35aac"))
-                (	497090,	uint256S("0x06f1ab2e988ca8bb01ac8b2c61db8683fd5f91cfd6dfb33801fc4e008d583d3c"))
-                (	597090,	uint256S("0x0b5dfcc0a3a77b76c50f7a255e550933906dacbc9e8e010c437dff7bd274851e"))
-                (	697090,	uint256S("0x09d5e46c9604e97d46a534ada0d3053534bc56a06d78c0591714c05c53e61c72"))
-                (	797090,	uint256S("0x0d5f22caf6b6c369b31d6171bef0729c9de4a2e66058b822eff32c1c6fafe469"))
-                (	800471,	uint256S("0x0d538185490353a8d9609d4119539b54880684e902b6bf2131ba0592f6fda0ff")),
-                1708625402,     // * UNIX timestamp of last checkpoint block
-                1932594,       // * total number of transactions between genesis and last checkpoint (1708625402)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* ILN */
-    const CChainParams::CCheckpointData checkpointDataILN = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	100000,	uint256S("0x0255f6eeb048be44e25b07c7e77546a0ccad281c1056ecc20db1470cdb593622"))
-                (	200000,	uint256S("0x0a77f6222cae12b2b3cec2a8bfe1ca3ee996dcaf17f6a908113e732f81048c9a"))
-                (	300000,	uint256S("0x02afcf16d001d3780402371605ab6d31f3fc9e737813c04020ba44dd0e9e7ffc"))
-                (	400000,	uint256S("0x00e213def828888414e3a3ccd116c560b965c22d2c10b82d4f557dfeae658640"))
-                (	500000,	uint256S("0x071f32d867fed4c6181a2c0fe31536d942b7828e2f9390134d5582e374d09632"))
-                (	600000,	uint256S("0x0078e00f286f4b51522693ca4af38d05f1fe62f8b03eb559702a3ce7733f51c0"))
-                (	700000,	uint256S("0x001237cf280d2c23870b7270009b79580220bb528c4dd69f475634e67c3139cc"))
-                (	800000,	uint256S("0x08c0f16f4a33bb6aa8b390e2bd17cfa10730e77548d2db731482e34d739e41f2"))
-                (	900000,	uint256S("0x01302fdea83dbce0c0b88ae75e553ca140d0458b7b29926a507989201a96ba92"))
-                (	1000000,	uint256S("0x018375b59dab316301d884e1d2ff3e6ad8926d5bce19a61780307d274708b417"))
-                (	1100000,	uint256S("0x0425072113955ada4cd10600182ca2bdbab4bf6c2e7f485ebf7db1eb754e95e0"))
-                (	1200000,	uint256S("0x0916ff2a0361560862d8e53dc69fb34d500d650457e1b85bf60a9ae1ce5ca503"))
-                (	1300000,	uint256S("0x0b1b14a7ff79af1748d69e5f26a25ed8fdffb0eae2e92ef9fb5e2e44bf7d5136"))
-                (	1400000,	uint256S("0x00cfc16e6b69220b3a85ca852a6407c51e5f11ec3aa85d858ed897ff2253484f"))
-                (	1500000,	uint256S("0x028a0de1129f988865d58d2dff96affff124be97757698cd347437fd0778a62c"))
-                (	1600000,	uint256S("0x00cb4bfeb17143a9cff24e11242b4c9d0292f600b70701fd428580df00a4f83d"))
-                (	1700000,	uint256S("0x02b68ab117120f770fb767003e2c0463f76c677e6acbbabc90ff6a9dfb909350"))
-                (	1800000,	uint256S("0x0020a682fe9e65bf9820c36b4e01ac0e3c5aa6f775b0b1974a2fa07b09d517e3"))
-                (	1900000,	uint256S("0x0021c436ba826416c7a6b3ebccd3677c577df77c37cea00cea501cf2f14d387e"))
-                (	2000000,	uint256S("0x003e6641d94c46f0396910ed037a4e501df6c0cd2ae91261b21ee0c0b905bd0b"))
-                (	2100000,	uint256S("0x016927a09b65dc8eb2bdf0e01c1b3a05bf73fb4bc02e1525a48f781bd932998f"))
-                (	2121020,	uint256S("0x001e4e8f960407e16e284027e4226230f209185d399c98d743f53cfa100cdc1f")),
-                1708625280,     // * UNIX timestamp of last checkpoint block
-                3175260,       // * total number of transactions between genesis and last checkpoint (1708625280)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* KOIN */
-    const CChainParams::CCheckpointData checkpointDataKOIN = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	100000,	uint256S("0x001dfa68b6b0c22fb92ac2de5ece869946d39af99a5f8f56df6213edc8714792"))
-                (	200000,	uint256S("0x029b1801a7ac2dcedf96ffd3aea3e750e17d4e90b0cfacf8213c6cbd58d77b88"))
-                (	300000,	uint256S("0x005415331953e4ddc5a2293d663d4a077115c312b12caf7b7415a943c90dc3f0"))
-                (	400000,	uint256S("0x0018ff60fb4934def322bbceddff4d0e68c4ddbdb749fc3ac7f7166908f76d5c"))
-                (	500000,	uint256S("0x043e6e574db9b7ba7ee276cb552495966a3207b2ac19ffa4ad604738f33ec46d"))
-                (	600000,	uint256S("0x08c115912995b92958706468c39cae61d8eb295759936c3d9072c676f7692a0a"))
-                (	700000,	uint256S("0x03dfb5a33df2338b2aa84ce85718a79dd4b5fbc9806cfc2237b97c4b9f3d5843"))
-                (	800000,	uint256S("0x034db19b0c1255c9a1907ed7f3d155985870325472966739e993382dd0d5237e"))
-                (	900000,	uint256S("0x039508734f733c86df7863592d8f9ac5237edc351439b0265bf93eebf4647a13"))
-                (	1000000,	uint256S("0x0189d3c90914e009efc86cd9af3a71f657531dbab040f6bf9c9fd15ba551a0bb"))
-                (	1100000,	uint256S("0x00b52b6ed25202f1c03da9d742590f49ff1b7112dc654f770f4400ce39fb4f25"))
-                (	1200000,	uint256S("0x012eed04f7cf3fbc6da0553b3d2511e654cd5e2122d325db648a2e3dcf830e4d"))
-                (	1300000,	uint256S("0x01c87629cb85cf618561506ec0ee15bb3d1c8171a97005493e01f2fb217e87cd"))
-                (	1400000,	uint256S("0x018716846747fb9953b2cb8d9903315f95d3662fe861d05971eb3b6edcfcdf67"))
-                (	1500000,	uint256S("0x005376bd3da229f5c202876dcf3dca9e7a2e257262a09a6a82c472626d49ed2d"))
-                (	1600000,	uint256S("0x00a4329390e85898bfb1bb974e2198cfac84ce50435c3a6ff98de66ba17a21cf"))
-                (	1700000,	uint256S("0x0dd40b85431249574ad06705b8fa14d49d1823ce25eb5706082b038bb79aa9e1"))
-                (	1790665,	uint256S("0x003bb396cd1dd5a4c1d92bee7153f7ad630fc8e6aa15ec64981baf73adc7fc5c")),
-                1708625369,     // * UNIX timestamp of last checkpoint block
-                2309748,       // * total number of transactions between genesis and last checkpoint (1708625369)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* MARTY */
-    const CChainParams::CCheckpointData checkpointDataMARTY = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	99975,	uint256S("0x0000a259f1d2e1137b837d9d311cae09bc7e78496cf1a8441cabb2f32bd75ed5"))
-                (	199952,	uint256S("0x0001772dce8ce4eb9ebece31db12fedc740229feff108f08ee78f382fc3d8d2e"))
-                (	299950,	uint256S("0x0006f6b4a0fbae53ad220a362cb6f297366e7969fbcae958466d0ee4f3aa8216"))
-                (	399907,	uint256S("0x00017dd1264a1852fdcacbbd74acb5897f87ee3cb2f453262ac8ac7524cb29d0"))
-                (	452802,	uint256S("0x0001ffc5074e925193d96191f97e8ad3f7736def2a6d252519aa10b6950edc97")),
-                1708623455,     // * UNIX timestamp of last checkpoint block
-                755009,       // * total number of transactions between genesis and last checkpoint (1708625233)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
-    /* NINJA */
-    const CChainParams::CCheckpointData checkpointDataNINJA = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	100000,	uint256S("0x05df9d478e2e8ea081f68cf2114bb9b5a1d1383f6a4405a53eed312bfbbe7df7"))
-                (	200000,	uint256S("0x01ca78fe373896dc7dfb267d924d62d0321f7189be9344291417c0c4220d1e18"))
-                (	300000,	uint256S("0x03048a4e64422115d6f21d85382b3921fe6d99b24bee8aafb61915fdffc060a2"))
-                (	400000,	uint256S("0x01f1589d67aeda3516e4ab8a04877f3fdb32a1f89e4aa368378d17748a5b968e"))
-                (	500000,	uint256S("0x004abd7b29b08b0efb400eb674c24460cea409302f553965d2e1ea9475c0fe15"))
-                (	600000,	uint256S("0x063df7424d69c8d30b7dc3ba40376e36903d8e9c00e416881a8ff1edf91abe68"))
-                (	700000,	uint256S("0x067a31b26ebd49029d898818d07f405897ccceb319275e40832740fac39521ba"))
-                (	800000,	uint256S("0x045ec204280c1de956c9cf8ee3f4b6a9df3654c36193e68f200cc312306101da"))
-                (	900000,	uint256S("0x00df8c9cec3f4ba5de90a5c2b4a443b01cf5cfcfa3508b6df4c55f348c0a21c3"))
-                (	1000000,	uint256S("0x01e9f7a0cd28cf1879df91abf33d99b6bf3e1876b90b2e89ee45943bcdb5c6e0"))
-                (	1100000,	uint256S("0x0196a3d0d38884cb6f59857aebef3933c154b3a2ef5a40ded54a7ee98e1f2818"))
-                (	1200000,	uint256S("0x007a2491142314e7023a87d4baa63aca8b7e16a9e10455294d76314472209399"))
-                (	1300000,	uint256S("0x00c97fa3da8387fb711d0ba29eaea4bc41c76e00d2a82896d3a30edd907c5aee"))
-                (	1400000,	uint256S("0x0011af5cb9d2648efaee90309384ff66869fb6816e667fbac6a84c6e31108c26"))
-                (	1500000,	uint256S("0x01082d03a4e9eb09a23803993b75cf67a1fd3037ef375e1437066e0d43b035ef"))
-                (	1600000,	uint256S("0x0057ad1370f5abf7cd618c5d47a7514f464181bb92379b0474aa9276b87cd4fd"))
-                (	1700000,	uint256S("0x0103d0a1e79f8cb2b94a59fc95101832c39ddbb7a971c8d6d545bdb3c7703fc2"))
-                (	1743459,	uint256S("0x001e9a57238a7395ce61cf99903252d37f41246f6f0dad9e613a11ed6382ca92")),
-                1708625349,     // * UNIX timestamp of last checkpoint block
-                2187696,       // * total number of transactions between genesis and last checkpoint (1708625349)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
     /* PIRATE */
     const CChainParams::CCheckpointData checkpointDataPIRATE = {
                 boost::assign::map_list_of
@@ -940,61 +749,12 @@ const CChainParams::CCheckpointData GetACCheckPoints()
                 2777            // * estimated number of transactions per day after checkpoint
                                 //   total number of tx / (checkpoint block height / (24 * 24))
                 };
-    /* SUPERNET */
-    const CChainParams::CCheckpointData checkpointDataSUPERNET = {
-                boost::assign::map_list_of
-                (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
-                (	100000,	uint256S("0x0000254a74bc92b8a8f75b924213185471b30040a31a81fb4462f94edafd7464"))
-                (	200000,	uint256S("0x0000150bb004f57d4dbf103a6edb03b02c6ef69743c2184a8d4cf58b3561dd4a"))
-                (	300000,	uint256S("0x0000dfbbec9b156c99914bad855575c759b13c6c6a7cc90c6a16f0feda8b0315"))
-                (	400000,	uint256S("0x0000341ed25c4bf8de762a71e1511ff5baba968b67b9a91bc65e17d331a0cf2d"))
-                (	500000,	uint256S("0x00016d3ab7ce41d8221f111467b609e444d4151ce38e2578f2666a880022d6bf"))
-                (	600000,	uint256S("0x05045f8d724c9898dd64bf08cfeac7ca3512f39d111e14cde9a4e049e97aa034"))
-                (	700000,	uint256S("0x0004b23dba3990403d043f9f5383b989d260136119720a55337f952c61b8ccc5"))
-                (	800000,	uint256S("0x0627e3a4d2dd894e469f7bd444a5914364a88c3bdd3d88465738cd53d1eb5b8b"))
-                (	900000,	uint256S("0x035f2499db684311613f66bc2706ba2be6324994ff9bdc71914979f28e8fc700"))
-                (	1000000,	uint256S("0x000395f12080d21ce9bbd57e1994fc97297b26782c16c10b066c3d9e2e9119ba"))
-                (	1100000,	uint256S("0x034a8b2a09150f84132160d7bd3bd973d8fb8a43580b4b34ab568e683d0eb9d9"))
-                (	1200000,	uint256S("0x000bf57b96834fcbf38c1e99119ba0b2844cf39f6447ca9d1c797875285922e2"))
-                (	1300000,	uint256S("0x0132d2d843c731a8e2ecceea41929c56192125d8e7f0a16dc84174a2cccfa9dc"))
-                (	1400000,	uint256S("0x07ccd8ffa17d991cf25a9b872a9e440104122fa285acdd183f2ddaea6b844bc2"))
-                (	1500000,	uint256S("0x000117e0eacc69bb2e2520132dd31d53cfdec7f4819607e909b6f4c215a5bccc"))
-                (	1600000,	uint256S("0x000c57f73465254c95b429190d38a2ba6017ba505ed0c56564475205d24d6918"))
-                (	1700000,	uint256S("0x000069e23885d8271d58dc41d3c1791ffd21bec8df7b22fb6e4ffee0fe1a2490"))
-                (	1800000,	uint256S("0x00003ea9afa40f32dad7d47a834b9aadfec9b0ddf1a9ff1e51115c5b3b4b6f17"))
-                (	1900000,	uint256S("0x00003608d560fd9568f499ff982089f8773cc945ab111a7a47ab9d2056fce022"))
-                (	2000000,	uint256S("0x00001f4d51be8518eedde1e59e9488d53f6906f17c44a1acf6d3c2f9d34268e2"))
-                (	2100000,	uint256S("0x00002b97ef87249962f4818a27128aa188b245da70ff9bae3f51c74a07eded0a"))
-                (	2200000,	uint256S("0x00003457994610bb49a2e2ad9075332eba76ac197d3b8c51865a4b3a6be41b5d"))
-                (	2300000,	uint256S("0x004cd8a03fec35097cf0296a8ca94dff52e8f2dc7a9187ee1cb42a47a45cc1f1"))
-                (	2400000,	uint256S("0x037a8a13e1c3e32bf3b9807253c81cd4f428821f9be32c98251aa7e06597fa57"))
-                (	2500000,	uint256S("0x005b8d948859fdb041594004918813fea07bd2d79567456d3680db987f61f9d9"))
-                (	2600000,	uint256S("0x006e0394a0b4c547a2e1ba845f672ed76d695c3cc2388fb28aeded5035aa8a1c"))
-                (	2700000,	uint256S("0x00007f54311dd9001ade1bade3da7c4d86e3f5c2d26aa5bd99c955835e47f0f3"))
-                (	2800000,	uint256S("0x008b33d01f17e9393beb95632d9639e546bb160a934e327ca8d760ebf49fcecc"))
-                (	2900000,	uint256S("0x00d298970a22b43a3e3b63b93411d402dfaeb8e180cc9f8a04c1d71725bf5cab"))
-                (	2922193,	uint256S("0x004a13d67a59af12889b2b4875f988a1ebc2bdd6ac0850fa2515f35d71888622")),
-                1708625347,     // * UNIX timestamp of last checkpoint block
-                3633150,       // * total number of transactions between genesis and last checkpoint (1708625347)
-                                //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
-                                //   total number of tx / (checkpoint block height / (24 * 24))
-                };
 
     /* should not be called with KMD, as the intention is to use it exclusively with AC, but anyway ... */
     const std::unordered_map<std::string, CChainParams::CCheckpointData> mapACCheckpointsData =
         boost::assign::map_list_of
         ("KMD", Params().Checkpoints())
-        ("CCL", checkpointDataCCL)
-        ("CLC", checkpointDataCLC)
-        ("DOC", checkpointDataDOC)
-        ("GLEEC", checkpointDataGLEEC)
-        ("ILN", checkpointDataILN)
-        ("KOIN", checkpointDataKOIN)
-        ("MARTY", checkpointDataMARTY)
-        ("NINJA", checkpointDataNINJA)
-        ("PIRATE", checkpointDataPIRATE)
-        ("SUPERNET", checkpointDataSUPERNET);
+        ("PIRATE", checkpointDataPIRATE);
 
     auto it = mapACCheckpointsData.find(chainName.ToString());
     if (it != mapACCheckpointsData.end()) {
@@ -1002,6 +762,35 @@ const CChainParams::CCheckpointData GetACCheckPoints()
     } else {
         return checkpointDataDefault;
     }
+}
+
+/* This function returns the DNS seed list for a currently active asset chain.
+   pCurrentParams should be initialized by a SelectParams call before use. */
+const std::vector<CDNSSeedData> GetACDNSSeeds()
+{
+    /* Only mainnet PIRATE has real DNS seed infrastructure (the pirate-seeder
+       instances). Every other asset chain built from this codebase
+       (PIRATETST, or anything else) has none and must rely on
+       -addnode/-connect instead. */
+    if (chainName.isSymbol("PIRATE")) {
+        return std::vector<CDNSSeedData>{
+            CDNSSeedData("Forge1", "dnsseed1.cryptoforge.cc"), // Forge - pirate-seeder
+            CDNSSeedData("Forge2", "dnsseed2.cryptoforge.cc"), // Forge - pirate-seeder
+        };
+    }
+    return std::vector<CDNSSeedData>();
+}
+
+/* This function returns the fixed-seed data for a currently active asset chain.
+   pCurrentParams should be initialized by a SelectParams call before use. */
+const std::vector<uint8_t> GetACFixedSeeds()
+{
+    /* Only mainnet PIRATE has curated fixed-seed IP data (chainparamsseeds.h).
+       Every other asset chain has none. */
+    if (chainName.isSymbol("PIRATE")) {
+        return std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
+    }
+    return std::vector<uint8_t>();
 }
 
 void *chainparams_commandline()
@@ -1045,6 +834,8 @@ void *chainparams_commandline()
             }
 
             checkpointData = GetACCheckPoints();
+            pCurrentParams->SetDNSSeeds(GetACDNSSeeds());
+            pCurrentParams->SetFixedSeeds(GetACFixedSeeds());
         }
 
     }

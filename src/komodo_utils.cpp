@@ -1061,24 +1061,34 @@ void komodo_args(char *argv0)
     SoftSetArg("-ac_private", std::string("1"));
     SoftSetArg("-ac_halving", std::string("77777"));
 
-    // Only load hardcoded addnodes for mainnet (not testnet or regtest)
+    std::string name = GetArg("-ac_name","");
+
+    // Only load hardcoded addnodes for mainnet PIRATE - not testnet, regtest,
+    // or any other asset chain built from this same codebase (-ac_name set to
+    // something other than PIRATE/PIRATETST). SoftSetArg above only applies
+    // the "PIRATE" default when -ac_name wasn't already passed on the
+    // CLI/config, so this must check the resolved name explicitly rather
+    // than assume it.
     bool fTestNet = GetBoolArg("-testnet", false);
     bool fRegTest = GetBoolArg("-regtest", false);
-    if (!fTestNet && !fRegTest) {
-        // Fixed peers - not real DNS seeds (see vSeeds for dnsseed1-4.cryptoforge.cc,
+    if (name == "PIRATE" && !fTestNet && !fRegTest) {
+        // Fixed peers - not real DNS seeds (see vSeeds for dnsseed1-2.cryptoforge.cc,
         // the actual pirate-seeder instances). Pruned 2026-08-11 to hosts that
         // were at least reachable on 45452 at check time, or otherwise worth
         // keeping around; the rest (explorer.piratechain.com, explorer.cryptoforge.cc,
         // and a batch of unresponsive third-party IPs) were dropped.
         mapMultiArgs["-addnode"].push_back("pirate1.cryptoforge.cc");
         mapMultiArgs["-addnode"].push_back("pirate2.cryptoforge.cc");
-        mapMultiArgs["-addnode"].push_back("pirate3.cryptoforge.cc");
-        mapMultiArgs["-addnode"].push_back("pirate4.cryptoforge.cc");
         mapMultiArgs["-addnode"].push_back("seed.dexstats.info");
         mapMultiArgs["-addnode"].push_back("seed.komodostats.com");
         mapMultiArgs["-addnode"].push_back("bootstrap.arrr.black");
     }
-	  std::string name = GetArg("-ac_name","");
+
+    if (name == "PIRATETST" && !fTestNet && !fRegTest) {
+        mapMultiArgs["-addnode"].push_back("pirate1.cryptoforge.cc");
+        mapMultiArgs["-addnode"].push_back("pirate2.cryptoforge.cc");
+    }
+
     if ( argv0 != 0 )
     {
         int32_t len = (int32_t)strlen(argv0);

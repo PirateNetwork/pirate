@@ -216,6 +216,16 @@ public:
      */
     void SetCheckpointData(CCheckpointData checkpointData);
     /***
+     * Set the DNS seeds used to discover peers
+     * @param seeds the new DNS seed list
+     */
+    void SetDNSSeeds(std::vector<CDNSSeedData> seeds) { vSeeds = seeds; }
+    /***
+     * Set the hard-coded fixed-seed IP data used as a last resort when DNS fails
+     * @param seeds the new fixed seed byte data
+     */
+    void SetFixedSeeds(std::vector<uint8_t> seeds) { vFixedSeeds = seeds; }
+    /***
      * @param n the new N value for equihash
      */
     void SetNValue(uint64_t n) { nEquihashN = n; }

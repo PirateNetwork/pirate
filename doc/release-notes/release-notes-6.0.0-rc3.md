@@ -215,7 +215,7 @@ Peer-to-peer networking and transaction privacy
   process is killed or crashes mid-write to the address database) are
   now cleaned up automatically on startup.
 - Default DNS seeds and fallback `-addnode` peers were updated to the
-  new `dnsseed1-4.cryptoforge.cc` pirate-seeder instances, replacing
+  new `dnsseed1-2.cryptoforge.cc` pirate-seeder instances, replacing
   hostnames that predated the pirate-seeder rewrite; the fallback
   addnode list was also pruned to hosts confirmed reachable.
 
