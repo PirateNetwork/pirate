@@ -11,19 +11,11 @@
 // one small harness covers both: bind 127.0.0.1 on an OS-assigned port,
 // accept exactly one connection on a background thread, and hand it to a
 // caller-supplied handler that reads/writes lines to drive the scripted
-// conversation for one test case.
-//
-// Linux-only (raw POSIX sockets) - matches this suite's existing scope, since
-// `make check` (which runs pirate-gtest) is only ever invoked on the Linux CI
-// job (see .github/workflows/pirate_build_all.yml's "Run tests (Linux)" step).
+// conversation for one test case. It uses the node's cross-platform socket
+// wrapper so the test binary can be built on every supported CI platform.
 
 #include <netaddress.h>
 #include <netbase.h>
-
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #include <atomic>
 #include <cstring>
@@ -32,26 +24,26 @@
 #include <string>
 #include <thread>
 
-/** Read one '\n'-terminated line from fd, without the trailing newline. Returns false on EOF/error. */
-inline bool MockServerReadLine(int fd, std::string& out)
+/** Read one '\n'-terminated line, without the trailing newline. Returns false on EOF/error. */
+inline bool MockServerReadLine(const Sock& sock, std::string& out)
 {
     out.clear();
     char c;
     while (true) {
-        ssize_t n = read(fd, &c, 1);
+        const ssize_t n = sock.Recv(&c, 1, 0);
         if (n <= 0) return !out.empty(); // treat EOF after partial data as a short line
         if (c == '\n') return true;
         out.push_back(c);
     }
 }
 
-/** Write `line` followed by '\n' to fd. */
-inline void MockServerWriteLine(int fd, const std::string& line)
+/** Write `line` followed by '\n'. */
+inline void MockServerWriteLine(const Sock& sock, const std::string& line)
 {
     std::string withNewline = line + "\n";
     size_t sent = 0;
     while (sent < withNewline.size()) {
-        ssize_t n = write(fd, withNewline.data() + sent, withNewline.size() - sent);
+        const ssize_t n = sock.Send(withNewline.data() + sent, withNewline.size() - sent, 0);
         if (n <= 0) throw std::runtime_error("MockServerWriteLine: write failed");
         sent += static_cast<size_t>(n);
     }
@@ -60,8 +52,8 @@ inline void MockServerWriteLine(int fd, const std::string& line)
 class MockLineServer
 {
 public:
-    /** Handler runs on a background thread with the accepted client fd; it owns the whole conversation. */
-    using Handler = std::function<void(int)>;
+    /** Handler runs on a background thread with the accepted client socket; it owns the conversation. */
+    using Handler = std::function<void(const Sock&)>;
 
     MockLineServer() = default;
 
@@ -85,11 +77,15 @@ public:
      */
     CService Start(Handler handler)
     {
-        m_listen_fd = socket(AF_INET, SOCK_STREAM, 0);
-        if (m_listen_fd < 0) throw std::runtime_error("MockLineServer: socket() failed");
+        m_stopping = false;
+        m_listen_socket = Sock(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+        if (m_listen_socket.Get() == INVALID_SOCKET) {
+            throw std::runtime_error("MockLineServer: socket() failed");
+        }
 
         int one = 1;
-        setsockopt(m_listen_fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+        ::setsockopt(m_listen_socket.Get(), SOL_SOCKET, SO_REUSEADDR,
+                     (sockopt_arg_type)&one, sizeof(one));
 
         struct sockaddr_in addr;
         std::memset(&addr, 0, sizeof(addr));
@@ -97,29 +93,27 @@ public:
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port = 0; // ask the OS for a free port
 
-        if (::bind(m_listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+        if (::bind(m_listen_socket.Get(), (struct sockaddr*)&addr, sizeof(addr)) == SOCKET_ERROR) {
             throw std::runtime_error("MockLineServer: bind() failed");
         }
-        if (listen(m_listen_fd, 8) != 0) {
+        if (::listen(m_listen_socket.Get(), 8) == SOCKET_ERROR) {
             throw std::runtime_error("MockLineServer: listen() failed");
         }
 
         socklen_t addrlen = sizeof(addr);
-        if (getsockname(m_listen_fd, (struct sockaddr*)&addr, &addrlen) != 0) {
+        if (::getsockname(m_listen_socket.Get(), (struct sockaddr*)&addr, &addrlen) == SOCKET_ERROR) {
             throw std::runtime_error("MockLineServer: getsockname() failed");
         }
 
         m_thread = std::thread([this, handler]() {
             while (true) {
-                int client_fd = accept(m_listen_fd, nullptr, nullptr);
-                if (client_fd < 0) break; // listening socket was closed
+                Sock client_socket(::accept(m_listen_socket.Get(), nullptr, nullptr));
+                if (client_socket.Get() == INVALID_SOCKET) break; // listening socket was closed
                 if (m_stopping) {
                     // Stop()'s own unblocking connection, not a real client.
-                    close(client_fd);
                     break;
                 }
-                handler(client_fd);
-                close(client_fd);
+                handler(client_socket);
             }
         });
 
@@ -129,7 +123,7 @@ public:
     /** Close the listening socket and join the background thread. Safe to call more than once. */
     void Stop()
     {
-        if (m_listen_fd < 0) {
+        if (m_listen_socket.Get() == INVALID_SOCKET) {
             if (m_thread.joinable()) m_thread.join();
             return;
         }
@@ -142,11 +136,10 @@ public:
         // Linux, so connect to ourselves to hand it something to return from.
         struct sockaddr_in addr;
         socklen_t addrlen = sizeof(addr);
-        if (getsockname(m_listen_fd, (struct sockaddr*)&addr, &addrlen) == 0) {
-            int poke_fd = socket(AF_INET, SOCK_STREAM, 0);
-            if (poke_fd >= 0) {
-                connect(poke_fd, (struct sockaddr*)&addr, addrlen);
-                close(poke_fd);
+        if (::getsockname(m_listen_socket.Get(), (struct sockaddr*)&addr, &addrlen) == 0) {
+            Sock poke_socket(::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
+            if (poke_socket.Get() != INVALID_SOCKET) {
+                poke_socket.Connect((struct sockaddr*)&addr, addrlen);
             }
         }
 
@@ -154,12 +147,11 @@ public:
             m_thread.join();
         }
 
-        close(m_listen_fd);
-        m_listen_fd = -1;
+        m_listen_socket.Reset();
     }
 
 private:
-    int m_listen_fd{-1};
+    Sock m_listen_socket;
     std::atomic<bool> m_stopping{false};
     std::thread m_thread;
 };
