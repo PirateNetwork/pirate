@@ -97,7 +97,7 @@ public:
         addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
         addr.sin_port = 0; // ask the OS for a free port
 
-        if (bind(m_listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
+        if (::bind(m_listen_fd, (struct sockaddr*)&addr, sizeof(addr)) != 0) {
             throw std::runtime_error("MockLineServer: bind() failed");
         }
         if (listen(m_listen_fd, 8) != 0) {
