@@ -104,6 +104,15 @@ public:
      */
     bool Connect(const CService& to, Connection& conn, bool& proxy_error);
 
+    /**
+     * Return this session's own I2P destination (.b32.i2p) address, derived
+     * from `m_private_key_file`. Establishes the SAM session first if it
+     * isn't already up (same as the first successful `Listen()` would), so
+     * this is safe to call even if nothing has accepted a connection yet.
+     * @throws std::runtime_error if the SAM proxy is unreachable
+     */
+    CService MyAddress();
+
 protected:
 
   CCriticalSection cs_i2p;

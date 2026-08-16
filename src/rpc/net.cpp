@@ -703,6 +703,35 @@ UniValue getnettotals(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return obj;
 }
 
+UniValue geti2paddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() > 0)
+        throw runtime_error(
+            "geti2paddress\n"
+            "\nReturns this node's permanent I2P destination address - the one to hand\n"
+            "out for others to -addnode/-connect to. This is a stable identity tied to\n"
+            "a key file on disk (i2p_private_key in the data directory) and does not\n"
+            "change across restarts.\n"
+            "\nIt is NOT one of the rotating, burn-after-use I2P identities from the\n"
+            "relay pool (see -i2prelaypoolsize) that this node may also be using to\n"
+            "relay its own locally-originated transactions - those are intentionally\n"
+            "short-lived and unsuitable to advertise as an addnode target. getpeerinfo's\n"
+            "i2p_identity field on inbound/outbound connections distinguishes \"primary\"\n"
+            "(this address) from \"pool-N\" (relay-pool) for that reason; this RPC always\n"
+            "returns the former.\n"
+            "\nResult:\n"
+            "\"address\"     (string) the node's own address:port on the I2P network\n"
+            "\nExamples:\n"
+            + HelpExampleCli("geti2paddress", "")
+            + HelpExampleRpc("geti2paddress", "")
+        );
+
+    if (!m_i2p_sam_session)
+        throw JSONRPCError(RPC_MISC_ERROR, "I2P is not enabled on this node (see -i2psam)");
+
+    return m_i2p_sam_session->MyAddress().ToString();
+}
+
 static UniValue GetNetworksInfo()
 {
     UniValue networks(UniValue::VARR);
@@ -954,6 +983,7 @@ static const CRPCCommand commands[] =
     { "network",            "getaddnodestatus",       &getaddnodestatus,       true  },
     { "network",            "getnettotals",           &getnettotals,           true  },
     { "network",            "getnetworkinfo",         &getnetworkinfo,         true  },
+    { "network",            "geti2paddress",          &geti2paddress,          true  },
     { "network",            "setban",                 &setban,                 true  },
     { "network",            "listbanned",             &listbanned,             true  },
     { "network",            "clearbanned",            &clearbanned,            true  },

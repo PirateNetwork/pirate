@@ -369,6 +369,13 @@ Binary Session::MyDestination() const
     return Binary{m_private_key.begin(), m_private_key.begin() + dest_len};
 }
 
+CService Session::MyAddress()
+{
+    LOCK(cs_i2p);
+    CreateIfNotCreatedAlready();
+    return m_my_addr;
+}
+
 void Session::CreateIfNotCreatedAlready()
 {
     LOCK(cs_i2p);
