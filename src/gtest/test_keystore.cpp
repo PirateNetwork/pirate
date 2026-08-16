@@ -289,6 +289,51 @@ TEST(keystore_tests, StoreAndRetrieveIronwoodSpendingKey) {
     EXPECT_EQ(ivk, ivkOut);
 }
 
+// Regression test for a stack buffer overflow in IronwoodSpendingKey::DeriveFVK's
+// degenerate-IVK guard (fixed in dd81bd4c1). Ironwood's incoming viewing key is a
+// 64-byte (dk, ivk) pair, not a 32-byte scalar like Sapling's; the old code copied
+// it straight into a 32-byte uint256 via std::copy, overflowing the destination by
+// 32 bytes on every call, and the resulting validity check ended up inspecting only
+// the first 32 bytes (dk) rather than the true ivk scalar.
+//
+// This calls DeriveFVK directly (StoreAndRetrieveIronwoodSpendingKey above only
+// exercises it indirectly, via IronwoodExtendedSpendingKeyPirate::GetXFVK), across
+// several independently-random spending keys, and cross-checks the resulting IVK
+// against an independent re-derivation via GetXFVK's own path. This doesn't attempt
+// to construct a genuinely degenerate (zero) ivk scalar directly - doing so would
+// require reaching into the underlying curve math to find such a scalar, which
+// isn't exposed via the public key-derivation API - but it does exercise the exact
+// 64-byte deserialization and cleanse path that overflowed on every call, so a
+// memory-sanitizer build (ASan/valgrind) would catch a reintroduced overflow here.
+TEST(keystore_tests, IronwoodDeriveFVKDegenerateIVKGuard) {
+    for (int i = 0; i < 8; i++) {
+        auto seed = HDSeed::Random();
+        auto extsk = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed);
+
+        libzcash::IronwoodFullViewingKey fvk;
+        ASSERT_TRUE(extsk.sk.DeriveFVK(&fvk))
+            << "DeriveFVK failed for a freshly-generated, presumed-valid spending key";
+
+        // A successfully-derived FVK must itself be usable, and must never carry a
+        // degenerate (null) ivk scalar - that's exactly what DeriveFVK's guard is
+        // supposed to reject before ever returning true.
+        libzcash::IronwoodIncomingViewingKey derivedIvk;
+        ASSERT_TRUE(fvk.DeriveIVK(&derivedIvk));
+        EXPECT_FALSE(derivedIvk.ivk.IsNull());
+
+        libzcash::IronwoodPaymentAddress addr;
+        ASSERT_TRUE(fvk.DeriveDefaultAddress(&addr));
+
+        // Cross-check against the extended-key path, which internally calls the
+        // same DeriveFVK - the two must agree.
+        auto extfvkOpt = extsk.GetXFVK();
+        ASSERT_TRUE(extfvkOpt.has_value());
+        libzcash::IronwoodIncomingViewingKey ivkViaExtfvk;
+        ASSERT_TRUE(extfvkOpt.value().fvk.DeriveIVK(&ivkViaExtfvk));
+        EXPECT_EQ(derivedIvk, ivkViaExtfvk);
+    }
+}
+
 // Dissabled, as these tests need to be moved to the wallet tests
 // TODO: Move these tests to the wallet tests, as they depend on CCryptoKeyStore 
 

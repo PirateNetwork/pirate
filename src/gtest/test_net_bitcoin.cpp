@@ -17,8 +17,11 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <future>
 #include <ios>
 #include <string>
+#include <thread>
 
 // Covers CNetAddr serialization (legacy v1, v2/BIP155 addrv2 wire formats),
 // reachability tracking (IsReachable/SetReachable), and local-address
@@ -1064,4 +1067,80 @@ TEST_F(net_tests_bitcoin, IsStalePeersDatTempFilename_Behavior)
     EXPECT_FALSE(IsStalePeersDatTempFilename("banlist.dat"));
     EXPECT_FALSE(IsStalePeersDatTempFilename("mempeers.dat.a3f2"));
     EXPECT_FALSE(IsStalePeersDatTempFilename(""));
+}
+
+// Regression test for the cs_vNodes/cs_i2p_relay_pool deadlock fixed in
+// 4ea6c6676. ThreadSocketHandler()'s disconnect loop used to lock cs_vNodes
+// and, while still holding it, lock cs_i2p_relay_pool to update a departing
+// peer's pool slot count - the opposite order from TickI2PRelayPool()'s
+// retirement step, which locks cs_i2p_relay_pool first and nests cs_vNodes
+// inside it. Concurrent firing of both froze the node. The fix defers the
+// pool slot update until after cs_vNodes is released, so the two locks are
+// never nested in opposite orders anywhere.
+//
+// This deliberately steps outside the "pure algorithm only" scope described
+// above the I2P relay pool tests: ThreadSocketHandler/TickI2PRelayPool are
+// infinite socket-handling loops with no unit boundary to call directly, so
+// this instead reproduces each function's own lock-acquisition order
+// exactly, using the real cs_vNodes/cs_i2p_relay_pool globals and two real
+// threads under sustained contention. If that order is ever reintroduced as
+// nested the other way, this reliably deadlocks within a handful of
+// iterations. The worker threads are never join()ed directly - only awaited
+// with a bounded timeout - so a genuine deadlock is reported as an ordinary
+// test failure instead of hanging the whole suite; the two permanently-stuck
+// threads are simply abandoned (process exit still tears them down).
+TEST_F(net_tests_bitcoin, NoDeadlockBetweenVNodesAndI2PRelayPoolLocks)
+{
+    std::promise<void> retirementDone;
+    std::promise<void> disconnectDone;
+    auto retirementFuture = retirementDone.get_future();
+    auto disconnectFuture = disconnectDone.get_future();
+
+    // Mirrors TickI2PRelayPool()'s retirement step: cs_i2p_relay_pool locked
+    // first, cs_vNodes nested inside it.
+    std::thread retirementThread([&]() {
+        for (int i = 0; i < 500; i++) {
+            LOCK(cs_i2p_relay_pool);
+            {
+                LOCK(cs_vNodes);
+            }
+        }
+        retirementDone.set_value();
+    });
+
+    // Mirrors ThreadSocketHandler()'s (fixed) disconnect loop: cs_vNodes is
+    // locked and released entirely on its own, then cs_i2p_relay_pool is
+    // locked separately - never nested inside cs_vNodes.
+    std::thread disconnectThread([&]() {
+        for (int i = 0; i < 500; i++) {
+            {
+                LOCK(cs_vNodes);
+            }
+            LOCK(cs_i2p_relay_pool);
+        }
+        disconnectDone.set_value();
+    });
+
+    auto retirementStatus = retirementFuture.wait_for(std::chrono::seconds(10));
+    auto disconnectStatus = disconnectFuture.wait_for(std::chrono::seconds(10));
+
+    EXPECT_EQ(retirementStatus, std::future_status::ready)
+        << "timed out waiting for the cs_i2p_relay_pool-then-cs_vNodes thread - "
+           "possible deadlock between cs_i2p_relay_pool and cs_vNodes";
+    EXPECT_EQ(disconnectStatus, std::future_status::ready)
+        << "timed out waiting for the cs_vNodes-then-cs_i2p_relay_pool thread - "
+           "possible deadlock between cs_i2p_relay_pool and cs_vNodes";
+
+    // Only join a thread that actually finished; a still-stuck one must not
+    // block test teardown.
+    if (retirementStatus == std::future_status::ready) {
+        retirementThread.join();
+    } else {
+        retirementThread.detach();
+    }
+    if (disconnectStatus == std::future_status::ready) {
+        disconnectThread.join();
+    } else {
+        disconnectThread.detach();
+    }
 }

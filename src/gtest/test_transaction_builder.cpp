@@ -1067,6 +1067,208 @@ TEST(TransactionBuilder, ChangeOutput)
     }
 }
 
+// Regression test for the -changeaddress cross-pool change fix
+// (asyncrpcoperation_sendmany.cpp, rpc/rawtransaction.cpp's
+// z_buildrawtransaction). SendChangeTo() only records a pending destination -
+// it does not itself initialize that pool's builder. If a send spends from
+// (and produces outputs in) only one pool, but -changeaddress routes change
+// to the *other* pool, that other pool's builder was never otherwise
+// touched.
+//
+// This isn't just a caller-discipline issue: Build() itself has no general
+// protection against it. Its own fallback ("if no Sapling spends/outputs
+// were added, initialize an empty builder", see transaction_builder.cpp)
+// runs *after* the change-output block that would need it, so it never
+// actually helps here - and there is no equivalent fallback for Ironwood at
+// all. The two RPC call sites are the only thing that check for this and
+// initialize the target pool before calling SendChangeTo(); this test
+// reproduces both the failure and the fix directly against
+// TransactionBuilder, bypassing the wallet/RPC layer entirely (spending from
+// Ironwood only, routing change to a Sapling address - the reverse of
+// ChangeOutput above, which never leaves the Sapling pool).
+TEST(TransactionBuilder, CrossPoolChangeAddressRequiresInitialization)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+    auto consensusParams = Params().GetConsensus();
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    IronwoodWallet ironwoodWallet;
+    IronwoodMerkleFrontier ironwoodFrontier;
+    ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontier);
+
+    // Wallet holding the Ironwood key we'll shield to, then spend from -
+    // mirrors IronwoodShieldAndSpend's setup above exactly.
+    CWallet fromWallet;
+    CKeyingMaterial rawSeed(32, 0);
+    HDSeed seed(rawSeed);
+    fromWallet.LoadHDSeed(seed);
+    auto addr = fromWallet.GenerateNewIronwoodZKey();
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+    ASSERT_TRUE(fromWallet.GetIronwoodExtendedSpendingKey(addr, extsk));
+    libzcash::IronwoodFullViewingKey ironwoodFvk;
+    ASSERT_TRUE(extsk.sk.DeriveFVK(&ironwoodFvk));
+    libzcash::IronwoodOutgoingViewingKey ironwoodOvk;
+    ASSERT_TRUE(ironwoodFvk.DeriveOVK(&ironwoodOvk));
+
+    auto shieldBuilder = TransactionBuilder(consensusParams, 1, &keystore);
+    shieldBuilder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    shieldBuilder.InitializeIronwood(/*spendsEnabled=*/false, /*outputsEnabled=*/true, uint256());
+    ASSERT_TRUE(shieldBuilder.AddIronwoodOutputRaw(addr, 40000, {}));
+    ASSERT_TRUE(shieldBuilder.ConvertRawIronwoodOutput(ironwoodOvk.ovk));
+    auto maybeShieldTx = shieldBuilder.Build();
+    ASSERT_EQ(maybeShieldTx.IsTx(), true);
+    auto shieldTx = maybeShieldTx.GetTxOrThrow();
+
+    // Find the real (non-dummy) action, exactly as IronwoodShieldAndSpend does.
+    const auto& bundleDetails = shieldTx.GetIronwoodBundle().GetDetails();
+    auto actions = bundleDetails.actions();
+    uint256_t ovkBytes;
+    std::copy(ironwoodOvk.ovk.begin(), ironwoodOvk.ovk.end(), ovkBytes.begin());
+    int realActionIndex = -1;
+    uint64_t noteValue = 0;
+    uint256_t noteRho{}, noteRseed{};
+    for (size_t i = 0; i < actions.size(); i++) {
+        uint256_t ock;
+        if (!ironwood::derive_ironwood_ock(actions[i], ovkBytes, ock)) {
+            continue;
+        }
+        uint64_t testValue;
+        std::array<uint8_t, 43> testAddress;
+        std::array<uint8_t, 512> testMemo;
+        uint256_t testRho, testRseed;
+        if (ironwood::try_ironwood_decrypt_action_ock(
+                actions[i], ock, testValue, testAddress, testMemo, testRho, testRseed)) {
+            realActionIndex = (int)i;
+            noteValue = testValue;
+            noteRho = testRho;
+            noteRseed = testRseed;
+            break;
+        }
+    }
+    ASSERT_NE(realActionIndex, -1);
+    uint256 rho = uint256::FromRawBytes(noteRho);
+    uint256 rseed = uint256::FromRawBytes(noteRseed);
+    uint256 cmx = uint256::FromRawBytes(actions[realActionIndex].cmx());
+
+    ironwoodWallet.CreateEmptyPositionsForTxid(2, shieldTx.GetHash());
+    for (size_t j = 0; j < actions.size(); j++) {
+        ironwoodWallet.AppendNoteCommitment(2, shieldTx.GetHash(), 0, (int)j, &actions[j], true);
+    }
+    libzcash::MerklePath ironwoodMerklePath;
+    ASSERT_TRUE(ironwoodWallet.GetMerklePathOfNote(shieldTx.GetHash(), realActionIndex, ironwoodMerklePath));
+    uint256 anchor;
+    ASSERT_TRUE(ironwoodWallet.GetPathRootWithCMU(ironwoodMerklePath, cmx, anchor));
+
+    // A Sapling change destination - never spent from or otherwise output to
+    // in either scenario below, so its pool's builder is only ever touched
+    // via SendChangeTo (and, in the fixed scenario, an explicit
+    // InitializeSapling call made first).
+    auto changeSk = libzcash::SaplingSpendingKey::random();
+    auto changeExpsk = changeSk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey changeFvk;
+    changeExpsk.DeriveFVK(&changeFvk);
+    SaplingIncomingViewingKey changeIvk;
+    changeFvk.DeriveIVK(&changeIvk);
+    libzcash::diversifier_t change_d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    SaplingPaymentAddress changeAddr;
+    ASSERT_TRUE(changeIvk.DeriveAddress(&changeAddr, change_d));
+
+    CKeyingMaterial recipientRawSeed(32, 7);
+    HDSeed recipientSeed(recipientRawSeed);
+    auto recipientExtsk = libzcash::IronwoodExtendedSpendingKeyPirate::Master(recipientSeed);
+    libzcash::IronwoodPaymentAddress recipientAddr;
+    ASSERT_TRUE(recipientExtsk.sk.DeriveDefaultAddress(&recipientAddr));
+
+    // Buggy scenario: spend from Ironwood only, route change to the Sapling
+    // address above, but skip InitializeSapling - reproducing what would
+    // happen without the RPC-layer fix. Build() throws rather than
+    // completing.
+    {
+        auto builder = TransactionBuilder(consensusParams, 2);
+        builder.InitializeIronwood(/*spendsEnabled=*/true, /*outputsEnabled=*/true, anchor);
+        ASSERT_TRUE(builder.AddIronwoodSpendRaw(
+            IronwoodOutPoint(shieldTx.GetHash(), realActionIndex), addr, noteValue, rho, rseed, ironwoodMerklePath, anchor));
+        ASSERT_TRUE(builder.ConvertRawIronwoodSpend(extsk));
+        ASSERT_TRUE(builder.AddIronwoodOutputRaw(recipientAddr, 25000, {}));
+        ASSERT_TRUE(builder.ConvertRawIronwoodOutput(ironwoodOvk.ovk));
+        builder.SetFee(0);
+        builder.SendChangeTo(changeAddr, changeFvk.ovk);
+
+        ASSERT_THROW(builder.Build(), std::runtime_error)
+            << "Sapling change address on an Ironwood-only send should throw "
+               "without an explicit InitializeSapling call first - if this "
+               "starts passing, Build() itself has gained the defense-in-depth "
+               "this comment says it lacks, and the two RPC-layer workarounds "
+               "(and this test) can be simplified.";
+    }
+
+    // Fixed scenario: same setup, but with InitializeSapling called before
+    // SendChangeTo, exactly as both RPC call sites now do. Build() succeeds,
+    // and the change genuinely lands in the Sapling pool.
+    {
+        auto builder = TransactionBuilder(consensusParams, 2);
+        builder.InitializeIronwood(/*spendsEnabled=*/true, /*outputsEnabled=*/true, anchor);
+        ASSERT_TRUE(builder.AddIronwoodSpendRaw(
+            IronwoodOutPoint(shieldTx.GetHash(), realActionIndex), addr, noteValue, rho, rseed, ironwoodMerklePath, anchor));
+        ASSERT_TRUE(builder.ConvertRawIronwoodSpend(extsk));
+        ASSERT_TRUE(builder.AddIronwoodOutputRaw(recipientAddr, 25000, {}));
+        ASSERT_TRUE(builder.ConvertRawIronwoodOutput(ironwoodOvk.ovk));
+        builder.SetFee(0);
+        builder.InitializeSapling(uint256());
+        builder.SendChangeTo(changeAddr, changeFvk.ovk);
+
+        auto maybeTx = builder.Build();
+        ASSERT_EQ(maybeTx.IsTx(), true);
+        auto tx = maybeTx.GetTxOrThrow();
+
+        // 40000 spent, 25000 to the recipient, 0 fee -> 15000 change.
+        EXPECT_EQ(tx.GetSaplingSpendsCount(), 0);
+        EXPECT_EQ(tx.GetSaplingOutputsCount(), 2); // real change + dummy padding
+        EXPECT_EQ(tx.GetValueBalanceSapling(), -15000);
+        EXPECT_EQ(tx.GetValueBalanceIronwood(), 15000); // 40000 - 25000, no Ironwood change
+
+        // Confirm the change note itself decrypts to the expected value at
+        // the expected address, not just that the aggregate value balance
+        // happens to add up.
+        auto vOutputs = tx.GetSaplingOutputs();
+        bool foundChange = false;
+        for (int j = 0; j < vOutputs.size(); j++) {
+            auto maybePt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], changeIvk);
+            if (maybePt) {
+                EXPECT_EQ(maybePt.value().value(), 15000);
+                foundChange = true;
+                break;
+            }
+        }
+        EXPECT_TRUE(foundChange) << "change output should decrypt with the Sapling change address's own ivk";
+    }
+}
+
 TEST(TransactionBuilder, SetFee)
 {
     SelectParams(CBaseChainParams::REGTEST);

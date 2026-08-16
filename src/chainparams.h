@@ -307,4 +307,19 @@ void komodo_setactivation(int32_t height);
 void komodo_setironwood(int32_t height);
 int32_t MAX_BLOCK_SIZE(int32_t height);
 
+/**
+ * Returns the DNS seed list for the currently active asset chain (chainName).
+ * Only mainnet PIRATE has any; every other asset chain built from this
+ * codebase gets an empty list. See chainparams.cpp for the full rationale.
+ */
+const std::vector<CDNSSeedData> GetACDNSSeeds();
+
+/**
+ * Returns the fixed-seed IP data for the currently active asset chain
+ * (chainName). Only mainnet PIRATE has any; every other asset chain built
+ * from this codebase gets an empty list. See chainparams.cpp for the full
+ * rationale.
+ */
+const std::vector<uint8_t> GetACFixedSeeds();
+
 #endif // BITCOIN_CHAINPARAMS_H
