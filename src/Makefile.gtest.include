@@ -140,7 +140,7 @@ pirate_gtest_SOURCES += \
 endif
 
 if TARGET_WINDOWS
-pirate_gtest_SOURCES += test-komodo/komodo-test-res.rc
+pirate_gtest_SOURCES += gtest/pirate-gtest-res.rc
 endif
 
 # JSON test vectors these sources #include as generated headers (see the

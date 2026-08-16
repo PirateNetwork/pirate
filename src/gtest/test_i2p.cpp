@@ -119,36 +119,36 @@ TEST_F(i2p_tests, SessionConnectDistinguishesProxyVsPeerErrors)
         LineLog log;
         MockLineServer server;
 
-        CService samAddr = server.Start([&](int fd) {
+        CService samAddr = server.Start([&](const Sock& sock) {
             const int idx = connectionIndex++;
             std::string line;
 
             if (idx == 0) {
                 // Session::CreateIfNotCreatedAlready(): HELLO, DEST GENERATE, SESSION CREATE.
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log.Push(line);
-                MockServerWriteLine(fd, "HELLO REPLY RESULT=OK VERSION=3.1");
+                MockServerWriteLine(sock, "HELLO REPLY RESULT=OK VERSION=3.1");
 
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log.Push(line);
-                MockServerWriteLine(fd, "DEST REPLY PUB=unused PRIV=" + privKeyB64);
+                MockServerWriteLine(sock, "DEST REPLY PUB=unused PRIV=" + privKeyB64);
 
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log.Push(line);
-                MockServerWriteLine(fd, "SESSION STATUS RESULT=OK DESTINATION=" + privKeyB64);
+                MockServerWriteLine(sock, "SESSION STATUS RESULT=OK DESTINATION=" + privKeyB64);
             } else {
                 // Session::Connect(): a fresh Hello(), then NAMING LOOKUP, then STREAM CONNECT.
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log.Push(line);
-                MockServerWriteLine(fd, "HELLO REPLY RESULT=OK VERSION=3.1");
+                MockServerWriteLine(sock, "HELLO REPLY RESULT=OK VERSION=3.1");
 
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log.Push(line);
-                MockServerWriteLine(fd, "NAMING REPLY RESULT=OK VALUE=" + privKeyB64);
+                MockServerWriteLine(sock, "NAMING REPLY RESULT=OK VALUE=" + privKeyB64);
 
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log.Push(line);
-                MockServerWriteLine(fd, "STREAM STATUS RESULT=" + c.result);
+                MockServerWriteLine(sock, "STREAM STATUS RESULT=" + c.result);
             }
         });
 
@@ -191,21 +191,21 @@ TEST_F(i2p_tests, SessionCreatePersistsAndReusesPrivateKey)
     const fs::path keyFile = GetTempPath() / boost::filesystem::unique_path("i2p_privkey-%%%%.dat");
 
     auto handlerFor = [&](bool expectDestGenerate, LineLog* log) {
-        return [&privKeyB64, expectDestGenerate, log](int fd) {
+        return [&privKeyB64, expectDestGenerate, log](const Sock& sock) {
             std::string line;
-            if (!MockServerReadLine(fd, line)) return;
+            if (!MockServerReadLine(sock, line)) return;
             log->Push(line);
-            MockServerWriteLine(fd, "HELLO REPLY RESULT=OK VERSION=3.1");
+            MockServerWriteLine(sock, "HELLO REPLY RESULT=OK VERSION=3.1");
 
             if (expectDestGenerate) {
-                if (!MockServerReadLine(fd, line)) return;
+                if (!MockServerReadLine(sock, line)) return;
                 log->Push(line);
-                MockServerWriteLine(fd, "DEST REPLY PUB=unused PRIV=" + privKeyB64);
+                MockServerWriteLine(sock, "DEST REPLY PUB=unused PRIV=" + privKeyB64);
             }
 
-            if (!MockServerReadLine(fd, line)) return;
+            if (!MockServerReadLine(sock, line)) return;
             log->Push(line);
-            MockServerWriteLine(fd, "SESSION STATUS RESULT=OK DESTINATION=" + privKeyB64);
+            MockServerWriteLine(sock, "SESSION STATUS RESULT=OK DESTINATION=" + privKeyB64);
         };
     };
 
