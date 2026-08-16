@@ -1082,11 +1082,30 @@ void komodo_args(char *argv0)
         mapMultiArgs["-addnode"].push_back("seed.dexstats.info");
         mapMultiArgs["-addnode"].push_back("seed.komodostats.com");
         mapMultiArgs["-addnode"].push_back("bootstrap.arrr.black");
+
+        // Live Tor v3/I2P mainnet peers, same reasoning as PIRATETST's below -
+        // gives real onion/i2p connectivity a path in by default rather than
+        // depending entirely on addr/addrv2 gossip discovering some over
+        // time. No port suffix: all were reachable on 45452, this chain's
+        // own default P2P port, at check time.
+        mapMultiArgs["-addnode"].push_back("qtc2fvwy5uwkr3ltwccob5iwmzvtqr42yaceh2i2q2j7itdzugg3peid.onion");
+        mapMultiArgs["-addnode"].push_back("kgm4yyrbosdqzmdvwfaf52vxe5523vkmrcsotxjnnigj2asknlp7hgyd.onion");
+        mapMultiArgs["-addnode"].push_back("2fsfsijithvoksrugq6o7mz4m6t3mrlhf5l3xzwxl2zfwjmc3ewq.b32.i2p");
+        mapMultiArgs["-addnode"].push_back("z4erjirwipghat26yd553w7jxmxlvbxnymxvtim3vu7guh42iyya.b32.i2p");
     }
 
     if (name == "PIRATETST" && !fTestNet && !fRegTest) {
         mapMultiArgs["-addnode"].push_back("pirate1.cryptoforge.cc");
         mapMultiArgs["-addnode"].push_back("pirate2.cryptoforge.cc");
+
+        // Tor v3/I2P test peers, for exercising the embedded-Tor SOCKS proxy
+        // and I2P SAM connectivity (see tor_process.cpp/i2pd_process.cpp) end
+        // to end against real onion/i2p peers rather than only clearnet ones.
+        // No port suffix: addnode falls back to this chain's own P2P port.
+        mapMultiArgs["-addnode"].push_back("ieeqvoutipmjvrvljr34exo5d7jlxopjguqgfqdutvlf6x4uoehnrpid.onion");
+        mapMultiArgs["-addnode"].push_back("medc6ob6tt36opxvaquezi5yp77jsfecaljljsayzmipiweukh5icryd.onion");
+        mapMultiArgs["-addnode"].push_back("gmew5z4kmp3l3nonwvfuwo4zymiz5rwsvh2ruzf355pfj7pi34eq.b32.i2p");
+        mapMultiArgs["-addnode"].push_back("3w3zpyislstrz5k6zhl7owhdjjwkagjbk2qrgmd7irosehlh55ga.b32.i2p");
     }
 
     if ( argv0 != 0 )
