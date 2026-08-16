@@ -130,6 +130,23 @@ bool StartEmbeddedTor(boost::thread_group& threadGroup)
         LogPrintf("tor: -torcontrol port was busy, using %s instead\n", torControlTarget.ToStringIPPort());
     }
 
+    const std::string torSocksArg = GetArg("-torsocksport", DEFAULT_TOR_SOCKS);
+    CService torSocksTarget = LookupNumeric(torSocksArg.c_str(), 9050);
+    if (!torSocksTarget.IsValid()) {
+        LogPrintf("tor: invalid -torsocksport address '%s', not starting embedded tor\n", torSocksArg);
+        return false;
+    }
+    const uint16_t chosenSocksPort = PickAvailablePort(torSocksTarget.ToStringIP(), torSocksTarget.GetPort());
+    if (chosenSocksPort != torSocksTarget.GetPort()) {
+        torSocksTarget = CService(torSocksTarget, chosenSocksPort);
+        // Same reasoning as -torcontrol just above: torcontrol.cpp's auth_cb
+        // reads -torsocksport lazily, after the daemon this launches has
+        // already authenticated over its ControlPort - overriding it here is
+        // what makes the picked port reach it instead of the stale default.
+        mapArgs["-torsocksport"] = torSocksTarget.ToStringIPPort();
+        LogPrintf("tor: -torsocksport port was busy, using %s instead\n", torSocksTarget.ToStringIPPort());
+    }
+
     // "pirate-tor" is our own bundled copy (sibling of this executable, hash-verified);
     // "tor" is only used as the $PATH fallback name, since that's what an externally
     // managed system Tor install is actually called - see FindBinary()'s doc comment.
@@ -157,7 +174,7 @@ bool StartEmbeddedTor(boost::thread_group& threadGroup)
     torrc += "CookieAuthentication 1\n";
     torrc += "DataDirectory " + (dataDir / "data").string() + "\n";
     torrc += "RunAsDaemon 0\n";
-    torrc += "SocksPort 0\n";
+    torrc += "SocksPort " + torSocksTarget.ToStringIPPort() + "\n";
     torrc += "Log notice stdout\n";
     if (!WriteBinaryFile(torrcPath, torrc)) {
         LogPrintf("tor: failed to write torrc to '%s'\n", torrcPath.string());

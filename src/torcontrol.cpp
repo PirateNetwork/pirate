@@ -37,6 +37,8 @@ using namespace boost::placeholders;
 
 /** Default control port */
 const std::string DEFAULT_TOR_CONTROL = "127.0.0.1:9051";
+/** Default SOCKS port - see torcontrol.h's doc comment. */
+const std::string DEFAULT_TOR_SOCKS = "127.0.0.1:9050";
 /** Tor cookie size (from control-spec.txt) */
 static const int TOR_COOKIE_SIZE = 32;
 /** Size of client/server nonce for SAFECOOKIE */
@@ -486,9 +488,15 @@ void TorController::auth_cb(TorControlConnection& conn, const TorControlReply& r
         LogPrint("tor", "tor: Authentication successful\n");
 
         // Now that we know Tor is running setup the proxy for onion addresses
-        // if -onion isn't set to something else.
+        // if -onion isn't set to something else. -torsocksport is where
+        // tor_process.cpp actually told *this* tor daemon (embedded or
+        // external) to open its SOCKS port - reading the same key/default it
+        // writes keeps this in sync instead of assuming the conventional
+        // 9050 regardless of what was actually configured (the embedded
+        // daemon used to be launched with its SOCKS port off entirely,
+        // which this code had no way to notice - see tor_process.cpp).
         if (GetArg("-onion", "") == "") {
-            CService resolved(LookupNumeric("127.0.0.1", 9050));
+            CService resolved(LookupNumeric(GetArg("-torsocksport", DEFAULT_TOR_SOCKS).c_str(), 9050));
             proxyType addrOnion = proxyType(resolved, true);
             SetProxy(NET_ONION, addrOnion);
             SetReachable(NET_ONION, true);

@@ -30,6 +30,11 @@ knows when upgrading to Pirate v5.4.3 and up that supports Tor v3 only.
 
 ## 1. Run Pirate behind a Tor proxy
 
+If you're using the default embedded Tor daemon (see section 2's "Embedded
+Tor daemon" subsection), this already happens automatically - the rest of
+this section is only needed to point at a *different* Tor instance (e.g. a
+separately-run system Tor) via `-proxy`/`-onion` instead.
+
 The first step is running Pirate behind a Tor proxy. This will already anonymize all
 outgoing connections, but more is possible.
 
@@ -96,17 +101,34 @@ Tor.
 
 Relevant options:
 
-    -torautostart=1  Automatically launch and manage the bundled pirate-tor daemon
-                      (default: 1). Set to 0 to disable and use an externally
-                      managed Tor instead - the "Control Port" / "Authentication"
-                      setup below then applies.
+    -torautostart=1               Automatically launch and manage the bundled
+                                   pirate-tor daemon (default: 1). Set to 0 to
+                                   disable and use an externally managed Tor
+                                   instead - the "Control Port" /
+                                   "Authentication" setup below then applies.
 
-    -torpath=<path>   Use a specific tor binary instead of the bundled/
-                      auto-detected one.
+    -torpath=<path>               Use a specific tor binary instead of the
+                                   bundled/auto-detected one.
+
+    -torsocksport=<ip>:<port>     SOCKS port to launch the embedded daemon
+                                   with (default: 127.0.0.1:9050). If that
+                                   port is already taken, the same automatic
+                                   fallback -torcontrol uses picks another one
+                                   and logs it - you don't need to change this
+                                   unless you want a specific port. Only
+                                   meaningful for the embedded daemon; has no
+                                   effect if -onion is set to something else
+                                   (see section 1), since that always wins.
 
 The embedded daemon is only started if `-listenonion` is also enabled
-(the default) - it exists to serve the automatic onion service feature
-described above, not as a general-purpose SOCKS proxy.
+(the default). It serves both roles: the automatic onion service feature
+described above (inbound), and - since it also opens a real SOCKS port at
+`-torsocksport` - reaching other `.onion` peers outbound as well, the same
+as if you'd passed `-onion=<that address>` yourself. In other words, with
+both `-torautostart` and `-listenonion` at their defaults, Tor connectivity
+in both directions works with no configuration at all; section 1's
+`-proxy`/`-onion` instructions are only needed if you want to point at a
+*different* (e.g. externally-run) Tor instance instead.
 
 Binary discovery order, if `-torpath` isn't set: a `pirate-tor` binary sitting
 next to the running `pirated`/`pirate-qt` executable (checked against the

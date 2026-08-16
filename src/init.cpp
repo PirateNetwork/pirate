@@ -513,6 +513,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-timeout=<n>", strprintf(_("Specify connection timeout in milliseconds (minimum: 1, default: %d)"), DEFAULT_CONNECT_TIMEOUT));
     strUsage += HelpMessageOpt("-torcontrol=<ip>:<port>", strprintf(_("Tor control port to use if onion listening enabled (default: %s)"), DEFAULT_TOR_CONTROL));
     strUsage += HelpMessageOpt("-torpassword=<pass>", _("Tor control port password (default: empty)"));
+    strUsage += HelpMessageOpt("-torsocksport=<ip>:<port>", strprintf(_("Tor SOCKS proxy to assume is available once the tor control port authenticates, if -onion isn't set to something else - for an embedded/managed tor daemon (-torautostart) this is also the port it's actually launched with (default: %s)"), DEFAULT_TOR_SOCKS));
 #if ENABLE_EMBEDDED_TOR
     strUsage += HelpMessageOpt("-torautostart", strprintf(_("Automatically launch and manage a bundled Tor daemon so Tor works without a separately running instance (default: %u)"), DEFAULT_TOR_AUTOSTART));
     strUsage += HelpMessageOpt("-torpath=<path>", _("Path to the tor binary to use instead of auto-detection"));
