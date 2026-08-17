@@ -131,6 +131,20 @@ system-installed copies, and a header-sync stall caused by
   a sibling process (e.g. lightwalletd, publishing its own hidden
   service via the same Tor daemon) can discover the real value instead
   of trusting a possibly-stale configured/default one.
+- Fixed a mismatch where the embedded Tor daemon's SOCKS proxy was
+  registered at a fixed default address (127.0.0.1:9050) regardless of
+  whether it was actually running one there — the daemon's SOCKS port
+  was disabled entirely, so every outbound onion dial pirated itself
+  attempted was silently failing. The embedded daemon now opens a real
+  SOCKS port (configurable via the new `-torsocksport`, with the same
+  busy-port fallback `-torcontrol` already had) and the address
+  registered for it always reflects where it actually ended up.
+- Added `geti2paddress`, returning the node's permanent I2P destination
+  address for advertising as an `-addnode` target. Previously the only
+  way to see a local I2P address was via `getnetworkinfo`'s
+  `localaddresses`, which mixes this stable identity together with the
+  rotating, burn-after-use relay-pool addresses with nothing to tell
+  them apart.
 
 Peer-to-peer networking and transaction privacy
 ---------------------------------------------------
@@ -227,6 +241,12 @@ Peer-to-peer networking and transaction privacy
   new `dnsseed1-2.cryptoforge.cc` pirate-seeder instances, replacing
   hostnames that predated the pirate-seeder rewrite; the fallback
   addnode list was also pruned to hosts confirmed reachable.
+- The fixed `-addnode` fallback list now includes live Tor v3 and I2P
+  peers alongside the existing clearnet hosts, giving a fresh node a
+  guaranteed path onto both privacy networks instead of depending
+  entirely on `addr`/`addrv2` gossip to discover one over time.
+  `PIRATETST`/other non-mainnet asset chains get a separate set of test
+  peers rather than sharing PIRATE's live addresses.
 
 Test suite consolidation
 --------------------------
@@ -239,7 +259,11 @@ coverage gaps, and gained new coverage for shielded duplicate-nullifier
 rejection and real Sapling/Ironwood proof verification across the mempool
 and `ConnectBlock` paths. A link failure in the consolidated suite (an
 out-of-line template instantiation dropped by inlining, breaking only
-the test binary) was also fixed.
+the test binary) was also fixed. Further regression coverage was added
+for this cycle's `cs_vNodes`/`cs_i2p_relay_pool` lock-ordering deadlock,
+the Ironwood `DeriveFVK` stack-buffer overflow, the `-changeaddress`
+cross-pool builder-initialization gap, and per-asset-chain DNS/fixed
+seed isolation; the suite now stands at 554/554 passing.
 
 Wallet UI improvements
 ------------------------
@@ -344,6 +368,9 @@ The following flags are new relative to the master branch.
   bundled Tor daemon so Tor works without a separately running instance.
 - `-torpath=<path>` — path to the `tor` binary to use instead of
   auto-detection.
+- `-torsocksport=<ip>:<port>` (default: 127.0.0.1:9050) — SOCKS port to
+  launch the embedded Tor daemon with; only meaningful for the embedded
+  daemon, and has no effect if `-onion` is set to something else.
 - `-i2pdautostart` (default: 1) — automatically launch and manage a
   bundled I2P (`i2pd`) daemon so I2P works without a separately running
   router.
@@ -409,6 +436,14 @@ Changelog
 =========
 
 Cryptoforge:
+  Add live Tor v3/I2P peers to PIRATE/PIRATETST hardcoded addnode lists.
+  (b509276e9)
+  Add geti2paddress RPC to expose the node's static I2P identity.
+  (e7bf1e02c)
+  Fix embedded Tor SOCKS proxy address mismatch (SocksPort was
+  disabled). (5c7ffd11d)
+  Add regression tests for this cycle's deadlock, overflow, and seed
+  fixes. (473399ddf)
   Set PIRATE dPoW requiredSigs, activation height, and Ironwood date.
   (a923ed6ec)
   Isolate PIRATETST/other asset chains from PIRATE's mainnet peer
