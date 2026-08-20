@@ -54,19 +54,17 @@ ENV APP_VERSION_SUFFIX=${APP_VERSION_SUFFIX}
 
 RUN ./zcutil/build-qt-linux.sh -j$(nproc)
 
-# make check/the functional tests need the full build tree (object files,
-# src/test/* test binaries) that only exists in this stage - not something
-# the scratch export below could hand back to the host - so they run here,
-# inside the same pinned ubuntu:20.04 userspace that built the binaries.
-# A test failure fails this RUN and thus the whole docker build.
-ENV PYTHONPATH=/pirate/src/test
-ENV SRCDIR=/pirate/src
-ENV BUILDDIR=/pirate/src
+# pirate-gtest (src/Makefile.gtest.include) is the only suite that needs to
+# run - it's already built as a normal bin_PROGRAMS target by the
+# build-qt-linux.sh RUN above, TESTS is scoped to just it so `make check`
+# doesn't also try to run qt/test/test_bitcoin-qt (needs a display) - and it
+# needs the Sapling/Sprout trusted-setup params for its joinsplit tests (see
+# src/gtest/main.cpp). Runs here, inside the same pinned ubuntu:20.04
+# userspace that built it, since the scratch export below can't hand the
+# build tree back to the host. A test failure fails this RUN and thus the
+# whole docker build.
 RUN ./zcutil/fetch-params.sh
-RUN PATH="/pirate/src:$PATH" make check
-RUN PATH="/pirate/src:$PATH" python3 src/test/bitcoin-util-test.py
-RUN PATH="/pirate/src:$PATH" python3 src/test/wallet-utility.py
-RUN PATH="/pirate/src:$PATH" test/functional/test_runner.py --jobs=$(nproc)
+RUN make check TESTS=pirate-gtest
 
 RUN sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1 > /tmp/VERSION
 
