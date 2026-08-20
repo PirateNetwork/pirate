@@ -72,6 +72,11 @@ if [ -z "$APP_VERSION" ]; then
     echo "warning: could not determine PACKAGE_VERSION from ./Makefile (did ./configure run first?), skipping .deb packaging" >&2
     exit 0
 fi
+# CI sets this on non-tag builds (e.g. a short git sha) so repeated builds
+# off the same configure.ac version don't collide - see pirate_build_all.yml.
+if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
+    APP_VERSION="${APP_VERSION}-${APP_VERSION_SUFFIX}"
+fi
 
 PKG_ROOT="$(mktemp -d)"
 trap 'rm -rf "$PKG_ROOT"' EXIT

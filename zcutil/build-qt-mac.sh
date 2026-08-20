@@ -113,6 +113,11 @@ done
 # Exported so makeReleaseMac.sh can fill it into zcutil/res/Info.plist's
 # RELEASE_VERSION placeholders (CFBundleShortVersionString/CFBundleVersion).
 APP_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+# CI sets this on non-tag builds (e.g. a short git sha) so repeated builds
+# off the same configure.ac version don't collide - see pirate_build_all.yml.
+if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
+    APP_VERSION="${APP_VERSION}-${APP_VERSION_SUFFIX}"
+fi
 export APP_VERSION
 
 #Package as App bundle in a dmg
