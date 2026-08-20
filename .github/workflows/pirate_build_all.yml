@@ -13,19 +13,13 @@ permissions:
   contents: read
 
 jobs:
-  cli-linux:
-    name: CLI (Linux x86_64)
+  linux-x86_64:
+    name: Linux x86_64 (CLI + QT)
     runs-on: ubuntu-latest
-    env:
-      HOST: x86_64-unknown-linux-gnu
-      BUILD: x86_64-unknown-linux-gnu
     outputs:
       version: ${{ steps.pkgver.outputs.version }}
     steps:
       - uses: actions/checkout@v6
-      - name: Ensure parent depends alias
-        shell: bash
-        run: ln -sfn "$PWD/depends" "$PWD/../depends"
       - name: Set version suffix
         shell: bash
         run: |
@@ -36,88 +30,42 @@ jobs:
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           fi
-      - name: Install build dependencies
+      - name: Build, test, and package (Docker, ubuntu:20.04)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            cmake \
-            m4 \
-            g++-multilib \
-            autoconf \
-            libtool \
-            libncurses-dev \
-            unzip \
-            git \
-            python3 \
-            python3-zmq \
-            zlib1g-dev \
-            wget \
-            libcurl4-gnutls-dev \
-            bsdmainutils \
-            curl \
-            libsodium-dev \
-            bison \
-            liblz4-dev \
-            zip
-      - name: Build daemon
-        run: |
-          chmod +x zcutil/build.sh
-          ./zcutil/build.sh -j$(nproc)
+          # Pins the build (and the test run, and the packaging - see the
+          # Dockerfile) to a fixed ubuntu:20.04 glibc/toolchain baseline
+          # instead of whatever ubuntu-latest happens to be this week, and
+          # builds this exact checkout (not a fresh git clone of master,
+          # unlike docker-engine-builds' standalone images). One build only
+          # (build-qt-linux.sh) exports both the CLI zip and the QT deb/zip,
+          # plus the resolved version string.
+          mkdir -p docker-out
+          docker build \
+            --build-arg APP_VERSION_SUFFIX="${APP_VERSION_SUFFIX:-}" \
+            --target=binaries \
+            -o docker-out \
+            -f zcutil/docker/ubuntu20.04-linux.Dockerfile \
+            .
       - name: Determine package version
         id: pkgver
         shell: bash
         run: |
-          BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
-          if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
-            VERSION="${BASE_VERSION}-${APP_VERSION_SUFFIX}"
-          else
-            VERSION="$BASE_VERSION"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          VERSION="$(cat docker-out/VERSION)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          # Same <arch>-<os> convention build-zip.sh already uses for QT
-          # packages, so CLI and QT artifact names line up.
-          echo "PLATFORM=${HOST%%-*}-linux" >> "$GITHUB_ENV"
-      - name: Strip CLI (Linux)
-        run: |
-          strip --strip-unneeded src/pirated src/pirate-cli src/pirate-tx
-      - name: Fetch Zcash params (tests)
-        run: ./zcutil/fetch-params.sh
-      - name: Run tests (Linux)
-        env:
-          PYTHONPATH: ./src/test
-          SRCDIR: ./src
-          BUILDDIR: ./src
-        run: |
-          export PATH="$PWD/src:$PATH"
-          make check
-          python3 src/test/bitcoin-util-test.py
-          python3 src/test/wallet-utility.py
-          test/functional/test_runner.py --jobs=$(nproc)
-      - name: Package CLI (Linux)
-        run: |
-          mkdir -p dist
-          zip -j "dist/pirate-cli-${PLATFORM}-v${VERSION}.zip" \
-            src/pirated \
-            src/pirate-cli \
-            src/pirate-tx \
-            PIRATE_7776
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: cli-linux
-          path: dist/*
+          name: linux-x86_64
+          path: |
+            docker-out/pirate-cli-*.zip
+            docker-out/pirate-qt-*.deb
+            docker-out/pirate-qt-*.zip
 
-  cli-windows:
-    name: CLI (Windows x86_64 cross)
+  windows-x86_64-cross:
+    name: Windows x86_64 cross (CLI + QT)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Ensure parent depends alias
-        shell: bash
-        run: ln -sfn "$PWD/depends" "$PWD/../depends"
       - name: Set version suffix
         shell: bash
         run: |
@@ -128,78 +76,32 @@ jobs:
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           fi
-      - name: Install build dependencies
+      - name: Build and package (Docker, ubuntu:20.04)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            cmake \
-            m4 \
-            autoconf \
-            libtool \
-            unzip \
-            git \
-            python3 \
-            python3-zmq \
-            zlib1g-dev \
-            wget \
-            libcurl4-gnutls-dev \
-            bsdmainutils \
-            curl \
-            libsodium-dev \
-            bison \
-            liblz4-dev \
-            zip \
-            gcc-mingw-w64-x86-64-posix \
-            g++-mingw-w64-x86-64-posix \
-            binutils-mingw-w64-x86-64
-      - name: Build daemon (cross)
-        run: |
-          chmod +x zcutil/build-win.sh
-          ./zcutil/build-win.sh -j$(nproc)
-      - name: Determine package version
-        shell: bash
-        run: |
-          BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
-          if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
-            VERSION="${BASE_VERSION}-${APP_VERSION_SUFFIX}"
-          else
-            VERSION="$BASE_VERSION"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # Matches the HOST build-win.sh hardcodes internally. Same
-          # <arch>-<os> convention build-zip.sh uses for QT packages.
-          HOST=x86_64-w64-mingw32
-          echo "PLATFORM=${HOST%%-*}-windows" >> "$GITHUB_ENV"
-      - name: Strip CLI (Windows)
-        run: |
-          x86_64-w64-mingw32-strip --strip-unneeded \
-            src/pirated.exe src/pirate-cli.exe src/pirate-tx.exe
-      - name: Package CLI (Windows)
-        run: |
-          mkdir -p dist
-          zip -j "dist/pirate-cli-${PLATFORM}-v${VERSION}.zip" \
-            src/pirated.exe \
-            src/pirate-cli.exe \
-            src/pirate-tx.exe \
-            PIRATE_7776
+          # Pins the build (and the packaging - see the Dockerfile) to a
+          # fixed ubuntu:20.04 glibc/toolchain baseline instead of whatever
+          # ubuntu-latest happens to be this week, and builds this exact
+          # checkout (not a fresh git clone of master, unlike
+          # docker-engine-builds' standalone images). One build only
+          # (build-qt-win.sh) exports both the CLI zip and the QT zip.
+          mkdir -p docker-out
+          docker build \
+            --build-arg APP_VERSION_SUFFIX="${APP_VERSION_SUFFIX:-}" \
+            --target=binaries \
+            -o docker-out \
+            -f zcutil/docker/ubuntu20.04-windows-cc.Dockerfile \
+            .
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: cli-windows
-          path: dist/*
+          name: windows-x86_64-cross
+          path: docker-out/pirate-*.zip
 
-  cli-aarch64:
-    name: CLI (Linux AArch64 cross)
+  linux-aarch64-cross:
+    name: Linux AArch64 cross (CLI + QT)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Ensure parent depends alias
-        shell: bash
-        run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Ensure AArch64 host alias
-        run: ln -sfn aarch64-linux-gnu depends/aarch64-unknown-linux-gnu
       - name: Set version suffix
         shell: bash
         run: |
@@ -210,66 +112,30 @@ jobs:
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
           fi
-      - name: Install build dependencies
+      - name: Build and package (Docker, ubuntu:20.04)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            cmake \
-            m4 \
-            autoconf \
-            libtool \
-            unzip \
-            git \
-            python3 \
-            python3-zmq \
-            zlib1g-dev \
-            wget \
-            libcurl4-gnutls-dev \
-            bsdmainutils \
-            curl \
-            libsodium-dev \
-            bison \
-            liblz4-dev \
-            zip \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu
-      - name: Build daemon (cross)
-        run: |
-          chmod +x zcutil/build-arm.sh
-          ./zcutil/build-arm.sh -j$(nproc)
-      - name: Determine package version
-        shell: bash
-        run: |
-          BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
-          if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
-            VERSION="${BASE_VERSION}-${APP_VERSION_SUFFIX}"
-          else
-            VERSION="$BASE_VERSION"
-          fi
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
-          # Matches the HOST build-arm.sh hardcodes internally. Same
-          # <arch>-<os> convention build-zip.sh uses for QT packages.
-          HOST=aarch64-linux-gnu
-          echo "PLATFORM=${HOST%%-*}-linux" >> "$GITHUB_ENV"
-      - name: Strip CLI (AArch64)
-        run: |
-          aarch64-linux-gnu-strip --strip-unneeded src/pirated src/pirate-cli src/pirate-tx
-      - name: Package CLI (AArch64)
-        run: |
-          mkdir -p dist
-          zip -j "dist/pirate-cli-${PLATFORM}-v${VERSION}.zip" \
-            src/pirated \
-            src/pirate-cli \
-            src/pirate-tx \
-            PIRATE_7776
+          # Pins the build (and the packaging - see the Dockerfile) to a
+          # fixed ubuntu:20.04 glibc/toolchain baseline instead of whatever
+          # ubuntu-latest happens to be this week, and builds this exact
+          # checkout (not a fresh git clone of master, unlike
+          # docker-engine-builds' standalone images). One build only
+          # (build-qt-aarch64.sh) exports both the CLI zip and the QT
+          # deb/zip.
+          mkdir -p docker-out
+          docker build \
+            --build-arg APP_VERSION_SUFFIX="${APP_VERSION_SUFFIX:-}" \
+            --target=binaries \
+            -o docker-out \
+            -f zcutil/docker/ubuntu20.04-aarch64-cc.Dockerfile \
+            .
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: cli-aarch64
-          path: dist/*
+          name: linux-aarch64-cross
+          path: |
+            docker-out/pirate-cli-*.zip
+            docker-out/pirate-qt-*.deb
+            docker-out/pirate-qt-*.zip
 
   cli-macos:
     name: CLI (macOS arm64)
@@ -431,202 +297,6 @@ jobs:
           name: cli-macos-intel
           path: dist/*
 
-  qt-linux:
-    name: QT (Linux x86_64)
-    runs-on: ubuntu-latest
-    env:
-      HOST: x86_64-unknown-linux-gnu
-      BUILD: x86_64-unknown-linux-gnu
-    steps:
-      - uses: actions/checkout@v6
-      - name: Ensure parent depends alias
-        shell: bash
-        run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Set version suffix
-        shell: bash
-        run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
-          # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
-          # don't collide - honored by build-deb.sh/build-zip.sh.
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          fi
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            cmake \
-            m4 \
-            g++-multilib \
-            autoconf \
-            libtool \
-            libncurses-dev \
-            unzip \
-            git \
-            python3 \
-            python3-zmq \
-            zlib1g-dev \
-            wget \
-            libcurl4-gnutls-dev \
-            bsdmainutils \
-            curl \
-            libsodium-dev \
-            bison \
-            liblz4-dev \
-            zip \
-            dpkg-dev \
-            qtbase5-dev \
-            qttools5-dev \
-            qttools5-dev-tools
-      - name: Build QT (Linux)
-        run: |
-          chmod +x zcutil/build-qt-linux.sh
-          ./zcutil/build-qt-linux.sh -j$(nproc)
-      - name: Package QT (Linux)
-        run: |
-          # build-qt-linux.sh already strips, versions (from configure.ac,
-          # via the Makefile's PACKAGE_VERSION), and packages this into
-          # artifacts/bin/pirate-qt-*.deb and artifacts/bin/pirate-qt-*.zip -
-          # see zcutil/build-deb.sh, zcutil/build-zip.sh.
-          mkdir -p dist
-          cp artifacts/bin/pirate-qt-*.deb artifacts/bin/pirate-qt-*.zip dist/
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: qt-linux
-          path: dist/*
-
-  qt-windows:
-    name: QT (Windows x86_64 cross)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Ensure parent depends alias
-        shell: bash
-        run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Set version suffix
-        shell: bash
-        run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
-          # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
-          # don't collide - honored by build-deb.sh/build-zip.sh.
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          fi
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            cmake \
-            m4 \
-            autoconf \
-            libtool \
-            unzip \
-            git \
-            python3 \
-            python3-zmq \
-            zlib1g-dev \
-            wget \
-            libcurl4-gnutls-dev \
-            bsdmainutils \
-            curl \
-            libsodium-dev \
-            bison \
-            liblz4-dev \
-            zip \
-            gcc-mingw-w64-x86-64-posix \
-            g++-mingw-w64-x86-64-posix \
-            binutils-mingw-w64-x86-64
-      - name: Build QT (Windows cross)
-        run: |
-          chmod +x zcutil/build-qt-win.sh
-          ./zcutil/build-qt-win.sh -j$(nproc)
-      - name: Package QT (Windows)
-        run: |
-          # build-qt-win.sh already strips, versions (from configure.ac, via
-          # the Makefile's PACKAGE_VERSION), and packages this into
-          # artifacts/bin/pirate-qt-*.zip - see zcutil/build-zip.sh. No .deb
-          # for a Windows target.
-          mkdir -p dist
-          cp artifacts/bin/pirate-qt-*.zip dist/
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: qt-windows
-          path: dist/*
-
-  qt-aarch64:
-    name: QT (Linux AArch64 cross)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Ensure parent depends alias
-        shell: bash
-        run: ln -sfn "$PWD/depends" "$PWD/../depends"
-      - name: Ensure AArch64 host alias
-        run: ln -sfn aarch64-linux-gnu depends/aarch64-unknown-linux-gnu
-      - name: Set version suffix
-        shell: bash
-        run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
-          # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
-          # don't collide - honored by build-deb.sh/build-zip.sh.
-          if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
-            echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
-          fi
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            pkg-config \
-            cmake \
-            m4 \
-            autoconf \
-            libtool \
-            unzip \
-            git \
-            python3 \
-            python3-zmq \
-            zlib1g-dev \
-            wget \
-            libcurl4-gnutls-dev \
-            bsdmainutils \
-            curl \
-            libsodium-dev \
-            bison \
-            liblz4-dev \
-            zip \
-            dpkg-dev \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            binutils-aarch64-linux-gnu
-      - name: Build QT (AArch64 cross)
-        run: |
-          chmod +x zcutil/build-qt-aarch64.sh
-          ./zcutil/build-qt-aarch64.sh -j$(nproc)
-      - name: Package QT (AArch64)
-        run: |
-          # build-qt-aarch64.sh already strips (with the correct
-          # aarch64-linux-gnu-strip), versions (from configure.ac, via the
-          # Makefile's PACKAGE_VERSION), and packages this into
-          # artifacts/bin/pirate-qt-*.deb and artifacts/bin/pirate-qt-*.zip -
-          # see zcutil/build-deb.sh, zcutil/build-zip.sh.
-          mkdir -p dist
-          cp artifacts/bin/pirate-qt-*.deb artifacts/bin/pirate-qt-*.zip dist/
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: qt-aarch64
-          path: dist/*
-
   qt-macos:
     name: QT (macOS arm64)
     runs-on: macos-latest
@@ -765,14 +435,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     needs:
-      - cli-linux
-      - cli-windows
-      - cli-aarch64
+      - linux-x86_64
+      - windows-x86_64-cross
+      - linux-aarch64-cross
       - cli-macos
       - cli-macos-intel
-      - qt-linux
-      - qt-windows
-      - qt-aarch64
       - qt-macos
       - qt-macos-intel
     permissions:
@@ -820,11 +487,11 @@ jobs:
         env:
           PIRATE_GPG_PASSPHRASE: ${{ secrets.PIRATE_GPG_PASSPHRASE }}
         run: |
-          VERSION="${{ needs.cli-linux.outputs.version }}"
+          VERSION="${{ needs.linux-x86_64.outputs.version }}"
           ./zcutil/signbinaries.sh --version "$VERSION"
       - name: Generate release notes
         run: |
-          VERSION="${{ needs.cli-linux.outputs.version }}"
+          VERSION="${{ needs.linux-x86_64.outputs.version }}"
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             NOTES_RAW="$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}")"
           else
@@ -855,7 +522,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           name: ${{ env.RELEASE_TITLE }}
-          tag_name: v${{ needs.cli-linux.outputs.version }}
+          tag_name: v${{ needs.linux-x86_64.outputs.version }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
           body_path: release_body.md
           files: |

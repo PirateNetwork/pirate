@@ -1,0 +1,7 @@
+.git
+artifacts
+dist
+release
+depends/built
+depends/work
+depends/sources
