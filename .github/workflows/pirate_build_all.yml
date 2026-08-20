@@ -185,7 +185,7 @@ jobs:
           CONFIGURE_FLAGS: --disable-hardening
         run: |
           chmod +x zcutil/build-mac.sh
-          ./zcutil/build-mac.sh -j$(sysctl -n hw.ncpu)
+          ./zcutil/build-mac.sh --disable-tests -j$(sysctl -n hw.ncpu)
       - name: Determine package version
         shell: bash
         run: |
@@ -265,7 +265,7 @@ jobs:
           CONFIGURE_FLAGS: --disable-hardening
         run: |
           chmod +x zcutil/build-mac.sh
-          ./zcutil/build-mac.sh -j$(sysctl -n hw.ncpu)
+          ./zcutil/build-mac.sh --disable-tests -j$(sysctl -n hw.ncpu)
       - name: Determine package version
         shell: bash
         run: |

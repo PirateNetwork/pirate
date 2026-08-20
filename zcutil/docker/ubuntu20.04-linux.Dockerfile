@@ -55,16 +55,19 @@ ENV APP_VERSION_SUFFIX=${APP_VERSION_SUFFIX}
 RUN ./zcutil/build-qt-linux.sh -j$(nproc)
 
 # pirate-gtest (src/Makefile.gtest.include) is the only suite that needs to
-# run - it's already built as a normal bin_PROGRAMS target by the
-# build-qt-linux.sh RUN above, TESTS is scoped to just it so `make check`
-# doesn't also try to run qt/test/test_bitcoin-qt (needs a display) - and it
+# run, and it's already built as a normal bin_PROGRAMS target by the
+# build-qt-linux.sh RUN above - so run the binary directly instead of `make
+# check` (even scoped via TESTS=pirate-gtest, that still recurses into
+# unrelated SUBDIRS like cryptoconditions/src/include/secp256k1, whose own
+# check-TESTS then fails trying to build a pirate-gtest.log/.trs that has
+# nothing to do with them - the TESTS override isn't subdir-scoped). It
 # needs the Sapling/Sprout trusted-setup params for its joinsplit tests (see
 # src/gtest/main.cpp). Runs here, inside the same pinned ubuntu:20.04
 # userspace that built it, since the scratch export below can't hand the
 # build tree back to the host. A test failure fails this RUN and thus the
 # whole docker build.
 RUN ./zcutil/fetch-params.sh
-RUN make check TESTS=pirate-gtest
+RUN ./src/pirate-gtest
 
 RUN sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1 > /tmp/VERSION
 
