@@ -90,7 +90,6 @@ using namespace libzcash;
 
 //extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 //extern std::string ASSETCHAINS_OVERRIDE_PUBKEY;
-const std::string ADDR_TYPE_SPROUT = "sprout";
 const std::string ADDR_TYPE_SAPLING = "sapling";
 const std::string ADDR_TYPE_IRONWOOD = "ironwood";
 
@@ -4327,14 +4326,11 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
             "  \"txid\" : \"transactionid\",   (string) The transaction id\n"
             "  \"spends\" : [\n"
             "    {\n"
-            "      \"type\" : \"sprout|sapling\",      (string) The type of address\n"
-            "      \"js\" : n,                       (numeric, sprout) the index of the JSDescription within vJoinSplit\n"
-            "      \"jsSpend\" : n,                  (numeric, sprout) the index of the spend within the JSDescription\n"
-            "      \"spend\" : n,                    (numeric, sapling) the index of the spend within vShieldedSpend\n"
+            "      \"type\" : \"sapling|ironwood\",   (string) The type of address\n"
+            "      \"spend\" : n,                    (numeric, sapling/ironwood) the index of this spend within the RPC's spends array\n"
             "      \"txidPrev\" : \"transactionid\",   (string) The id for the transaction this note was created in\n"
-            "      \"jsPrev\" : n,                   (numeric, sprout) the index of the JSDescription within vJoinSplit\n"
-            "      \"jsOutputPrev\" : n,             (numeric, sprout) the index of the output within the JSDescription\n"
             "      \"outputPrev\" : n,               (numeric, sapling) the index of the output within the vShieldedOutput\n"
+            "      \"actionPrev\" : n,               (numeric, ironwood) the index of the action within the previous transaction's action bundle\n"
             "      \"address\" : \"zcashaddress\",     (string) The Zcash address involved in the transaction\n"
             "      \"value\" : x.xxx                 (numeric) The amount in " + CURRENCY_UNIT + "\n"
             "      \"valueZat\" : xxxx               (numeric) The amount in zatoshis\n"
@@ -4343,12 +4339,11 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
             "  ],\n"
             "  \"outputs\" : [\n"
             "    {\n"
-            "      \"type\" : \"sprout|sapling\",      (string) The type of address\n"
-            "      \"js\" : n,                       (numeric, sprout) the index of the JSDescription within vJoinSplit\n"
-            "      \"jsOutput\" : n,                 (numeric, sprout) the index of the output within the JSDescription\n"
+            "      \"type\" : \"sapling|ironwood\",   (string) The type of address\n"
             "      \"output\" : n,                   (numeric, sapling) the index of the output within the vShieldedOutput\n"
+            "      \"action\" : n,                   (numeric, ironwood) the index of the action within the action bundle\n"
             "      \"address\" : \"zcashaddress\",     (string) The Zcash address involved in the transaction\n"
-            "      \"recovered\" : true|false        (boolean, sapling) True if the output is not for an address in the wallet\n"
+            "      \"recovered\" : true|false        (boolean, sapling/ironwood) True if the output is not for an address in the wallet\n"
             "      \"value\" : x.xxx                 (numeric) The amount in " + CURRENCY_UNIT + "\n"
             "      \"valueZat\" : xxxx               (numeric) The amount in zatoshis\n"
             "      \"memo\" : \"hexmemo\",             (string) Hexademical string representation of the memo field\n"
@@ -4379,65 +4374,6 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
     UniValue spends(UniValue::VARR);
     UniValue outputs(UniValue::VARR);
-
-    // Sprout spends - retained for old sprout addresses and transactions
-    for (size_t i = 0; i < wtx.vjoinsplit.size(); ++i) {
-        for (size_t j = 0; j < wtx.vjoinsplit[i].nullifiers.size(); ++j) {
-            auto nullifier = wtx.vjoinsplit[i].nullifiers[j];
-
-            // Fetch the note that is being spent, if ours
-            auto res = pwalletMain->mapSproutNullifiersToNotes.find(nullifier);
-            if (res == pwalletMain->mapSproutNullifiersToNotes.end()) {
-                continue;
-            }
-            auto jsop = res->second;
-            auto wtxPrev = pwalletMain->mapWallet.at(jsop.hash);
-
-            auto decrypted = wtxPrev.DecryptSproutNote(jsop);
-            auto notePt = decrypted.first;
-            auto pa = decrypted.second;
-
-            UniValue entry(UniValue::VOBJ);
-            entry.push_back(Pair("type", ADDR_TYPE_SPROUT));
-            entry.push_back(Pair("js", (int)i));
-            entry.push_back(Pair("jsSpend", (int)j));
-            entry.push_back(Pair("txidPrev", jsop.hash.GetHex()));
-            entry.push_back(Pair("jsPrev", (int)jsop.js));
-            entry.push_back(Pair("jsOutputPrev", (int)jsop.n));
-            entry.push_back(Pair("address", EncodePaymentAddress(pa)));
-            entry.push_back(Pair("value", ValueFromAmount(notePt.value())));
-            entry.push_back(Pair("valueZat", notePt.value()));
-            outputs.push_back(entry);
-        }
-    }
-
-    // Sprout outputs
-    for (auto & pair : wtx.mapSproutNoteData) {
-        JSOutPoint jsop = pair.first;
-
-        auto decrypted = wtx.DecryptSproutNote(jsop);
-        auto notePt = decrypted.first;
-        auto pa = decrypted.second;
-        auto memo = notePt.memo();
-
-        UniValue entry(UniValue::VOBJ);
-        entry.push_back(Pair("type", ADDR_TYPE_SPROUT));
-        entry.push_back(Pair("js", (int)jsop.js));
-        entry.push_back(Pair("jsOutput", (int)jsop.n));
-        entry.push_back(Pair("address", EncodePaymentAddress(pa)));
-        entry.push_back(Pair("value", ValueFromAmount(notePt.value())));
-        entry.push_back(Pair("valueZat", notePt.value()));
-        entry.push_back(Pair("memo", HexStr(memo)));
-        if (memo[0] <= 0xf4) {
-            auto end = std::find_if(memo.rbegin(), memo.rend(), [](unsigned char v) { return v != 0; });
-            std::string memoStr(memo.begin(), end.base());
-            //if (utf8::is_valid(memoStr))
-            {
-                entry.push_back(Pair("memoStr", memoStr));
-            }
-        }
-        outputs.push_back(entry);
-    }
 
     // Sapling spends
     std::set<uint256> ovks;
@@ -4477,7 +4413,7 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
     }
 
     // Sapling outputs
-    uint32_t outputCount = wtx.GetSaplingSpendsCount();
+    uint32_t outputCount = wtx.GetSaplingOutputsCount();
     for (uint32_t i = 0; i < outputCount; ++i) {
         auto op = SaplingOutPoint(hash, i);
 
@@ -4509,6 +4445,105 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
         UniValue entry(UniValue::VOBJ);
         entry.push_back(Pair("type", ADDR_TYPE_SAPLING));
         entry.push_back(Pair("output", (int)op.n));
+        entry.push_back(Pair("recovered", isRecovered));
+        entry.push_back(Pair("address", EncodePaymentAddress(pa)));
+        entry.push_back(Pair("value", ValueFromAmount(notePt.value())));
+        entry.push_back(Pair("valueZat", notePt.value()));
+        entry.push_back(Pair("memo", HexStr(memo)));
+        if (memo[0] <= 0xf4) {
+            auto end = std::find_if(memo.rbegin(), memo.rend(), [](unsigned char v) { return v != 0; });
+            std::string memoStr(memo.begin(), end.base());
+            //if (utf8::is_valid(memoStr))
+            {
+                entry.push_back(Pair("memoStr", memoStr));
+            }
+        }
+        outputs.push_back(entry);
+    }
+
+    // Ironwood spends
+    std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
+    int actionSpendIndex = 0;
+    for (const auto& action : wtx.GetIronwoodActions()) {
+        uint256 nullifier = uint256::FromRawBytes(action.nullifier());
+
+        // Fetch the note that is being spent
+        auto res = pwalletMain->mapIronwoodNullifiersToNotes.find(nullifier);
+        if (res == pwalletMain->mapIronwoodNullifiersToNotes.end()) {
+            continue;
+        }
+        auto op = res->second;
+        auto wtxPrev = pwalletMain->mapWallet.at(op.hash);
+
+        // We don't need to check the leadbyte here: if wtx exists in
+        // the wallet, it must have already passed the leadbyte check
+        auto decrypted = wtxPrev.DecryptIronwoodNote(op).value();
+        auto notePt = decrypted.first;
+        auto pa = decrypted.second;
+
+        // Store the OutgoingViewingKeys for recovering outputs
+        libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
+        assert(pwalletMain->GetIronwoodFullViewingKey(wtxPrev.mapIronwoodNoteData.at(op).ivk, extfvk));
+        libzcash::IronwoodOutgoingViewingKey ovkExternal, ovkInternal;
+        if (extfvk.fvk.DeriveOVK(&ovkExternal)) {
+            ironwoodOvks.insert(ovkExternal);
+        }
+        if (extfvk.fvk.DeriveOVKinternal(&ovkInternal)) {
+            ironwoodOvks.insert(ovkInternal);
+        }
+
+        UniValue entry(UniValue::VOBJ);
+        entry.push_back(Pair("type", ADDR_TYPE_IRONWOOD));
+        entry.push_back(Pair("spend", actionSpendIndex));
+        entry.push_back(Pair("txidPrev", op.hash.GetHex()));
+        entry.push_back(Pair("actionPrev", (int)op.n));
+        entry.push_back(Pair("address", EncodePaymentAddress(pa)));
+        entry.push_back(Pair("value", ValueFromAmount(notePt.value())));
+        entry.push_back(Pair("valueZat", notePt.value()));
+        spends.push_back(entry);
+        actionSpendIndex++;
+    }
+
+    // Ironwood outputs
+    auto ironwoodActions = wtx.GetIronwoodActions();
+    for (uint32_t i = 0; i < ironwoodActions.size(); ++i) {
+        auto op = IronwoodOutPoint(hash, i);
+
+        IronwoodNotePlaintext notePt;
+        libzcash::IronwoodPaymentAddress pa;
+        bool isRecovered;
+
+        // We don't need to check the leadbyte here: if wtx exists in
+        // the wallet, it must have already passed the leadbyte check
+        auto decrypted = wtx.DecryptIronwoodNote(op);
+        if (decrypted) {
+            notePt = decrypted->first;
+            pa = decrypted->second;
+            isRecovered = false;
+        } else {
+            // Try recovering the output using the OVKs collected from this
+            // transaction's own Ironwood spends
+            bool foundViaOvk = false;
+            for (const auto& ovk : ironwoodOvks) {
+                auto recovered = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&ironwoodActions[i], ovk);
+                if (recovered) {
+                    notePt = recovered.value();
+                    pa = notePt.GetAddress();
+                    isRecovered = true;
+                    foundViaOvk = true;
+                    break;
+                }
+            }
+            if (!foundViaOvk) {
+                // Unreadable
+                continue;
+            }
+        }
+        auto memo = notePt.memo();
+
+        UniValue entry(UniValue::VOBJ);
+        entry.push_back(Pair("type", ADDR_TYPE_IRONWOOD));
+        entry.push_back(Pair("action", (int)i));
         entry.push_back(Pair("recovered", isRecovered));
         entry.push_back(Pair("address", EncodePaymentAddress(pa)));
         entry.push_back(Pair("value", ValueFromAmount(notePt.value())));

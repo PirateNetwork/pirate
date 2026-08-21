@@ -904,6 +904,7 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
         nIndex = arcTxPt.nIndex;
 
         // Get Ivks and Ovks saved in ArchiveTxPoint
+        bool usedCachedKeys = false;
         if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.ironwoodIvks.size() == 0 && arcTxPt.ironwoodOvks.size() == 0) || rescan) {
             getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
             getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
@@ -914,12 +915,7 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
             saplingOvks = arcTxPt.saplingOvks;
             ironwoodIvks = arcTxPt.ironwoodIvks;
             ironwoodOvks = arcTxPt.ironwoodOvks;
-            // Supplement with fresh IVKs for spend resolution. The cached set may
-            // be incomplete if internal IVKs were added after this tx was first
-            // processed (e.g. Sapling change-address spend support).
-            if (!tx.GetSaplingSpends().empty()) {
-                getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-            }
+            usedCachedKeys = true;
         }
 
         // Find the block it claims to be in
@@ -945,6 +941,18 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
 
         if (tx.GetHash() != txid) {
             return; // Tx Hash doesn't match;
+        }
+
+        // Supplement with fresh IVKs for spend resolution now that tx is loaded.
+        // The cached set may be incomplete if internal IVKs were added after
+        // this tx was first processed (e.g. change-address spend support).
+        if (usedCachedKeys) {
+            if (!tx.GetSaplingSpends().empty()) {
+                getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+            }
+            if (tx.GetIronwoodActionsCount() > 0) {
+                getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
+            }
         }
     } else {
         return;
@@ -1059,9 +1067,12 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
             ironwoodOvks = arcTxPt.ironwoodOvks;
             // Supplement with fresh IVKs for spend resolution. The cached set may
             // be incomplete if internal IVKs were added after this tx was first
-            // processed (e.g. Sapling change-address spend support).
+            // processed (e.g. change-address spend support).
             if (!tx.GetSaplingSpends().empty()) {
                 getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+            }
+            if (tx.GetIronwoodActionsCount() > 0) {
+                getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
             }
         }
     } else {
@@ -2793,27 +2804,29 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
                     if (txType == 0 && pwalletMain->IsLockedNote(op))
                         txType = 3;
 
-                    auto note = pt.value();
-                    SaplingPaymentAddress addr;
-                    assert(ivk.DeriveAddress(&addr, note.d));
-                    string addressString = EncodePaymentAddress(addr);
-                    if (addressBalances.count(addressString) == 0)
-                        addressBalances.insert(make_pair(addressString, txAmounts));
+                    if (pt) {
+                        auto note = pt.value();
+                        SaplingPaymentAddress addr;
+                        assert(ivk.DeriveAddress(&addr, note.d));
+                        string addressString = EncodePaymentAddress(addr);
+                        if (addressBalances.count(addressString) == 0)
+                            addressBalances.insert(make_pair(addressString, txAmounts));
 
-                    if (txType == 0) {
-                        addressBalances.at(addressString).confirmed += note.value();
-                        privateConfirmed += note.value();
-                    } else if (txType == 1) {
-                        addressBalances.at(addressString).immature += note.value();
-                        privateImmature += note.value();
-                    } else if (txType == 2) {
-                        addressBalances.at(addressString).unconfirmed += note.value();
-                        privateUnconfirmed += note.value();
-                    } else if (txType == 3) {
-                        addressBalances.at(addressString).locked += note.value();
-                        privateLocked += note.value();
+                        if (txType == 0) {
+                            addressBalances.at(addressString).confirmed += note.value();
+                            privateConfirmed += note.value();
+                        } else if (txType == 1) {
+                            addressBalances.at(addressString).immature += note.value();
+                            privateImmature += note.value();
+                        } else if (txType == 2) {
+                            addressBalances.at(addressString).unconfirmed += note.value();
+                            privateUnconfirmed += note.value();
+                        } else if (txType == 3) {
+                            addressBalances.at(addressString).locked += note.value();
+                            privateLocked += note.value();
+                        }
+                        addressBalances.at(addressString).spendable = haveSpendingKey;
                     }
-                    addressBalances.at(addressString).spendable = haveSpendingKey;
                 }
             }
         }

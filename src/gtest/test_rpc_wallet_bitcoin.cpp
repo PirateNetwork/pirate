@@ -6,8 +6,11 @@
 #include "rpc/server.h"
 #include "rpc/client.h"
 
+#include "consensus/consensus.h"
 #include "key_io.h"
 #include "main.h"
+#include "script/standard.h"
+#include "transaction_builder.h"
 #include "wallet/wallet.h"
 
 #include "gtest/gtestutils.h"
@@ -1249,6 +1252,190 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
     SelectParams(CBaseChainParams::MAIN);
     fUnlockedForReporting = previousUnlockedForReporting;
     boost::filesystem::current_path(previousCwd);
+}
+
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_sapling_outputs_without_spends)
+{
+    // Regression test for a copy-paste bug in z_viewtransaction: the Sapling
+    // outputs loop bounded itself with GetSaplingSpendsCount() instead of
+    // GetSaplingOutputsCount() (wallet/rpcwallet.cpp), so any transaction with
+    // more Sapling outputs than Sapling spends had the excess outputs silently
+    // dropped from the RPC result. An ordinary shielded receive - zero spends,
+    // one or more outputs - hit this worst-case: outputCount was truncated to
+    // zero and the outputs array came back empty even though the wallet could
+    // decrypt the note. Build exactly that shape and confirm the RPC reports it.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // TransactionBuilder needs Sapling active; UpdateNetworkUpgradeParameters()
+    // always mutates the REGTEST params singleton (chainparams.cpp:670).
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } upgradeReverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress myAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingExtendedSpendingKey myExtsk;
+    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(myAddr, myExtsk));
+
+    // Funding key for the transparent input; only used to build the tx
+    // locally, never broadcast or mined.
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret("UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1");
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    CScript scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    auto builder = TransactionBuilder(Params().GetConsensus(), 1, &keystore);
+    builder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder.InitializeSapling(uint256());
+    ASSERT_TRUE(builder.AddSaplingOutputRaw(myAddr, 40000, {}));
+    ASSERT_TRUE(builder.ConvertRawSaplingOutput(myExtsk.expsk.ovk));
+    auto maybeTx = builder.Build();
+    ASSERT_TRUE(maybeTx.IsTx());
+    CTransaction tx = maybeTx.GetTxOrThrow();
+
+    // Confirm this reproduces the bug's exact shape: zero spends, at least
+    // one output (the builder pads to a 2-output privacy floor, but that
+    // padding is irrelevant here - what matters is spends == 0 < outputs).
+    ASSERT_EQ(tx.GetSaplingSpendsCount(), 0);
+    ASSERT_GT(tx.GetSaplingOutputsCount(), 0u);
+
+    // Feed the tx through the same wallet path a block-connect/rescan would
+    // use, so mapSaplingNoteData ends up populated exactly as it would for a
+    // real received transaction.
+    std::vector<CTransaction> vtx{tx};
+    std::vector<CTransaction> vAdded;
+    std::set<libzcash::SaplingPaymentAddress> saplingAddressesFound;
+    std::set<libzcash::IronwoodPaymentAddress> ironwoodAddressesFound;
+    pwalletMain->AddToWalletIfInvolvingMe(vtx, vAdded, nullptr, 1, true, saplingAddressesFound, ironwoodAddressesFound, false);
+    ASSERT_EQ(vAdded.size(), 1u);
+
+    UniValue result;
+    EXPECT_NO_THROW(result = CallRPC("z_viewtransaction " + tx.GetHash().GetHex()));
+    UniValue outputs = find_value(result, "outputs");
+    ASSERT_TRUE(outputs.isArray());
+
+    bool foundOurOutput = false;
+    for (const UniValue& out : outputs.getValues()) {
+        if (find_value(out, "type").get_str() == "sapling" &&
+            find_value(out, "address").get_str() == EncodePaymentAddress(myAddr)) {
+            foundOurOutput = true;
+            EXPECT_EQ(find_value(out, "valueZat").get_int64(), 40000);
+        }
+    }
+    EXPECT_TRUE(foundOurOutput)
+        << "z_viewtransaction omitted the wallet's own Sapling output on a "
+           "transaction with zero Sapling spends";
+}
+
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_ironwood_outputs)
+{
+    // z_viewtransaction previously had no Ironwood handling at all - its
+    // spends/outputs loops only ever looked at Sprout and Sapling data, so an
+    // Ironwood receive was silently absent from the RPC's report regardless
+    // of the GetSaplingOutputsCount()/GetSaplingSpendsCount() bug fixed above.
+    // Confirm a plain Ironwood receive (own address, own OVK, zero spends) is
+    // now reported.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // TransactionBuilder needs Overwinter/Sapling/Ironwood active; REGTEST is
+    // the only chain UpdateNetworkUpgradeParameters() mutates.
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } upgradeReverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::IronwoodPaymentAddress myAddr = pwalletMain->GenerateNewIronwoodZKey();
+    libzcash::IronwoodExtendedSpendingKeyPirate myExtsk;
+    ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(myAddr, myExtsk));
+    libzcash::IronwoodFullViewingKey myFvk;
+    ASSERT_TRUE(myExtsk.sk.DeriveFVK(&myFvk));
+    libzcash::IronwoodOutgoingViewingKey myOvk;
+    ASSERT_TRUE(myFvk.DeriveOVK(&myOvk));
+
+    // Funding key for the transparent input; only used to build the tx
+    // locally, never broadcast or mined.
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret("UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1");
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    CScript scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    auto builder = TransactionBuilder(Params().GetConsensus(), 1, &keystore);
+    builder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder.InitializeIronwood(/*spendsEnabled=*/false, /*outputsEnabled=*/true, uint256());
+    ASSERT_TRUE(builder.AddIronwoodOutputRaw(myAddr, 40000, {}));
+    ASSERT_TRUE(builder.ConvertRawIronwoodOutput(myOvk.ovk));
+    auto maybeTx = builder.Build();
+    ASSERT_TRUE(maybeTx.IsTx());
+    CTransaction tx = maybeTx.GetTxOrThrow();
+
+    ASSERT_GT(tx.GetIronwoodActionsCount(), 0u);
+
+    // Feed the tx through the same wallet path a block-connect/rescan would
+    // use, so mapIronwoodNoteData ends up populated exactly as it would for a
+    // real received transaction.
+    std::vector<CTransaction> vtx{tx};
+    std::vector<CTransaction> vAdded;
+    std::set<libzcash::SaplingPaymentAddress> saplingAddressesFound;
+    std::set<libzcash::IronwoodPaymentAddress> ironwoodAddressesFound;
+    pwalletMain->AddToWalletIfInvolvingMe(vtx, vAdded, nullptr, 1, true, saplingAddressesFound, ironwoodAddressesFound, false);
+    ASSERT_EQ(vAdded.size(), 1u);
+
+    UniValue result;
+    EXPECT_NO_THROW(result = CallRPC("z_viewtransaction " + tx.GetHash().GetHex()));
+    UniValue outputs = find_value(result, "outputs");
+    ASSERT_TRUE(outputs.isArray());
+
+    bool foundOurOutput = false;
+    for (const UniValue& out : outputs.getValues()) {
+        if (find_value(out, "type").get_str() == "ironwood" &&
+            find_value(out, "address").get_str() == EncodePaymentAddress(myAddr)) {
+            foundOurOutput = true;
+            EXPECT_EQ(find_value(out, "valueZat").get_int64(), 40000);
+        }
+    }
+    EXPECT_TRUE(foundOurOutput) << "z_viewtransaction did not report the wallet's own Ironwood output";
 }
 
 
