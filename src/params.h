@@ -1,3 +1,7 @@
+// Copyright (c) 2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef BITCOIN_PARAMS_H
 #define BITCOIN_PARAMS_H
 
@@ -86,13 +90,14 @@ struct JsonDownload {
 extern std::map<std::string, ParamFile> mapParams;
 
 extern bool checkParams();
-extern void initalizeMapParamBootstrap();
+extern void initalizeMapParamBootstrap(const std::string& url);
 extern void initalizeMapParam();
 static size_t writer(char *in, size_t size, size_t nmemb, std::string *out);
 static size_t write_data(void *ptr, size_t size, size_t nmemb, void *stream);
 extern bool downloadFiles(std::string title);
 extern void getHttpsJson(std::string url, JsonDownload *reply, int headerType);
 extern bool getBootstrap();
+extern bool VerifyBootstrapHash(const boost::filesystem::path& path, const std::string& expectedHash);
 static bool extract(boost::filesystem::path filename);
 static int copy_data(struct archive *ar, struct archive *aw);
 

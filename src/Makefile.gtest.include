@@ -28,6 +28,7 @@ endif
 pirate_gtest_SOURCES += \
 	gtest/test_tautology.cpp \
 	gtest/test_chainparams.cpp \
+	gtest/test_params.cpp \
 	gtest/test_deprecation.cpp \
 	gtest/test_httprpc.cpp \
 	gtest/test_joinsplit.cpp \

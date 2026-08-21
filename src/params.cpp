@@ -1,8 +1,15 @@
 
+// Copyright (c) 2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include "params.h"
+#include "random.h"
 #include "ui_interface.h"
 
 #include <fstream>
+#include <sstream>
+#include <vector>
 
 std::map<std::string, ParamFile> mapParams;
 static const int K_READ_BUF_SIZE{ 1024 * 16 };
@@ -91,18 +98,67 @@ static int xferinfo(void *p,
   return 0;
 }
 
-void initalizeMapParamBootstrap() {
+// Mirrors, in random order, so no single host takes the brunt of client
+// load; a sha256 published alongside each tarball is verified before
+// extraction (see VerifyBootstrapHash) rather than trusting any one of them.
+static const std::vector<std::string> BOOTSTRAP_URLS = {
+    "https://bootstrap1.cryptoforge.cc/ARRR-bootstrap-v2.tar.gz",
+    "https://bootstrap2.cryptoforge.cc/ARRR-bootstrap-v2.tar.gz",
+    "https://bootstrap.arrr.black/ARRR-bootstrap-v2.tar.gz",
+};
+
+void initalizeMapParamBootstrap(const std::string& url) {
   mapParams.clear();
 
   ParamFile bootFile;
   bootFile.name = "bootstrap";
-  bootFile.URL = "http://bootstrap.arrr.black/ARRR-bootstrap-v2.tar.gz";
+  bootFile.URL = url;
   bootFile.verified = false;
   bootFile.path = GetDataDir() / "ARRR-bootstrap.tar.gz";
   bootFile.dlnow = 0;
   bootFile.dltotal = 0;
   mapParams[bootFile.URL] = bootFile;
 
+}
+
+static std::vector<std::string> ShuffledBootstrapUrls()
+{
+    std::vector<std::string> urls(BOOTSTRAP_URLS.begin(), BOOTSTRAP_URLS.end());
+    for (size_t i = urls.size(); i > 1; i--) {
+        size_t j = GetRand(i);
+        std::swap(urls[i - 1], urls[j]);
+    }
+    return urls;
+}
+
+bool VerifyBootstrapHash(const boost::filesystem::path& path, const std::string& expectedHash)
+{
+    if (expectedHash.size() != 64) {
+        return false;
+    }
+    std::string actualHash = CalcSha256(path.string());
+    return !actualHash.empty() && actualHash == expectedHash;
+}
+
+// Fetches "<url>.sha256" (a plain-text sha256sum-style file: the hex digest,
+// optionally followed by whitespace and a filename) via the existing JSON
+// fetch helper - it only requires curl to succeed and the server to send
+// some Content-Type header, so it works fine for a plain-text response too.
+static bool FetchBootstrapHash(const std::string& bootstrapUrl, std::string& hashOut)
+{
+    JsonDownload reply;
+    getHttpsJson(bootstrapUrl + ".sha256", &reply, STANDARD_HEADERS);
+    if (!reply.complete || reply.response.empty()) {
+        return false;
+    }
+    std::istringstream iss(reply.response);
+    std::string hash;
+    iss >> hash;
+    if (hash.size() != 64) {
+        return false;
+    }
+    hashOut = hash;
+    return true;
 }
 
 
@@ -430,22 +486,39 @@ void getHttpsJson(std::string url, JsonDownload *reply, int headerType)
 
 
 bool getBootstrap() {
-    initalizeMapParamBootstrap();
-    bool dlsuccess = downloadFiles("Bootstrap");
+    for (const std::string& url : ShuffledBootstrapUrls()) {
+        LogPrintf("Bootstrap: attempting download from %s\n", url);
 
-    for (std::map<std::string, ParamFile>::iterator it = mapParams.begin(); it != mapParams.end(); ++it) {
+        initalizeMapParamBootstrap(url);
+        bool dlsuccess = downloadFiles("Bootstrap");
+        boost::filesystem::path bootPath = mapParams.begin()->second.path;
+
         if (dlsuccess) {
-            if (!extract(it->second.path)) {
+            std::string expectedHash;
+            if (!FetchBootstrapHash(url, expectedHash) || !VerifyBootstrapHash(bootPath, expectedHash)) {
+                LogPrintf("Bootstrap: sha256 verification failed for %s, trying next source\n", url);
+                dlsuccess = false;
+            }
+        }
+
+        if (dlsuccess) {
+            if (!extract(bootPath)) {
                 boost::filesystem::remove_all(GetDataDir() / "blocks");
                 boost::filesystem::remove_all(GetDataDir() / "chainstate");
                 dlsuccess = false;
             }
         }
-        if (boost::filesystem::exists(it->second.path.string())) {
-            boost::filesystem::remove(it->second.path.string());
+
+        if (boost::filesystem::exists(bootPath)) {
+            boost::filesystem::remove(bootPath);
+        }
+
+        if (dlsuccess) {
+            return true;
         }
     }
-    return dlsuccess;
+    LogPrintf("Bootstrap: all sources failed\n");
+    return false;
 }
 
 
