@@ -54,7 +54,12 @@ ARG APP_VERSION_SUFFIX=
 ENV APP_VERSION_SUFFIX=${APP_VERSION_SUFFIX}
 
 RUN ./zcutil/build-qt-aarch64.sh -j$(nproc)
-RUN sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1 > /tmp/VERSION
+RUN BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)" && \
+    if [ -n "${APP_VERSION_SUFFIX:-}" ]; then \
+        printf '%s-%s' "$BASE_VERSION" "$APP_VERSION_SUFFIX" > /tmp/VERSION; \
+    else \
+        printf '%s' "$BASE_VERSION" > /tmp/VERSION; \
+    fi
 
 # --target=binaries: build-qt-aarch64.sh already strips (with the correct
 # aarch64-linux-gnu-strip), versions, and packages everything into

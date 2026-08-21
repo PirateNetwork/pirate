@@ -47,7 +47,12 @@ ARG APP_VERSION_SUFFIX=
 ENV APP_VERSION_SUFFIX=${APP_VERSION_SUFFIX}
 
 RUN ./zcutil/build-qt-win.sh -j$(nproc)
-RUN sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1 > /tmp/VERSION
+RUN BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)" && \
+    if [ -n "${APP_VERSION_SUFFIX:-}" ]; then \
+        printf '%s-%s' "$BASE_VERSION" "$APP_VERSION_SUFFIX" > /tmp/VERSION; \
+    else \
+        printf '%s' "$BASE_VERSION" > /tmp/VERSION; \
+    fi
 
 # --target=binaries: build-qt-win.sh already strips, versions, and packages
 # everything into artifacts/bin/*.zip (pirate-qt-*, pirate-cli-*) - no .deb

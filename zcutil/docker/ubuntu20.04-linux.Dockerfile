@@ -69,7 +69,12 @@ RUN ./zcutil/build-qt-linux.sh -j$(nproc)
 RUN ./zcutil/fetch-params.sh
 RUN ./src/pirate-gtest
 
-RUN sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1 > /tmp/VERSION
+RUN BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)" && \
+    if [ -n "${APP_VERSION_SUFFIX:-}" ]; then \
+        printf '%s-%s' "$BASE_VERSION" "$APP_VERSION_SUFFIX" > /tmp/VERSION; \
+    else \
+        printf '%s' "$BASE_VERSION" > /tmp/VERSION; \
+    fi
 
 # --target=binaries: build-qt-linux.sh already strips, versions, and
 # packages everything into artifacts/bin/*.deb and artifacts/bin/*.zip
