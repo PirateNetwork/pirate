@@ -276,6 +276,12 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress& zaddr) c
         }
     }
 
+    // Initialize Sapling for transaction building. Shielding is an
+    // outputs-only case (transparent inputs, zero Sapling spends), so
+    // nothing else calls InitializeSapling() on this path before
+    // SendChangeTo() adds the Sapling output below.
+    m_op->builder_.InitializeSapling(uint256());
+
     // Send all value to the target z-addr
     m_op->builder_.SendChangeTo(zaddr, ovk);
 
