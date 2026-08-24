@@ -1598,6 +1598,70 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
 
 }
 
+// Regression test: ShieldToAddress::operator()(SaplingPaymentAddress&) used
+// to call SendChangeTo() (which adds a Sapling output) without ever calling
+// builder_.InitializeSapling() first. That's fine for callers that add
+// Sapling spends first (spend-adding initializes the builder along the
+// way), but shielding is an outputs-only case - transparent inputs, zero
+// Sapling spends - so every real z_shieldcoinbase call targeting a Sapling
+// address hit TransactionBuilder::ConvertRawSaplingOutput()'s "cannot add
+// Sapling output without Sapling builder (call InitializeSapling first)"
+// throw. The Ironwood handler right below this one already called
+// InitializeIronwood() in the equivalent spot.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_sapling_builds_transaction)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // TransactionBuilder needs Sapling active; UpdateNetworkUpgradeParameters()
+    // always mutates the REGTEST params singleton (chainparams.cpp:670).
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } upgradeReverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress myAddr = pwalletMain->GenerateNewSaplingZKey();
+
+    // Funding key for the transparent coinbase input. Unlike the
+    // z_viewtransaction tests above (which use a standalone CBasicKeyStore),
+    // this key must live in pwalletMain itself: AsyncRPCOperation_shieldcoinbase
+    // builds its TransactionBuilder against pwalletMain as the signing keystore.
+    CPubKey pubkey = pwalletMain->GenerateNewKey();
+    CScript scriptPubKey = GetScriptForDestination(pubkey.GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    std::vector<ShieldCoinbaseUTXO> inputs = {
+        ShieldCoinbaseUTXO{coinbaseTx.GetHash(), 0, scriptPubKey, 50000}
+    };
+
+    auto operation = std::make_shared<AsyncRPCOperation_shieldcoinbase>(
+        Params().GetConsensus(), 1, CMutableTransaction(), inputs, EncodePaymentAddress(myAddr), 10000);
+    operation->testmode = true;
+
+    TEST_FRIEND_AsyncRPCOperation_shieldcoinbase proxy(operation);
+    bool success = false;
+    EXPECT_NO_THROW(success = proxy.main_impl());
+    EXPECT_TRUE(success);
+
+    CTransaction tx = proxy.getTx();
+    EXPECT_EQ(tx.GetSaplingSpendsCount(), 0);
+    EXPECT_GT(tx.GetSaplingOutputsCount(), 0u);
+}
 
 
 // rpc_z_shieldcoinbase_internals - probes AsyncRPCOperation_shieldcoinbase's
