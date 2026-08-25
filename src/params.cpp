@@ -487,18 +487,25 @@ void getHttpsJson(std::string url, JsonDownload *reply, int headerType)
 
 bool getBootstrap() {
     for (const std::string& url : ShuffledBootstrapUrls()) {
+        // Fetch the sha256 first, before spending any bandwidth on the
+        // (multi-GB) tarball - a source with no published hash (e.g. one
+        // not yet brought up to spec) is rejected immediately instead of
+        // downloading the whole thing only to throw it away.
+        std::string expectedHash;
+        if (!FetchBootstrapHash(url, expectedHash)) {
+            LogPrintf("Bootstrap: no sha256 published for %s, skipping without downloading\n", url);
+            continue;
+        }
+
         LogPrintf("Bootstrap: attempting download from %s\n", url);
 
         initalizeMapParamBootstrap(url);
         bool dlsuccess = downloadFiles("Bootstrap");
         boost::filesystem::path bootPath = mapParams.begin()->second.path;
 
-        if (dlsuccess) {
-            std::string expectedHash;
-            if (!FetchBootstrapHash(url, expectedHash) || !VerifyBootstrapHash(bootPath, expectedHash)) {
-                LogPrintf("Bootstrap: sha256 verification failed for %s, trying next source\n", url);
-                dlsuccess = false;
-            }
+        if (dlsuccess && !VerifyBootstrapHash(bootPath, expectedHash)) {
+            LogPrintf("Bootstrap: sha256 verification failed for %s, trying next source\n", url);
+            dlsuccess = false;
         }
 
         if (dlsuccess) {
