@@ -44,16 +44,19 @@ then
 Usage:
 $0 --help
   Show this help message and exit.
-$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --disable-libs ] [ --enable-debug ] [ MAKEARGS... ]
-  Build Komodo and most of its transitive dependencies from
-  source. MAKEARGS are applied to both dependencies and Komodo itself.
-  If --enable-lcov is passed, Komodo is configured to add coverage
+$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --enable-debug ] [ --enable-system-command ] [ MAKEARGS... ]
+  Build Pirate and most of its transitive dependencies from
+  source. MAKEARGS are applied to both dependencies and Pirate itself.
+  If --enable-lcov is passed, Pirate is configured to add coverage
   instrumentation, thus enabling "make cov" to work.
-  If --disable-tests is passed instead, the Komodo tests are not built.
-  If --disable-mining is passed, Komodo is configured to not build any mining
+  If --disable-tests is passed instead, the Pirate tests are not built.
+  If --disable-mining is passed, Pirate is configured to not build any mining
   code. It must be passed after the test arguments, if present.
-  If --enable-debug is passed, Komodo is built with debugging information. It
+  If --enable-debug is passed, Pirate is built with debugging information. It
   must be passed after the previous arguments, if present.
+  If --enable-system-command is passed, -blocknotify/-alertnotify are allowed
+  to run their configured command. It must be passed after the previous
+  arguments, if present.
 EOF
     exit 0
 fi
@@ -95,6 +98,16 @@ if [[ -z "${VERBOSE-}" ]]; then
    VERBOSITY="--enable-silent-rules"
 else
    VERBOSITY="--disable-silent-rules"
+fi
+
+# If --enable-system-command is the next argument, allow -blocknotify/
+# -alertnotify to actually run their configured command (see
+# util.cpp's runCommand(), gated behind this macro).
+if [ "x${1:-}" = 'x--enable-system-command' ]
+then
+    CXXFLAGS="${CXXFLAGS-} -DENABLE_SYSTEM_COMMAND"
+    export CXXFLAGS
+    shift
 fi
 
 HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ V=1 NO_QT=1

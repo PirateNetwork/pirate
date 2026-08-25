@@ -30,7 +30,7 @@ Usage:
 $0 --help
   Show this help message and exit.
 
-$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --disable-rust ] [ MAKEARGS... ]
+$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --disable-rust ] [ --enable-system-command ] [ MAKEARGS... ]
   Build Pirate and most of its transitive dependencies from
   source. MAKEARGS are applied to both dependencies and Pirate itself.
 
@@ -43,6 +43,10 @@ $0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --disable-rust ] 
 
   If --disable-rust is passed, Pirate is configured to not build any Rust language
   assets. It must be passed after test/mining arguments, if present.
+
+  If --enable-system-command is passed, -blocknotify/-alertnotify are allowed
+  to run their configured command. It must be passed after the previous
+  arguments, if present.
 EOF
     exit 0
 fi
@@ -78,6 +82,16 @@ then
     shift
 fi
 
+# If --enable-system-command is the next argument, allow -blocknotify/
+# -alertnotify to actually run their configured command (see
+# util.cpp's runCommand(), gated behind this macro).
+SYSTEM_COMMAND_CXXFLAGS=''
+if [ "x${1:-}" = 'x--enable-system-command' ]
+then
+    SYSTEM_COMMAND_CXXFLAGS='-DENABLE_SYSTEM_COMMAND'
+    shift
+fi
+
 PREFIX="$(pwd)/depends/$HOST"
 
 eval "$MAKE" --version
@@ -105,5 +119,5 @@ cd ../..
 
 # Build the full node
 ./autogen.sh
-CONFIG_SITE="$PREFIX/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$RUST_ARG" $CONFIGURE_FLAGS CXXFLAGS='-g'
+CONFIG_SITE="$PREFIX/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$RUST_ARG" $CONFIGURE_FLAGS CXXFLAGS="-g $SYSTEM_COMMAND_CXXFLAGS"
 "$MAKE" "$@" V=1

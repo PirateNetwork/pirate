@@ -10,13 +10,16 @@ Usage:
 $0 --help
   Show this help message and exit.
 
-$0 [ --enable-lcov ] [ --enable-debug ] [ MAKEARGS... ]
-  Build Komodo and most of its transitive dependencies from
-  source. MAKEARGS are applied to both dependencies and Komodo itself.
-  If --enable-lcov is passed, Komodo is configured to add coverage
+$0 [ --enable-lcov ] [ --enable-debug ] [ --enable-system-command ] [ MAKEARGS... ]
+  Build Pirate and most of its transitive dependencies from
+  source. MAKEARGS are applied to both dependencies and Pirate itself.
+  If --enable-lcov is passed, Pirate is configured to add coverage
   instrumentation, thus enabling "make cov" to work.
-  If --enable-debug is passed, Komodo is built with debugging information. It
+  If --enable-debug is passed, Pirate is built with debugging information. It
   must be passed after the previous arguments, if present.
+  If --enable-system-command is passed, -blocknotify/-alertnotify are allowed
+  to run their configured command. It must be passed after the previous
+  arguments, if present.
 EOF
     exit 0
 fi
@@ -38,6 +41,16 @@ then
     DEBUG=1
     export DEBUG
     DEBUGGING_ARG='--enable-debug'
+    shift
+fi
+
+# If --enable-system-command is the next argument, allow -blocknotify/
+# -alertnotify to actually run their configured command (see
+# util.cpp's runCommand(), gated behind this macro).
+SYSTEM_COMMAND_CXXFLAGS=''
+if [ "x${1:-}" = 'x--enable-system-command' ]
+then
+    SYSTEM_COMMAND_CXXFLAGS='-DENABLE_SYSTEM_COMMAND'
     shift
 fi
 
@@ -63,7 +76,7 @@ fi
 CONFIG_SITE="$PREFIX/share/config.site" \
 CXXFLAGS="-fwrapv -fno-strict-aliasing \
 -Wno-deprecated-declarations -Wno-deprecated-builtins -Wno-enum-constexpr-conversion \
--Wno-unknown-warning-option -Wno-error=attributes -g" \
+-Wno-unknown-warning-option -Wno-error=attributes -g $SYSTEM_COMMAND_CXXFLAGS" \
 ./configure --prefix="${PREFIX}" --disable-bip70 --with-gui=qt5 --enable-tests=no "$HARDENING_ARG" "$LCOV_ARG" "$DEBUGGING_ARG"
 
 make "$@" NO_GTEST=0 STATIC=1
