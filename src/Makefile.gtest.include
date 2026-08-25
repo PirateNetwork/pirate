@@ -22,7 +22,8 @@ if ENABLE_WALLET
 pirate_gtest_SOURCES += \
 	wallet/gtest/test_wallet_zkeys.cpp \
 	wallet/gtest/test_crypter.cpp \
-	wallet/gtest/test_wallet_encryption.cpp
+	wallet/gtest/test_wallet_encryption.cpp \
+	gtest/test_init.cpp
 endif
 
 pirate_gtest_SOURCES += \

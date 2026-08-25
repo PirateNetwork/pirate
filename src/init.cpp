@@ -191,7 +191,7 @@ void StartShutdown()
       //Flush wallet on exit
       //Write all transactions and block locator to the wallet
 #ifdef ENABLE_WALLET
-    if ( (loadComplete) && (nMaxConnections>0) ) {
+    if ( pwalletMain && (loadComplete) && (nMaxConnections>0) ) {
         LogPrintf("Flushing wallet to disk on shutdown.\n");
         LOCK2(cs_main, pwalletMain->cs_wallet);
         CBlockLocator currentBlock = chainActive.GetLocator();
