@@ -7,6 +7,7 @@
 #include "init.h"
 #include "net.h"
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 
 // Regression test for a crash-on-exit reported with -disablewallet on Linux:
 // StartShutdown() (init.cpp) unconditionally locked pwalletMain->cs_wallet to
@@ -42,4 +43,19 @@ TEST(init_tests, StartShutdownDoesNotCrashWithWalletDisabled)
     nMaxConnections = savedMaxConnections;
     pwalletMain = savedWallet;
     fRequestShutdown = savedShutdown;
+}
+
+// -disablewallet means init.cpp's Step 8 never runs, so nothing ever calls
+// CWalletManager::Get().RegisterDefaultWallet() -- the registry simply stays
+// at its default-constructed empty state. This is a same-process regression
+// check for that: it doesn't re-run init.cpp's startup gating, just confirms
+// an untouched registry looks exactly like the disabled-wallet case is
+// supposed to look.
+TEST(init_tests, WalletManagerStaysEmptyWhenWalletIsDisabled)
+{
+    CWalletManager::Get().Reset();
+
+    EXPECT_TRUE(CWalletManager::Get().ListWalletNames().empty());
+    EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName()));
 }

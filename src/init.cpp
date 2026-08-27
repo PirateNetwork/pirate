@@ -73,6 +73,7 @@
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "wallet/walletmanager.h"
 #include "wallet/asyncrpcoperation_saplingconsolidation.h"
 #include "wallet/asyncrpcoperation_ironwoodconsolidation.h"
 #include "wallet/asyncrpcoperation_sweeptoaddress.h"
@@ -264,6 +265,9 @@ void Shutdown()
     StopRPC();
     StopHTTPServer();
 #ifdef ENABLE_WALLET
+    // Secondary wallets first: nothing routes a request to one after this point,
+    // and they must be gone before Reset() clears the registry at the end of Shutdown().
+    CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
     if (pwalletMain)
         pwalletMain->Flush(false);
 #endif
@@ -348,6 +352,7 @@ void Shutdown()
 #ifdef ENABLE_WALLET
     delete pwalletMain;
     pwalletMain = NULL;
+    CWalletManager::Get().Reset();
 #endif
     delete pzcashParams;
     pzcashParams = NULL;
@@ -1460,8 +1465,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         fDisableWallet = true;
         nLocalServices = 0;
     }
-    if (!fDisableWallet)
+    if (!fDisableWallet) {
         RegisterWalletRPCCommands(tableRPC);
+        RegisterMultiWalletRPCCommands(tableRPC);
+    }
 #endif
 
     nConnectTimeout = GetArg("-timeout", DEFAULT_CONNECT_TIMEOUT);
@@ -2919,6 +2926,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
 
         vpwallets.push_back(pwalletMain);
+
+        CWalletManager::Get().RegisterDefaultWallet(strWalletFile, pwalletMain);
+
+        // Best-effort secondary wallets: skip whichever entry became strWalletFile
+        // above (already loaded through the full default-wallet sequence) and try
+        // the rest. Unlike the default wallet, a failure here doesn't abort startup.
+        for (const std::string& strSecondaryWallet : mapMultiArgs["-wallet"]) {
+            if (strSecondaryWallet == strWalletFile)
+                continue;
+            std::string strWalletLoadError;
+            if (CWalletManager::Get().LoadWallet(strSecondaryWallet, strWalletLoadError))
+                LogPrintf("Loaded secondary wallet \"%s\"\n", strSecondaryWallet);
+            else
+                LogPrintf("Warning: failed to load secondary wallet \"%s\": %s\n", strSecondaryWallet, strWalletLoadError);
+        }
     } // (!fDisableWallet)
 #else // ENABLE_WALLET
     LogPrintf("No wallet support compiled in!\n");

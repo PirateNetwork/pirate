@@ -29,6 +29,9 @@
 #include "util/strencodings.h"
 #include "asyncrpcqueue.h"
 #include "assetchain.h"
+#ifdef ENABLE_WALLET
+#include "wallet/walletmanager.h"
+#endif
 
 #include <memory>
 
@@ -864,9 +867,35 @@ UniValue get_async_result(std::string sOpID)
 UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params) const
 {
     const CRPCCommand *pcmd = tableRPC[strMethod];
+
+#ifdef ENABLE_WALLET
+    // Load-bearing correctness guard: rpcwallet.cpp isn't rewired to consult
+    // GetWalletForRequest() until phase 2, so without this gate a request routed
+    // to a non-default wallet would silently run against pwalletMain instead --
+    // a fund-misdirection risk this must refuse instead of allowing. Deny-by-
+    // default across every category, not just "wallet": pwalletMain is read
+    // directly by RPCs registered under several other categories too (e.g.
+    // "pirate Exclusive", "rawtransactions", "generating", "control", "hidden"),
+    // and a category allowlist would silently let those reach the wrong wallet
+    // instead of being refused like the rest. Checked ahead of the
+    // fRPCNeedUnlocked branch below (not just in the normal-dispatch "else"),
+    // since that branch lets "openwallet" run unconditionally during the
+    // encrypted-wallet-unlock window -- without this check here, a passphrase
+    // supplied for one wallet name could unlock a different one.
+    {
+        std::string strRequestedWallet = CWalletManager::GetRequestedWalletName();
+        if (pcmd && !strRequestedWallet.empty() &&
+            !CWalletManager::Get().IsDefaultWallet(strRequestedWallet) &&
+            pcmd->name != "loadwallet" && pcmd->name != "unloadwallet" && pcmd->name != "listwallets") {
+            throw JSONRPCError(RPC_WALLET_NOT_SPECIFIED,
+                strprintf("RPC method \"%s\" is not yet supported against a non-default wallet", pcmd->name));
+        }
+    }
+#endif
+
     if (fRPCNeedUnlocked) {
 
-        if (pcmd->name != "openwallet")
+        if (!pcmd || pcmd->name != "openwallet")
             throw JSONRPCError(RPC_IN_WARMUP, rpcWarmupStatus);
 
     } else {

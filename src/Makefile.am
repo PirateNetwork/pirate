@@ -418,7 +418,8 @@ BITCOIN_CORE_H = \
 	wallet/wallet_fees.h \
   wallet/wallet_ismine.h \
   wallet/walletdb.h \
-  wallet/witness.h 
+  wallet/walletmanager.h \
+  wallet/witness.h
 
 if ENABLE_ZMQ
   BITCOIN_CORE_H += zmq/zmqabstractnotifier.h \
@@ -584,10 +585,12 @@ libbitcoin_wallet_a_SOURCES = \
   cc/CCtx.cpp \
   wallet/rpcwallet.cpp \
 	wallet/rpcpiratewallet.cpp \
+  wallet/rpcmultiwallet.cpp \
   wallet/wallet.cpp \
 	wallet/wallet_fees.cpp \
   wallet/wallet_ismine.cpp \
   wallet/walletdb.cpp \
+  wallet/walletmanager.cpp \
   wallet/witness.cpp \
   zcash/address/zip32.cpp \
   $(BITCOIN_CORE_H) \

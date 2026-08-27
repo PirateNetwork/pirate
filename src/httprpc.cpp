@@ -25,6 +25,9 @@
 #include "util.h"
 #include "util/strencodings.h"
 #include "ui_interface.h"
+#ifdef ENABLE_WALLET
+#include "wallet/walletmanager.h"
+#endif
 
 #include <boost/algorithm/string.hpp> // boost::trim
 
@@ -102,7 +105,7 @@ static bool RPCAuthorized(const std::string& strAuth)
     return TimingResistantEqual(strUserPass, strRPCUserColonPass);
 }
 
-static bool HTTPReq_JSONRPC(HTTPRequest* req, const std::string &)
+static bool HTTPReq_JSONRPC(HTTPRequest* req, const std::string &strURIPart)
 {
     // JSONRPC handles only POST
     if (req->GetRequestMethod() != HTTPRequest::POST) {
@@ -130,8 +133,36 @@ static bool HTTPReq_JSONRPC(HTTPRequest* req, const std::string &)
         return false;
     }
 
+    // strURIPart is whatever the matched "/" or "/wallet/" prefix left behind:
+    // empty for "/", or "<name>"/"<name>/" for "/wallet/<name>". Trim a trailing
+    // slash so "/wallet/second" and "/wallet/second/" resolve identically.
+    std::string strWalletName = strURIPart;
+    while (!strWalletName.empty() && strWalletName.back() == '/')
+        strWalletName.pop_back();
+
     JSONRequest jreq;
+    // Populated from the already-matched path remainder rather than req->GetURI():
+    // GetURI() is non-virtual, so a mocked HTTPRequest in tests can't safely stand in
+    // for it, and strURIPart already carries the only URI-derived data this handler uses.
+    jreq.URI = strURIPart;
     try {
+#ifdef ENABLE_WALLET
+        // Scoped for the rest of this request, including JSONRPCExecBatch below --
+        // that runs on this same call stack, so it observes the same thread-local.
+        // Must stay alive across tableRPC.execute() throwing, since this call stack
+        // may unwind back onto a pooled HTTP worker thread that serves an unrelated
+        // request next; the destructor is what prevents that leak.
+        //
+        // Existence and ref-holding are resolved together inside the guard's own
+        // constructor (one lock acquisition) rather than via a separate GetWallet()
+        // lookup beforehand -- a lookup-then-construct split would leave a window
+        // for unloadwallet to remove the entry in between the two.
+        RPCWalletRequestGuard walletGuard(strWalletName);
+        if (!strWalletName.empty() && !walletGuard.IsResolved()) {
+            throw JSONRPCError(RPC_WALLET_NOT_FOUND, strprintf("Requested wallet does not exist or is not loaded: %s", strWalletName));
+        }
+#endif
+
         // Parse request
         UniValue valRequest;
         if (!valRequest.read(req->ReadBody()))
@@ -198,6 +229,7 @@ bool StartHTTPRPC()
         return false;
 
     RegisterHTTPHandler("/", true, HTTPReq_JSONRPC);
+    RegisterHTTPHandler("/wallet/", false, HTTPReq_JSONRPC);
 
     assert(EventBase());
     httpRPCTimerInterface = new HTTPRPCTimerInterface(EventBase());
@@ -214,6 +246,7 @@ void StopHTTPRPC()
 {
     LogPrint("rpc", "Stopping HTTP RPC server\n");
     UnregisterHTTPHandler("/", true);
+    UnregisterHTTPHandler("/wallet/", false);
     if (httpRPCTimerInterface) {
         RPCUnregisterTimerInterface(httpRPCTimerInterface);
         delete httpRPCTimerInterface;

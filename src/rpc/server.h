@@ -390,6 +390,12 @@ extern UniValue walletpassphrasechange(const UniValue& params, bool fHelp, const
 extern UniValue walletlock(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk);
+
+extern UniValue listwallets(const UniValue& params, bool fHelp, const CPubKey& mypk); // in rpcmultiwallet.cpp
+extern UniValue loadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
+extern UniValue unloadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
+/** Register wallet-registry management RPC commands (listwallets/loadwallet/unloadwallet) */
+void RegisterMultiWalletRPCCommands(CRPCTable &tableRPC);
 extern UniValue txnotarizedconfirmed(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue decodeccopret(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);
