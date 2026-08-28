@@ -4803,9 +4803,39 @@ UniValue z_viewtransaction(const UniValue& params, bool fHelp, const CPubKey& my
 }
 
 
+// An operation "belongs" to the given wallet name if it was constructed
+// against that wallet (AsyncRPCOperation::getWalletName(), set from the
+// CWallet* passed at construction -- see asyncrpcoperation.h) -- or, for the
+// handful of operation classes CWallet::ChainTip() spawns automatically
+// with no request-resolved wallet in scope at all (getWalletName() empty in
+// that case), if the requested name is the default wallet's, since those
+// are always implicitly the default wallet's own operations. Used to scope
+// z_getoperationstatus/z_getoperationresult/z_listoperationids to the
+// requesting wallet, so a secondary wallet's send amounts/addresses/memos
+// aren't visible by polling these from a different wallet's endpoint.
+static bool OperationBelongsToWallet(const std::shared_ptr<AsyncRPCOperation>& operation, const std::string& requestedWalletName)
+{
+    std::string opWalletName = operation->getWalletName();
+    if (!opWalletName.empty())
+        return opWalletName == requestedWalletName;
+    // Compared against pwalletMain->strWalletFile directly rather than
+    // CWalletManager::Get().GetDefaultWalletName(): the latter is only set
+    // by RegisterDefaultWallet(), which some test fixtures never call for
+    // their pwalletMain (it's still a perfectly usable wallet, just not
+    // registered) -- comparing against the registry there would wrongly
+    // filter out every parameterless-constructor operation in that
+    // environment (empty vs "" still matches, but empty vs a name that
+    // legitimately resolved straight to pwalletMain would not). pwalletMain
+    // is what GetWalletForRequest() itself falls back to for the
+    // no-selection case, so it's the right reference point regardless of
+    // registration status.
+    return pwalletMain != nullptr && requestedWalletName == pwalletMain->strWalletFile;
+}
+
 UniValue z_getoperationresult(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 1)
@@ -4828,7 +4858,8 @@ UniValue z_getoperationresult(const UniValue& params, bool fHelp, const CPubKey&
 
 UniValue z_getoperationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-   if (!EnsureWalletIsAvailable(fHelp))
+   CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+   if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 1)
@@ -4852,8 +4883,9 @@ UniValue z_getoperationstatus(const UniValue& params, bool fHelp, const CPubKey&
 
 UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedOperations=false)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     std::set<AsyncRPCOperationId> filter;
     if (params.size()==1) {
@@ -4887,6 +4919,8 @@ UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedO
             // It's possible that the operation was removed from the internal queue and map during this loop
             // throw JSONRPCError(RPC_INVALID_PARAMETER, "No operation exists for that id.");
         }
+        if (!OperationBelongsToWallet(operation, pwallet->strWalletFile))
+            continue;
 
         UniValue obj = operation->getStatus();
         std::string s = obj["status"].get_str();
@@ -5741,7 +5775,8 @@ UniValue z_sign_offline(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 2 || params.size() > 4)
@@ -5769,9 +5804,9 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("z_sendmany", "\"zs1youraddress\", [{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\", \"amount\": 5.0}]")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
@@ -5793,7 +5828,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     // Check that we have the spending key
-    if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), res)) {
+    if (!std::visit(HaveSpendingKeyForPaymentAddress(pwallet), res)) {
          throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, zaddr spending key not found.");
     }
 
@@ -5955,7 +5990,7 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, ironwoodRecipients, nMinDepth, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwallet, Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, ironwoodRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     return operationId;
@@ -6328,7 +6363,14 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
     // Create operation and add to global queue
     //printf("z_sendmany_prepare_offline() Create AsyncRPCOperation_sendmany()\n");
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, ironwoodRecipients, nMinDepth, nFee, contextInfo) );
+    // Not rewired for multiwallet in this phase (out of scope -- see the
+    // z_sendmany/z_shieldcoinbase/z_mergetoaddress/consolidateaddress
+    // rewiring above; this offline-signing variant wasn't part of that
+    // pass): pwalletMain explicitly here, unconditionally, exactly as
+    // before AsyncRPCOperation_sendmany's constructor gained a wallet
+    // parameter. This RPC is not in IsMultiWalletAwareRPC()'s allowlist, so
+    // it still only ever runs against the default wallet regardless.
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, Params().GetConsensus(), nextBlockHeight, fromaddress, saplingRecipients, ironwoodRecipients, nMinDepth, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
     //printf("z_sendmany_prepare_offline() operationId returned\n");
@@ -6356,7 +6398,8 @@ When estimating the number of coinbase utxos we can shield in a single transacti
 
 UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 2 || params.size() > 4)
@@ -6390,9 +6433,9 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
             + HelpExampleRpc("z_shieldcoinbase", "\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\", \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     //THROW_IF_SYNCING(KOMODO_INSYNC);
 
@@ -6474,7 +6517,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
 
     // Get available utxos
     vector<COutput> vecOutputs;
-    pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, true);
+    pwallet->AvailableCoins(vecOutputs, true, NULL, false, true);
 
     // Find unspent coinbase utxos and update estimated size
     BOOST_FOREACH(const COutput& out, vecOutputs) {
@@ -6561,7 +6604,7 @@ UniValue z_shieldcoinbase(const UniValue& params, bool fHelp, const CPubKey& myp
 
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(Params().GetConsensus(), nextBlockHeight, contextualTx, inputs, destaddress, nFee, contextInfo) );
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(pwallet, Params().GetConsensus(), nextBlockHeight, contextualTx, inputs, destaddress, nFee, contextInfo) );
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
 
@@ -7280,7 +7323,8 @@ UniValue setsweepaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
  */
 UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 1 || params.size() > 4)
@@ -7322,8 +7366,8 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
             + HelpExampleRpc("consolidateaddress", "\"pirate1example7h29vj3vqzj8jklmnxyz6abcdefghqrstuvwxyz0123456789\", 0.0001")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     // Validate the address and determine type
     auto address = params[0].get_str();
@@ -7388,7 +7432,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
 
         // Check that we have the spending key for this address
         libzcash::SaplingExtendedSpendingKey extsk;
-        if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk)) {
+        if (!pwallet->GetSaplingExtendedSpendingKey(*saplingAddr, extsk)) {
             throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Sapling address");
         }
 
@@ -7396,8 +7440,8 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         {
             std::vector<SaplingNoteEntry> saplingEntries;
             std::vector<IronwoodNoteEntry> ironwoodEntries;
-            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, "", 11);
-            
+            pwallet->GetFilteredNotes(saplingEntries, ironwoodEntries, "", 11);
+
             for (const auto& entry : saplingEntries) {
                 if (entry.address == *saplingAddr) {
                     noteCount++;
@@ -7406,7 +7450,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         }
 
         operation = std::shared_ptr<AsyncRPCOperation>(
-            new AsyncRPCOperation_saplingconsolidation_address(nextBlockHeight, *saplingAddr, extsk, nFee, maxNotes, maxTransactions)
+            new AsyncRPCOperation_saplingconsolidation_address(pwallet, nextBlockHeight, *saplingAddr, extsk, nFee, maxNotes, maxTransactions)
         );
     } else {
         // Ironwood consolidation
@@ -7416,7 +7460,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
 
         // Check that we have the spending key for this address
         libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-        if (!pwalletMain->GetIronwoodExtendedSpendingKey(*ironwoodAddr, extsk)) {
+        if (!pwallet->GetIronwoodExtendedSpendingKey(*ironwoodAddr, extsk)) {
             throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have spending key for this Ironwood address");
         }
 
@@ -7424,8 +7468,8 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         {
             std::vector<SaplingNoteEntry> saplingEntries;
             std::vector<IronwoodNoteEntry> ironwoodEntries;
-            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, "", 11);
-            
+            pwallet->GetFilteredNotes(saplingEntries, ironwoodEntries, "", 11);
+
             for (const auto& entry : ironwoodEntries) {
                 if (entry.address == *ironwoodAddr) {
                     noteCount++;
@@ -7434,7 +7478,7 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
         }
 
         operation = std::shared_ptr<AsyncRPCOperation>(
-            new AsyncRPCOperation_ironwoodconsolidation_address(nextBlockHeight, *ironwoodAddr, extsk, nFee, maxNotes, maxTransactions)
+            new AsyncRPCOperation_ironwoodconsolidation_address(pwallet, nextBlockHeight, *ironwoodAddr, extsk, nFee, maxNotes, maxTransactions)
         );
     }
 
@@ -7493,7 +7537,8 @@ UniValue consolidateaddress(const UniValue& params, bool fHelp, const CPubKey& m
  */
 UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     string enableArg = "zmergetoaddress";
@@ -7558,8 +7603,8 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: z_mergetoaddress is disabled.");
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     // =====================================================
     // SOURCE ADDRESS PROCESSING AND VALIDATION
@@ -7761,7 +7806,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     if (useAnyUTXO || taddrs.size() > 0) {
         // Get available UTXOs from wallet
         vector<COutput> vecOutputs;
-        pwalletMain->AvailableCoins(vecOutputs, true, NULL, false, maximum_utxo_size != 0 ? true : false);
+        pwallet->AvailableCoins(vecOutputs, true, NULL, false, maximum_utxo_size != 0 ? true : false);
 
         // Find unspent utxos and update estimated size
         for (const COutput& out : vecOutputs) {
@@ -7820,7 +7865,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
         // Get available shielded notes from wallet
         std::vector<SaplingNoteEntry> saplingEntries;
         std::vector<IronwoodNoteEntry> ironwoodEntries;
-        pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs);
+        pwallet->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs);
 
         // Validate network upgrade compatibility for source addresses
         if (!saplingActive && saplingEntries.size() > 0) {
@@ -7845,7 +7890,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
                 } else {
                     estimatedTxSize += increase;
                     libzcash::SaplingExtendedSpendingKey extsk;
-                    if (!pwalletMain->GetSaplingExtendedSpendingKey(entry.address, extsk)) {
+                    if (!pwallet->GetSaplingExtendedSpendingKey(entry.address, extsk)) {
                         throw JSONRPCError(RPC_INVALID_PARAMETER, "Could not find spending key for payment address.");
                     }
                     saplingNoteInputs.emplace_back(entry.op, entry.note, nValue, extsk);
@@ -7870,7 +7915,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
                 } else {
                     estimatedTxSize += increase;
                     libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-                    if (!pwalletMain->GetIronwoodExtendedSpendingKey(entry.address, extsk)) {
+                    if (!pwallet->GetIronwoodExtendedSpendingKey(entry.address, extsk)) {
                         throw JSONRPCError(RPC_INVALID_PARAMETER, "Could not find spending key for payment address.");
                     }
 
@@ -7931,7 +7976,7 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
     // Create operation and add to global async queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
     std::shared_ptr<AsyncRPCOperation> operation(
-        new AsyncRPCOperation_mergetoaddress(Params().GetConsensus(), nextBlockHeight, contextualTx, utxoInputs, saplingNoteInputs, ironwoodNoteInputs, recipient, nFee, contextInfo));
+        new AsyncRPCOperation_mergetoaddress(pwallet, Params().GetConsensus(), nextBlockHeight, contextualTx, utxoInputs, saplingNoteInputs, ironwoodNoteInputs, recipient, nFee, contextInfo));
     q->addOperation(operation);
     AsyncRPCOperationId operationId = operation->getId();
 
@@ -7955,7 +8000,8 @@ UniValue z_mergetoaddress(const UniValue& params, bool fHelp, const CPubKey& myp
 
 UniValue z_listoperationids(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 1)
@@ -7974,8 +8020,8 @@ UniValue z_listoperationids(const UniValue& params, bool fHelp, const CPubKey& m
             + HelpExampleRpc("z_listoperationids", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     std::string filter;
     bool useFilter = false;
@@ -7992,6 +8038,8 @@ UniValue z_listoperationids(const UniValue& params, bool fHelp, const CPubKey& m
         if (!operation) {
             continue;
         }
+        if (!OperationBelongsToWallet(operation, pwallet->strWalletFile))
+            continue;
         std::string state = operation->getStateAsString();
         if (useFilter && filter.compare(state)!=0)
             continue;

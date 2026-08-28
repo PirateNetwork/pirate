@@ -33,9 +33,11 @@
 
 using namespace std;
 
+class CWallet;
+
 /**
  * AsyncRPCOperation objects are submitted to the AsyncRPCQueue for processing.
- * 
+ *
  * To subclass AsyncRPCOperation, implement the main() method.
  * Update the operation status as work is underway and completes.
  * If main() can be interrupted, implement the cancel() method.
@@ -54,6 +56,20 @@ typedef enum class operationStateEnum {
 class AsyncRPCOperation {
 public:
     AsyncRPCOperation();
+
+    // Wallet-aware construction: pins `wallet` unloadable (via CWalletManager)
+    // for as long as this object exists, and records its name for
+    // getWalletName(). Used by every operation class an RPC handler
+    // constructs directly on the HTTP thread (z_sendmany,
+    // z_shieldcoinbase, z_mergetoaddress, consolidateaddress); the handful
+    // of operation classes CWallet::ChainTip() spawns automatically on a
+    // validation-callback thread, with no request-resolved wallet in scope
+    // at all, still use the parameterless constructor above and are always
+    // implicitly the default wallet's own operations -- see
+    // wallet/walletmanager.cpp's documented limitation on why secondary
+    // wallets never receive ChainTip() callbacks in the first place.
+    explicit AsyncRPCOperation(CWallet* wallet);
+
     virtual ~AsyncRPCOperation();
 
     // You must implement this method in your subclass.
@@ -71,9 +87,19 @@ public:
     AsyncRPCOperationId getId() const {
         return id_;
     }
-   
+
     int64_t getCreationTime() const {
         return creation_time_;
+    }
+
+    // Name of the wallet this operation was constructed against (its
+    // strWalletFile), or empty for an operation built via the parameterless
+    // constructor. Used to scope z_getoperationstatus/z_getoperationresult/
+    // z_listoperationids to the requesting wallet -- an empty name is
+    // treated as "the default wallet" by that filtering, since every
+    // parameterless-constructor operation is implicitly one of its own.
+    const std::string& getWalletName() const {
+        return walletName_;
     }
 
     // Override this method to add data to the default status object.
@@ -128,7 +154,18 @@ protected:
     int error_code_;
     std::string error_message_;
     std::atomic<OperationStatus> state_;
-    std::chrono::time_point<std::chrono::system_clock> start_time_, end_time_;  
+    std::chrono::time_point<std::chrono::system_clock> start_time_, end_time_;
+
+    // Set once at construction (nullptr for the parameterless constructor,
+    // used only by the automatically-spawned ChainTip() operation classes).
+    // Not const: this class's private copy constructor/assignment operator
+    // below predate this field and are effectively dead code (every
+    // subclass declares its own copy/move operations `= delete`, so
+    // nothing ever invokes these), so making this immutable-after-
+    // construction a documented convention rather than a compiler-enforced
+    // one avoids having to touch that dead code just to keep it compiling.
+    // Subclasses read this directly in place of the pwalletMain global.
+    CWallet* wallet_ = nullptr;
 
     void start_execution_clock();
     void stop_execution_clock();
@@ -161,6 +198,13 @@ private:
     // Initialized in the operation constructor, never to be modified again.
     AsyncRPCOperationId id_;
     int64_t creation_time_;
+
+    // Bookkeeping for the ref taken on `wallet_` via CWalletManager, if any
+    // -- see the AsyncRPCOperation(CWallet*) constructor and the destructor.
+    // Empty/0/false for an operation built via the parameterless constructor.
+    std::string walletName_;
+    uint64_t walletGeneration_ = 0;
+    bool walletRefHeld_ = false;
 };
 
 #endif /* ASYNCRPCOPERATION_H */

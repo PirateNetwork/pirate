@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include "asyncrpcoperation.h"
 #include "init.h"
 #include "util.h"
 #include "wallet/wallet.h"
@@ -515,4 +516,55 @@ TEST_F(WalletManagerTest, GetWalletForRequestResolvesDefaultAndSecondary)
     }
     // Guard destructed -> thread-local cleared -> back to the default.
     EXPECT_EQ(defaultWallet, CWalletManager::GetWalletForRequest());
+}
+
+TEST_F(WalletManagerTest, AsyncOperationPinsWalletUnloadableForItsLifetime)
+{
+    // Phase 3: AsyncRPCOperation(CWallet*) is what z_sendmany/z_shieldcoinbase/
+    // z_mergetoaddress/consolidateaddress hand their operations to instead of
+    // reading pwalletMain directly (asyncrpcoperation.h/.cpp). Exercised here
+    // via the base class directly -- it's concrete (main() has a default
+    // body, not pure virtual), so no subclass or funded transaction is
+    // needed to test the wallet-pinning mechanism itself in isolation.
+    CreateWalletFileOnDisk("asyncopwallet");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("asyncopwallet", strError)) << strError;
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("asyncopwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    {
+        std::shared_ptr<AsyncRPCOperation> operation = std::make_shared<AsyncRPCOperation>(secondaryWallet);
+        EXPECT_EQ("asyncopwallet", operation->getWalletName());
+
+        // The whole point: a wallet an async operation was built against
+        // cannot be unloaded while that operation object still exists,
+        // exactly like an in-flight HTTP request via RPCWalletRequestGuard.
+        EXPECT_FALSE(CWalletManager::Get().UnloadWallet("asyncopwallet", strError));
+
+        // operation's destructor runs at the end of this scope, releasing
+        // the ref -- there is no explicit "operation finished" event to
+        // wait for (see the constructor's own comment on why release is
+        // tied to object lifetime instead).
+    }
+
+    EXPECT_TRUE(CWalletManager::Get().UnloadWallet("asyncopwallet", strError)) << strError;
+}
+
+TEST_F(WalletManagerTest, AsyncOperationBuiltWithoutAWalletDoesNotPinAnything)
+{
+    // The parameterless constructor (used by the 3 operation classes
+    // CWallet::ChainTip() spawns automatically, which have no
+    // request-resolved wallet in scope at all) must not pin or touch the
+    // registry -- confirmed here by checking it doesn't block unloading
+    // *any* currently-loaded secondary wallet.
+    CreateWalletFileOnDisk("unrelatedwallet");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("unrelatedwallet", strError)) << strError;
+
+    {
+        std::shared_ptr<AsyncRPCOperation> operation = std::make_shared<AsyncRPCOperation>();
+        EXPECT_TRUE(operation->getWalletName().empty());
+    }
+
+    EXPECT_TRUE(CWalletManager::Get().UnloadWallet("unrelatedwallet", strError)) << strError;
 }

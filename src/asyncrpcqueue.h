@@ -65,6 +65,21 @@ public:
     void addOperation(const std::shared_ptr<AsyncRPCOperation> &ptrOperation);
     std::vector<AsyncRPCOperationId> getAllOperationIds() const;
 
+    // Drops every shared_ptr this queue still holds in operation_map_ (any
+    // operation never retrieved via popOperationForId/z_getoperationresult),
+    // running each one's destructor now rather than whenever this queue's
+    // own shared_ptr (AsyncRPCQueue::sharedInstance()) happens to be
+    // destroyed. Call only once no worker can be executing (i.e. after
+    // closeAndWait()/finishAndWait()) and, for a node with wallet support,
+    // before CWalletManager::Get().Reset() -- an AsyncRPCOperation built
+    // against a wallet releases that wallet's ref in its own destructor,
+    // and CWalletManager's static instance is constructed (via
+    // RegisterDefaultWallet()) after this queue's, so plain process-exit
+    // static destruction would run these destructors in the wrong order
+    // otherwise: after CWalletManager's own static has already been torn
+    // down.
+    void clearOperationMap();
+
 private:
     // addWorker() will spawn a new thread on run())
     void run(size_t workerId);

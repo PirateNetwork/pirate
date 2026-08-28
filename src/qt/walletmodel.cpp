@@ -893,7 +893,8 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
 {
     // Create operation and add to global queue
     std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(Params().GetConsensus(),
+    std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(wallet,
+                                                                                 Params().GetConsensus(),
                                                                                  transaction.getTxHeight(),
                                                                                  transaction.getFromAddress().toStdString(),
                                                                                  transaction.getZaddrRecipients(),

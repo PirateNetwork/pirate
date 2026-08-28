@@ -64,13 +64,14 @@ const int IRONWOOD_CONSOLIDATION_EXPIRY_DELTA = 40;
  * @param maxTransactions Maximum number of transactions to create
  */
 AsyncRPCOperation_ironwoodconsolidation_address::AsyncRPCOperation_ironwoodconsolidation_address(
-    int targetHeight, 
+    CWallet* wallet,
+    int targetHeight,
     const libzcash::IronwoodPaymentAddress& address,
     const libzcash::IronwoodExtendedSpendingKeyPirate& spendingKey,
-    CAmount fee, 
+    CAmount fee,
     int maxNotes,
-    int maxTransactions) 
-    : targetHeight_(targetHeight), address_(address), spendingKey_(spendingKey), fee_(fee), maxNotes_(maxNotes), maxTransactions_(maxTransactions) {}
+    int maxTransactions)
+    : AsyncRPCOperation(wallet), targetHeight_(targetHeight), address_(address), spendingKey_(spendingKey), fee_(fee), maxNotes_(maxNotes), maxTransactions_(maxTransactions) {}
 
 /**
  * @brief Destructor - clears sensitive data from memory
@@ -181,19 +182,19 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         std::vector<SaplingNoteEntry> saplingEntries;
         std::vector<IronwoodNoteEntry> ironwoodEntries;
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
+            LOCK2(cs_main, wallet_->cs_wallet);
+            wallet_->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                           11, INT_MAX, true, true, true,
                                           maxNotes_, fee_ + 1);
             // Lock immediately so no other async operation can select the same notes.
             for (const auto& e : ironwoodEntries)
-                pwalletMain->LockNote(e.op);
+                wallet_->LockNote(e.op);
         }
 
         auto unlockIronwoodEntries = [&]() {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
+            LOCK2(cs_main, wallet_->cs_wallet);
             for (const auto& e : ironwoodEntries)
-                pwalletMain->UnlockNote(e.op);
+                wallet_->UnlockNote(e.op);
         };
 
         // Compute total aggregate value of this iteration's working set.
@@ -238,8 +239,8 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         uint256 anchor;
         std::vector<libzcash::MerklePath> ironwoodMerklePaths;
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
+            LOCK2(cs_main, wallet_->cs_wallet);
+            if (!wallet_->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
                 LogPrint("zrpcunsafe", "%s: Merkle Path not found for Ironwood notes. Stopping.\n", getId());
                 unlockIronwoodEntries();
                 break;
@@ -247,9 +248,9 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         }
 
         // === STEP 4: Transaction Construction ===
-        auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+        auto builder = TransactionBuilder(consensusParams, targetHeight_, wallet_);
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
+            LOCK2(cs_main, wallet_->cs_wallet);
             builder.SetExpiryHeight(chainActive.Tip()->nHeight + IRONWOOD_CONSOLIDATION_EXPIRY_DELTA);
         }
 
@@ -326,8 +327,8 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
 
         // Commit transaction to wallet and broadcast to network
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->CommitAutomatedTx(tx)) {
+            LOCK2(cs_main, wallet_->cs_wallet);
+            if (!wallet_->CommitAutomatedTx(tx)) {
                 LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
                 unlockIronwoodEntries();
                 break;
@@ -350,10 +351,10 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
     // Use filterAddresses (already scoped to address_) to avoid a full-wallet scan.
     int remainingNotes = 0;
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
         std::vector<SaplingNoteEntry> remainingSapling;
         std::vector<IronwoodNoteEntry> remainingIronwood;
-        pwalletMain->GetFilteredNotes(remainingSapling, remainingIronwood, filterAddresses, 11, INT_MAX, true, true, false);
+        wallet_->GetFilteredNotes(remainingSapling, remainingIronwood, filterAddresses, 11, INT_MAX, true, true, false);
         remainingNotes = (int)remainingIronwood.size();
     }
 

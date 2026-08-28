@@ -443,6 +443,21 @@ void CWalletManager::FlushAndUnloadAllSecondaryWallets()
     // is NOT the call this safety property actually depends on. If a future
     // caller ever invokes this outside that specific shutdown sequence, it
     // would need the same refcount == 0 wait UnloadWallet() does first.
+    //
+    // One narrower exception even at this point in shutdown: a finished (or
+    // never-polled) AsyncRPCOperation can still be sitting in
+    // AsyncRPCQueue::operation_map_ holding a ref, since StopRPC()'s
+    // closeAndWait() only joins the worker thread -- it never clears that
+    // map (only an explicit z_getoperationresult, or the queue object's own
+    // eventual destruction, drops those shared_ptrs). This is harmless here:
+    // ReleaseRefIfCurrent() (called from ~AsyncRPCOperation() whenever that
+    // eventually runs) already no-ops safely against a name this function
+    // has erased, and nothing re-reads that operation's CWallet* afterwards
+    // (main() already ran; only stored result/error/status values are read
+    // from then on) -- the same "pwalletMain deleted out from under a
+    // finished operation still sitting in the map" exposure already existed
+    // for every wallet RPC operation before this class had its own wallet
+    // pointer at all.
     LOCK(cs_wallets);
     for (auto it = mapWallets.begin(); it != mapWallets.end(); ) {
         if (it->second.isDefault) {

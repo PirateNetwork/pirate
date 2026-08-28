@@ -56,22 +56,26 @@ class AsyncRPCOperation_ironwoodconsolidation_address : public AsyncRPCOperation
 public:
     /**
      * @brief Constructs a new Ironwood address consolidation operation
-     * 
+     *
+     * @param wallet The wallet whose notes are consolidated -- resolved by
+     *               the caller before construction; pinned unloadable for
+     *               this object's lifetime.
      * @param targetHeight The blockchain height at which to create transactions
      * @param address The Ironwood payment address to consolidate notes for
      * @param spendingKey The extended spending key for the address (must be valid)
      * @param fee The fee amount in zatoshis to pay per consolidation transaction
      * @param maxNotes Maximum number of notes to include in a single consolidation transaction
      * @param maxTransactions Maximum number of consolidation transactions to create (default: 10)
-     * 
+     *
      * @note The spending key is captured during construction while the wallet is unlocked,
      *       allowing the operation to proceed even if the wallet is locked afterwards.
      * @note A fee of 10000 zatoshis (0.0001 ARRR) is recommended for reliable network acceptance.
      */
-    AsyncRPCOperation_ironwoodconsolidation_address(int targetHeight, 
+    AsyncRPCOperation_ironwoodconsolidation_address(CWallet* wallet,
+                                                   int targetHeight,
                                                    const libzcash::IronwoodPaymentAddress& address,
                                                    const libzcash::IronwoodExtendedSpendingKeyPirate& spendingKey,
-                                                   CAmount fee, 
+                                                   CAmount fee,
                                                    int maxNotes,
                                                    int maxTransactions = 10);
     

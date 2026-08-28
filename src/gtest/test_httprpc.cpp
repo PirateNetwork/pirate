@@ -9,6 +9,8 @@
 #include "httpserver.h"
 
 #ifdef ENABLE_WALLET
+#include "asyncrpcoperation.h"
+#include "asyncrpcqueue.h"
 #include "init.h"
 #include "key_io.h"
 #include "rpc/register.h"
@@ -482,4 +484,93 @@ TEST_F(MultiWalletDispatchTest, UnloadSucceedsCleanlyWithAPendingAutoRelockTimer
 // stale generation without underflowing the new entry's refcount) already
 // has direct coverage in wallet/gtest/test_walletmanager.cpp,
 // ReleaseAfterUnloadAndReloadUnderSameNameDoesNotUnderflowTheNewEntry.
+
+TEST_F(MultiWalletDispatchTest, AsyncOperationStatusIsScopedToTheRequestingWallet)
+{
+    // Phase 3: z_getoperationstatus/z_getoperationresult/z_listoperationids
+    // now filter by the requesting wallet (OperationBelongsToWallet(),
+    // rpcwallet.cpp) instead of returning every operation in the process.
+    // getAsyncRPCQueue() is a process-wide singleton that outlives any one
+    // test, so this checks *membership* of specific known operation ids
+    // rather than exact array sizes -- other tests in this binary may have
+    // left their own (possibly still-pending) operations in the same queue.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
+    // getAsyncRPCQueue() is a one-way-closable singleton (see AsyncRPCQueue::
+    // close(), asyncrpcqueue.h) shared with every other test in this binary.
+    // addOperation() silently no-ops once closed, which would otherwise turn
+    // into two confusing containsId() failures below instead of a clear
+    // diagnosis -- fail loudly here if some other test in the binary ever
+    // closes it (rpc_wallet_tests_bitcoin.rpc_z_getoperations in
+    // test_rpc_wallet_bitcoin.cpp used to be exactly that; it no longer
+    // calls close() as of this comment, for the same reason).
+    ASSERT_FALSE(q->isClosed());
+    auto secondaryOp = std::make_shared<AsyncRPCOperation>(secondaryWallet);
+    q->addOperation(secondaryOp);
+    auto defaultOp = std::make_shared<AsyncRPCOperation>(pwalletMain);
+    q->addOperation(defaultOp);
+    AsyncRPCOperationId secondaryOpId = secondaryOp->getId();
+    AsyncRPCOperationId defaultOpId = defaultOp->getId();
+
+    // getAsyncRPCQueue() is process-wide and outlives this test. Pop both
+    // from operation_map_ once done (runs even if an ASSERT_* below returns
+    // early) so a leftover entry never shows up in some later test's
+    // wallet-scoped z_listoperationids/z_getoperationstatus results --
+    // "secondarytestwallet" in particular is a name several other
+    // MultiWalletDispatchTest cases reuse. This deliberately does NOT try
+    // to drain the two ids out of AsyncRPCQueue's separate pending-work
+    // queue (no public API removes an id from there without running it,
+    // and adding a worker here to force that would itself pollute
+    // rpc_wallet_tests_bitcoin.rpc_z_getoperations's own worker-count
+    // assertions in the same binary -- observed as a real, order-dependent
+    // failure when this was tried). A stale id left in that queue after
+    // being popped from the map is already the documented, handled case in
+    // AsyncRPCQueue::run() (falls through as "operation not found").
+    struct QueueCleanup {
+        std::shared_ptr<AsyncRPCQueue> q;
+        AsyncRPCOperationId id1, id2;
+        ~QueueCleanup() { q->popOperationForId(id1); q->popOperationForId(id2); }
+    } cleanup{q, secondaryOpId, defaultOpId};
+
+    auto containsId = [](const UniValue& arr, const AsyncRPCOperationId& id) {
+        for (const UniValue& v : arr.getValues()) {
+            if (v.get_str() == id)
+                return true;
+        }
+        return false;
+    };
+
+    UniValue secondaryIds;
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        ASSERT_NO_THROW(secondaryIds = tableRPC.execute("z_listoperationids", UniValue(UniValue::VARR)));
+    }
+    EXPECT_TRUE(containsId(secondaryIds, secondaryOpId));
+    EXPECT_FALSE(containsId(secondaryIds, defaultOpId));
+
+    UniValue defaultIds;
+    ASSERT_NO_THROW(defaultIds = tableRPC.execute("z_listoperationids", UniValue(UniValue::VARR)));
+    EXPECT_TRUE(containsId(defaultIds, defaultOpId));
+    EXPECT_FALSE(containsId(defaultIds, secondaryOpId));
+
+    // z_getoperationstatus (no id filter) goes through the same
+    // OperationBelongsToWallet() check as z_listoperationids -- confirm it
+    // too, since it's a separate code path (z_getoperationstatus_IMPL)
+    // rather than a shared helper the two RPCs both call.
+    UniValue secondaryStatuses;
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        ASSERT_NO_THROW(secondaryStatuses = tableRPC.execute("z_getoperationstatus", UniValue(UniValue::VARR)));
+    }
+    bool foundSecondaryOwn = false, foundDefaultForeign = false;
+    for (const UniValue& obj : secondaryStatuses.getValues()) {
+        std::string id = find_value(obj, "id").get_str();
+        if (id == secondaryOpId) foundSecondaryOwn = true;
+        if (id == defaultOpId) foundDefaultForeign = true;
+    }
+    EXPECT_TRUE(foundSecondaryOwn);
+    EXPECT_FALSE(foundDefaultForeign);
+}
 #endif // ENABLE_WALLET

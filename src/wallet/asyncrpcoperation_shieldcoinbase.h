@@ -92,6 +92,8 @@ public:
      * 
      * @param consensusParams Consensus parameters for the current network
      * @param nHeight Current blockchain height for transaction building
+     * @param wallet Wallet to shield into -- resolved by the caller before
+     *               construction; pinned unloadable for this object's lifetime.
      * @param contextualTx Base transaction context for building
      * @param inputs Vector of coinbase UTXOs to shield
      * @param toAddress Destination shielded address as string
@@ -99,6 +101,7 @@ public:
      * @param contextInfo Additional context information for status reporting
      */
     AsyncRPCOperation_shieldcoinbase(
+        CWallet* wallet,
         const Consensus::Params& consensusParams,
         const int nHeight,
         CMutableTransaction contextualTx,

@@ -138,6 +138,22 @@ std::shared_ptr<AsyncRPCOperation> AsyncRPCQueue::popOperationForId(AsyncRPCOper
     return ptr;
 }
 
+void AsyncRPCQueue::clearOperationMap() {
+    // Move the map out under the lock, then let it (and every
+    // ~AsyncRPCOperation it triggers) go out of scope after releasing --
+    // same reasoning used elsewhere in this codebase for not running
+    // destructor-triggered work while holding an unrelated lock. Whatever
+    // ids are still sitting in operation_id_queue_ are left alone: any
+    // worker that later pops one of them finds nothing in operation_map_
+    // and treats it as "operation not found" (see run()), which is already
+    // the documented, handled case for exactly this situation.
+    AsyncRPCOperationMap toDestroy;
+    {
+        std::lock_guard<std::mutex> guard(lock_);
+        toDestroy.swap(operation_map_);
+    }
+}
+
 /**
  * Return true if the queue is closed to new operations.
  */

@@ -942,15 +942,23 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_getoperations)
     EXPECT_THROW(CallRPC("z_getoperationresult [] toomanyargs"), runtime_error);
     EXPECT_THROW(CallRPC("z_getoperationresult not_an_array"), runtime_error);
 
+    // getAsyncRPCQueue() is a process-wide singleton shared with every other
+    // test in this binary (e.g. MultiWalletDispatchTest.
+    // AsyncOperationStatusIsScopedToTheRequestingWallet, in test_httprpc.cpp,
+    // also queues operations against it), so its pending-operation and
+    // worker counts are not guaranteed to start at 0 here -- assert deltas
+    // relative to whatever was already there, not absolute values.
+    size_t operationCountBefore = q->getOperationCount();
+    size_t workerCountBefore = q->getNumberOfWorkers();
+
     std::shared_ptr<AsyncRPCOperation> op1 = std::make_shared<AsyncRPCOperation>();
     q->addOperation(op1);
     std::shared_ptr<AsyncRPCOperation> op2 = std::make_shared<AsyncRPCOperation>();
     q->addOperation(op2);
 
-    EXPECT_TRUE(q->getOperationCount() == 2);
-    EXPECT_TRUE(q->getNumberOfWorkers() == 0);
+    EXPECT_TRUE(q->getOperationCount() == operationCountBefore + 2);
     q->addWorker();
-    EXPECT_TRUE(q->getNumberOfWorkers() == 1);
+    EXPECT_TRUE(q->getNumberOfWorkers() == workerCountBefore + 1);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     EXPECT_TRUE(q->getOperationCount() == 0);
 
@@ -995,7 +1003,29 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_getoperations)
     array = retValue.get_array();
     EXPECT_TRUE(array.size() == 0);
 
-    q->close();
+    // Deliberately no q->close() here: q is getAsyncRPCQueue(), a process-wide
+    // singleton (AsyncRPCQueue::sharedInstance()) shared with every other test
+    // in this binary, not something this test owns -- close() sets a one-way
+    // flag with no public "reopen," so calling it here would permanently
+    // disable async operations for whatever test happens to run afterward
+    // (e.g. MultiWalletDispatchTest.AsyncOperationStatusIsScopedToTheRequestingWallet
+    // in test_httprpc.cpp, which needs to addOperation() against this same
+    // singleton). This test's own assertions are already complete by this
+    // point without it.
+    //
+    // Trade-off, not fully resolved: this also means the worker added above
+    // now survives to process exit instead of exiting via close(). Harmless
+    // under this binary's normal (non-repeated, non-shuffled) run order --
+    // nothing after this point in the default run order queues against the
+    // singleton except the test named above, which only checks membership
+    // of its own ids -- but a `--gtest_repeat`/`--gtest_shuffle` run could
+    // race this test's own delta-based operationCount assertion above
+    // against that same now-persistent worker draining the queue
+    // concurrently, and any future test added after this one that queues
+    // against the singleton would find a live worker actually executing its
+    // operations rather than leaving them READY. Not exercised by this
+    // project's normal `./pirate-gtest` invocation; worth revisiting if
+    // that ever changes.
 }
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
@@ -1091,13 +1121,13 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
     // outright, directing callers to z_shieldcoinbase instead).
     auto consensusParams = Params().GetConsensus();
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(consensusParams, nHeight, "", {}, {}, -1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "", {}, {}, -1));
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Minconf cannot be negative"));
     }
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(consensusParams, nHeight, "", {}, {}, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "", {}, {}, 1));
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "From address parameter missing"));
     }
@@ -1106,14 +1136,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
         // Recipients-empty is still checked before the from-address's
         // transparent/shielded classification, so this still surfaces
         // "No recipients" rather than the transparent-source rejection.
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(consensusParams, nHeight, "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ", {}, {}, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ", {}, {}, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "No recipients"));
     }
 
     try {
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(consensusParams, nHeight, "INVALID", recipients, {}, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "INVALID", recipients, {}, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid from address"));
     }
@@ -1121,7 +1151,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
     try {
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(consensusParams, nHeight, "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U", recipients, {}, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U", recipients, {}, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid from address"));
     }
@@ -1139,7 +1169,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
         auto notOwnedKey = libzcash::SaplingExtendedSpendingKey::Master(notOwnedSeed).Derive(0 | HARDENED_KEY_LIMIT);
         std::string notOwnedAddr = EncodePaymentAddress(notOwnedKey.DefaultAddress());
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
-        EXPECT_NO_THROW(std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(consensusParams, nHeight, notOwnedAddr, recipients, {}, 1) ));
+        EXPECT_NO_THROW(std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, notOwnedAddr, recipients, {}, 1) ));
     }
 }
 
@@ -1583,7 +1613,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
     std::string mainnetzaddr = "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U";
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(consensusParams, nHeight, mtx, {}, testnetzaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(pwalletMain, consensusParams, nHeight, mtx, {}, testnetzaddr, 1));
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "No coinbase inputs provided for shielding"));
     }
@@ -1591,7 +1621,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
     try {
         std::vector<ShieldCoinbaseUTXO> inputs = { ShieldCoinbaseUTXO{uint256(),0,0} };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(consensusParams, nHeight, mtx, inputs, mainnetzaddr, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(pwalletMain, consensusParams, nHeight, mtx, inputs, mainnetzaddr, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid recipient address"));
     }
@@ -1650,7 +1680,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_sapling_builds_transaction
     };
 
     auto operation = std::make_shared<AsyncRPCOperation_shieldcoinbase>(
-        Params().GetConsensus(), 1, CMutableTransaction(), inputs, EncodePaymentAddress(myAddr), 10000);
+        pwalletMain, Params().GetConsensus(), 1, CMutableTransaction(), inputs, EncodePaymentAddress(myAddr), 10000);
     operation->testmode = true;
 
     TEST_FRIEND_AsyncRPCOperation_shieldcoinbase proxy(operation);
@@ -1957,14 +1987,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
         "mainnet memo");
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, -1 ));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, -1 ));
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Fee is out of range"));
     }
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, 1));
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "No inputs"));
@@ -1974,7 +2004,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
 
     try {
         MergeToAddressRecipient badaddr("", "memo");
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(consensusParams, nHeight, mtx, inputs, {}, {}, badaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, inputs, {}, {}, badaddr, 1));
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Recipient parameter missing"));
@@ -1983,7 +2013,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
     try {
         std::vector<MergeToAddressInputUTXO> inputs = { MergeToAddressInputUTXO{ COutPoint{uint256(), 0}, 0, CScript()} };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_mergetoaddress(consensusParams, nHeight, mtx, inputs, {}, {}, mainnetzaddr, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, inputs, {}, {}, mainnetzaddr, 1) );
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid recipient address"));

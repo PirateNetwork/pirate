@@ -86,6 +86,7 @@ int find_output(UniValue obj, int n)
  * @throws JSONRPCError for invalid parameters or addresses
  */
 AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
+    CWallet* wallet,
     const Consensus::Params& consensusParams,
     const int blockHeight,
     std::string fromAddress,
@@ -93,8 +94,9 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
     std::vector<SendManyRecipient> ironwoodOutputs,
     int minimumConfirmationDepth,
     CAmount transactionFee,
-    UniValue contextInfo) 
-    : fromaddress_(fromAddress),
+    UniValue contextInfo)
+    : AsyncRPCOperation(wallet),
+      fromaddress_(fromAddress),
       saplingOutputs_(std::move(saplingOutputs)),
       ironwoodOutputs_(std::move(ironwoodOutputs)),
       mindepth_(minimumConfirmationDepth),
@@ -103,7 +105,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
       isFromSaplingAddress_(false),
       isFromIronwoodAddress_(false),
       hasOfflineSpendingKey(false),
-      builder_(TransactionBuilder(consensusParams, blockHeight, pwalletMain))
+      builder_(TransactionBuilder(consensusParams, blockHeight, wallet_))
 {
     assert(fee_ >= 0);
     if (minimumConfirmationDepth < 0) {
@@ -149,13 +151,13 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
 
         // Check if we have the spending key for this address
         // Wallet spending key methods are thread-safe, so no locking needed
-        if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), decodedAddress)) {
+        if (!std::visit(HaveSpendingKeyForPaymentAddress(wallet_), decodedAddress)) {
             // Address is valid but we don't have the spending key
             // This enables offline transaction preparation
             hasOfflineSpendingKey = true;
         } else {
             // We have the spending key, retrieve it for transaction building
-            spendingkey_ = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), decodedAddress).value();
+            spendingkey_ = std::visit(GetSpendingKeyForPaymentAddress(wallet_), decodedAddress).value();
             hasOfflineSpendingKey = false;
         }
     } else {
@@ -271,11 +273,11 @@ bool AsyncRPCOperation_sendmany::main_impl()
     // GetFilteredNotes will naturally exclude the spent notes; for failures
     // the notes must be freed so other operations can select them.
     auto unlock_notes = [&]() {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
         for (const auto& e : saplingInputs_)
-            pwalletMain->UnlockNote(e.op);
+            wallet_->UnlockNote(e.op);
         for (const auto& e : ironwoodInputs_)
-            pwalletMain->UnlockNote(e.op);
+            wallet_->UnlockNote(e.op);
     };
 
     // STEP 2: Calculate total input and output amounts.
@@ -343,7 +345,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
     // STEP 4: Handle Sapling shielded address spending.
     if (isFromSaplingAddress_) {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
 
         SaplingExtendedSpendingKey extsk;
         auto extskPtr = std::get_if<libzcash::SaplingExtendedSpendingKey>(&spendingkey_);
@@ -393,7 +395,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         uint256 anchor;
         std::vector<libzcash::MerklePath> saplingMerklePaths;
-        if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
+        if (!wallet_->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Merkle Path not found for Sapling note. Stopping.", getId()));
             unlock_notes();
@@ -425,7 +427,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
     // STEP 5: Handle Ironwood shielded address spending.
     if (isFromIronwoodAddress_) {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
 
         // Extract the spending key, derive the FVK, and obtain the OVK for output encryption.
         IronwoodExtendedSpendingKeyPirate extsk;
@@ -484,7 +486,7 @@ bool AsyncRPCOperation_sendmany::main_impl()
 
         uint256 anchor;
         std::vector<libzcash::MerklePath> ironwoodMerklePaths;
-        if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
+        if (!wallet_->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Merkle Path not found for Ironwood note. Stopping.", getId()));
             unlock_notes();
@@ -532,8 +534,8 @@ bool AsyncRPCOperation_sendmany::main_impl()
     // and vice versa. Uses this send's own ovk (already the one used for every
     // other output above, cross-pool or not) so the sending wallet can still
     // recognize this change note as its own.
-    if (pwalletMain->configuredChangeAddress.has_value()) {
-        const auto& changeAddress = pwalletMain->configuredChangeAddress.value();
+    if (wallet_->configuredChangeAddress.has_value()) {
+        const auto& changeAddress = wallet_->configuredChangeAddress.value();
         if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
             // STEP 4 only initializes the Sapling builder when spending from Sapling
             // or when Sapling outputs were already queued. A Sapling change address
@@ -694,20 +696,20 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes()
     
     // Retrieve filtered notes based on spending mode
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
         
         if (hasOfflineSpendingKey) {
-            pwalletMain->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
+            wallet_->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
                                           fromaddress_, mindepth_, true, false);
         } else {
-            pwalletMain->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
+            wallet_->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
                                           fromaddress_, mindepth_, true, true);
         }
         // Lock immediately so no other async operation can select the same notes.
         for (const auto& e : saplingNoteEntries)
-            pwalletMain->LockNote(e.op);
+            wallet_->LockNote(e.op);
         for (const auto& e : ironwoodNoteEntries)
-            pwalletMain->LockNote(e.op);
+            wallet_->LockNote(e.op);
     }
 
     // Process Sapling note entries

@@ -84,6 +84,9 @@ public:
      * and loads the spending key or sets the offline flag if the key is
      * not held locally.
      *
+     * @param wallet           Wallet to spend from and build the transaction against --
+     *                         resolved by the caller (CWalletManager::GetWalletForRequest())
+     *                         before construction; pinned unloadable for this object's lifetime.
      * @param consensusParams  Network consensus parameters
      * @param nHeight          Block height used to initialise the transaction builder
      * @param fromAddress      Sapling or Ironwood payment address to spend from
@@ -96,6 +99,7 @@ public:
      * @throws JSONRPCError    On any invalid parameter or unsupported address type
      */
     AsyncRPCOperation_sendmany(
+        CWallet* wallet,
         const Consensus::Params& consensusParams,
         const int nHeight,
         std::string fromAddress,

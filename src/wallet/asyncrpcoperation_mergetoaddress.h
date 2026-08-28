@@ -87,7 +87,10 @@ class AsyncRPCOperation_mergetoaddress : public AsyncRPCOperation
 public:
     /**
      * @brief Constructor for merge-to-address operation
-     * 
+     *
+     * @param wallet Wallet whose UTXOs/notes are merged -- resolved by the
+     *               caller before construction; pinned unloadable for this
+     *               object's lifetime.
      * @param consensusParams Network consensus parameters
      * @param nHeight Current blockchain height
      * @param contextualTx Base transaction context
@@ -99,6 +102,7 @@ public:
      * @param contextInfo Context information for status reporting
      */
     AsyncRPCOperation_mergetoaddress(
+        CWallet* wallet,
         const Consensus::Params& consensusParams,
         const int nHeight,
         CMutableTransaction contextualTx,

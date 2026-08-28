@@ -97,6 +97,7 @@ static int find_output(UniValue obj, int n)
  * @throws std::runtime_error if fee is negative or recipient address is invalid
  */
 AsyncRPCOperation_shieldcoinbase::AsyncRPCOperation_shieldcoinbase(
+        CWallet* wallet,
         const Consensus::Params& consensusParams,
         const int nHeight,
         CMutableTransaction contextualTx,
@@ -104,7 +105,8 @@ AsyncRPCOperation_shieldcoinbase::AsyncRPCOperation_shieldcoinbase(
         std::string toAddress,
         CAmount fee,
         UniValue contextInfo) :
-    builder_(consensusParams, nHeight, pwalletMain), inputs_(inputs), fee_(fee), contextinfo_(contextInfo)
+    AsyncRPCOperation(wallet),
+    builder_(consensusParams, nHeight, wallet_), inputs_(inputs), fee_(fee), contextinfo_(contextInfo)
 {
     assert(fee_ >= 0);
 
@@ -259,7 +261,7 @@ bool ShieldToAddress::operator()(const libzcash::SaplingPaymentAddress& zaddr) c
     // recoverable, while keeping it logically separate from the ZIP 32
     // Sapling key hierarchy, which the user might not be using.
     HDSeed seed;
-    if (!pwalletMain->GetHDSeed(seed)) {
+    if (!m_op->wallet_->GetHDSeed(seed)) {
         throw JSONRPCError(
             RPC_WALLET_ERROR,
             "HD seed not found - required for shielding from transparent address");
@@ -334,7 +336,7 @@ bool ShieldToAddress::operator()(const libzcash::IronwoodPaymentAddress& zaddr) 
     // recoverable, while keeping it logically separate from the ZIP 32
     // Sapling key hierarchy, which the user might not be using.
     HDSeed seed;
-    if (!pwalletMain->GetHDSeed(seed)) {
+    if (!m_op->wallet_->GetHDSeed(seed)) {
         throw JSONRPCError(
             RPC_WALLET_ERROR,
             "HD seed not found - required for shielding from transparent address");
@@ -433,10 +435,10 @@ UniValue AsyncRPCOperation_shieldcoinbase::getStatus() const
  */
 void AsyncRPCOperation_shieldcoinbase::lock_utxos()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (const auto& utxo : inputs_) {
         COutPoint outPoint(utxo.txid, utxo.vout);
-        pwalletMain->LockCoin(outPoint);
+        wallet_->LockCoin(outPoint);
     }
 }
 
@@ -450,9 +452,9 @@ void AsyncRPCOperation_shieldcoinbase::lock_utxos()
  */
 void AsyncRPCOperation_shieldcoinbase::unlock_utxos()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (const auto& utxo : inputs_) {
         COutPoint outPoint(utxo.txid, utxo.vout);
-        pwalletMain->UnlockCoin(outPoint);
+        wallet_->UnlockCoin(outPoint);
     }
 }

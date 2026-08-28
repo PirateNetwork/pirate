@@ -27,6 +27,7 @@
 #include "primitives/block.h"
 #include "addrman.h"
 #include "amount.h"
+#include "asyncrpcqueue.h"
 #include "checkpoints.h"
 #include "compat/sanity.h"
 #include "policy/policy.h"
@@ -265,6 +266,19 @@ void Shutdown()
     StopRPC();
     StopHTTPServer();
 #ifdef ENABLE_WALLET
+    // StopRPC()'s closeAndWait() joined the async worker thread but never
+    // clears AsyncRPCQueue's own operation map (only an explicit
+    // z_getoperationresult, or the queue's own eventual destruction, does
+    // that) -- so a finished-but-never-polled AsyncRPCOperation built
+    // against a wallet can still be sitting here holding that wallet's ref.
+    // Drop them now, before FlushAndUnloadAllSecondaryWallets()/Reset()
+    // below: left to plain process-exit static destruction, the queue's
+    // static shared_ptr (constructed by StartRPC()) outlives
+    // CWalletManager's (constructed later, by RegisterDefaultWallet()), so
+    // reverse-order teardown would run these operations' destructors --
+    // and their CWalletManager::Get().ReleaseRefIfCurrent() calls -- after
+    // CWalletManager's own static instance no longer exists.
+    getAsyncRPCQueue()->clearOperationMap();
     // Secondary wallets first: nothing routes a request to one after this point,
     // and they must be gone before Reset() clears the registry at the end of Shutdown().
     CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();

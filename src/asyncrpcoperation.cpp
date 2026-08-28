@@ -17,7 +17,30 @@
  *                                                                            *
  ******************************************************************************/
 
+#if defined(HAVE_CONFIG_H)
+#include "config/bitcoin-config.h"
+#endif
+
 #include "asyncrpcoperation.h"
+
+// This file lives in the unconditionally-built server library (see
+// Makefile.am), but CWalletManager/CWallet live in libbitcoin_wallet.a,
+// which is only built and linked with ENABLE_WALLET. Guard both the
+// includes and the two function bodies below that touch them, rather than
+// making the whole file (or the constructor's existence) conditional --
+// nothing calls the wallet-aware constructor in a --disable-wallet build
+// anyway, since every AsyncRPCOperation subclass that uses it lives under
+// wallet/ and is itself ENABLE_WALLET-only.
+//
+// ENABLE_WALLET itself is defined by config/bitcoin-config.h (autoconf
+// output), included above -- this file never had a reason to pull that in
+// before now, and without it every #ifdef ENABLE_WALLET below silently
+// resolves to "not defined" regardless of how the build was actually
+// configured, compiling the inert #else stub in its place.
+#ifdef ENABLE_WALLET
+#include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
+#endif
 
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
@@ -50,6 +73,81 @@ AsyncRPCOperation::AsyncRPCOperation() : error_code_(0), error_message_() {
     set_state(OperationStatus::READY);
 }
 
+// Takes the wallet this operation should run against. Resolved and pinned
+// here, on the caller's thread (the RPC handler that's about to queue this
+// operation for the single AsyncRPCQueue worker thread) -- AsyncRPCQueue's
+// worker is a separate, long-lived thread with no visibility into the HTTP
+// request's own RPCWalletRequestGuard/thread-local wallet selection (see
+// walletmanager.cpp's g_requestedWalletName), so by the time main() actually
+// runs, the request that queued this operation is long gone and there is no
+// other point at which this wallet could still be safely re-resolved.
+//
+// The ref is held for as long as this C++ object exists, released in the
+// destructor rather than at "operation finished": AsyncRPCOperation has no
+// single completion choke-point every subclass funnels through (each sets
+// its own terminal OperationStatus independently, at its own call sites --
+// see set_state()), so tying release to object lifetime instead of a
+// business-logic event is what makes it impossible for some untouched
+// subclass exit path to leak the ref forever. This mirrors
+// RPCWalletRequestGuard's own reasoning for a request in flight, and
+// correctly extends to however long a finished operation's result sits in
+// AsyncRPCQueue::operation_map_ waiting to be polled -- z_getoperationresult
+// calling popOperationForId() is what actually drops the last shared_ptr and
+// runs this destructor in the common case.
+// Lock order note: RPC handlers that construct a wallet-aware operation
+// (z_sendmany et al.) do so from inside LOCK2(cs_main, pwallet->cs_wallet),
+// and z_getoperationstatus_IMPL (the shared impl behind z_getoperationresult)
+// destroys one (via popOperationForId(), dropping the last shared_ptr) from
+// that same LOCK2 -- so this constructor/destructor's own CWalletManager::Get() call
+// (ResolveAndHoldForRequest()/ReleaseRefIfCurrent(), both taking cs_wallets)
+// establishes cs_main -> cs_wallet -> cs_wallets as a real, exercised lock
+// order in this codebase, not just a theoretical one. Nothing currently
+// reachable while cs_wallets is held acquires cs_main or any cs_wallet back
+// (CWalletManager's own internals only ever take cs_nWalletUnlockTime/
+// bitdb->cs_db/the RPC timer lock under cs_wallets -- see UnloadWallet()/
+// CancelWalletAutoLockTimer()), so there is no cycle today. A future change
+// to CWalletManager that acquires cs_main or a CWallet's cs_wallet while
+// already holding cs_wallets would deadlock against an in-flight
+// z_sendmany/z_getoperationstatus -- keep that from happening rather than
+// fixing it here.
+#ifdef ENABLE_WALLET
+AsyncRPCOperation::AsyncRPCOperation(CWallet* wallet) : AsyncRPCOperation() {
+    wallet_ = wallet;
+    if (wallet_ == nullptr)
+        return;
+    walletName_ = wallet_->strWalletFile;
+    CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(walletName_);
+    walletGeneration_ = resolved.generation;
+    // NotFound and IsDefault both mean "nothing to hold": IsDefault because
+    // the default wallet is never unloadable (same as
+    // RPCWalletRequestGuard's own handling of this outcome); NotFound
+    // because some test fixtures construct a CWallet and use it as
+    // pwalletMain without ever registering it with CWalletManager -- in
+    // that environment nothing can "unload" it through this system either,
+    // so not pinning a ref doesn't leave anything reachable unprotected.
+    if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+        walletRefHeld_ = true;
+}
+#else
+AsyncRPCOperation::AsyncRPCOperation(CWallet* wallet) : AsyncRPCOperation() {
+    wallet_ = wallet;
+}
+#endif
+
+// Neither this nor operator=() below copy wallet_/walletName_/
+// walletGeneration_/walletRefHeld_ -- a copy would get a null wallet_ and,
+// worse, walletRefHeld_ defaulting false regardless of the original's real
+// state, so a copy's destructor would never release a ref the original is
+// still holding on the original's behalf. Left uncorrected deliberately:
+// these two are private and unreachable from outside the class, and every
+// subclass (all 8, including the 3 that never touch wallet_ at all)
+// declares its own copy/move constructor and assignment operator `= delete`,
+// so nothing anywhere in this codebase can actually invoke either of these.
+// If that ever stops being true, this comment is the warning that fixing it
+// means copying those four fields too -- and that wallet_-holding
+// AsyncRPCOperations still shouldn't be copied even then, since two
+// objects would then independently release the same ref in their
+// destructors.
 AsyncRPCOperation::AsyncRPCOperation(const AsyncRPCOperation& o) :
         id_(o.id_), creation_time_(o.creation_time_), state_(o.state_.load()),
         start_time_(o.start_time_), end_time_(o.end_time_),
@@ -72,6 +170,10 @@ AsyncRPCOperation& AsyncRPCOperation::operator=( const AsyncRPCOperation& other 
 
 
 AsyncRPCOperation::~AsyncRPCOperation() {
+#ifdef ENABLE_WALLET
+    if (walletRefHeld_)
+        CWalletManager::Get().ReleaseRefIfCurrent(walletName_, walletGeneration_);
+#endif
 }
 
 /**

@@ -84,6 +84,7 @@ using namespace libzcash;
  * @throws JSONRPCError for invalid parameters or addresses
  */
 AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
+    CWallet* wallet,
     const Consensus::Params& consensusParams,
     const int nHeight,
     CMutableTransaction contextualTx,
@@ -92,14 +93,15 @@ AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
     std::vector<MergeToAddressInputIronwoodNote> ironwoodNoteInputs,
     MergeToAddressRecipient recipient,
     CAmount fee,
-    UniValue contextInfo) : tx_(contextualTx), 
+    UniValue contextInfo) : AsyncRPCOperation(wallet),
+                            tx_(contextualTx),
                             utxoInputs_(utxoInputs),
                             saplingNoteInputs_(saplingNoteInputs), 
                             ironwoodNoteInputs_(ironwoodNoteInputs), 
                             recipient_(recipient), 
                             fee_(fee), 
                             contextinfo_(contextInfo),
-                            builder_(TransactionBuilder(consensusParams, nHeight, pwalletMain))
+                            builder_(TransactionBuilder(consensusParams, nHeight, wallet_))
 {
     // =================================================================
     // PARAMETER VALIDATION
@@ -231,7 +233,18 @@ void AsyncRPCOperation_mergetoaddress::main()
         set_error_message("unknown error");
     }
 
-    // Re-enable mining if it was previously enabled
+    // Re-enable mining if it was previously enabled. Deliberately pwalletMain,
+    // not wallet_: this restarts the process-global miner thread group
+    // (GenerateBitcoins() interrupts/joins whatever's running and spawns a
+    // new BitcoinMiner(pwallet) holding that raw pointer for the thread's
+    // entire lifetime), so binding it to this operation's own wallet would
+    // rebind ALL future mined block rewards to this operation's wallet
+    // indefinitely, and leave the miner thread holding a pointer this
+    // operation's own destructor may outlive -- a still-mining thread
+    // referencing wallet_ after unloadwallet (or node shutdown) deletes it.
+    // Mining is a whole-node facility that was never scoped to "the wallet
+    // that happened to call z_mergetoaddress last" before this file was
+    // touched for multiwallet, and must not become so now.
 #ifdef ENABLE_MINING
 #ifdef ENABLE_WALLET
     GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
@@ -420,7 +433,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
     // Iterate through all the selected notes and add them to the transaction
     bool saplingInitialized = false;
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
         
         for (std::set<SaplingExtendedSpendingKey>::iterator keyIterator = uniqueExtendedKeys.begin(); 
              keyIterator != uniqueExtendedKeys.end(); keyIterator++) {
@@ -434,7 +447,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
                     
                     // Get the Merkle path for this note
                     libzcash::MerklePath saplingMerklePath;
-                    if (!pwalletMain->SaplingWalletGetMerklePathOfNote(saplingOutPoints[noteIndex].hash, 
+                    if (!wallet_->SaplingWalletGetMerklePathOfNote(saplingOutPoints[noteIndex].hash, 
                                                                        saplingOutPoints[noteIndex].n, 
                                                                        saplingMerklePath)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
@@ -443,7 +456,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
 
                     // Get the anchor for this note
                     uint256 anchor;
-                    if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, 
+                    if (!wallet_->SaplingWalletGetPathRootWithCMU(saplingMerklePath, 
                                                                       saplingNotes[noteIndex].cmu().value(), 
                                                                       anchor)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
@@ -517,7 +530,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
     // Add Ironwood notes to the transaction builder
     // Iterate through all the selected notes and add them to the transaction
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
 
         bool ironwoodInitialized = false;
         uint256 ironwoodAnchor;
@@ -533,7 +546,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
                     
                     // Get the Merkle path for this Ironwood note
                     libzcash::MerklePath ironwoodMerklePath;
-                    if (!pwalletMain->IronwoodWalletGetMerklePathOfNote(ironwoodOutPoints[noteIndex].hash, 
+                    if (!wallet_->IronwoodWalletGetMerklePathOfNote(ironwoodOutPoints[noteIndex].hash, 
                                                                        ironwoodOutPoints[noteIndex].n, 
                                                                        ironwoodMerklePath)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
@@ -542,7 +555,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
 
                     // Get the anchor for this Ironwood note
                     uint256 pathAnchor;
-                    if (!pwalletMain->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, 
+                    if (!wallet_->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, 
                                                                       ironwoodNotes[noteIndex].cmx(), 
                                                                       pathAnchor)) {
                         throw JSONRPCError(RPC_WALLET_ERROR, 
@@ -655,7 +668,7 @@ bool AsyncRPCOperation_mergetoaddress::main_impl()
             // recoverable, while keeping it logically separate from the ZIP 32
             // Sapling key hierarchy, which the user might not be using.
             HDSeed seed;
-            if (!pwalletMain->GetHDSeed(seed)) {
+            if (!wallet_->GetHDSeed(seed)) {
                 throw JSONRPCError(RPC_WALLET_ERROR,
                                    "AsyncRPCOperation_mergetoaddress: HD seed not found");
             }
@@ -795,9 +808,9 @@ UniValue AsyncRPCOperation_mergetoaddress::getStatus() const
  */
 void AsyncRPCOperation_mergetoaddress::lock_utxos()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (auto transparentInput : utxoInputs_) {
-        pwalletMain->LockCoin(std::get<0>(transparentInput));
+        wallet_->LockCoin(std::get<0>(transparentInput));
     }
 }
 
@@ -809,9 +822,9 @@ void AsyncRPCOperation_mergetoaddress::lock_utxos()
  */
 void AsyncRPCOperation_mergetoaddress::unlock_utxos()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (auto transparentInput : utxoInputs_) {
-        pwalletMain->UnlockCoin(std::get<0>(transparentInput));
+        wallet_->UnlockCoin(std::get<0>(transparentInput));
     }
 }
 
@@ -823,9 +836,9 @@ void AsyncRPCOperation_mergetoaddress::unlock_utxos()
  */
 void AsyncRPCOperation_mergetoaddress::lock_sapling_notes()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (auto saplingNote : saplingNoteInputs_) {
-        pwalletMain->LockNote(std::get<0>(saplingNote));
+        wallet_->LockNote(std::get<0>(saplingNote));
     }
 }
 
@@ -837,9 +850,9 @@ void AsyncRPCOperation_mergetoaddress::lock_sapling_notes()
  */
 void AsyncRPCOperation_mergetoaddress::unlock_sapling_notes()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (auto saplingNote : saplingNoteInputs_) {
-        pwalletMain->UnlockNote(std::get<0>(saplingNote));
+        wallet_->UnlockNote(std::get<0>(saplingNote));
     }
 }
 
@@ -851,9 +864,9 @@ void AsyncRPCOperation_mergetoaddress::unlock_sapling_notes()
  */
 void AsyncRPCOperation_mergetoaddress::lock_ironwood_notes()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (auto ironwoodNote : ironwoodNoteInputs_) {
-        pwalletMain->LockNote(std::get<0>(ironwoodNote));
+        wallet_->LockNote(std::get<0>(ironwoodNote));
     }
 }
 
@@ -865,8 +878,8 @@ void AsyncRPCOperation_mergetoaddress::lock_ironwood_notes()
  */
 void AsyncRPCOperation_mergetoaddress::unlock_ironwood_notes()
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, wallet_->cs_wallet);
     for (auto ironwoodNote : ironwoodNoteInputs_) {
-        pwalletMain->UnlockNote(std::get<0>(ironwoodNote));
+        wallet_->UnlockNote(std::get<0>(ironwoodNote));
     }
 }
