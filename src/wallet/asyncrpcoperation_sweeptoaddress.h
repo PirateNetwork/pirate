@@ -47,11 +47,13 @@ class AsyncRPCOperation_sweeptoaddress : public AsyncRPCOperation
 public:
     /**
      * @brief Constructor for sweep-to-address operation
-     * 
+     *
+     * @param wallet Wallet to sweep -- resolved by the caller before
+     *               construction; pinned unloadable for this object's lifetime.
      * @param targetHeight Blockchain height for transaction targeting
      * @param fromRpc True if initiated from RPC call, false for background operation
      */
-    AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc = false);
+    AsyncRPCOperation_sweeptoaddress(CWallet* wallet, int targetHeight, bool fromRpc = false);
     
     /**
      * @brief Destructor with automatic resource cleanup

@@ -3144,7 +3144,7 @@ void CWallet::RunSaplingSweep(int blockHeight) {
         lastOperation->cancel();
     }
     pendingSaplingSweepTxs.clear();
-    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sweeptoaddress(blockHeight + 5));
+    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sweeptoaddress(this, blockHeight + 5));
     saplingSweepOperationId = operation->getId();
     q->addOperation(operation);
 }
@@ -3198,7 +3198,7 @@ void CWallet::RunSaplingConsolidation(int blockHeight) {
         lastOperation->cancel();
     }
     pendingSaplingConsolidationTxs.clear();
-    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_saplingconsolidation(blockHeight + 5));
+    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_saplingconsolidation(this, blockHeight + 5));
     saplingConsolidationOperationId = operation->getId();
     q->addOperation(operation);
 
@@ -3243,7 +3243,7 @@ void CWallet::RunIronwoodConsolidation(int blockHeight) {
         lastOperation->cancel();
     }
     pendingIronwoodConsolidationTxs.clear();
-    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_ironwoodconsolidation(blockHeight + 5));
+    std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_ironwoodconsolidation(this, blockHeight + 5));
     ironwoodConsolidationOperationId = operation->getId();
     q->addOperation(operation);
 
@@ -9348,7 +9348,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for unspent inputs or spend less than N Blocks ago. (Sapling)
             for (auto & pair : pwtx->mapSaplingNoteData) {
               SaplingNoteData nd = pair.second;
-              if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+              if (!nd.fNoteDataInitialized || !nd.nullifier || GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent sapling input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
                 break;
@@ -9363,9 +9363,9 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Sapling)
             for (const auto& spend : pwtx->GetSaplingSpends())  {
               uint256 saplingNullifier = uint256::FromRawBytes(spend.nullifier());
-              if (pwalletMain->IsSaplingNullifierFromMe(saplingNullifier)) {
-                const uint256& parentHash = pwalletMain->mapSaplingNullifiersToNotes[saplingNullifier].hash;
-                const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
+              if (IsSaplingNullifierFromMe(saplingNullifier)) {
+                const uint256& parentHash = mapSaplingNullifiersToNotes[saplingNullifier].hash;
+                const CWalletTx* parent = GetWalletTx(parentHash);
                 if (parent != NULL && parentHash != wtxid) {
                   LogPrint("deletetx","DeleteTx - Parent of sapling tx %s found\n", pwtx->GetHash().ToString());
                   deleteTx = false;
@@ -9385,7 +9385,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for unspent inputs or spend less than N Blocks ago. (Ironwood)
             for (auto & pair : pwtx->mapIronwoodNoteData) {
               IronwoodNoteData nd = pair.second;
-              if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetIronwoodSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+              if (!nd.fNoteDataInitialized || !nd.nullifier || GetIronwoodSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent ironwood input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
                 break;
@@ -9400,9 +9400,9 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for outputs that no longer have parents in the wallet. Exclude parents that are in the same transaction. (Ironwood)
             for (const auto& action: pwtx->GetIronwoodActions()) {
               uint256 ironwoodNullifier = uint256::FromRawBytes(action.nullifier());
-              if (pwalletMain->IsIronwoodNullifierFromMe(ironwoodNullifier)) {
-                const uint256& parentHash = pwalletMain->mapIronwoodNullifiersToNotes[ironwoodNullifier].hash;
-                const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
+              if (IsIronwoodNullifierFromMe(ironwoodNullifier)) {
+                const uint256& parentHash = mapIronwoodNullifiersToNotes[ironwoodNullifier].hash;
+                const CWalletTx* parent = GetWalletTx(parentHash);
                 if (parent != NULL && parentHash != wtxid) {
                   LogPrint("deletetx","DeleteTx - Parent of ironwood tx %s found\n", pwtx->GetHash().ToString());
                   deleteTx = false;
@@ -9423,7 +9423,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             //Check for unspent inputs or spend less than N Blocks ago. (Sprout)
             for (auto & pair : pwtx->mapSproutNoteData) {
               SproutNoteData nd = pair.second;
-              if (!nd.nullifier || pwalletMain->GetSproutSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
+              if (!nd.nullifier || GetSproutSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent sprout input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
                 continue;
@@ -9439,10 +9439,10 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             for (int i = 0; i < pwtx->vjoinsplit.size(); i++) {
               const JSDescription& jsdesc = pwtx->vjoinsplit[i];
               for (const uint256 &nullifier : jsdesc.nullifiers) {
-                // JSOutPoint op = pwalletMain->mapSproutNullifiersToNotes[nullifier];
-                if (pwalletMain->IsSproutNullifierFromMe(nullifier)) {
-                  const uint256& parentHash = pwalletMain->mapSproutNullifiersToNotes[nullifier].hash;
-                  const CWalletTx* parent = pwalletMain->GetWalletTx(parentHash);
+                // JSOutPoint op = mapSproutNullifiersToNotes[nullifier];
+                if (IsSproutNullifierFromMe(nullifier)) {
+                  const uint256& parentHash = mapSproutNullifiersToNotes[nullifier].hash;
+                  const CWalletTx* parent = GetWalletTx(parentHash);
                   if (parent != NULL && parentHash != wtxid) {
                     LogPrint("deletetx","DeleteTx - Parent of sprout tx %s found\n", pwtx->GetHash().ToString());
                     deleteTx = false;
@@ -9462,7 +9462,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
               CTxDestination address;
               ExtractDestination(pwtx->vout[i].scriptPubKey, address);
               if(IsMine(pwtx->vout[i])) {
-                if (pwalletMain->GetSpendDepth(pwtx->GetHash(), i) <= fDeleteTransactionsAfterNBlocks) {
+                if (GetSpendDepth(pwtx->GetHash(), i) <= fDeleteTransactionsAfterNBlocks) {
                   LogPrint("deletetx","DeleteTx - Unspent transparent input tx %s\n", pwtx->GetHash().ToString());
                   deleteTx = false;
                   continue;
@@ -9479,7 +9479,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             for (int i = 0; i < pwtx->vin.size(); i++) {
               const CTxIn& txin = pwtx->vin[i];
               const uint256& parentHash = txin.prevout.hash;
-              const CWalletTx* parent = pwalletMain->GetWalletTx(txin.prevout.hash);
+              const CWalletTx* parent = GetWalletTx(txin.prevout.hash);
               if (parent != NULL && parentHash != wtxid) {
                 LogPrint("deletetx","DeleteTx - Parent of transparent tx %s found\n", pwtx->GetHash().ToString());
                 deleteTx = false;
@@ -9735,18 +9735,18 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         LOCK(cs_KeyStore);
 
         //Get List of current list of txids
-        for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
+        for (map<uint256, ArchiveTxPoint>::iterator it = mapArcTxs.begin(); it != mapArcTxs.end(); ++it)
         {
             txListOriginal.insert((*it).first);
         }
-        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it)
         {
             txListOriginal.insert((*it).first);
         }
 
         // no need to read and scan block, if block was created before
         // our wallet birthday (as adjusted for block time variability)
-        while (!fIgnoreBirthday && pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)) && (pindex->nHeight < pwalletMain->nBirthday))
+        while (!fIgnoreBirthday && pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)) && (pindex->nHeight < nBirthday))
             pindex = chainActive.Next(pindex);
 
         uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup

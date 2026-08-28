@@ -279,9 +279,9 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
         }
 
         CWallet* wallet = nullptr;
+        bool fFirstRun = false;
         try {
             wallet = new CWallet(name);
-            bool fFirstRun = false;
             DBErrors loadResult = wallet->LoadWallet(fFirstRun);
             if (loadResult != DB_LOAD_OK) {
                 delete wallet;
@@ -302,6 +302,134 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
             return false;
         }
 
+        // Register for chain-tip notifications and catch this wallet up to
+        // the current tip before it's ever visible in the registry (i.e.
+        // before the mapWallets commit below) -- mirrors, as closely as
+        // possible, exactly what init.cpp does for the default wallet at
+        // startup: RegisterValidationInterface(), then (still under the same
+        // cs_main hold, so no ChainTip() call on the block-connection thread
+        // can interleave mid-catch-up) an incremental ScanForWalletTransactions
+        // from this wallet's own persisted "bestblock" locator, then
+        // Validate*WalletTrackedPositions()-or-rebuild for both pools. This
+        // is what makes a newly-loaded secondary wallet's staleness a
+        // bounded, synchronous cost paid once by this RPC call, rather than
+        // a surprise stall discovered later on some unrelated future block
+        // (see the "Witness-cache DoS" scoping decision this phase was
+        // built against). It is exactly as capable of stalling the node's
+        // RPC surface for the duration as the default wallet's own startup
+        // sequence already is -- not a new risk, the same one reachable
+        // from a second entry point.
+        //
+        // RegisterValidationInterface() itself must run *inside* the
+        // LOCK(cs_main) below, not before it: registering first and then
+        // taking cs_main leaves a real window, on a live node, where a
+        // block connects (on a thread that already holds cs_main to do so)
+        // between the two -- ChainTip() would fire on this wallet before
+        // any of its catch-up has run, and its own SetBestChain() call
+        // (wallet.cpp) can persist a "bestblock" locator at the *new* tip,
+        // which would then make the catch-up below believe it's already
+        // caught up and rescan only the last block -- silently skipping
+        // this wallet's entire missed range with no error anywhere.
+        //
+        // Committing this wallet's ref-counted registry entry is handled by
+        // a scope-exit rather than the try/catch alone: mapWallets.try_emplace()
+        // below runs after this whole block, and if it ever throws (e.g.
+        // std::bad_alloc), falling through to the outer catch (this
+        // function's own, further down) without unregistering would leave a
+        // wallet permanently receiving chain-tip notifications forever with
+        // no registry entry to ever unload it through.
+        bool fCommitted = false;
+        auto registrationGuard = MakeScopeExit([&fCommitted, &wallet, &name]() {
+            if (fCommitted)
+                return;
+            // cs_main here, not just at the call site below: this guard can
+            // run *after* the LOCK(cs_main) scope below has already closed
+            // (e.g. the catch-up's own catch block returns false, which
+            // unwinds that scope before this guard's body runs) -- without
+            // re-taking it, UnregisterValidationInterface()+delete would run
+            // unprotected against a block-connection thread that grabs the
+            // now-free cs_main and dispatches ChainTip() to this
+            // already-registered wallet concurrently with the delete. This
+            // is exactly the use-after-free UnloadWallet()'s own cs_main
+            // hold exists to prevent, just reachable from this function's
+            // error path instead. Recursive-safe with the LOCK(cs_main)
+            // below on the success-of-registration-but-later-failure path,
+            // and matches how init.cpp holds cs_main across its own
+            // -wallet= loading loop.
+            LOCK(cs_main);
+            UnregisterValidationInterface(wallet);
+            delete wallet;
+            CloseWalletDbFile(name);
+        });
+        {
+            LOCK(cs_main);
+            RegisterValidationInterface(wallet);
+            try {
+                if (fFirstRun) {
+                    // Brand-new wallet, nothing to catch up: pin its
+                    // checkpoint at the current tip, same as init.cpp does
+                    // for a freshly created default wallet.
+                    if (chainActive.Tip()) {
+                        LOCK(wallet->cs_wallet); // SetBestChain() requires this (AssertLockHeld)
+                        wallet->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->nHeight);
+                    }
+                } else if (chainActive.Tip()) {
+                    // ReadWalletBirthday() -- unlike ReadBestBlock() below,
+                    // CWallet::LoadWallet()'s own CWalletDB pass never reads
+                    // this key (see init.cpp, the only other caller), so
+                    // without this nBirthday stays at CWallet::SetNull()'s
+                    // default and the birthday-skip loop inside
+                    // ScanForWalletTransactions() (the only two callers that
+                    // pass fIgnoreBirthday=false are this and init.cpp) runs
+                    // with a value this wallet's file never actually had.
+                    {
+                        CWalletDB walletdb(name);
+                        walletdb.ReadWalletBirthday(wallet->nBirthday);
+                    }
+                    CBlockIndex* pindexRescan = nullptr;
+                    {
+                        CWalletDB walletdb(name);
+                        CBlockLocator locator;
+                        pindexRescan = walletdb.ReadBestBlock(locator)
+                            ? FindForkInGlobalIndex(chainActive, locator)
+                            : chainActive.Genesis();
+                    }
+                    if (pindexRescan && chainActive.Tip() != pindexRescan) {
+                        wallet->ScanForWalletTransactions(pindexRescan, true, false, false, false);
+                    } else if (chainActive.Height() > 0) {
+                        // Same as init.cpp: rescan at minimum the last block
+                        // even when the persisted checkpoint already matches
+                        // the tip, rather than skipping the scan entirely.
+                        wallet->ScanForWalletTransactions(chainActive[chainActive.Tip()->nHeight - 1], true, false, false, false);
+                    }
+                }
+                if (chainActive.Tip() && chainActive.Height() > 0) {
+                    LOCK(wallet->cs_wallet);
+                    if (!wallet->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
+                        wallet->SaplingWalletReset();
+                        wallet->IncrementSaplingWallet(chainActive.Tip());
+                    }
+                    wallet->saplingWalletPositionsValidated = true;
+                    if (!wallet->ValidateIronwoodWalletTrackedPositions(chainActive.Tip())) {
+                        wallet->IronwoodWalletReset();
+                        wallet->IncrementIronwoodWallet(chainActive.Tip());
+                    }
+                    wallet->ironwoodWalletPositionsValidated = true;
+                }
+                // Same as init.cpp: whether a loaded wallet's own
+                // transactions get relayed/rebroadcast at all is gated on
+                // this flag, which CWallet::SetNull() defaults to false.
+                // Without it, sendtoaddress against this wallet would
+                // build, sign, and record a transaction as if it succeeded
+                // (CommitTransaction() returns true regardless) while never
+                // actually broadcasting it to the network.
+                wallet->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
+            } catch (const std::exception& e) {
+                strError = strprintf("Failed to catch up wallet %s to the current chain tip: %s", name, e.what());
+                return false; // registrationGuard unregisters+deletes+closes.
+            }
+        }
+
         // Briefly re-take cs_wallets just to commit. Two concurrent loads of
         // two *different* names that happen to be aliases of each other could
         // in principle both pass their own equivalence check above (each ran
@@ -311,7 +439,21 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
         // catch it on the next load attempt of either name either way.
         {
             LOCK(cs_wallets);
-            mapWallets.try_emplace(name, wallet, false, nextGeneration.fetch_add(1, std::memory_order_relaxed));
+            // .second, not just calling try_emplace() and assuming success:
+            // if this ever returned false (name already present -- shouldn't
+            // happen given the loadingNames reservation and the earlier
+            // mapWallets.count(name) check, but both of those run in their
+            // own separate cs_wallets critical sections, not one continuous
+            // hold spanning to here), unconditionally setting fCommitted
+            // would disarm registrationGuard and leak `wallet` still fully
+            // registered on all 9 validation-interface signals -- the exact
+            // zombie this guard exists to prevent, arrived at from the
+            // commit side instead of an exception.
+            fCommitted = mapWallets.try_emplace(name, wallet, false, nextGeneration.fetch_add(1, std::memory_order_relaxed)).second;
+        }
+        if (!fCommitted) {
+            strError = strprintf("Wallet %s is already loaded", name);
+            return false; // registrationGuard unregisters+deletes+closes.
         }
         return true;
     } catch (const std::exception& e) {
@@ -322,7 +464,31 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
 
 bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError)
 {
-    LOCK(cs_wallets);
+    // Phase 4: cs_main is taken here, *before* cs_wallets, not nested inside
+    // it -- this function needs both because ChainTip() is always invoked by
+    // main.cpp's block-(dis)connection code while it already holds cs_main
+    // (a recursive mutex), across every registered wallet's callback in one
+    // synchronous dispatch, and this function must not delete a wallet that
+    // dispatch could still be executing against. Without cs_main here at
+    // all, a block connecting at the same moment as this unload could have
+    // ChainTip() mid-execution on `wallet` on the block-connection thread
+    // while this thread deletes it out from under that call -- the refcount
+    // check below only ever tracked RPC-request/async-op-held refs, never
+    // validation-interface callbacks.
+    //
+    // The order matters as much as the fact of it: asyncrpcoperation.cpp
+    // documents this codebase's established order as
+    // cs_main -> cs_wallet -> cs_wallets (z_sendmany et al. take
+    // LOCK2(cs_main, pwallet->cs_wallet) and then construct an
+    // AsyncRPCOperation, whose constructor takes cs_wallets internally). An
+    // earlier version of this fix took cs_main nested *inside* cs_wallets --
+    // the inverse order -- which deadlocks the whole node: this thread
+    // holding cs_wallets and waiting on cs_main, against a z_sendmany
+    // holding cs_main+cs_wallet and waiting on cs_wallets in its own
+    // AsyncRPCOperation constructor, or against ChainTip() itself needing
+    // cs_wallets from inside RunSaplingConsolidation's construction of its
+    // own AsyncRPCOperation while already holding cs_main.
+    LOCK2(cs_main, cs_wallets);
 
     if (defaultWalletName == name) {
         strError = "The default wallet cannot be unloaded";
@@ -350,6 +516,10 @@ bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError
     // it's still left ticking, and if this same name is reloaded before the
     // deadline, it would fire and relock a wallet it was never armed for.
     CancelWalletAutoLockTimer(wallet);
+    // Already holding cs_main (see above) for exactly this: no in-flight
+    // ChainTip() dispatch can be executing against `wallet` right now, and
+    // none can start until this function returns and releases it.
+    UnregisterValidationInterface(wallet);
     delete wallet;
     CloseWalletDbFile(name);
     mapWallets.erase(it);
@@ -458,7 +628,20 @@ void CWalletManager::FlushAndUnloadAllSecondaryWallets()
     // finished operation still sitting in the map" exposure already existed
     // for every wallet RPC operation before this class had its own wallet
     // pointer at all.
-    LOCK(cs_wallets);
+    // Phase 4 addendum: this shutdown-time deletion loop now also races a
+    // possible in-flight ChainTip() dispatch, for the same reason and with
+    // the same fix as UnloadWallet() -- see the comment there, including why
+    // cs_main must be taken *before* cs_wallets (this codebase's established
+    // order is cs_main -> cs_wallet -> cs_wallets; nesting it the other way
+    // around deadlocks against anything that takes cs_wallets while already
+    // holding cs_main, which includes ChainTip() itself via
+    // RunSaplingConsolidation's AsyncRPCOperation construction). Interrupt()
+    // (bitcoind.cpp) deliberately does not join the thread group before
+    // Shutdown() runs (its own comment: "was left out intentionally...
+    // because we didn't re-test all of" the shutdown ordering), so block
+    // connection is not guaranteed to have stopped by the time this
+    // function runs.
+    LOCK2(cs_main, cs_wallets);
     for (auto it = mapWallets.begin(); it != mapWallets.end(); ) {
         if (it->second.isDefault) {
             ++it;
@@ -467,6 +650,7 @@ void CWalletManager::FlushAndUnloadAllSecondaryWallets()
         const std::string name = it->first;
         // See UnloadWallet(): must run before delete for the same reason.
         CancelWalletAutoLockTimer(it->second.wallet);
+        UnregisterValidationInterface(it->second.wallet);
         delete it->second.wallet;
         CloseWalletDbFile(name);
         it = mapWallets.erase(it);

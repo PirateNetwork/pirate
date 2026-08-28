@@ -12,6 +12,7 @@
 #include "key_io.h"
 #include "pubkey.h"
 #include "transaction_builder.h"
+#include "wallet/walletmanager.h"
 #include "zcash/Address.hpp"
 
 #include <thread>
@@ -1947,4 +1948,87 @@ TEST(test_block, TestProcessBadBlock)
     EXPECT_EQ(state.GetRejectReason(), "bad-txnmrklroot");
     // Verify transaction is still in mempool
     EXPECT_EQ(mempool.size(), 1);
+}
+
+// Phase 4 of the multiwallet effort: CWalletManager::LoadWallet() now
+// registers a secondary wallet for ChainTip() notifications and catches it
+// up to the current tip, instead of leaving it a permanently frozen
+// snapshot. This drives a real TestChain rather than a synthetic
+// CBlockIndex, because CWallet::ChainTip() (via IncrementSaplingWallet etc.)
+// reads chainActive/pcoinsTip for real -- a fake index would crash inside
+// that machinery rather than exercise it.
+TEST(test_block, SecondaryWalletReceivesChainTipNotificationsAfterLoad)
+{
+    // TestChain doesn't reset bitdb itself: its own wallets are in-memory
+    // TestWallet instances that don't care where their backing file
+    // physically lands. CWalletManager::LoadWallet()'s file-exists check
+    // does care (it resolves the path via the real GetDataDir(), independent
+    // of whatever directory bitdb happens to still be bound to from an
+    // earlier test) -- give it a fresh CDBEnv bound to this test's own
+    // datadir first, the same pattern test_walletmanager.cpp's fixture uses.
+    //
+    // RAII, not a plain restore at the end of the test body: every ASSERT_*
+    // below returns immediately on failure, which would otherwise skip the
+    // restore and leave the global bitdb (and, if UnloadWallet's own
+    // ASSERT_TRUE fired, a still-registered secondary wallet in
+    // CWalletManager) installed as state for whatever test in this binary
+    // runs next.
+    struct GlobalStateCleanup {
+        std::shared_ptr<CDBEnv> previousBitdb;
+        ~GlobalStateCleanup() {
+            CWalletManager::Get().Reset();
+            bitdb->Flush(true);
+            bitdb->Reset();
+            bitdb = previousBitdb;
+        }
+    } cleanup{bitdb};
+    bitdb = std::shared_ptr<CDBEnv>(new CDBEnv{});
+
+    TestChain chain;
+    // Must be set after TestChain's constructor, not before: it resets
+    // chainName to the KMD default itself as part of its own setup (see the
+    // comment in TestChain::TestChain()), which would otherwise silently
+    // clobber this back before any block is generated.
+    chainName = assetchain("TST");
+    auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
+    chain.generateBlock(notary); // genesis
+    chain.generateBlock(notary); // one real block on top of genesis
+
+    bool fFirstRun;
+    CWallet scratch("secondarytestwallet");
+    ASSERT_EQ(DB_LOAD_OK, scratch.LoadWallet(fFirstRun));
+
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondarytestwallet", strError)) << strError;
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    // The load-time catch-up (walletmanager.cpp) should already have run the
+    // witness validate-or-rebuild step for both pools -- chainHeight itself
+    // isn't set by that step (it's only ever set inside ChainTip() proper,
+    // after these same calls run there too; init.cpp's own startup catch-up
+    // for the default wallet doesn't set it either), so
+    // saplingWalletPositionsValidated/ironwoodWalletPositionsValidated are
+    // the right signal that the catch-up sequence actually ran end to end.
+    EXPECT_TRUE(secondaryWallet->saplingWalletPositionsValidated);
+    EXPECT_TRUE(secondaryWallet->ironwoodWalletPositionsValidated);
+
+    // Advance the chain: this is where chainHeight becomes the right check
+    // -- it's set inside ChainTip() itself, so this is the actual regression
+    // guard for "does ChainTip() now fire at all for a registered secondary
+    // wallet." Before Phase 4 this wallet was never registered, so
+    // chainHeight would stay 0 forever regardless of how many more blocks
+    // connect.
+    chain.generateBlock(notary);
+    EXPECT_EQ(chain.GetIndex()->nHeight, secondaryWallet->chainHeight);
+
+    // Unload, then advance again. If UnregisterValidationInterface() were
+    // missing from UnloadWallet(), this generateBlock() call would
+    // dereference the just-freed `secondaryWallet` from inside ChainTip() on
+    // the block-connection path -- there is no graceful assertion for a
+    // use-after-free; the absence of a crash here is the actual check.
+    ASSERT_TRUE(CWalletManager::Get().UnloadWallet("secondarytestwallet", strError)) << strError;
+    EXPECT_NO_THROW(chain.generateBlock(notary));
+
+    // Cleanup runs via `cleanup`'s destructor above, on every exit path.
 }

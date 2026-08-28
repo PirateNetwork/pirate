@@ -1675,6 +1675,13 @@ public:
         nSetChainUpdates = 0;
         nTimeFirstKey = 0;
         fBroadcastTransactions = false;
+        // Left uninitialized before this fix: only ever populated by
+        // init.cpp's own ReadWalletBirthday() call for pwalletMain, so any
+        // other CWallet instance (e.g. one loaded via
+        // CWalletManager::LoadWallet(), or a gtest fixture) read garbage
+        // here -- found via ScanForWalletTransactions()'s birthday-skip loop
+        // comparing pindex->nHeight against this.
+        nBirthday = 0;
     }
 
     /**

@@ -64,10 +64,12 @@ class AsyncRPCOperation_saplingconsolidation : public AsyncRPCOperation
 public:
     /**
      * @brief Constructor for Sapling consolidation operation
-     * 
+     *
+     * @param wallet Wallet to consolidate -- resolved by the caller before
+     *               construction; pinned unloadable for this object's lifetime.
      * @param targetHeight Blockchain height for transaction targeting
      */
-    AsyncRPCOperation_saplingconsolidation(int targetHeight);
+    AsyncRPCOperation_saplingconsolidation(CWallet* wallet, int targetHeight);
     
     /**
      * @brief Destructor with automatic resource cleanup

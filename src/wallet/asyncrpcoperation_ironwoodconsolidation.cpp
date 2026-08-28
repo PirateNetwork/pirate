@@ -34,7 +34,7 @@ const int IRONWOOD_CONSOLIDATION_EXPIRY_DELTA = 40;
  * 
  * @param targetHeight Target blockchain height for consolidation operations
  */
-AsyncRPCOperation_ironwoodconsolidation::AsyncRPCOperation_ironwoodconsolidation(int targetHeight) : targetHeight_(targetHeight) {}
+AsyncRPCOperation_ironwoodconsolidation::AsyncRPCOperation_ironwoodconsolidation(CWallet* wallet, int targetHeight) : AsyncRPCOperation(wallet), targetHeight_(targetHeight) {}
 
 /**
  * @brief Destructor - automatically cleans up resources
@@ -114,9 +114,9 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
     if (nextActivationHeight && targetHeight_ + IRONWOOD_CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
         LogPrint("zrpcunsafe", "%s: Ironwood consolidation txs would be created before a NU activation but may expire after. Skipping this round.\n", getId());
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->nextIronwoodConsolidation = pwalletMain->ironwoodConsolidationInterval + chainActive.Tip()->nHeight;
-            pwalletMain->fIronwoodConsolidationRunning = false;
+            LOCK2(cs_main, wallet_->cs_wallet);
+            wallet_->nextIronwoodConsolidation = wallet_->ironwoodConsolidationInterval + chainActive.Tip()->nHeight;
+            wallet_->fIronwoodConsolidationRunning = false;
         }
         setConsolidationResult(0, 0, std::vector<std::string>());
         return true;
@@ -131,10 +131,10 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
     int consolidationTarget = 0;
     std::vector<libzcash::IronwoodPaymentAddress> candidateAddresses;
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        consolidationTarget = pwalletMain->targetIronwoodConsolidationQty;
+        LOCK2(cs_main, wallet_->cs_wallet);
+        consolidationTarget = wallet_->targetIronwoodConsolidationQty;
 
-        if (pwalletMain->fSweepEnabled) {
+        if (wallet_->fSweepEnabled) {
             // When sweep is active, consolidation is restricted to the sweep destination
             // address only - consolidating into it prepares funds for the sweep.
             if (rpcIronwoodSweepAddress.has_value()) {
@@ -159,7 +159,7 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
         } else {
             // No filter active: consolidate all wallet Ironwood addresses.
             std::set<libzcash::IronwoodPaymentAddress> allAddrs;
-            pwalletMain->GetIronwoodPaymentAddresses(allAddrs);
+            wallet_->GetIronwoodPaymentAddresses(allAddrs);
             candidateAddresses.assign(allAddrs.begin(), allAddrs.end());
         }
     }
@@ -171,8 +171,8 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
         // Spending key check first - skip watch-only addresses immediately.
         libzcash::IronwoodExtendedSpendingKeyPirate extsk;
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk))
+            LOCK2(cs_main, wallet_->cs_wallet);
+            if (!wallet_->GetIronwoodExtendedSpendingKey(addr, extsk))
                 continue;
         }
 
@@ -182,10 +182,10 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
             std::vector<SaplingNoteEntry> saplingProbe;
             std::vector<IronwoodNoteEntry> ironwoodProbe;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 std::set<libzcash::PaymentAddress> filterAddr;
                 filterAddr.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingProbe, ironwoodProbe, filterAddr,
+                wallet_->GetFilteredNotes(saplingProbe, ironwoodProbe, filterAddr,
                                               11, INT_MAX, true, true, true,
                                               consolidationTarget, 0);
             }
@@ -207,21 +207,21 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
             std::vector<SaplingNoteEntry> saplingEntries;
             std::vector<IronwoodNoteEntry> ironwoodEntries;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 std::set<libzcash::PaymentAddress> filterAddresses;
                 filterAddresses.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
+                wallet_->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
                                               maxQuantity, fIronwoodConsolidationTxFee + 1);
                 // Lock immediately so no other async operation can select the same notes.
                 for (const auto& e : ironwoodEntries)
-                    pwalletMain->LockNote(e.op);
+                    wallet_->LockNote(e.op);
             }
 
             auto unlockIronwoodEntries = [&]() {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 for (const auto& e : ironwoodEntries)
-                    pwalletMain->UnlockNote(e.op);
+                    wallet_->UnlockNote(e.op);
             };
 
             if ((int)ironwoodEntries.size() < minQuantity) {
@@ -247,17 +247,17 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
             uint256 anchor;
             std::vector<libzcash::MerklePath> ironwoodMerklePaths;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Ironwood note. Stopping.\n", getId());
                     unlockIronwoodEntries();
                     break;
                 }
             }
 
-            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, wallet_);
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + IRONWOOD_CONSOLIDATION_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Building Ironwood consolidation transaction with %d inputs, output amount=%s\n",
@@ -326,8 +326,8 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
             }
 
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit Ironwood consolidation transaction. Stopping.\n", getId());
                     unlockIronwoodEntries();
                     break;
@@ -342,9 +342,9 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
     }
 
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->nextIronwoodConsolidation = pwalletMain->ironwoodConsolidationInterval + chainActive.Tip()->nHeight;
-        pwalletMain->fIronwoodConsolidationRunning = false;
+        LOCK2(cs_main, wallet_->cs_wallet);
+        wallet_->nextIronwoodConsolidation = wallet_->ironwoodConsolidationInterval + chainActive.Tip()->nHeight;
+        wallet_->fIronwoodConsolidationRunning = false;
     }
 
     LogPrint("zrpcunsafe", "%s: Created %d Ironwood consolidation transactions with total output amount=%s\n", getId(), numTxCreated, FormatMoney(amountConsolidated));

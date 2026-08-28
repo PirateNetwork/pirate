@@ -34,7 +34,7 @@ const int SAPLING_CONSOLIDATION_EXPIRY_DELTA = 40;
  * 
  * @param targetHeight Target blockchain height for consolidation operations
  */
-AsyncRPCOperation_saplingconsolidation::AsyncRPCOperation_saplingconsolidation(int targetHeight) : targetHeight_(targetHeight) {}
+AsyncRPCOperation_saplingconsolidation::AsyncRPCOperation_saplingconsolidation(CWallet* wallet, int targetHeight) : AsyncRPCOperation(wallet), targetHeight_(targetHeight) {}
 
 /**
  * @brief Destructor - automatically cleans up resources
@@ -114,9 +114,9 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
     if (nextActivationHeight && targetHeight_ + SAPLING_CONSOLIDATION_EXPIRY_DELTA >= nextActivationHeight.value()) {
         LogPrint("zrpcunsafe", "%s: Consolidation txs would be created before a NU activation but may expire after. Skipping this round.\n", getId());
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            pwalletMain->nextSaplingConsolidation = pwalletMain->saplingConsolidationInterval + chainActive.Tip()->nHeight;
-            pwalletMain->fSaplingConsolidationRunning = false;
+            LOCK2(cs_main, wallet_->cs_wallet);
+            wallet_->nextSaplingConsolidation = wallet_->saplingConsolidationInterval + chainActive.Tip()->nHeight;
+            wallet_->fSaplingConsolidationRunning = false;
         }
         setConsolidationResult(0, 0, std::vector<std::string>());
         return true;
@@ -131,10 +131,10 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
     int consolidationTarget = 0;
     std::vector<libzcash::SaplingPaymentAddress> candidateAddresses;
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        consolidationTarget = pwalletMain->targetSaplingConsolidationQty;
+        LOCK2(cs_main, wallet_->cs_wallet);
+        consolidationTarget = wallet_->targetSaplingConsolidationQty;
 
-        if (pwalletMain->fSweepEnabled) {
+        if (wallet_->fSweepEnabled) {
             // When sweep is active, consolidation is restricted to the sweep destination
             // address only - consolidating into it prepares funds for the sweep.
             if (rpcSaplingSweepAddress.has_value()) {
@@ -159,7 +159,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
         } else {
             // No filter active: consolidate all wallet Sapling addresses.
             std::set<libzcash::SaplingPaymentAddress> allAddrs;
-            pwalletMain->GetSaplingPaymentAddresses(allAddrs);
+            wallet_->GetSaplingPaymentAddresses(allAddrs);
             candidateAddresses.assign(allAddrs.begin(), allAddrs.end());
         }
     }
@@ -171,8 +171,8 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
         // Spending key check first - skip watch-only addresses immediately.
         libzcash::SaplingExtendedSpendingKey extsk;
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk))
+            LOCK2(cs_main, wallet_->cs_wallet);
+            if (!wallet_->GetSaplingExtendedSpendingKey(addr, extsk))
                 continue;
         }
 
@@ -182,10 +182,10 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             std::vector<SaplingNoteEntry> saplingProbe;
             std::vector<IronwoodNoteEntry> ironwoodProbe;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 std::set<libzcash::PaymentAddress> filterAddr;
                 filterAddr.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingProbe, ironwoodProbe, filterAddr,
+                wallet_->GetFilteredNotes(saplingProbe, ironwoodProbe, filterAddr,
                                               11, INT_MAX, true, true, true,
                                               consolidationTarget, 0);
             }
@@ -207,21 +207,21 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             std::vector<SaplingNoteEntry> saplingEntries;
             std::vector<IronwoodNoteEntry> ironwoodEntries;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 std::set<libzcash::PaymentAddress> filterAddresses;
                 filterAddresses.insert(addr);
-                pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
+                wallet_->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
                                               maxQuantity, fSaplingConsolidationTxFee + 1);
                 // Lock immediately so no other async operation can select the same notes.
                 for (const auto& e : saplingEntries)
-                    pwalletMain->LockNote(e.op);
+                    wallet_->LockNote(e.op);
             }
 
             auto unlockSaplingEntries = [&]() {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 for (const auto& e : saplingEntries)
-                    pwalletMain->UnlockNote(e.op);
+                    wallet_->UnlockNote(e.op);
             };
 
             if ((int)saplingEntries.size() < minQuantity) {
@@ -250,17 +250,17 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             uint256 anchor;
             std::vector<libzcash::MerklePath> saplingMerklePaths;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
                     unlockSaplingEntries();
                     break;
                 }
             }
 
-            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, wallet_);
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SAPLING_CONSOLIDATION_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Beginning creating transaction with Sapling output amount=%s\n", getId(), FormatMoney(outputAmount));
@@ -318,8 +318,8 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             }
 
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
                     unlockSaplingEntries();
                     break;
@@ -334,9 +334,9 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
     }
 
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->nextSaplingConsolidation = pwalletMain->saplingConsolidationInterval + chainActive.Tip()->nHeight;
-        pwalletMain->fSaplingConsolidationRunning = false;
+        LOCK2(cs_main, wallet_->cs_wallet);
+        wallet_->nextSaplingConsolidation = wallet_->saplingConsolidationInterval + chainActive.Tip()->nHeight;
+        wallet_->fSaplingConsolidationRunning = false;
     }
 
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total Sapling output amount=%s\n", getId(), numTxCreated, FormatMoney(amountConsolidated));

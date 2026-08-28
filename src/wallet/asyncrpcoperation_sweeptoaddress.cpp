@@ -57,7 +57,7 @@ std::optional<libzcash::IronwoodPaymentAddress> rpcIronwoodSweepAddress;
  * @param targetHeight Target blockchain height for sweep operations
  * @param fromRpc True for RPC calls, false for command-line operations
  */
-AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(int targetHeight, bool fromRpc) : targetHeight_(targetHeight), fromRPC_(fromRpc) {}
+AsyncRPCOperation_sweeptoaddress::AsyncRPCOperation_sweeptoaddress(CWallet* wallet, int targetHeight, bool fromRpc) : AsyncRPCOperation(wallet), targetHeight_(targetHeight), fromRPC_(fromRpc) {}
 
 /**
  * @brief Destructor - automatically cleans up resources
@@ -179,12 +179,12 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     std::set<libzcash::SaplingPaymentAddress> saplingCandidates;
     std::set<libzcash::IronwoodPaymentAddress> ironwoodCandidates;
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetSaplingPaymentAddresses(saplingCandidates);
+        LOCK2(cs_main, wallet_->cs_wallet);
+        wallet_->GetSaplingPaymentAddresses(saplingCandidates);
         if (hasSaplingTarget)
             saplingCandidates.erase(saplingSweepAddress);
 
-        pwalletMain->GetIronwoodPaymentAddresses(ironwoodCandidates);
+        wallet_->GetIronwoodPaymentAddresses(ironwoodCandidates);
         if (hasIronwoodTarget)
             ironwoodCandidates.erase(ironwoodSweepAddress);
     }
@@ -217,8 +217,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     std::vector<SaplingNoteEntry> allSaplingEntries;
     std::vector<IronwoodNoteEntry> allIronwoodEntries;
     if (!allFilterAddresses.empty()) {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->GetFilteredNotes(allSaplingEntries, allIronwoodEntries,
+        LOCK2(cs_main, wallet_->cs_wallet);
+        wallet_->GetFilteredNotes(allSaplingEntries, allIronwoodEntries,
                                       allFilterAddresses,
                                       11, INT_MAX, true, true, true,
                                       0, 0);
@@ -229,11 +229,11 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             return;
         }
 
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, wallet_->cs_wallet);
         for (const auto& entry : allSaplingEntries)
-            pwalletMain->UnlockNote(entry.op);
+            wallet_->UnlockNote(entry.op);
         for (const auto& entry : allIronwoodEntries)
-            pwalletMain->UnlockNote(entry.op);
+            wallet_->UnlockNote(entry.op);
     };
 
     std::vector<AddressSweepWork> saplingWork;
@@ -245,8 +245,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         // Skip watch-only addresses - spending key required to build spends.
         libzcash::SaplingExtendedSpendingKey extsk;
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk))
+            LOCK2(cs_main, wallet_->cs_wallet);
+            if (!wallet_->GetSaplingExtendedSpendingKey(addr, extsk))
                 continue;
         }
 
@@ -269,8 +269,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 
         libzcash::IronwoodExtendedSpendingKeyPirate ironwoodExtendedSpendingKey;
         {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, ironwoodExtendedSpendingKey))
+            LOCK2(cs_main, wallet_->cs_wallet);
+            if (!wallet_->GetIronwoodExtendedSpendingKey(addr, ironwoodExtendedSpendingKey))
                 continue;
         }
 
@@ -323,16 +323,16 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             uint256 anchor;
             std::vector<libzcash::MerklePath> saplingMerklePaths;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
                     break;
                 }
             }
 
-            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, wallet_);
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Creating Sapling sweep transaction with output amount=%s\n", getId(), FormatMoney(outputAmount));
@@ -395,8 +395,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             }
 
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit sweep transaction, stopping.\n", getId());
                     break;
                 }
@@ -443,9 +443,9 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
 
             const CAmount outputAmount = amountToSend - fee;
 
-            auto builder = TransactionBuilder(consensusParams, targetHeight_, pwalletMain);
+            auto builder = TransactionBuilder(consensusParams, targetHeight_, wallet_);
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
+                LOCK2(cs_main, wallet_->cs_wallet);
                 builder.SetExpiryHeight(chainActive.Tip()->nHeight + SWEEP_EXPIRY_DELTA);
             }
             LogPrint("zrpcunsafe", "%s: Creating Ironwood sweep transaction with %d notes, output amount=%s\n",
@@ -454,8 +454,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             uint256 anchor;
             std::vector<libzcash::MerklePath> ironwoodMerklePaths;
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Ironwood note. Stopping.\n", getId());
                     break;
                 }
@@ -534,8 +534,8 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
             }
 
             {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                if (!pwalletMain->CommitAutomatedTx(tx)) {
+                LOCK2(cs_main, wallet_->cs_wallet);
+                if (!wallet_->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit Ironwood sweep transaction, stopping.\n", getId());
                     break;
                 }

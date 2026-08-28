@@ -68,10 +68,12 @@ class AsyncRPCOperation_ironwoodconsolidation : public AsyncRPCOperation
 public:
     /**
      * @brief Constructor for Ironwood consolidation operation
-     * 
+     *
+     * @param wallet Wallet to consolidate -- resolved by the caller before
+     *               construction; pinned unloadable for this object's lifetime.
      * @param targetHeight Blockchain height for transaction targeting and expiration
      */
-    AsyncRPCOperation_ironwoodconsolidation(int targetHeight);
+    AsyncRPCOperation_ironwoodconsolidation(CWallet* wallet, int targetHeight);
     
     /**
      * @brief Destructor with automatic resource cleanup
