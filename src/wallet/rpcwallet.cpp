@@ -35,6 +35,7 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 #include "walletdb.h"
+#include "walletmanager.h"
 #include "primitives/transaction.h"
 #include "zcbenchmarks.h"
 #include "script/interpreter.h"
@@ -97,6 +98,68 @@ int64_t nWalletUnlockTime;
 static CCriticalSection cs_nWalletUnlockTime;
 std::string CCerror;
 
+// Per-secondary-wallet auto-lock deadline, guarded by cs_nWalletUnlockTime.
+// The default wallet keeps using the plain nWalletUnlockTime global above
+// (still read directly by getinfo, rpc/misc.cpp -- not rewired this phase);
+// without this map, walletpassphrase/walletlock on a secondary wallet would
+// overwrite that single global's deadline regardless of which wallet it was
+// actually meant for, and a later timer firing for one wallet would call
+// LockWallet() on whichever wallet happened to be pwalletMain at that later
+// moment rather than the wallet that was actually unlocked.
+static std::map<CWallet*, int64_t> mapSecondaryWalletUnlockTime;
+
+static int64_t GetWalletUnlockTime(CWallet* pwallet)
+{
+    // Caller must already hold cs_nWalletUnlockTime.
+    if (pwallet == pwalletMain)
+        return nWalletUnlockTime;
+    std::map<CWallet*, int64_t>::const_iterator it = mapSecondaryWalletUnlockTime.find(pwallet);
+    return it == mapSecondaryWalletUnlockTime.end() ? 0 : it->second;
+}
+
+static void SetWalletUnlockTime(CWallet* pwallet, int64_t deadline)
+{
+    // Caller must already hold cs_nWalletUnlockTime.
+    if (pwallet == pwalletMain) {
+        nWalletUnlockTime = deadline;
+        return;
+    }
+    if (deadline == 0)
+        mapSecondaryWalletUnlockTime.erase(pwallet);
+    else
+        mapSecondaryWalletUnlockTime[pwallet] = deadline;
+}
+
+// RPCRunLater/RPCCancelRunLater timers are named globally by this process --
+// a bare "lockwallet" name would mean unlocking a second wallet cancels the
+// first wallet's pending auto-relock timer (or vice versa). Only
+// walletpassphrase/walletlock reference this name (grepped: no other call
+// site depends on the literal string "lockwallet"), so it's safe to make it
+// wallet-specific for both together.
+static std::string LockWalletTimerName(CWallet* pwallet)
+{
+    return "lockwallet-" + pwallet->strWalletFile;
+}
+
+// Called by CWalletManager::UnloadWallet()/FlushAndUnloadAllSecondaryWallets()
+// (wallet/walletmanager.cpp) before deleting a CWallet, so a stale entry
+// doesn't linger in mapSecondaryWalletUnlockTime and so a not-yet-fired timer
+// doesn't stay armed (LockWallet() itself re-resolves by name+generation
+// rather than capturing a raw pointer, so a timer that fires anyway --
+// e.g. the fraction of a race where it's already running when this call
+// happens -- can no longer use-after-free; see LockWallet's own comment).
+// Unload-only semantics: this clears the deadline but does not call
+// pwallet->Lock() -- fine since both current callers delete the wallet
+// immediately afterward, but a future caller that cancels without deleting
+// would leave the wallet unlocked with no auto-relock armed, while
+// getwalletinfo's unlocked_until would report 0 (i.e. "locked").
+void CancelWalletAutoLockTimer(CWallet* pwallet)
+{
+    RPCCancelRunLater(LockWalletTimerName(pwallet));
+    LOCK(cs_nWalletUnlockTime);
+    SetWalletUnlockTime(pwallet, 0);
+}
+
 // Private method:
 UniValue z_getoperationstatus_IMPL(const UniValue&, bool);
 
@@ -136,6 +199,40 @@ void EnsureWalletIsUnlockedForReporting()
     }
 
     if (pwalletMain->IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+}
+
+// Parameterized overloads for RPCs rewired to resolve
+// CWalletManager::GetWalletForRequest() instead of always pwalletMain (see
+// rpc/server.h's IsMultiWalletAwareRPC). The zero-arg versions above are left
+// exactly as they were for every RPC not yet rewired. fUnlockedForReporting
+// is a single process-wide, startup-configured (-unlockforreporting) mode
+// switch, not per-wallet state, so it's read as-is in this overload too.
+bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException)
+{
+    if (!pwallet)
+    {
+        if (!avoidException)
+            throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found (disabled)");
+        else
+            return false;
+    }
+    return true;
+}
+
+void EnsureWalletIsUnlocked(CWallet* pwallet)
+{
+    if (pwallet->IsLocked())
+        throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
+}
+
+void EnsureWalletIsUnlockedForReporting(CWallet* pwallet)
+{
+    if (fUnlockedForReporting) {
+        return;
+    }
+
+    if (pwallet->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 }
 
@@ -195,7 +292,8 @@ void OS_randombytes(unsigned char *x,long xlen);
 
 UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if ( KOMODO_NSPV_FULLNODE && !EnsureWalletIsAvailable(fHelp) )
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if ( KOMODO_NSPV_FULLNODE && !EnsureWalletIsAvailable(pwallet, fHelp) )
         return NullUniValue;
 
     if (fHelp || params.size() > 1)
@@ -228,24 +326,24 @@ UniValue getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
         result.push_back(Pair("pubkey",HexStr(pubkey)));
         return(result);
     }
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     // Parse the account first so we don't generate a key if there's an error
     string strAccount;
     if (params.size() > 0)
         strAccount = AccountFromValue(params[0]);
 
-    if (!pwalletMain->IsLocked())
-        pwalletMain->TopUpKeyPool();
+    if (!pwallet->IsLocked())
+        pwallet->TopUpKeyPool();
 
     // Generate a new key that is added to wallet
     CPubKey newKey;
-    if (!pwalletMain->GetKeyFromPool(newKey))
+    if (!pwallet->GetKeyFromPool(newKey))
         throw JSONRPCError(RPC_WALLET_KEYPOOL_RAN_OUT, "Error: Keypool ran out, please call keypoolrefill first");
     CKeyID keyID = newKey.GetID();
 
-    pwalletMain->SetAddressBook(keyID, strAccount, "receive");
+    pwallet->SetAddressBook(keyID, strAccount, "receive");
 
     return EncodeDestination(keyID);
 }
@@ -477,9 +575,13 @@ UniValue getaddressesbyaccount(const UniValue& params, bool fHelp, const CPubKey
     return ret;
 }
 
-static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtractFeeFromAmount, CWalletTx& wtxNew,uint8_t *opretbuf,int32_t opretlen,long int opretValue)
+// Takes the target wallet explicitly (rather than always pwalletMain) so its
+// one IsMultiWalletAwareRPC() caller (sendtoaddress) operates on the request's
+// resolved wallet; the other two call sites (kvupdate, sendfrom -- neither
+// rewired yet) keep passing pwalletMain explicitly, identical to before.
+static void SendMoney(CWallet* pwallet, const CTxDestination &address, CAmount nValue, bool fSubtractFeeFromAmount, CWalletTx& wtxNew,uint8_t *opretbuf,int32_t opretlen,long int opretValue)
 {
-    CAmount curBalance = pwalletMain->GetBalance();
+    CAmount curBalance = pwallet->GetBalance();
 
     // Check amount
     if (nValue <= 0)
@@ -492,7 +594,7 @@ static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtr
     CScript scriptPubKey = GetScriptForDestination(address);
 
     // Create and send the transaction
-    CReserveKey reservekey(pwalletMain);
+    CReserveKey reservekey(pwallet);
     CAmount nFeeRequired;
     std::string strError;
     vector<CRecipient> vecSend;
@@ -513,19 +615,20 @@ static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtr
         vecSend.push_back(opret);
     }
     CAmount nMinFeeOverride = 0;
-    if (!pwalletMain->CreateTransaction(vecSend, wtxNew, reservekey, nFeeRequired, nChangePosRet, strError, nMinFeeOverride)) {
-        if (!fSubtractFeeFromAmount && nValue + nFeeRequired > pwalletMain->GetBalance())
+    if (!pwallet->CreateTransaction(vecSend, wtxNew, reservekey, nFeeRequired, nChangePosRet, strError, nMinFeeOverride)) {
+        if (!fSubtractFeeFromAmount && nValue + nFeeRequired > pwallet->GetBalance())
             strError = strprintf("Error: This transaction requires a transaction fee of at least %s because of its amount, complexity, or use of recently received funds!", FormatMoney(nFeeRequired));
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
     }
-    if (!pwalletMain->CommitTransaction(wtxNew, reservekey))
+    if (!pwallet->CommitTransaction(wtxNew, reservekey))
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: The transaction was rejected! This might happen if some of the coins in your wallet were already spent, such as if you used a copy of wallet.dat and coins were spent in the copy but not marked as spent here.");
 }
 
 
 UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 2 || params.size() > 5)
@@ -559,8 +662,8 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid " + chainName.ToString() + " address");
         }
     }
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     CTxDestination dest = DecodeDestination(params[0].get_str());
     if (!IsValidDestination(dest)) {
@@ -583,7 +686,7 @@ UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (params.size() > 4)
         fSubtractFeeFromAmount = params[4].get_bool();
 
-    SendMoney(dest, nAmount, fSubtractFeeFromAmount, wtx,0,0,0);
+    SendMoney(pwallet, dest, nAmount, fSubtractFeeFromAmount, wtx,0,0,0);
 
     return wtx.GetHash().GetHex();
 }
@@ -751,7 +854,7 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         CBitcoinAddress destaddress(CRYPTO777_KMDADDR);
         if (!destaddress.IsValid())
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid dest Bitcoin address");
-        SendMoney(destaddress.Get(),10000,false,wtx,opretbuf,opretlen,fee);
+        SendMoney(pwalletMain,destaddress.Get(),10000,false,wtx,opretbuf,opretlen,fee);
         ret.push_back(Pair("txid",wtx.GetHash().GetHex()));
     } else ret.push_back(Pair("error",(char *)"null key"));
     return ret;
@@ -759,7 +862,8 @@ UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue listaddressgroupings(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp)
@@ -785,12 +889,12 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp, const CPubKey&
             + HelpExampleRpc("listaddressgroupings", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     UniValue jsonGroupings(UniValue::VARR);
-    std::map<CTxDestination, CAmount> balances = pwalletMain->GetAddressBalances();
-    for (const std::set<CTxDestination>& grouping : pwalletMain->GetAddressGroupings()) {
+    std::map<CTxDestination, CAmount> balances = pwallet->GetAddressBalances();
+    for (const std::set<CTxDestination>& grouping : pwallet->GetAddressGroupings()) {
         UniValue jsonGrouping(UniValue::VARR);
         for (const CTxDestination& address : grouping)
         {
@@ -798,8 +902,8 @@ UniValue listaddressgroupings(const UniValue& params, bool fHelp, const CPubKey&
             addressInfo.push_back(EncodeDestination(address));
             addressInfo.push_back(ValueFromAmount(balances[address]));
             {
-                if (pwalletMain->mapAddressBook.find(address) != pwalletMain->mapAddressBook.end()) {
-                    addressInfo.push_back(pwalletMain->mapAddressBook.find(address)->second.name);
+                if (pwallet->mapAddressBook.find(address) != pwallet->mapAddressBook.end()) {
+                    addressInfo.push_back(pwallet->mapAddressBook.find(address)->second.name);
                 }
             }
             jsonGrouping.push_back(addressInfo);
@@ -1039,6 +1143,50 @@ CAmount GetAccountBalance(const string& strAccount, int nMinDepth, const isminef
     return GetAccountBalance(walletdb, strAccount, nMinDepth, filter);
 }
 
+// Parameterized overloads for getbalance, the only IsMultiWalletAwareRPC()
+// caller so far -- getreceivedbyaccount/listaccounts/etc. keep using the
+// pwalletMain-only overloads above unchanged, since they aren't rewired yet.
+CAmount GetAccountBalance(CWallet* pwallet, CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter)
+{
+    CAmount nBalance = 0;
+
+    // Tally wallet transactions
+    for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
+    {
+        const CWalletTx& wtx = (*it).second;
+        if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < 0)
+            continue;
+
+        CAmount nReceived, nSent, nFee;
+        wtx.GetAccountAmounts(strAccount, nReceived, nSent, nFee, filter);
+
+        int nDepth    = wtx.GetDepthInMainChain();
+        if( nMinDepth > 1 ) {
+            int nHeight    = tx_height(wtx.GetHash());
+            int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
+            if (nReceived != 0 && dpowconfs >= nMinDepth) {
+                nBalance += nReceived;
+            }
+        } else {
+            if (nReceived != 0 && wtx.GetDepthInMainChain() >= nMinDepth) {
+                nBalance += nReceived;
+            }
+        }
+        nBalance -= nSent + nFee;
+    }
+
+    // Tally internal accounting entries
+    nBalance += walletdb.GetAccountCreditDebit(strAccount);
+
+    return nBalance;
+}
+
+CAmount GetAccountBalance(CWallet* pwallet, const string& strAccount, int nMinDepth, const isminefilter& filter)
+{
+    CWalletDB walletdb(pwallet->strWalletFile);
+    return GetAccountBalance(pwallet, walletdb, strAccount, nMinDepth, filter);
+}
+
 UniValue cleanwallettransactions(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (!EnsureWalletIsAvailable(fHelp))
@@ -1146,7 +1294,8 @@ UniValue cleanwallettransactions(const UniValue& params, bool fHelp, const CPubK
 
 UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 3)
@@ -1168,11 +1317,11 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("getbalance", "\"*\", 6")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     if (params.size() == 0)
-        return  ValueFromAmount(pwalletMain->GetBalance());
+        return  ValueFromAmount(pwallet->GetBalance());
 
     int nMinDepth = 1;
     if (params.size() > 1)
@@ -1187,7 +1336,7 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // (GetBalance() sums up all unspent TxOuts)
         // getbalance and "getbalance * 1 true" should return the same number
         CAmount nBalance = 0;
-        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
             if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < 0)
@@ -1222,7 +1371,7 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     string strAccount = AccountFromValue(params[0]);
 
-    CAmount nBalance = GetAccountBalance(strAccount, nMinDepth, filter);
+    CAmount nBalance = GetAccountBalance(pwallet, strAccount, nMinDepth, filter);
 
     return ValueFromAmount(nBalance);
 }
@@ -1383,7 +1532,7 @@ UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (nAmount > nBalance)
         throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, "Account has insufficient funds");
 
-    SendMoney(dest, nAmount, false, wtx, 0, 0, 0);
+    SendMoney(pwalletMain, dest, nAmount, false, wtx, 0, 0, 0);
 
     return wtx.GetHash().GetHex();
 }
@@ -1785,7 +1934,11 @@ static void MaybePushAddress(UniValue & entry, const CTxDestination &dest)
     }
 }
 
-void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter)
+// Takes the target wallet explicitly (rather than always pwalletMain) so its
+// IsMultiWalletAwareRPC() callers (listtransactions, gettransaction) operate
+// on the request's resolved wallet; listsinceblock (not rewired yet) keeps
+// passing pwalletMain explicitly, identical to before.
+void ListTransactions(CWallet* pwallet, const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter)
 {
     CAmount nFee;
     string strSentAccount;
@@ -1805,7 +1958,7 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
         BOOST_FOREACH(const COutputEntry& s, listSent)
         {
             UniValue entry(UniValue::VOBJ);
-            if(involvesWatchonly || (::IsMine(*pwalletMain, s.destination) & ISMINE_WATCH_ONLY))
+            if(involvesWatchonly || (::IsMine(*pwallet, s.destination) & ISMINE_WATCH_ONLY))
                 entry.push_back(Pair("involvesWatchonly", true));
             entry.push_back(Pair("account", strSentAccount));
             MaybePushAddress(entry, s.destination);
@@ -1827,12 +1980,12 @@ void ListTransactions(const CWalletTx& wtx, const string& strAccount, int nMinDe
         {
             string account;
             //fprintf(stderr,"recv iter %s\n",wtx.GetHash().GetHex().c_str());
-            if (pwalletMain->mapAddressBook.count(r.destination))
-                account = pwalletMain->mapAddressBook[r.destination].name;
+            if (pwallet->mapAddressBook.count(r.destination))
+                account = pwallet->mapAddressBook[r.destination].name;
             if (fAllAccounts || (account == strAccount))
             {
                 UniValue entry(UniValue::VOBJ);
-                if(involvesWatchonly || (::IsMine(*pwalletMain, r.destination) & ISMINE_WATCH_ONLY))
+                if(involvesWatchonly || (::IsMine(*pwallet, r.destination) & ISMINE_WATCH_ONLY))
                     entry.push_back(Pair("involvesWatchonly", true));
                 entry.push_back(Pair("account", account));
 
@@ -1890,7 +2043,8 @@ void AcentryToJSON(const CAccountingEntry& acentry, const string& strAccount, Un
 
 UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 4)
@@ -1946,8 +2100,8 @@ UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& myp
             + HelpExampleRpc("listtransactions", "\"*\", 20, 100")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     string strAccount = "*";
     if (params.size() > 0)
@@ -1971,7 +2125,7 @@ UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& myp
     UniValue ret(UniValue::VARR);
 
     std::list<CAccountingEntry> acentries;
-    CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
+    CWallet::TxItems txOrdered = pwallet->OrderedTxItems(acentries, strAccount);
 
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)
@@ -1980,7 +2134,7 @@ UniValue listtransactions(const UniValue& params, bool fHelp, const CPubKey& myp
         if (pwtx != 0)
         {
             //fprintf(stderr,"pwtx iter.%d %s\n",(int32_t)pwtx->nOrderPos,pwtx->GetHash().GetHex().c_str());
-            ListTransactions(*pwtx, strAccount, 0, true, ret, filter);
+            ListTransactions(pwallet, *pwtx, strAccount, 0, true, ret, filter);
         } //else fprintf(stderr,"null pwtx\n");
         CAccountingEntry *const pacentry = (*it).second.second;
         if (pacentry != 0)
@@ -2174,7 +2328,7 @@ UniValue listsinceblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
         CWalletTx tx = (*it).second;
 
         if (depth == -1 || tx.GetDepthInMainChain() < depth)
-            ListTransactions(tx, "*", 0, true, transactions, filter);
+            ListTransactions(pwalletMain, tx, "*", 0, true, transactions, filter);
     }
 
     CBlockIndex *pblockLast = chainActive[chainActive.Height() + 1 - target_confirms];
@@ -2189,7 +2343,8 @@ UniValue listsinceblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 1 || params.size() > 2)
@@ -2239,8 +2394,8 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
@@ -2251,9 +2406,9 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
             filter = filter | ISMINE_WATCH_ONLY;
 
     UniValue entry(UniValue::VOBJ);
-    if (!pwalletMain->mapWallet.count(hash))
+    if (!pwallet->mapWallet.count(hash))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid or non-wallet transaction id");
-    const CWalletTx& wtx = pwalletMain->mapWallet[hash];
+    const CWalletTx& wtx = pwallet->mapWallet[hash];
 
     CAmount nCredit = wtx.GetCredit(filter);
     CAmount nDebit = wtx.GetDebit(filter);
@@ -2267,7 +2422,7 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
     WalletTxToJSON(wtx, entry);
 
     UniValue details(UniValue::VARR);
-    ListTransactions(wtx, "*", 0, false, details, filter);
+    ListTransactions(pwallet, wtx, "*", 0, false, details, filter);
     entry.push_back(Pair("details", details));
 
     string strHex = EncodeHexTx(static_cast<CTransaction>(wtx));
@@ -2279,7 +2434,8 @@ UniValue gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -2295,8 +2451,8 @@ UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("backupwallet", "\"backupdata\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     boost::filesystem::path exportdir;
     try {
@@ -2314,7 +2470,7 @@ UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     boost::filesystem::path exportfilepath = exportdir / clean;
 
-    if (!BackupWallet(*pwalletMain, exportfilepath.string()))
+    if (!BackupWallet(*pwallet, exportfilepath.string()))
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: Wallet backup failed!");
 
     return exportfilepath.string();
@@ -2323,7 +2479,8 @@ UniValue backupwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 1)
@@ -2338,9 +2495,9 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("keypoolrefill", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     // 0 is interpreted by TopUpKeyPool() as the default keypool size given by -keypool
     unsigned int kpSize = 0;
@@ -2350,20 +2507,54 @@ UniValue keypoolrefill(const UniValue& params, bool fHelp, const CPubKey& mypk)
         kpSize = (unsigned int)params[0].get_int();
     }
 
-    pwalletMain->TopUpKeyPool(kpSize);
+    pwallet->TopUpKeyPool(kpSize);
 
-    if (pwalletMain->GetKeyPoolSize() < kpSize)
+    if (pwallet->GetKeyPoolSize() < kpSize)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error refreshing keypool.");
 
     return NullUniValue;
 }
 
 
-static void LockWallet(CWallet* pWallet)
+// Takes the wallet's *name* and the generation it was armed for, not a raw
+// CWallet* -- this runs later, on a background timer thread, and binding the
+// pointer directly (as earlier code did) left a window where unloadwallet's
+// delete could run concurrently with this callback taking pWallet->cs_wallet,
+// since RPCCancelRunLater only prevents a *future* firing, not one already in
+// flight. Re-resolving through CWalletManager::ResolveAndHoldForRequest()
+// under cs_wallets -- the same atomic lookup-and-hold RPCWalletRequestGuard
+// uses -- makes this thread's use of the wallet visible to UnloadWallet's own
+// refcount check, so the two can no longer race: whichever gets there first
+// wins, instead of both partially succeeding.
+//
+// `walletName` is taken BY VALUE, not by reference: boost::bind stores it
+// inside the boost::function this callback lives in, which RPCCancelRunLater
+// destroys (erasing deadlineTimers) as part of an unrelated unload/relock
+// racing against this exact call. A reference parameter would keep reading
+// that same storage across the ResolveAndHoldForRequest call below (which
+// blocks on cs_wallets, held for the whole of UnloadWallet's delete) -- a
+// reference here would be a *wider* dangling-access window than the raw
+// CWallet* this function replaced, not a narrower one.
+static void LockWallet(std::string walletName, uint64_t generation)
 {
-    LOCK2(pWallet->cs_wallet, cs_nWalletUnlockTime);
-    nWalletUnlockTime = 0;
-    pWallet->Lock();
+    CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(walletName);
+    if (resolved.outcome == CWalletManager::ResolveOutcome::NotFound)
+        return; // Already unloaded; nothing to lock.
+    if (resolved.generation != generation) {
+        // A *different* wallet has since been loaded under this same name --
+        // not the instance this timer was armed for. Release the ref this
+        // resolve just took (if any) and do nothing to the new instance.
+        if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+            CWalletManager::Get().ReleaseRefIfCurrent(walletName, resolved.generation);
+        return;
+    }
+    if (CWallet* pWallet = CWalletManager::Get().GetWallet(walletName)) {
+        LOCK2(pWallet->cs_wallet, cs_nWalletUnlockTime);
+        SetWalletUnlockTime(pWallet, 0);
+        pWallet->Lock();
+    }
+    if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+        CWalletManager::Get().ReleaseRefIfCurrent(walletName, resolved.generation);
 }
 
 UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -2412,10 +2603,11 @@ UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
-    if (pwalletMain->IsCrypted() && (fHelp || params.size() != 2))
+    if (pwallet->IsCrypted() && (fHelp || params.size() != 2))
         throw runtime_error(
             "walletpassphrase \"passphrase\" timeout\n"
             "\nStores the wallet decryption key in memory for 'timeout' seconds.\n"
@@ -2459,26 +2651,59 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& myp
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, timeout too large");
     
     // Cancel stale lockwallet timer before unlock and long wallet operations.
-    RPCCancelRunLater("lockwallet");
+    RPCCancelRunLater(LockWalletTimerName(pwallet));
 
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, pwallet->cs_wallet);
 
-        if (!pwalletMain->IsCrypted())
+        if (!pwallet->IsCrypted())
             throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletpassphrase was called.");
 
-        if (!pwalletMain->Unlock(strWalletPass))
+        if (!pwallet->Unlock(strWalletPass))
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
 
         // No need to check return values, because the wallet was unlocked above
-        pwalletMain->UpdateNullifierNoteMap();
-        pwalletMain->TopUpKeyPool();
+        pwallet->UpdateNullifierNoteMap();
+        pwallet->TopUpKeyPool();
+    }
+
+    // Captures the wallet's *name* and current generation for the timer, not
+    // the raw pointer (see LockWallet's own comment). Resolved and released
+    // here, before the LOCK2 below, rather than while already holding
+    // cs_wallet/cs_nWalletUnlockTime -- ResolveAndHoldForRequest() takes
+    // cs_wallets internally, and taking it while already holding those two
+    // would invert the lock order CancelWalletAutoLockTimer() uses from
+    // UnloadWallet() (cs_wallets -> cs_nWalletUnlockTime), a deadlock risk if
+    // the two ever ran concurrently. Immediately releasing any ref this
+    // takes is safe: this request's own RPCWalletRequestGuard (for a
+    // secondary wallet) or the fact that the default wallet can never be
+    // unloaded already guarantees pwallet is live for the rest of this call.
+    CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(pwallet->strWalletFile);
+    if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+        CWalletManager::Get().ReleaseRefIfCurrent(pwallet->strWalletFile, resolved.generation);
+    if (resolved.outcome == CWalletManager::ResolveOutcome::NotFound) {
+        // Should not happen in practice: pwallet is either pwalletMain (never
+        // unloadable) or this request's own resolved secondary (pinned by its
+        // own RPCWalletRequestGuard for the duration of this call). Refuse
+        // explicitly rather than arm a timer bound to a name that's already
+        // gone -- LockWallet() would correctly no-op on it, silently leaving
+        // the wallet unlocked with no working auto-relock instead of failing
+        // loudly on an RPC that just handled key material.
+        //
+        // Re-lock before throwing: pwallet->Unlock() above already succeeded
+        // by this point. Throwing without this would leave keys decrypted in
+        // memory indefinitely -- the exact failure this whole check exists to
+        // rule out, just reported as an error instead of silently. This way
+        // the error is honest: the RPC fails *and* the wallet ends up locked.
+        LOCK(pwallet->cs_wallet);
+        pwallet->Lock();
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Wallet vanished from the registry mid-request");
     }
 
     {
-        LOCK2(pwalletMain->cs_wallet, cs_nWalletUnlockTime);
-        nWalletUnlockTime = GetTime() + nSleepTime;
-        RPCRunLater("lockwallet", boost::bind(LockWallet, pwalletMain), nSleepTime);
+        LOCK2(pwallet->cs_wallet, cs_nWalletUnlockTime);
+        SetWalletUnlockTime(pwallet, GetTime() + nSleepTime);
+        RPCRunLater(LockWalletTimerName(pwallet), boost::bind(LockWallet, pwallet->strWalletFile, resolved.generation), nSleepTime);
     }
 
     return NullUniValue;
@@ -2533,10 +2758,11 @@ UniValue walletpassphrasechange(const UniValue& params, bool fHelp, const CPubKe
 
 UniValue walletlock(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
-    if (pwalletMain->IsCrypted() && (fHelp || params.size() != 0))
+    if (pwallet->IsCrypted() && (fHelp || params.size() != 0))
         throw runtime_error(
             "walletlock\n"
             "\nRemoves the wallet encryption key from memory, locking the wallet.\n"
@@ -2557,16 +2783,16 @@ UniValue walletlock(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return true;
 
     // Manual walletlock should also clear any pending timer-based lock.
-    RPCCancelRunLater("lockwallet");
+    RPCCancelRunLater(LockWalletTimerName(pwallet));
 
     {
-        LOCK2(pwalletMain->cs_wallet, cs_nWalletUnlockTime);
+        LOCK2(pwallet->cs_wallet, cs_nWalletUnlockTime);
 
-        if (!pwalletMain->IsCrypted())
+        if (!pwallet->IsCrypted())
             throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an unencrypted wallet, but walletlock was called.");
 
-        pwalletMain->Lock();
-        nWalletUnlockTime = 0;
+        pwallet->Lock();
+        SetWalletUnlockTime(pwallet, 0);
     }
 
     return NullUniValue;
@@ -2833,7 +3059,8 @@ UniValue settxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 0)
@@ -2858,12 +3085,12 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("getwalletinfo", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     //Count Sapling Outpoints
     int outCount = 0;
-    for (map<uint256,CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+    for (map<uint256,CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
         CWalletTx wtx = (*it).second;
         outCount += wtx.mapSaplingNoteData.size();
     }
@@ -2872,11 +3099,11 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     std::set<libzcash::SaplingExtendedSpendingKey> saplingExtSpendingKeys;
     std::set<libzcash::SaplingExtendedFullViewingKey> saplingExtFullViewingKeys;
     std::set<libzcash::SaplingPaymentAddress> saplingAddresses;
-    pwalletMain->GetSaplingPaymentAddresses(saplingAddresses);
+    pwallet->GetSaplingPaymentAddresses(saplingAddresses);
 
     for (auto addr : saplingAddresses) {
         libzcash::SaplingExtendedSpendingKey extsk;
-        if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+        if (pwallet->GetSaplingExtendedSpendingKey(addr, extsk)) {
             if (EncodePaymentAddress(addr) == EncodePaymentAddress(extsk.DefaultAddress())) {
                 saplingExtSpendingKeys.insert(extsk);
             }
@@ -2885,11 +3112,11 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     for (auto addr : saplingAddresses) {
         libzcash::SaplingExtendedSpendingKey extsk;
-        if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+        if (!pwallet->GetSaplingExtendedSpendingKey(addr, extsk)) {
             libzcash::SaplingIncomingViewingKey ivk;
             libzcash::SaplingExtendedFullViewingKey extfvk;
-            pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
-            pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
+            pwallet->GetSaplingIncomingViewingKey(addr, ivk);
+            pwallet->GetSaplingFullViewingKey(ivk,extfvk);
             if (EncodePaymentAddress(addr) == EncodePaymentAddress(extfvk.DefaultAddress())) {
                 saplingExtFullViewingKeys.insert(extfvk);
             }
@@ -2897,23 +3124,25 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     UniValue obj(UniValue::VOBJ);
-    obj.push_back(Pair("walletversion",           pwalletMain->GetVersion()));
-    obj.push_back(Pair("balance",                 ValueFromAmount(pwalletMain->GetBalance())));
-    obj.push_back(Pair("unconfirmed_balance",     ValueFromAmount(pwalletMain->GetUnconfirmedBalance())));
-    obj.push_back(Pair("immature_balance",        ValueFromAmount(pwalletMain->GetImmatureBalance())));
-    obj.push_back(Pair("txcount",                 (int)pwalletMain->mapWallet.size()));
+    obj.push_back(Pair("walletversion",           pwallet->GetVersion()));
+    obj.push_back(Pair("balance",                 ValueFromAmount(pwallet->GetBalance())));
+    obj.push_back(Pair("unconfirmed_balance",     ValueFromAmount(pwallet->GetUnconfirmedBalance())));
+    obj.push_back(Pair("immature_balance",        ValueFromAmount(pwallet->GetImmatureBalance())));
+    obj.push_back(Pair("txcount",                 (int)pwallet->mapWallet.size()));
     obj.push_back(Pair("saplingnotes",            outCount));
-    obj.push_back(Pair("arctxcount",              (int)pwalletMain->mapArcTxs.size()));
-    obj.push_back(Pair("arcsaplingnotes",         (int)pwalletMain->mapArcSaplingOutPoints.size()));
+    obj.push_back(Pair("arctxcount",              (int)pwallet->mapArcTxs.size()));
+    obj.push_back(Pair("arcsaplingnotes",         (int)pwallet->mapArcSaplingOutPoints.size()));
     obj.push_back(Pair("saplingaddresses",        (int)saplingAddresses.size()));
     obj.push_back(Pair("saplingspendingkeys",     (int)saplingExtSpendingKeys.size()));
     obj.push_back(Pair("saplingfullviewingkeys",  (int)saplingExtFullViewingKeys.size()));
-    obj.push_back(Pair("keypoololdest",           pwalletMain->GetOldestKeyPoolTime()));
-    obj.push_back(Pair("keypoolsize",             (int)pwalletMain->GetKeyPoolSize()));
-    if (pwalletMain->IsCrypted())
-        obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
+    obj.push_back(Pair("keypoololdest",           pwallet->GetOldestKeyPoolTime()));
+    obj.push_back(Pair("keypoolsize",             (int)pwallet->GetKeyPoolSize()));
+    if (pwallet->IsCrypted()) {
+        LOCK(cs_nWalletUnlockTime);
+        obj.push_back(Pair("unlocked_until", GetWalletUnlockTime(pwallet)));
+    }
     obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
-    uint256 seedFp = pwalletMain->GetHDChain().seedFp;
+    uint256 seedFp = pwallet->GetHDChain().seedFp;
     if (!seedFp.IsNull())
          obj.push_back(Pair("seedfp", seedFp.GetHex()));
     return obj;
@@ -2968,7 +3197,8 @@ UniValue resendwallettransactions(const UniValue& params, bool fHelp, const CPub
 
 UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 3)
@@ -3037,11 +3267,11 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     UniValue results(UniValue::VARR);
     vector<COutput> vecOutputs;
-    assert(pwalletMain != NULL);
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    assert(pwallet != NULL);
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
+    pwallet->AvailableCoins(vecOutputs, false, NULL, true);
     BOOST_FOREACH(const COutput& out, vecOutputs) {
         int nDepth    = out.tx->GetDepthInMainChain();
         if( nMinDepth > 1 ) {
@@ -3072,13 +3302,13 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             entry.push_back(Pair("address", EncodeDestination(address)));
             entry.push_back(Pair("segid", (int)komodo_segid32((char*)EncodeDestination(address).c_str()) & 0x3f ));
 
-            if (pwalletMain->mapAddressBook.count(address))
-                entry.push_back(Pair("account", pwalletMain->mapAddressBook[address].name));
+            if (pwallet->mapAddressBook.count(address))
+                entry.push_back(Pair("account", pwallet->mapAddressBook[address].name));
 
             if (scriptPubKey.IsPayToScriptHash()) {
                 const CScriptID& hash = *(std::get_if<CScriptID>(&address));
                 CScript redeemScript;
-                if (pwalletMain->GetCScript(hash, redeemScript))
+                if (pwallet->GetCScript(hash, redeemScript))
                     entry.push_back(Pair("redeemScript", HexStr(redeemScript.begin(), redeemScript.end())));
             }
         }
@@ -3807,7 +4037,11 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
     return ret;
 }
 
-CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true) {
+// Takes the target wallet explicitly (rather than always pwalletMain) so its
+// IsMultiWalletAwareRPC() caller (z_getbalance) operates on the request's
+// resolved wallet; z_gettotalbalance (not rewired yet) keeps passing
+// pwalletMain explicitly, identical to before.
+CAmount getBalanceTaddr(CWallet* pwallet, std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true) {
     std::set<CTxDestination> destinations;
     vector<COutput> vecOutputs;
     CAmount balance = 0;
@@ -3820,9 +4054,9 @@ CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ign
         destinations.insert(taddr);
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
+    pwallet->AvailableCoins(vecOutputs, false, NULL, true);
 
     BOOST_FOREACH(const COutput& out, vecOutputs) {
         int nDepth    = out.tx->GetDepthInMainChain();
@@ -3859,12 +4093,13 @@ CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ign
     return balance;
 }
 
-CAmount getBalanceZaddr(std::string address, int minDepth = 1, bool ignoreUnspendable=true) {
+// Same reasoning as getBalanceTaddr above.
+CAmount getBalanceZaddr(CWallet* pwallet, std::string address, int minDepth = 1, bool ignoreUnspendable=true) {
     CAmount balance = 0;
     std::vector<SaplingNoteEntry> saplingEntries;
     std::vector<IronwoodNoteEntry> ironwoodEntries;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, address, minDepth, true, ignoreUnspendable);
+    LOCK2(cs_main, pwallet->cs_wallet);
+    pwallet->GetFilteredNotes(saplingEntries, ironwoodEntries, address, minDepth, true, ignoreUnspendable);
     for (auto & entry : saplingEntries) {
         balance += CAmount(entry.note.value());
     }
@@ -4001,7 +4236,8 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
 
 UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size()==0 || params.size() >2)
@@ -4024,8 +4260,8 @@ UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("z_getbalance", "\"myaddress\", 5")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     int nMinDepth = 1;
     if (params.size() > 1) {
@@ -4045,16 +4281,16 @@ UniValue z_getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if (!IsValidPaymentAddress(res)) {
             throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address, should be a taddr or zaddr.");
         }
-        if (!std::visit(PaymentAddressBelongsToWallet(pwalletMain), res)) {
+        if (!std::visit(PaymentAddressBelongsToWallet(pwallet), res)) {
              throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, spending key or viewing key not found.");
         }
     }
 
     CAmount nBalance = 0;
     if (fromTaddr) {
-        nBalance = getBalanceTaddr(fromaddress, nMinDepth, false);
+        nBalance = getBalanceTaddr(pwallet, fromaddress, nMinDepth, false);
     } else {
-        nBalance = getBalanceZaddr(fromaddress, nMinDepth, false);
+        nBalance = getBalanceZaddr(pwallet, fromaddress, nMinDepth, false);
     }
 
     return ValueFromAmount(nBalance);
@@ -4297,8 +4533,8 @@ UniValue z_gettotalbalance(const UniValue& params, bool fHelp, const CPubKey& my
     // but they don't because wtx.GetAmounts() does not handle tx where there are no outputs
     // pwalletMain->GetBalance() does not accept min depth parameter
     // so we use our own method to get balance of utxos.
-    CAmount nBalance = getBalanceTaddr("", nMinDepth, !fIncludeWatchonly);
-    CAmount nPrivateBalance = getBalanceZaddr("", nMinDepth, !fIncludeWatchonly);
+    CAmount nBalance = getBalanceTaddr(pwalletMain, "", nMinDepth, !fIncludeWatchonly);
+    CAmount nPrivateBalance = getBalanceZaddr(pwalletMain, "", nMinDepth, !fIncludeWatchonly);
     uint64_t interest = komodo_interestsum();
     CAmount nTotalBalance = nBalance + nPrivateBalance;
     UniValue result(UniValue::VOBJ);

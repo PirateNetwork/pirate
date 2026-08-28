@@ -17,13 +17,13 @@
 class CWallet;
 
 /**
- * Phase 1 multiwallet registry: tracks every CWallet the process has loaded
- * (the default wallet plus any secondary wallets opened via loadwallet), by
- * name. Secondary wallets are load/unload/list-able only in this phase --
- * every wallet-scoped RPC other than loadwallet/unloadwallet/listwallets
- * still runs exclusively against the default wallet (enforced in
- * CRPCTable::execute()), so nothing here needs to make a secondary wallet's
- * CWallet* safe to actually spend from yet.
+ * Multiwallet registry: tracks every CWallet the process has loaded (the
+ * default wallet plus any secondary wallets opened via loadwallet), by name.
+ * As of phase 2, a core subset of wallet RPCs (see IsMultiWalletAwareRPC,
+ * rpc/server.h) actually operate on a selected secondary wallet via
+ * GetWalletForRequest() below; everything else still runs exclusively
+ * against the default wallet, enforced by the same gate in
+ * CRPCTable::execute().
  */
 class CWalletManager
 {
@@ -85,6 +85,18 @@ public:
     // Thread-local read: empty string means no override is in effect for the
     // calling thread (the request should run against the default wallet).
     static std::string GetRequestedWalletName();
+
+    // Resolves the current thread's selected wallet (via
+    // GetRequestedWalletName()) to an actual CWallet* for a rewired RPC to
+    // operate on: pwalletMain when no wallet was selected (default request
+    // path, unchanged from before multiwallet existed), or the resolved
+    // secondary otherwise. Only meaningful to call from an RPC that
+    // IsMultiWalletAwareRPC() has already let through the dispatch gate in
+    // CRPCTable::execute() -- it does not itself re-validate the selection,
+    // and falls back to pwalletMain if the name somehow isn't found (should
+    // not happen in practice: the gate and RPCWalletRequestGuard::IsResolved()
+    // already guarantee it exists by the time a rewired RPC runs).
+    static CWallet* GetWalletForRequest();
 
 private:
     CWalletManager() = default;

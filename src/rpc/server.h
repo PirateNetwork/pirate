@@ -396,6 +396,31 @@ extern UniValue loadwallet(const UniValue& params, bool fHelp, const CPubKey& my
 extern UniValue unloadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk);
 /** Register wallet-registry management RPC commands (listwallets/loadwallet/unloadwallet) */
 void RegisterMultiWalletRPCCommands(CRPCTable &tableRPC);
+/**
+ * True for an RPC method that's been rewired (wallet/rpcwallet.cpp,
+ * wallet/rpcdump.cpp) to resolve CWalletManager::GetWalletForRequest()
+ * instead of always reading the global pwalletMain -- i.e. one that's safe
+ * to let CRPCTable::execute()'s dispatch gate route to a non-default
+ * wallet. Every other RPC still gets refused there, regardless of category.
+ */
+bool IsMultiWalletAwareRPC(const std::string& name); // in rpcmultiwallet.cpp
+
+class CWallet;
+/**
+ * Cancels `pwallet`'s pending walletpassphrase auto-relock timer (if any) and
+ * drops its entry from the unlock-deadline bookkeeping. Must be called by
+ * CWalletManager::UnloadWallet()/FlushAndUnloadAllSecondaryWallets() before
+ * deleting a CWallet. walletpassphrase (wallet/rpcwallet.cpp) schedules that
+ * timer bound to the wallet's *name* and generation, not a raw CWallet*, so a
+ * still-armed timer that fires after unload will safely no-op via
+ * ResolveAndHoldForRequest() rather than dereference freed memory. Calling
+ * this before delete is still required, though: it's what keeps that timer
+ * from firing at all and relocking a *different* wallet that later takes over
+ * the same name, and from sitting in RPCRunLater's queue for however long the
+ * caller originally requested (up to ~3.17 years) doing nothing useful.
+ */
+void CancelWalletAutoLockTimer(CWallet* pwallet); // in rpcwallet.cpp
+
 extern UniValue txnotarizedconfirmed(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue decodeccopret(const UniValue& params, bool fHelp, const CPubKey& mypk);
 extern UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk);

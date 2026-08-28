@@ -4,6 +4,7 @@
 
 #include <gtest/gtest.h>
 
+#include "init.h"
 #include "util.h"
 #include "wallet/wallet.h"
 #include "wallet/walletmanager.h"
@@ -476,4 +477,42 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardSetsAndClearsThreadLocal)
         EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
     }
     EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+}
+
+TEST_F(WalletManagerTest, GetWalletForRequestResolvesDefaultAndSecondary)
+{
+    // GetWalletForRequest() falls back to the real pwalletMain global for the
+    // no-selection case, mirroring init.cpp (which registers the very same
+    // CWallet* as both pwalletMain and the manager's default). Unlike this
+    // fixture's other tests -- which register a default wallet with the
+    // manager but never touch the real pwalletMain global, since nothing
+    // else in this file calls GetWalletForRequest() -- pwalletMain has to be
+    // saved and restored explicitly here rather than left to TearDown().
+    // Scope-exit rather than a plain assignment at the end: an ASSERT_*
+    // below returning early would otherwise skip the restore and leave
+    // pwalletMain pointing at a wallet TearDown() is about to delete,
+    // dangling for whatever test in this binary runs next.
+    struct PwalletMainRestorer {
+        CWallet* saved;
+        ~PwalletMainRestorer() { pwalletMain = saved; }
+    } restorer{pwalletMain};
+
+    CWallet* defaultWallet = new CWallet("default_test.dat");
+    pwalletMain = defaultWallet;
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+
+    CreateWalletFileOnDisk("secondtestwallet");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondtestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_NE(secondaryWallet, defaultWallet);
+
+    EXPECT_EQ(defaultWallet, CWalletManager::GetWalletForRequest());
+    {
+        RPCWalletRequestGuard guard("secondtestwallet");
+        EXPECT_EQ(secondaryWallet, CWalletManager::GetWalletForRequest());
+    }
+    // Guard destructed -> thread-local cleared -> back to the default.
+    EXPECT_EQ(defaultWallet, CWalletManager::GetWalletForRequest());
 }

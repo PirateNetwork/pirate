@@ -65,6 +65,13 @@ static std::vector<RPCTimerInterface*> timerInterfaces;
 /* Map of name to timer.
  * @note Can be changed to std::unique_ptr when C++11 */
 static std::map<std::string, boost::shared_ptr<RPCTimerBase> > deadlineTimers;
+// Guards deadlineTimers. Multiwallet added concurrent mutators beyond the
+// original single-wallet lockwallet/walletpassphrase pair (unloadwallet's
+// CancelWalletAutoLockTimer can now race a per-wallet walletpassphrase call
+// arming its own timer from a different RPC worker thread), so the map
+// itself needs a real lock rather than relying on there having been only
+// one wallet's worth of timer traffic at a time.
+static CCriticalSection cs_deadlineTimers;
 
 static struct CRPCSignals
 {
@@ -714,7 +721,15 @@ void InterruptRPC()
 void StopRPC()
 {
     LogPrint("rpc", "Stopping RPC\n");
-    deadlineTimers.clear();
+    {
+        // Swap out under the lock, destroy the timers after releasing it --
+        // same reasoning as RPCCancelRunLater.
+        std::map<std::string, boost::shared_ptr<RPCTimerBase> > toDestroy;
+        {
+            LOCK(cs_deadlineTimers);
+            toDestroy.swap(deadlineTimers);
+        }
+    }
     g_rpcSignals.Stopped();
 
     // Tells async queue to cancel all operations and shutdown.
@@ -869,24 +884,26 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     const CRPCCommand *pcmd = tableRPC[strMethod];
 
 #ifdef ENABLE_WALLET
-    // Load-bearing correctness guard: rpcwallet.cpp isn't rewired to consult
-    // GetWalletForRequest() until phase 2, so without this gate a request routed
-    // to a non-default wallet would silently run against pwalletMain instead --
-    // a fund-misdirection risk this must refuse instead of allowing. Deny-by-
-    // default across every category, not just "wallet": pwalletMain is read
-    // directly by RPCs registered under several other categories too (e.g.
-    // "pirate Exclusive", "rawtransactions", "generating", "control", "hidden"),
-    // and a category allowlist would silently let those reach the wrong wallet
-    // instead of being refused like the rest. Checked ahead of the
-    // fRPCNeedUnlocked branch below (not just in the normal-dispatch "else"),
-    // since that branch lets "openwallet" run unconditionally during the
-    // encrypted-wallet-unlock window -- without this check here, a passphrase
-    // supplied for one wallet name could unlock a different one.
+    // Load-bearing correctness guard: only IsMultiWalletAwareRPC() methods
+    // (rpc/server.h) have been rewired to consult GetWalletForRequest() --
+    // every other RPC still reads pwalletMain directly, so without this gate
+    // a request routed to a non-default wallet would silently run against
+    // the default wallet instead of being refused -- a fund-misdirection
+    // risk. Deny-by-default across every category, not just "wallet":
+    // pwalletMain is read directly by RPCs registered under several other
+    // categories too (e.g. "pirate Exclusive", "rawtransactions",
+    // "generating", "control", "hidden"), and a category allowlist would
+    // silently let those reach the wrong wallet instead of being refused
+    // like the rest. Checked ahead of the fRPCNeedUnlocked branch below (not
+    // just in the normal-dispatch "else"), since that branch lets
+    // "openwallet" run unconditionally during the encrypted-wallet-unlock
+    // window -- without this check here, a passphrase supplied for one
+    // wallet name could unlock a different one.
     {
         std::string strRequestedWallet = CWalletManager::GetRequestedWalletName();
         if (pcmd && !strRequestedWallet.empty() &&
             !CWalletManager::Get().IsDefaultWallet(strRequestedWallet) &&
-            pcmd->name != "loadwallet" && pcmd->name != "unloadwallet" && pcmd->name != "listwallets") {
+            !IsMultiWalletAwareRPC(pcmd->name)) {
             throw JSONRPCError(RPC_WALLET_NOT_SPECIFIED,
                 strprintf("RPC method \"%s\" is not yet supported against a non-default wallet", pcmd->name));
         }
@@ -999,11 +1016,13 @@ string experimentalDisabledHelpMsg(const string& rpc, const string& enableArg)
 
 void RPCRegisterTimerInterface(RPCTimerInterface *iface)
 {
+    LOCK(cs_deadlineTimers);
     timerInterfaces.push_back(iface);
 }
 
 void RPCUnregisterTimerInterface(RPCTimerInterface *iface)
 {
+    LOCK(cs_deadlineTimers);
     std::vector<RPCTimerInterface*>::iterator i = std::find(timerInterfaces.begin(), timerInterfaces.end(), iface);
     assert(i != timerInterfaces.end());
     timerInterfaces.erase(i);
@@ -1011,17 +1030,68 @@ void RPCUnregisterTimerInterface(RPCTimerInterface *iface)
 
 void RPCRunLater(const std::string& name, boost::function<void(void)> func, int64_t nSeconds)
 {
-    if (timerInterfaces.empty())
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "No timer handler registered for RPC");
-    deadlineTimers.erase(name);
-    RPCTimerInterface* timerInterface = timerInterfaces[0];
+    // timerInterfaces shares cs_deadlineTimers rather than getting its own
+    // lock: StopHTTPRPC() unregisters and deletes httpRPCTimerInterface
+    // before StopHTTPServer() joins the RPC worker threads (init.cpp), so an
+    // in-flight walletpassphrase on another thread could otherwise read
+    // timerInterfaces[0] concurrently with erase()'s vector-internal move,
+    // which is undefined behavior on std::vector regardless of what the
+    // pointer itself points to. Locking this read/erase pair removes that
+    // UB. It does NOT fully close the window against httpRPCTimerInterface's
+    // delete: NewTimer() below is deliberately called after this lock is
+    // released (see the comment on that call), so a concurrent
+    // StopHTTPRPC() could still free the interface object between here and
+    // there. Fixing that needs the interface's own lifetime tied to
+    // in-flight RPCRunLater callers (e.g. a refcount or shutdown-quiesce
+    // step before the delete), which is a real fix but a bigger one than
+    // this round's scope -- pre-existing behavior, not introduced here.
+    RPCTimerInterface* timerInterface;
+    {
+        LOCK(cs_deadlineTimers);
+        if (timerInterfaces.empty())
+            throw JSONRPCError(RPC_INTERNAL_ERROR, "No timer handler registered for RPC");
+        timerInterface = timerInterfaces[0];
+    }
     LogPrint("rpc", "queue run of timer %s in %i seconds (using %s)\n", name, nSeconds, timerInterface->Name());
-    deadlineTimers.insert(std::make_pair(name, boost::shared_ptr<RPCTimerBase>(timerInterface->NewTimer(func, nSeconds*1000))));
+    // NewTimer() is constructed outside the lock: it's the libevent backend
+    // allocating/arming its own timer object, not anything that touches
+    // deadlineTimers, and keeping it outside avoids holding cs_deadlineTimers
+    // across a call into a different subsystem.
+    boost::shared_ptr<RPCTimerBase> pTimer(timerInterface->NewTimer(func, nSeconds*1000));
+
+    // Any timer this call displaces is extracted here and destroyed only
+    // after the lock below is released -- same reasoning as
+    // RPCCancelRunLater. Doing the erase()/insert() as two separate calls,
+    // like the original code, drops the old shared_ptr's last reference (and
+    // so runs ~RPCTimerBase, which for the real backend calls into libevent)
+    // while still holding cs_deadlineTimers.
+    boost::shared_ptr<RPCTimerBase> pOldTimer;
+    {
+        LOCK(cs_deadlineTimers);
+        std::map<std::string, boost::shared_ptr<RPCTimerBase> >::iterator it = deadlineTimers.find(name);
+        if (it != deadlineTimers.end()) {
+            pOldTimer = it->second;
+            deadlineTimers.erase(it);
+        }
+        deadlineTimers.insert(std::make_pair(name, pTimer));
+    }
 }
 
 void RPCCancelRunLater(const std::string& name)
 {
-    deadlineTimers.erase(name);
+    // Pull the shared_ptr out of the map under the lock, then let it (and
+    // whatever the timer backend's destructor does) go out of scope after
+    // releasing cs_deadlineTimers -- same reasoning as RPCRunLater: don't
+    // hold this lock across a call into the timer backend.
+    boost::shared_ptr<RPCTimerBase> pTimer;
+    {
+        LOCK(cs_deadlineTimers);
+        std::map<std::string, boost::shared_ptr<RPCTimerBase> >::iterator it = deadlineTimers.find(name);
+        if (it == deadlineTimers.end())
+            return;
+        pTimer = it->second;
+        deadlineTimers.erase(it);
+    }
 }
 
 CRPCTable tableRPC;

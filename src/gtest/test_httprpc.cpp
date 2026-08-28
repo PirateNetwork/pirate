@@ -9,6 +9,8 @@
 #include "httpserver.h"
 
 #ifdef ENABLE_WALLET
+#include "init.h"
+#include "key_io.h"
 #include "rpc/register.h"
 #include "wallet/rpcwallet.h"
 #include "wallet/wallet.h"
@@ -177,7 +179,15 @@ protected:
         if (RPCIsInWarmup(nullptr))
             SetRPCWarmupFinished();
 
-        CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+        CWallet* defaultWallet = new CWallet("default_test.dat");
+        CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+        // GetWalletForRequest() falls back to the real pwalletMain global for
+        // the no-selection case, exactly like init.cpp -- which registers the
+        // same CWallet* as both. Without this, tests exercising a rewired RPC
+        // via the default "/" path would run against whatever pwalletMain was
+        // left over from an earlier, unrelated test in this binary.
+        previousPwalletMain = pwalletMain;
+        pwalletMain = defaultWallet;
 
         bool fFirstRun;
         CWallet scratch("secondarytestwallet");
@@ -188,6 +198,7 @@ protected:
     }
 
     void TearDown() override {
+        pwalletMain = previousPwalletMain;
         CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
         CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
         CWalletManager::Get().Reset();
@@ -211,6 +222,7 @@ protected:
     std::shared_ptr<CDBEnv> previousBitdb;
     bool fHadPreviousDatadir;
     std::string previousDatadir;
+    CWallet* previousPwalletMain = nullptr; // in case SetUp() fails before it's assigned
 };
 
 TEST_F(MultiWalletDispatchTest, DefaultWalletUriRunsWalletRPCsNormally)
@@ -227,10 +239,16 @@ TEST_F(MultiWalletDispatchTest, RootUriWithNoWalletSegmentAlsoRunsWalletRPCsNorm
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksOrdinaryWalletRPCs)
 {
+    // settxfee is deliberately NOT in IsMultiWalletAwareRPC(): it assigns the
+    // process-global payTxFee (wallet/rpcwallet.cpp), so making it "work" on
+    // a secondary would still change every wallet's fee behavior, not just
+    // the selected one -- it needs its own design, not a mechanical
+    // pwalletMain->pwallet substitution. Good stand-in for "an ordinary,
+    // still-gated 'wallet'-category RPC" now that getbalance is rewired.
     RPCWalletRequestGuard guard("secondarytestwallet");
     try {
-        tableRPC.execute("getbalance", UniValue(UniValue::VARR));
-        FAIL() << "expected getbalance to be refused against a non-default wallet";
+        tableRPC.execute("settxfee", UniValue(UniValue::VARR));
+        FAIL() << "expected settxfee to be refused against a non-default wallet";
     } catch (const UniValue& objError) {
         EXPECT_EQ((int)RPC_WALLET_NOT_SPECIFIED, find_value(objError, "code").get_int());
     }
@@ -285,7 +303,7 @@ TEST_F(MultiWalletDispatchTest, ThreadLocalDoesNotLeakIntoTheNextRequestOnTheSam
 {
     {
         RPCWalletRequestGuard guard("secondarytestwallet");
-        EXPECT_THROW(tableRPC.execute("getbalance", UniValue(UniValue::VARR)), UniValue);
+        EXPECT_THROW(tableRPC.execute("settxfee", UniValue(UniValue::VARR)), UniValue);
     }
     // The guard's destructor must clear the thread-local even though execute()
     // threw -- otherwise a later, unrelated request reusing this pooled HTTP
@@ -293,4 +311,175 @@ TEST_F(MultiWalletDispatchTest, ThreadLocalDoesNotLeakIntoTheNextRequestOnTheSam
     EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
     EXPECT_NO_THROW(tableRPC.execute("listwallets", UniValue(UniValue::VARR)));
 }
+
+TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRewiredCoreSubset)
+{
+    // Phase 1 could only prove these were REFUSED against a non-default
+    // wallet; phase 2 rewired them to actually run. Zero-arg-safe read-only
+    // members of the set are enough to prove the gate now lets them through.
+    RPCWalletRequestGuard guard("secondarytestwallet");
+    EXPECT_NO_THROW(tableRPC.execute("getbalance", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("getwalletinfo", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("listunspent", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("listtransactions", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("listaddressgroupings", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("keypoolrefill", UniValue(UniValue::VARR)));
+}
+
+TEST_F(MultiWalletDispatchTest, GetNewAddressOperatesOnTheSelectedWalletNotTheDefault)
+{
+    // The real correctness property phase 2 exists for: a rewired RPC must
+    // touch the *resolved* wallet's own state, not silently fall through to
+    // pwalletMain the way it would if GetWalletForRequest() were wired wrong
+    // or a helper function still referenced the global internally.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_NE(secondaryWallet, pwalletMain);
+
+    UniValue result;
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        ASSERT_NO_THROW(result = tableRPC.execute("getnewaddress", UniValue(UniValue::VARR)));
+    }
+    CTxDestination dest = DecodeDestination(result.get_str());
+    ASSERT_TRUE(IsValidDestination(dest));
+
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        EXPECT_TRUE(secondaryWallet->mapAddressBook.count(dest));
+    }
+    {
+        LOCK(pwalletMain->cs_wallet);
+        EXPECT_FALSE(pwalletMain->mapAddressBook.count(dest));
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, UnloadSucceedsCleanlyWithAPendingAutoRelockTimerArmed)
+{
+    // Regression test for a use-after-free an earlier version of this change
+    // introduced: walletpassphrase arms a process-wide RPCRunLater timer;
+    // UnloadWallet() must call CancelWalletAutoLockTimer() before deleting
+    // the wallet, or that timer stays armed to run against freed state
+    // whenever its deadline (up to ~100,000,000s out) is reached.
+    //
+    // RPCRunLater() throws unless some RPCTimerInterface is registered --
+    // normally httprpc.cpp's libevent-backed one, set up during real node
+    // startup, which this gtest binary never runs. This stand-in doubles as
+    // the actual proof the cancellation ran: RPCCancelRunLater() erases the
+    // timer's owning shared_ptr, destroying the RPCTimerBase object, so a
+    // destructor-set flag is a direct, non-flaky observation -- no need to
+    // wait out the real deadline or introspect RPCRunLater's internal map.
+    // static, not a stack local: FlaggingRPCTimer's destructor can in
+    // principle still run after this test function's frame is gone (e.g. if
+    // some later fixture teardown drops the last reference to a timer this
+    // test armed), and a bool* pointing into an unwound stack frame would
+    // make that a write into freed stack space instead of a harmless no-op
+    // write to static storage. Reset explicitly since static storage
+    // persists across repeated runs of this test (--gtest_repeat).
+    static bool timerWasDestroyed;
+    timerWasDestroyed = false;
+    class FlaggingRPCTimer : public RPCTimerBase {
+    public:
+        explicit FlaggingRPCTimer(bool* flag) : destroyedFlag(flag) {}
+        ~FlaggingRPCTimer() override { *destroyedFlag = true; }
+    private:
+        bool* destroyedFlag;
+    };
+    class FlaggingRPCTimerInterface : public RPCTimerInterface {
+    public:
+        explicit FlaggingRPCTimerInterface(bool* flag) : destroyedFlag(flag) {}
+        const char* Name() override { return "FlaggingTestTimer"; }
+        RPCTimerBase* NewTimer(boost::function<void(void)>& func, int64_t millis) override {
+            // Captured on the interface itself, not just handed to the
+            // RPCTimerBase this returns: RPCCancelRunLater()/StopRPC() erase
+            // and destroy that object well before its deadline, but this
+            // test still needs to be able to invoke the real callback
+            // afterwards to prove LockWallet()'s post-unload branch is safe
+            // -- exactly the scenario of a timer that already fired (or was
+            // about to) racing against the unload that cancels it.
+            lastFunc = func;
+            return new FlaggingRPCTimer(destroyedFlag);
+        }
+        boost::function<void(void)> lastFunc;
+    private:
+        bool* destroyedFlag;
+    };
+    FlaggingRPCTimerInterface timerInterface(&timerWasDestroyed);
+    RPCRegisterTimerInterface(&timerInterface);
+    struct TimerInterfaceGuard {
+        RPCTimerInterface* iface;
+        ~TimerInterfaceGuard() { RPCUnregisterTimerInterface(iface); }
+    } timerGuard{&timerInterface};
+
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    // EncryptWallet() requires an HD seed to already exist (it derives a
+    // salt fingerprint from it) -- CreateWalletFileOnDisk's plain LoadWallet()
+    // never generates one (that normally only happens via the full node
+    // startup/first-run flow), so this test wallet needs one made explicitly.
+    secondaryWallet->GenerateNewSeed();
+
+    SecureString passphrase;
+    passphrase.reserve(64);
+    passphrase = "unittestpassphrase";
+    ASSERT_TRUE(secondaryWallet->EncryptWallet(passphrase));
+
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        UniValue params(UniValue::VARR);
+        params.push_back("unittestpassphrase");
+        params.push_back(3600);
+        ASSERT_NO_THROW(tableRPC.execute("walletpassphrase", params));
+
+        UniValue info;
+        ASSERT_NO_THROW(info = tableRPC.execute("getwalletinfo", UniValue(UniValue::VARR)));
+        EXPECT_GT(find_value(info, "unlocked_until").get_int64(), 0);
+    }
+    ASSERT_FALSE(timerWasDestroyed) << "the timer should still be live going into the unload below";
+
+    // Grab the actual callback LockWallet() was armed with -- not just proof
+    // that *some* timer object got destroyed, but the real closure a fired
+    // timer thread would be holding right as the unload below runs.
+    boost::function<void(void)> raceFunc = timerInterface.lastFunc;
+    ASSERT_TRUE(static_cast<bool>(raceFunc));
+
+    std::string strError;
+    EXPECT_TRUE(CWalletManager::Get().UnloadWallet("secondarytestwallet", strError)) << strError;
+
+    // The actual regression check: without CancelWalletAutoLockTimer()
+    // running before the delete, this timer -- and the raw pointer bound
+    // into it -- would still be sitting in RPCRunLater's queue right now.
+    EXPECT_TRUE(timerWasDestroyed);
+
+    // The residual race this specific redesign (name+generation, re-resolved
+    // through ResolveAndHoldForRequest at fire time, rather than a raw
+    // CWallet*) targets: a callback already in a timer thread's hands before
+    // the cancel/delete above ran must still be safe to invoke afterwards.
+    // It should resolve to NotFound and return -- not dereference the now-
+    // freed CWallet. This is the one branch of LockWallet() that matters
+    // most from a safety standpoint, and unlike the destroyedFlag check
+    // above, this actually calls into LockWallet()'s real logic rather than
+    // just observing that RPCCancelRunLater() ran.
+    //
+    // Caveat: ASSERT_NO_THROW alone is a weak regression detector for the
+    // specific bug this guards against (a raw CWallet* capture instead of
+    // name+generation) -- a freshly freed heap block is usually still
+    // readable, so a reintroduced raw-pointer version would likely still run
+    // to completion here without a sanitizer. This check is real evidence
+    // under ASAN/valgrind; run this test binary under one periodically
+    // rather than trusting a green run here alone to catch that class of bug.
+    ASSERT_NO_THROW(raceFunc());
+}
+// LockWallet()'s generation-mismatch branch (a name reloaded as a different
+// CWallet before a stale timer fires) is intentionally not additionally
+// exercised here: constructing it needs an unload+reload of a wallet whose
+// file was just put through CWallet::EncryptWallet()'s CDB::Rewrite() in
+// this same live environment, which runs into the exact hazard documented
+// on CWalletManager::LoadWallet()'s fAlreadyTouched check (walletmanager.cpp)
+// -- not something specific to LockWallet. The mismatch logic itself
+// (ResolveAndHoldForRequest()/ReleaseRefIfCurrent() correctly handling a
+// stale generation without underflowing the new entry's refcount) already
+// has direct coverage in wallet/gtest/test_walletmanager.cpp,
+// ReleaseAfterUnloadAndReloadUnderSameNameDoesNotUnderflowTheNewEntry.
 #endif // ENABLE_WALLET

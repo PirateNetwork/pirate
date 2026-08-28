@@ -28,6 +28,7 @@
 #include "util.h"
 #include "utiltime.h"
 #include "wallet.h"
+#include "walletmanager.h"
 #include "komodo_nSPV_defs.h"
 #include <fstream>
 #include <stdint.h>
@@ -42,6 +43,9 @@ using namespace std;
 void EnsureWalletIsUnlocked();
 void EnsureWalletIsUnlockedForReporting();
 bool EnsureWalletIsAvailable(bool avoidException);
+void EnsureWalletIsUnlocked(CWallet* pwallet);
+void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
+bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException);
 
 UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys);
 UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys);
@@ -151,7 +155,8 @@ UniValue convertpassphrase(const UniValue& params, bool fHelp, const CPubKey& my
 
 UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 1 || params.size() > 5)
@@ -184,9 +189,9 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("importprivkey", "\"mykey\", \"testing\", true, 1000")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     string strSecret = params[0].get_str();
     string strLabel = "";
@@ -221,24 +226,24 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
     assert(key.VerifyPubKey(pubkey));
     CKeyID vchAddress = pubkey.GetID();
     {
-        pwalletMain->MarkDirty();
-        pwalletMain->SetAddressBook(vchAddress, strLabel, "receive");
+        pwallet->MarkDirty();
+        pwallet->SetAddressBook(vchAddress, strLabel, "receive");
 
         // Don't throw error in case a key is already there
-        if (pwalletMain->HaveKey(vchAddress)) {
+        if (pwallet->HaveKey(vchAddress)) {
             return EncodeDestination(vchAddress);
         }
 
-        pwalletMain->mapKeyMetadata[vchAddress].nCreateTime = 1;
+        pwallet->mapKeyMetadata[vchAddress].nCreateTime = 1;
 
-        if (!pwalletMain->AddKeyPubKey(key, pubkey))
+        if (!pwallet->AddKeyPubKey(key, pubkey))
             throw JSONRPCError(RPC_WALLET_ERROR, "Error adding key to wallet");
 
         // whenever a key is imported, we need to scan the whole chain
-        pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
+        pwallet->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
         if (fRescan) {
-            pwalletMain->ScanForWalletTransactions(chainActive[height], true, true, true, true);
+            pwallet->ScanForWalletTransactions(chainActive[height], true, true, true, true);
         }
     }
 
@@ -693,7 +698,8 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
 
 UniValue dumpprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -711,9 +717,9 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("dumpprivkey", "\"myaddress\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     std::string strAddress = params[0].get_str();
     CTxDestination dest = DecodeDestination(strAddress);
@@ -725,7 +731,7 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
     }
     CKey vchSecret;
-    if (!pwalletMain->GetKey(*keyID, vchSecret)) {
+    if (!pwallet->GetKey(*keyID, vchSecret)) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
     }
     return EncodeSecret(vchSecret);

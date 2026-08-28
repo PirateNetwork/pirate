@@ -50,7 +50,7 @@
 #include <QSettings>
 
 /* from rpcwallet.cpp */
-extern CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
+extern CAmount getBalanceTaddr(CWallet* pwallet, std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
 extern uint64_t komodo_interestsum();
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
@@ -1501,7 +1501,7 @@ CAmount WalletModel::getAddressBalance(const std::string &sAddress)
 
     CAmount nBalance = 0;
     if (isTaddr) {
-        nBalance = getBalanceTaddr(sAddress, 1, false);
+        nBalance = getBalanceTaddr(wallet, sAddress, 1, false);
     } else {
         nBalance = getBalanceZaddr(sAddress, 1, false);
     }

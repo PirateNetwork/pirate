@@ -4,6 +4,8 @@
 
 #include "wallet/walletmanager.h"
 
+#include "init.h"
+#include "rpc/server.h"
 #include "util.h"
 #include "wallet/db.h"
 #include "wallet/wallet.h"
@@ -109,6 +111,39 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
     return true;
 }
 
+// KNOWN LIMITATION, deliberately not addressed this phase: a loaded secondary
+// wallet is never registered with RegisterValidationInterface() (only
+// pwalletMain is, in init.cpp), so it never receives new-block notifications
+// and is a frozen snapshot of its file as of load time -- getbalance/
+// z_getbalance/listunspent/listtransactions/getwalletinfo on it report stale
+// data indefinitely, not just until the next block.
+//
+// This was deliberately NOT fixed by simply adding RegisterValidationInterface()
+// here -- not primarily because of witness-continuity risk (CWallet's own
+// IncrementSaplingWallet() already detects a height gap and forces a rebuild
+// rather than silently miscomputing), but because CWallet::ChainTip() (the
+// callback that call registers) does far more than update balances:
+//   - It can set the process-global fBuilingWitnessCache (wallet.cpp), which
+//     CRPCTable::execute() checks for *every* RPC on the node (rpc/server.cpp)
+//     -- a secondary wallet's own rebuild would stall the entire RPC
+//     interface for the duration, a real remote-triggerable DoS
+//     (load a stale wallet, wait one block).
+//   - It calls RunSaplingConsolidation/RunIronwoodConsolidation/RunSaplingSweep,
+//     which construct AsyncRPCOperation_* objects that read the global
+//     pwalletMain directly on a background thread with no wallet-identity
+//     tracking (see the async-ops section of the plan) -- a secondary
+//     wallet's block-connect event would trigger fund-moving
+//     consolidation/sweep transactions built against the *default* wallet,
+//     not itself. Fund misdirection, not staleness.
+//   - It also drives DeleteWalletTransactions() (when -deletetx is set),
+//     destructive pruning against a wallet whose own tx/nullifier maps were
+//     never caught up to begin with.
+// None of the default wallet's actual catch-up machinery (RegisterValidationInterface
+// under LOCK(cs_main), ReadWalletBirthday, ScanForWalletTransactions,
+// Sapling/Ironwood witness validation-or-rebuild -- all in init.cpp, run
+// atomically with block connection) is reproduced by a bare
+// RegisterValidationInterface() call here either, so this needs its own
+// scoped design, not a one-line addition.
 bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
 {
     if (!IsValidWalletName(name, strError))
@@ -199,6 +234,30 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
         // now that cs_wallets itself isn't held here: no other loadwallet call
         // for this exact name can be in progress concurrently to falsify it
         // between the check and CWallet::Verify() actually running.
+        // KNOWN GAP: this only detects "currently open right now", not "ever
+        // touched by this process" -- CloseWalletDbFile()/CDB::Rewrite() both
+        // erase() the mapFileUseCount entry entirely once a file's refcount
+        // reaches 0 (deliberately, so a *different*, never-before-seen file
+        // that happens to reuse the name can still pass CDBEnv::Verify()'s
+        // assert later). That means a straightforward unload-then-reload of
+        // the exact same name also reaches this as fAlreadyTouched == false,
+        // running Verify() again on a file this process has definitely
+        // touched before. That's harmless after a plain load+unload (covered
+        // by test_walletmanager.cpp's
+        // ReleaseAfterUnloadAndReloadUnderSameNameDoesNotUnderflowTheNewEntry),
+        // but reproducibly turns into a spurious DB_CORRUPT from
+        // CWallet::LoadWallet() on reload if the file was put through
+        // CWallet::EncryptWallet()'s CDB::Rewrite() (physical delete+rename
+        // via detached Db handles outside bitdb's own bookkeeping) at any
+        // point in between -- observed manually while writing this comment,
+        // not yet turned into a regression test given how narrow the
+        // trigger is. Not reachable via any RPC this phase exposes: the only
+        // thing that calls EncryptWallet() is `encryptwallet`, which is
+        // excluded from Phase 2's rewired set specifically because it
+        // unconditionally restarts the node on success (rpcmultiwallet.cpp),
+        // and a restart gives every wallet a fresh CDBEnv where this doesn't
+        // apply. Would need addressing before any future phase lets a live
+        // secondary wallet be encrypted without a restart.
         bool fAlreadyTouched;
         {
             LOCK(bitdb->cs_db);
@@ -284,6 +343,13 @@ bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError
     // Still holding cs_wallets: nothing can observe refcount==0 and start a
     // new request against this name between the check above and the erase.
     CWallet* wallet = it->second.wallet;
+    // Must run before delete: walletpassphrase (wallet/rpcwallet.cpp) can have
+    // armed a timer for this wallet. That timer is bound to the wallet's name
+    // and generation rather than this raw pointer, so it won't dereference
+    // freed memory if it fires afterwards anyway -- but without this call
+    // it's still left ticking, and if this same name is reloaded before the
+    // deadline, it would fire and relock a wallet it was never armed for.
+    CancelWalletAutoLockTimer(wallet);
     delete wallet;
     CloseWalletDbFile(name);
     mapWallets.erase(it);
@@ -363,6 +429,20 @@ void CWalletManager::ReleaseRefIfCurrent(const std::string& name, uint64_t gener
 
 void CWalletManager::FlushAndUnloadAllSecondaryWallets()
 {
+    // Unlike UnloadWallet(), this does not check refcount == 0 before
+    // deleting. That's only safe because of shutdown ordering, not because
+    // the race this would otherwise open is impossible: by the time
+    // Shutdown() (init.cpp) reaches this call, StopHTTPServer() has already
+    // run -- specifically its workQueue->WaitExit() (joins the HTTP RPC
+    // worker threads, so no ResolveAndHoldForRequest() can still be in
+    // flight and no in-flight request can be holding a ref via
+    // RPCWalletRequestGuard) and its threadHTTP.join() (joins the libevent
+    // thread that dispatches LockWallet timer callbacks). StopRPC(), which
+    // runs just before StopHTTPServer(), joins neither of these -- it only
+    // clears deadlineTimers and drains the async z_* operation queue, so it
+    // is NOT the call this safety property actually depends on. If a future
+    // caller ever invokes this outside that specific shutdown sequence, it
+    // would need the same refcount == 0 wait UnloadWallet() does first.
     LOCK(cs_wallets);
     for (auto it = mapWallets.begin(); it != mapWallets.end(); ) {
         if (it->second.isDefault) {
@@ -370,6 +450,8 @@ void CWalletManager::FlushAndUnloadAllSecondaryWallets()
             continue;
         }
         const std::string name = it->first;
+        // See UnloadWallet(): must run before delete for the same reason.
+        CancelWalletAutoLockTimer(it->second.wallet);
         delete it->second.wallet;
         CloseWalletDbFile(name);
         it = mapWallets.erase(it);
@@ -393,6 +475,23 @@ void CWalletManager::Reset()
 std::string CWalletManager::GetRequestedWalletName()
 {
     return g_requestedWalletName;
+}
+
+CWallet* CWalletManager::GetWalletForRequest()
+{
+    std::string name = GetRequestedWalletName();
+    if (name.empty())
+        return pwalletMain;
+    CWallet* wallet = CWalletManager::Get().GetWallet(name);
+    // Falls back to pwalletMain rather than returning nullptr: by the time a
+    // rewired RPC calls this, CRPCTable::execute()'s gate has already
+    // confirmed the name is either the default or IsMultiWalletAwareRPC(), and
+    // httprpc.cpp's RPCWalletRequestGuard::IsResolved() already confirmed it
+    // was loaded when the request started -- reaching here with `wallet ==
+    // nullptr` means it was unloaded in the brief window since (the guard
+    // holds a ref on a secondary specifically to prevent that, so this is
+    // belt-and-braces, not the expected path).
+    return wallet ? wallet : pwalletMain;
 }
 
 RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
