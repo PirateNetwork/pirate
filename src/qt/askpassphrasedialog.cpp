@@ -84,6 +84,13 @@ AskPassphraseDialog::~AskPassphraseDialog()
 void AskPassphraseDialog::setModel(WalletModel *_model)
 {
     this->model = _model;
+    // Attributes the prompt to a specific wallet -- with more than one
+    // loaded, requireUnlock() can pop this dialog for a wallet other than
+    // whichever one is currently visible (e.g. a background wallet's
+    // scheduled consolidation/sweep needing its passphrase), and the dialog
+    // itself otherwise gives no indication of which wallet it's asking for.
+    if (model)
+        setWindowTitle(tr("%1 -- %2").arg(windowTitle(), model->getWalletName()));
 }
 
 void AskPassphraseDialog::accept()

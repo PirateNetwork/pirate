@@ -1429,6 +1429,11 @@ int WalletModel::getDefaultConfirmTarget() const
     return wallet->nTxConfirmTarget;
 }
 
+QString WalletModel::getWalletName() const
+{
+    return QString::fromStdString(wallet->GetName());
+}
+
 namespace {
 // std::vector<std::string> <-> comma-separated QString, for the address-
 // filter fields (empty list/string both mean "no filter").

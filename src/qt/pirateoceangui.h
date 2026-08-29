@@ -35,6 +35,7 @@ QT_BEGIN_NAMESPACE
 class QAction;
 class QProgressBar;
 class QProgressDialog;
+class QThread;
 QT_END_NAMESPACE
 
 /**
@@ -149,6 +150,38 @@ private:
     // except the default one, which those maps key on DEFAULT_WALLET
     // ("~Default") instead of its real on-disk name.
     QString guiKeyForWalletName(const std::string& walletManagerName) const;
+    // Runs CWalletManager::LoadWallet()/CreateWallet() on a dedicated worker
+    // thread with a modal progress dialog, rather than blocking the GUI
+    // thread for the duration of a rescan (see the comment at its call sites
+    // in loadWalletClicked()/newWalletClicked()). handleWalletLoadOrCreateResult()
+    // does everything that used to run immediately after the (formerly
+    // synchronous) call: registering the WalletModel, attaching to
+    // WalletFrame, and reporting success/failure to the user.
+    void startWalletLoadOrCreate(const QString& name, bool fCreate);
+    void handleWalletLoadOrCreateResult(const QString& name, bool fCreate, bool ok,
+                                         const QString& strError, const QString& seedPhrase);
+    // Non-null exactly while a startWalletLoadOrCreate() worker thread is
+    // in flight -- guards against starting a second load/create concurrently
+    // (the progress dialog's modality isn't itself sufficient: Escape or the
+    // titlebar close button dismiss it without stopping the worker) and lets
+    // abortPendingWalletLoad() find it during shutdown.
+    QThread *pendingWalletThread = nullptr;
+    QMetaObject::Connection pendingWalletFinishedConnection;
+public:
+    // Called by KomodoApplication::requestShutdown() before tearing anything
+    // else down. A no-op if no load/create is in flight; otherwise
+    // disconnects the result handler (attaching a new WalletModel/WalletView
+    // while this window is being destroyed would use freed objects) and
+    // blocks until the worker's LoadWallet()/CreateWallet() call actually
+    // returns -- StartShutdown() must already have been called by the time
+    // this runs so the backend's own periodic ShutdownRequested() checks
+    // (ScanForWalletTransactions et al.) let it unwind promptly instead of
+    // running a full rescan to completion first. Whatever it already
+    // committed to CWalletManager's registry is left for the normal
+    // shutdown sweep (FlushAndUnloadAllSecondaryWallets(), init.cpp) to
+    // flush and unload like any other loaded wallet.
+    void abortPendingWalletLoad();
+private:
 #endif
 
     QSystemTrayIcon *trayIcon;

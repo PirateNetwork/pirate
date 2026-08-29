@@ -529,7 +529,27 @@ void KomodoApplication::requestShutdown()
     window->setClientModel(0);
     pollShutdownTimer->stop();
 
+    // Moved ahead of the wallet teardown below (it used to run last) so its
+    // fRequestShutdown flag is already set by the time
+    // abortPendingWalletLoad() waits for any in-flight wallet load/create --
+    // CWallet::ScanForWalletTransactions() and the witness-cache rebuilds
+    // poll ShutdownRequested() periodically and unwind promptly once it's
+    // true, instead of running a full rescan to completion first.
+    StartShutdown();
+
 #ifdef ENABLE_WALLET
+    // A load/create started from the "Wallets" menu runs on its own worker
+    // thread (PirateOceanGUI::startWalletLoadOrCreate()) -- wait for it to
+    // actually finish before tearing anything else down. Skipping this would
+    // mean: (a) the WalletModel/WalletFrame state removeAllWallets() below
+    // destroys could still be mid-construction when the worker's queued
+    // result handler eventually runs, (b) ~QThread aborting the process if
+    // it's later destroyed while still running, and (c) the worker's
+    // LoadWallet()/CreateWallet() call could commit a wallet into
+    // CWalletManager's registry after FlushAndUnloadAllSecondaryWallets()
+    // (init.cpp, reached via the requestedShutdown() signal below) has
+    // already swept it, leaking a wallet nothing will ever unload.
+    window->abortPendingWalletLoad();
     // Deletes every WalletModel it owns (default plus any secondary wallets)
     // as part of detaching them from WalletFrame -- see the comment on
     // PirateOceanGUI's now-absent walletModel member above.
@@ -537,8 +557,6 @@ void KomodoApplication::requestShutdown()
 #endif
     delete clientModel;
     clientModel = 0;
-
-    StartShutdown();
 
     // Request shutdown from core thread
     Q_EMIT requestedShutdown();

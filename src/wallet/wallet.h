@@ -1677,9 +1677,13 @@ public:
     MasterKeyMap mapMasterKeys;
     unsigned int nMasterKeyMaxID;
 
+    // strWalletFile is immutable after construction (see the comment on
+    // cs_wallet above), so this needs no lock. Was a hardcoded "dummy" stub
+    // until Phase 7 of the multiwallet effort (WalletModel::getWalletName())
+    // became the first real caller.
     std::string GetName() const
     {
-        return "dummy";
+        return strWalletFile;
     }
 
     CWallet()

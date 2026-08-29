@@ -85,6 +85,16 @@ protected:
     std::string previousDatadir;
 };
 
+TEST_F(WalletManagerTest, GetNameReturnsTheWalletsOwnFileName)
+{
+    // Regression test: CWallet::GetName() was a hardcoded "dummy" stub until
+    // Phase 7 of the multiwallet effort (WalletModel::getWalletName(), used
+    // to attribute the passphrase-unlock dialog to a specific wallet) became
+    // its first real caller and the audit caught the stub still in place.
+    CWallet wallet("attributed_test.dat");
+    EXPECT_EQ("attributed_test.dat", wallet.GetName());
+}
+
 TEST_F(WalletManagerTest, RegisterDefaultWalletIsListedAndFlaggedDefault)
 {
     CWallet* defaultWallet = new CWallet("default_test.dat");

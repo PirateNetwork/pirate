@@ -50,6 +50,7 @@
 #include <QMessageBox>
 #include <QMimeData>
 #include <QSettings>
+#include <QThread>
 #include <QShortcut>
 #include <QStackedWidget>
 #include <QStatusBar>
@@ -83,6 +84,38 @@ const std::string PirateOceanGUI::DEFAULT_UIPLATFORM =
 /** Display name for default wallet name. Uses tilde to avoid name
  * collisions in the future with additional wallets */
 const QString PirateOceanGUI::DEFAULT_WALLET = "~Default";
+
+#ifdef ENABLE_WALLET
+/* Runs CWalletManager::LoadWallet()/CreateWallet() on a worker thread,
+ * moved there via moveToThread() and driven by QThread::started() --
+ * startWalletLoadOrCreate() below owns the thread/worker pair and their
+ * lifetimes. Both backend calls are already safe to call off the GUI
+ * thread: they don't touch anything Qt-related, and their own internal
+ * locking (cs_wallets/cs_main/cs_wallet) is the same locking any concurrent
+ * HTTP RPC worker thread already relies on. Kept private to this file
+ * (like RPCExecutor is to rpcconsole.cpp) via the #include "pirateoceangui.moc"
+ * at the end of this file.
+ */
+class WalletLoadWorker : public QObject
+{
+    Q_OBJECT
+
+public Q_SLOTS:
+    void run(const QString &name, bool fCreate)
+    {
+        std::string strError, seedPhrase;
+        bool ok = fCreate
+            ? CWalletManager::Get().CreateWallet(name.toStdString(), strError, seedPhrase)
+            : CWalletManager::Get().LoadWallet(name.toStdString(), strError);
+        Q_EMIT finished(ok, QString::fromStdString(strError), QString::fromStdString(seedPhrase));
+    }
+
+Q_SIGNALS:
+    void finished(bool ok, const QString &strError, const QString &seedPhrase);
+};
+
+#include "pirateoceangui.moc"
+#endif // ENABLE_WALLET
 
 PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const NetworkStyle *networkStyle, QWidget *parent) :
     QMainWindow(parent),
@@ -1201,42 +1234,7 @@ void PirateOceanGUI::loadWalletClicked()
         return;
     }
 
-    // This runs synchronously on the GUI thread and can rescan the wallet
-    // from its last checkpoint while holding cs_main the whole time -- same
-    // blocking shape the loadwallet RPC and the default wallet's own startup
-    // sequence already have (walletmanager.cpp's own comment on this), just
-    // reachable from the main window's event loop instead of an HTTP worker
-    // thread here. Not backgrounded in this phase; the wait cursor is a
-    // stopgap so a slow load reads as "working" rather than "hung" -- a
-    // worker-thread + progress UI (mirroring the startup splash screen) is
-    // deferred.
-    qApp->setOverrideCursor(Qt::WaitCursor);
-    std::string strError;
-    bool fLoaded = CWalletManager::Get().LoadWallet(name.toStdString(), strError);
-    qApp->restoreOverrideCursor();
-    if (!fLoaded) {
-        QMessageBox::critical(this, tr("Load Wallet"), QString::fromStdString(strError));
-        return;
-    }
-
-    CWallet *wallet = CWalletManager::Get().GetWallet(name.toStdString());
-    if (!wallet) {
-        QMessageBox::critical(this, tr("Load Wallet"), tr("Wallet loaded but could not be found in the registry."));
-        return;
-    }
-
-    WalletModel *model = new WalletModel(platformStyle, wallet, clientModel ? clientModel->getOptionsModel() : nullptr, this);
-    if (!addWallet(guiKey, model)) {
-        delete model;
-        // Roll the backend load back rather than leaving a wallet loaded and
-        // registered (visible to listwallets/RPC) but with no GUI entry at
-        // all and no way back into the GUI for it short of a restart.
-        std::string unloadError;
-        CWalletManager::Get().UnloadWallet(name.toStdString(), unloadError);
-        QMessageBox::critical(this, tr("Load Wallet"), tr("Failed to attach the loaded wallet to the interface."));
-        return;
-    }
-    setCurrentWallet(guiKey);
+    startWalletLoadOrCreate(name, /*fCreate=*/false);
 }
 
 void PirateOceanGUI::newWalletClicked()
@@ -1249,22 +1247,106 @@ void PirateOceanGUI::newWalletClicked()
     if (!ok || name.isEmpty())
         return;
 
-    std::string strError, seedPhrase;
-    qApp->setOverrideCursor(Qt::WaitCursor);
-    bool fCreateOk = CWalletManager::Get().CreateWallet(name.toStdString(), strError, seedPhrase);
-    qApp->restoreOverrideCursor();
+    startWalletLoadOrCreate(name, /*fCreate=*/true);
+}
+
+void PirateOceanGUI::startWalletLoadOrCreate(const QString& name, bool fCreate)
+{
+    if (pendingWalletThread) {
+        // The progress dialog below is only *window*-modal, and neither
+        // Escape nor the titlebar close button is blocked from dismissing
+        // it (QProgressDialog::reject() runs regardless of setCancelButton())
+        // -- so a dismissed dialog leaves the first operation still running
+        // with nothing on screen to show it. Refuse a second one rather than
+        // letting two LoadWallet()/CreateWallet() calls run concurrently.
+        QMessageBox::warning(this, tr("Wallet"),
+            tr("A wallet load or create operation is already in progress. Please wait for it to finish."));
+        return;
+    }
+
+    // CWalletManager::LoadWallet()/CreateWallet() can rescan the wallet from
+    // its last checkpoint while holding cs_main for the whole duration --
+    // same blocking shape the loadwallet RPC and the default wallet's own
+    // startup sequence already have, just reachable from here instead of an
+    // HTTP worker thread. Run on a dedicated one-shot worker thread with a
+    // modal progress dialog instead of blocking this window's event loop for
+    // however long that takes.
+    QProgressDialog *progress = new QProgressDialog(
+        fCreate ? tr("Creating wallet \"%1\"...").arg(name) : tr("Loading wallet \"%1\"...").arg(name),
+        QString(), 0, 0, this);
+    progress->setWindowModality(Qt::WindowModal);
+    progress->setMinimumDuration(0);
+    progress->setCancelButton(nullptr); // can't safely cancel a load/create partway through
+    progress->setWindowTitle(fCreate ? tr("New Wallet") : tr("Load Wallet"));
+    // Removes the titlebar close button -- one of the two ways this dialog
+    // could otherwise be dismissed without stopping the worker (Escape is
+    // still possible; the pendingWalletThread guard above is what actually
+    // makes a dismissal safe rather than this).
+    progress->setWindowFlags(progress->windowFlags() & ~Qt::WindowCloseButtonHint);
+    progress->show();
+
+    QThread *thread = new QThread(this);
+    WalletLoadWorker *worker = new WalletLoadWorker();
+    worker->moveToThread(thread);
+    // Canonical Qt idiom for a one-shot worker thread: deleteLater() posted
+    // directly from thread's own finished() signal is delivered while the
+    // thread's event loop is still alive to process it. Posting it manually
+    // *after* thread->wait() (as an earlier version of this code did) is too
+    // late -- the loop has already exited, the DeferredDelete event is never
+    // pumped, and the worker leaks every time this runs.
+    connect(thread, &QThread::finished, worker, &QObject::deleteLater);
+
+    connect(thread, &QThread::started, worker, [worker, name, fCreate]() {
+        worker->run(name, fCreate);
+    });
+    pendingWalletFinishedConnection = connect(worker, &WalletLoadWorker::finished, this,
+        [this, progress, thread, name, fCreate](bool ok, const QString &strError, const QString &seedPhrase) {
+            pendingWalletThread = nullptr;
+            progress->close();
+            progress->deleteLater();
+            // The worker's slot has already returned by the time this runs
+            // (finished() is emitted as the last thing it does), so the
+            // thread has nothing left to process -- quit()+wait() here
+            // returns essentially immediately, not a second blocking wait.
+            thread->quit();
+            thread->wait();
+            thread->deleteLater();
+            handleWalletLoadOrCreateResult(name, fCreate, ok, strError, seedPhrase);
+        });
+
+    pendingWalletThread = thread;
+    thread->start();
+}
+
+void PirateOceanGUI::abortPendingWalletLoad()
+{
+    if (!pendingWalletThread)
+        return;
+    disconnect(pendingWalletFinishedConnection);
+    pendingWalletThread->quit();
+    pendingWalletThread->wait();
+    pendingWalletThread = nullptr;
+}
+
+void PirateOceanGUI::handleWalletLoadOrCreateResult(const QString& name, bool fCreate, bool ok,
+                                                     const QString& strError, const QString& seedPhrase)
+{
+    const QString title = fCreate ? tr("New Wallet") : tr("Load Wallet");
+
     // CreateWallet() deliberately leaves the wallet registered and loaded
     // even when it returns false for a seeding failure specifically (see its
     // own doc comment in walletmanager.h) -- check the registry rather than
-    // just the return value, so that case still gets a GUI entry instead of
-    // being silently stranded loaded-but-invisible until a restart.
+    // just ok, so that case still gets a GUI entry instead of being silently
+    // stranded loaded-but-invisible until a restart.
     CWallet *wallet = CWalletManager::Get().GetWallet(name.toStdString());
-    if (!fCreateOk && !wallet) {
-        QMessageBox::critical(this, tr("New Wallet"), QString::fromStdString(strError));
+    if (!ok && !(fCreate && wallet)) {
+        QMessageBox::critical(this, title, strError);
         return;
     }
     if (!wallet) {
-        QMessageBox::critical(this, tr("New Wallet"), tr("Wallet created but could not be found in the registry."));
+        QMessageBox::critical(this, title,
+            fCreate ? tr("Wallet created but could not be found in the registry.")
+                    : tr("Wallet loaded but could not be found in the registry."));
         return;
     }
 
@@ -1273,33 +1355,36 @@ void PirateOceanGUI::newWalletClicked()
     if (!addWallet(guiKey, model)) {
         delete model;
         // Roll the backend load back rather than leaving a wallet loaded and
-        // registered but with no GUI entry and no way back into the GUI for
-        // it short of a restart.
+        // registered (visible to listwallets/RPC) but with no GUI entry at
+        // all and no way back into the GUI for it short of a restart.
         std::string unloadError;
         CWalletManager::Get().UnloadWallet(name.toStdString(), unloadError);
-        QMessageBox::critical(this, tr("New Wallet"), tr("Failed to attach the new wallet to the interface."));
+        QMessageBox::critical(this, title, tr("Failed to attach the wallet to the interface."));
         return;
     }
     setCurrentWallet(guiKey);
 
-    if (!fCreateOk) {
+    if (!fCreate)
+        return;
+
+    if (!ok) {
         // Loaded, but GenerateNewSeed()/the first Sapling address failed --
         // seedPhrase is empty in this branch, nothing to show or back up.
-        QMessageBox::warning(this, tr("New Wallet"),
+        QMessageBox::warning(this, title,
             tr("Wallet \"%1\" was created and is loaded, but seeding it failed: %2\n\n"
-               "It has no usable seed phrase or shielded address yet.").arg(name, QString::fromStdString(strError)));
+               "It has no usable seed phrase or shielded address yet.").arg(name, strError));
         return;
     }
 
     // The seed phrase is returned exactly once by CreateWallet() -- there is
     // no way to retrieve it again later except via the wallet's own backup/
-    // export once it's loaded.
-    // Built directly rather than via QMessageBox::information() so the seed
-    // phrase text can be made explicitly selectable -- the user needs to
-    // copy or transcribe it, and this is the only time it is ever shown.
+    // export once it's loaded. Built directly rather than via
+    // QMessageBox::information() so the text can be made explicitly
+    // selectable -- the user needs to copy or transcribe it, and this is the
+    // only time it is ever shown.
     QMessageBox seedBox(QMessageBox::Information, tr("New Wallet Created"),
         tr("Wallet \"%1\" was created. Write down its seed phrase now -- it will not be shown again:\n\n%2")
-            .arg(name, QString::fromStdString(seedPhrase)),
+            .arg(name, seedPhrase),
         QMessageBox::Ok, this);
     seedBox.setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     seedBox.exec();

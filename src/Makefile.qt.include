@@ -202,6 +202,7 @@ QT_MOC = \
   qt/callback.moc \
   qt/intro.moc \
   qt/overviewpage.moc \
+  qt/pirateoceangui.moc \
   qt/rpcconsole.moc
 
 QT_QRC_CPP = qt/qrc_komodo.cpp
