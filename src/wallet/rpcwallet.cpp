@@ -64,6 +64,8 @@
 
 #include "consensus/upgrades.h"
 
+#include <limits>
+
 #include "sodium.h"
 
 #include <stdint.h>
@@ -3031,7 +3033,8 @@ UniValue listlockunspent(const UniValue& params, bool fHelp, const CPubKey& mypk
 
 UniValue settxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 1 || params.size() > 1)
@@ -3047,13 +3050,13 @@ UniValue settxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("settxfee", "0.00001")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     // Amount
     CAmount nAmount = AmountFromValue(params[0]);
 
-    payTxFee = CFeeRate(nAmount, 1000);
+    pwallet->SetPayTxFee(CFeeRate(nAmount, 1000));
     return true;
 }
 
@@ -3078,6 +3081,18 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"keypoolsize\": xxxx,        (numeric) how many new keys are pre-generated\n"
             "  \"unlocked_until\": ttt,      (numeric) the timestamp in seconds since epoch (midnight Jan 1 1970 GMT) that the wallet is unlocked for transfers, or 0 if the wallet is locked\n"
             "  \"paytxfee\": x.xxxx,         (numeric) the transaction fee configuration, set in " + CURRENCY_UNIT + "/kB\n"
+            "  \"mintxfee\": x.xxxx,         (numeric) fees below this (per kB) are treated as zero-fee\n"
+            "  \"txconfirmtarget\": n,       (numeric) target confirmation blocks used for fee estimation\n"
+            "  \"spendzeroconfchange\": true|false, (boolean) whether this wallet may spend its own unconfirmed change\n"
+            "  \"mintxvalue\": x.xxxx,       (numeric) minimum incoming shielded note value this wallet records\n"
+            "  \"keypoolsizetarget\": n,     (numeric) this wallet's target keypool size\n"
+            "  \"walletnotify\": \"cmd\",      (string) shell command run on wallet tx changes, empty if unset\n"
+            "  \"deletetxenabled\": true|false, (boolean) whether automatic old-transaction deletion is enabled\n"
+            "  \"deleteconflicttxenabled\": true|false, (boolean) whether conflicted-transaction deletion is enabled\n"
+            "  \"deleteinterval\": n,        (numeric) blocks between delete-old-tx passes during initial sync\n"
+            "  \"keeptxnum\": n,             (numeric) most-recent transactions always retained\n"
+            "  \"keeptxfornblocks\": n,      (numeric) minimum age in blocks before a tx/note is delete-eligible\n"
+            "  \"changeaddress\": \"addr\",    (string) configured shielded change address override, empty if unset\n"
             "  \"seedfp\": \"uint256\",        (string) the BLAKE2b-256 hash of the HD seed\n"
             "}\n"
             "\nExamples:\n"
@@ -3141,7 +3156,19 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         LOCK(cs_nWalletUnlockTime);
         obj.push_back(Pair("unlocked_until", GetWalletUnlockTime(pwallet)));
     }
-    obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
+    obj.push_back(Pair("paytxfee",      ValueFromAmount(pwallet->payTxFee.GetFeePerK())));
+    obj.push_back(Pair("mintxfee",              ValueFromAmount(pwallet->minTxFee.GetFeePerK())));
+    obj.push_back(Pair("txconfirmtarget",       (int)pwallet->nTxConfirmTarget));
+    obj.push_back(Pair("spendzeroconfchange",   pwallet->bSpendZeroConfChange));
+    obj.push_back(Pair("mintxvalue",            ValueFromAmount(pwallet->minTxValue)));
+    obj.push_back(Pair("keypoolsizetarget",     pwallet->nKeypoolSizeTarget));
+    obj.push_back(Pair("walletnotify",          pwallet->strWalletNotifyCommand));
+    obj.push_back(Pair("deletetxenabled",       pwallet->fTxDeleteEnabled));
+    obj.push_back(Pair("deleteconflicttxenabled", pwallet->fTxConflictDeleteEnabled));
+    obj.push_back(Pair("deleteinterval",        pwallet->fDeleteInterval));
+    obj.push_back(Pair("keeptxnum",             (int)pwallet->fKeepLastNTransactions));
+    obj.push_back(Pair("keeptxfornblocks",      (int)pwallet->fDeleteTransactionsAfterNBlocks));
+    obj.push_back(Pair("changeaddress",         pwallet->configuredChangeAddress.has_value() ? EncodePaymentAddress(pwallet->configuredChangeAddress.value()) : ""));
     uint256 seedFp = pwallet->GetHDChain().seedFp;
     if (!seedFp.IsNull())
          obj.push_back(Pair("seedfp", seedFp.GetHex()));
@@ -6634,8 +6661,8 @@ static int64_t ParseConsolidationInt(const UniValue& v)
 
 UniValue enablesaplingconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -6650,8 +6677,13 @@ UniValue enablesaplingconsolidation(const UniValue& params, bool fHelp, const CP
             + HelpExampleRpc("enablesaplingconsolidation", "1")
         );
 
-      LOCK2(cs_main, pwalletMain->cs_wallet);
-      EnsureWalletIsUnlockedForReporting();
+      LOCK2(cs_main, pwallet->cs_wallet);
+      // Full unlock, not EnsureWalletIsUnlockedForReporting(): this setting
+      // is now encrypted on disk (see WriteEncryptableSetting()), which
+      // requires the master key -- a locked wallet can't persist the change
+      // at all, so requiring reporting-only access here would let the
+      // in-memory toggle silently fail to survive a restart.
+      EnsureWalletIsUnlocked(pwallet);
 
       bool enabled = false;
       if (params[0].isNum()) {
@@ -6675,7 +6707,7 @@ UniValue enablesaplingconsolidation(const UniValue& params, bool fHelp, const CP
       }
 
 
-      pwalletMain->fSaplingConsolidationEnabled = enabled;
+      pwallet->SetSaplingConsolidationEnabled(enabled);
 
       UniValue result(UniValue::VOBJ);
       result.push_back(Pair("consolidationEnabled", enabled));
@@ -6685,8 +6717,8 @@ UniValue enablesaplingconsolidation(const UniValue& params, bool fHelp, const CP
 
 UniValue enableironwoodconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -6701,8 +6733,10 @@ UniValue enableironwoodconsolidation(const UniValue& params, bool fHelp, const C
             + HelpExampleRpc("enableironwoodconsolidation", "1")
         );
 
-      LOCK2(cs_main, pwalletMain->cs_wallet);
-      EnsureWalletIsUnlockedForReporting();
+      LOCK2(cs_main, pwallet->cs_wallet);
+      // See enablesaplingconsolidation's comment: this setting is now
+      // encrypted on disk, so persisting a change requires a full unlock.
+      EnsureWalletIsUnlocked(pwallet);
 
       bool enabled = false;
       if (params[0].isNum()) {
@@ -6726,7 +6760,7 @@ UniValue enableironwoodconsolidation(const UniValue& params, bool fHelp, const C
       }
 
 
-      pwalletMain->fIronwoodConsolidationEnabled = enabled;
+      pwallet->SetIronwoodConsolidationEnabled(enabled);
 
       UniValue result(UniValue::VOBJ);
       result.push_back(Pair("consolidationEnabled", enabled));
@@ -6736,8 +6770,8 @@ UniValue enableironwoodconsolidation(const UniValue& params, bool fHelp, const C
 
 UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -6754,8 +6788,10 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
             + HelpExampleRpc("enableconsolidation", "1")
         );
 
-      LOCK2(cs_main, pwalletMain->cs_wallet);
-      EnsureWalletIsUnlockedForReporting();
+      LOCK2(cs_main, pwallet->cs_wallet);
+      // See enablesaplingconsolidation's comment: this setting is now
+      // encrypted on disk, so persisting a change requires a full unlock.
+      EnsureWalletIsUnlocked(pwallet);
 
       bool enabled = false;
       if (params[0].isNum()) {
@@ -6779,8 +6815,8 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
       }
 
 
-      pwalletMain->fSaplingConsolidationEnabled = enabled;
-      pwalletMain->fIronwoodConsolidationEnabled = enabled;
+      pwallet->SetSaplingConsolidationEnabled(enabled);
+      pwallet->SetIronwoodConsolidationEnabled(enabled);
 
       UniValue result(UniValue::VOBJ);
       result.push_back(Pair("saplingConsolidationEnabled", enabled));
@@ -6791,8 +6827,8 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
 
 UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 0)
@@ -6815,61 +6851,57 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
             + HelpExampleRpc("consolidationstatus", "")
         );
 
-      LOCK2(cs_main, pwalletMain->cs_wallet);
-      EnsureWalletIsUnlockedForReporting();
+      LOCK2(cs_main, pwallet->cs_wallet);
+      EnsureWalletIsUnlockedForReporting(pwallet);
 
       UniValue result(UniValue::VOBJ);
-      
+
       // Sapling consolidation status
       UniValue saplingStatus(UniValue::VOBJ);
-      saplingStatus.push_back(Pair("consolidationEnabled", pwalletMain->fSaplingConsolidationEnabled));
-      saplingStatus.push_back(Pair("isRunning", pwalletMain->fSaplingConsolidationRunning));
-      if (pwalletMain->fSaplingConsolidationRunning) {
-          saplingStatus.push_back(Pair("nextConsolidation", pwalletMain->saplingConsolidationInterval + chainActive.Tip()->nHeight));
+      saplingStatus.push_back(Pair("consolidationEnabled", pwallet->fSaplingConsolidationEnabled));
+      saplingStatus.push_back(Pair("isRunning", pwallet->fSaplingConsolidationRunning));
+      if (pwallet->fSaplingConsolidationRunning) {
+          saplingStatus.push_back(Pair("nextConsolidation", pwallet->saplingConsolidationInterval + chainActive.Tip()->nHeight));
       } else {
-          if (pwalletMain->nextSaplingConsolidation == 0) {
+          if (pwallet->nextSaplingConsolidation == 0) {
               saplingStatus.push_back(Pair("nextConsolidation",  chainActive.Tip()->nHeight + 1));
           } else {
-              saplingStatus.push_back(Pair("nextConsolidation", pwalletMain->nextSaplingConsolidation));
+              saplingStatus.push_back(Pair("nextConsolidation", pwallet->nextSaplingConsolidation));
           }
       }
-      saplingStatus.push_back(Pair("consolidationInterval", pwalletMain->saplingConsolidationInterval));
-      saplingStatus.push_back(Pair("targetQty", pwalletMain->targetSaplingConsolidationQty));
-      saplingStatus.push_back(Pair("consolidationTxFee", fSaplingConsolidationTxFee));
-      saplingStatus.push_back(Pair("addressFilterEnabled", fSaplingConsolidationMapUsed));
+      saplingStatus.push_back(Pair("consolidationInterval", pwallet->saplingConsolidationInterval));
+      saplingStatus.push_back(Pair("targetQty", pwallet->targetSaplingConsolidationQty));
+      saplingStatus.push_back(Pair("consolidationTxFee", pwallet->saplingConsolidationTxFee));
+      saplingStatus.push_back(Pair("addressFilterEnabled", !pwallet->saplingConsolidationAddresses.empty()));
       {
           UniValue addrs(UniValue::VARR);
-          if (fSaplingConsolidationMapUsed) {
-              for (const std::string& a : mapMultiArgs["-consolidatesaplingaddress"])
-                  addrs.push_back(a);
-          }
+          for (const std::string& a : pwallet->saplingConsolidationAddresses)
+              addrs.push_back(a);
           saplingStatus.push_back(Pair("consolidationAddresses", addrs));
       }
       result.push_back(Pair("sapling", saplingStatus));
 
       // Ironwood consolidation status
       UniValue ironwoodStatus(UniValue::VOBJ);
-      ironwoodStatus.push_back(Pair("consolidationEnabled", pwalletMain->fIronwoodConsolidationEnabled));
-      ironwoodStatus.push_back(Pair("isRunning", pwalletMain->fIronwoodConsolidationRunning));
-      if (pwalletMain->fIronwoodConsolidationRunning) {
-          ironwoodStatus.push_back(Pair("nextConsolidation", pwalletMain->ironwoodConsolidationInterval + chainActive.Tip()->nHeight));
+      ironwoodStatus.push_back(Pair("consolidationEnabled", pwallet->fIronwoodConsolidationEnabled));
+      ironwoodStatus.push_back(Pair("isRunning", pwallet->fIronwoodConsolidationRunning));
+      if (pwallet->fIronwoodConsolidationRunning) {
+          ironwoodStatus.push_back(Pair("nextConsolidation", pwallet->ironwoodConsolidationInterval + chainActive.Tip()->nHeight));
       } else {
-          if (pwalletMain->nextIronwoodConsolidation == 0) {
+          if (pwallet->nextIronwoodConsolidation == 0) {
               ironwoodStatus.push_back(Pair("nextConsolidation",  chainActive.Tip()->nHeight + 1));
           } else {
-              ironwoodStatus.push_back(Pair("nextConsolidation", pwalletMain->nextIronwoodConsolidation));
+              ironwoodStatus.push_back(Pair("nextConsolidation", pwallet->nextIronwoodConsolidation));
           }
       }
-      ironwoodStatus.push_back(Pair("consolidationInterval", pwalletMain->ironwoodConsolidationInterval));
-      ironwoodStatus.push_back(Pair("targetQty", pwalletMain->targetIronwoodConsolidationQty));
-      ironwoodStatus.push_back(Pair("consolidationTxFee", fIronwoodConsolidationTxFee));
-      ironwoodStatus.push_back(Pair("addressFilterEnabled", fIronwoodConsolidationMapUsed));
+      ironwoodStatus.push_back(Pair("consolidationInterval", pwallet->ironwoodConsolidationInterval));
+      ironwoodStatus.push_back(Pair("targetQty", pwallet->targetIronwoodConsolidationQty));
+      ironwoodStatus.push_back(Pair("consolidationTxFee", pwallet->ironwoodConsolidationTxFee));
+      ironwoodStatus.push_back(Pair("addressFilterEnabled", !pwallet->ironwoodConsolidationAddresses.empty()));
       {
           UniValue addrs(UniValue::VARR);
-          if (fIronwoodConsolidationMapUsed) {
-              for (const std::string& a : mapMultiArgs["-consolidateironwoodaddress"])
-                  addrs.push_back(a);
-          }
+          for (const std::string& a : pwallet->ironwoodConsolidationAddresses)
+              addrs.push_back(a);
           ironwoodStatus.push_back(Pair("consolidationAddresses", addrs));
       }
       result.push_back(Pair("ironwood", ironwoodStatus));
@@ -6879,68 +6911,87 @@ UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& 
 
 UniValue consolidationaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() < 1 || params.size() > 2)
+    if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
-            "consolidationaddresses \"action\" ( \"zaddr\" )\n"
-            "\nManage the explicit list of Sapling addresses used by auto-consolidation.\n"
-            "When the list is non-empty only those addresses are consolidated;\n"
-            "when the list is cleared all wallet addresses are eligible.\n"
-            "All addresses must be Sapling addresses whose spending key is in this wallet.\n"
+            "consolidationaddresses \"action\" ( \"zaddr\" \"pool\" )\n"
+            "\nManage the explicit list of addresses used by auto-consolidation for one\n"
+            "pool (Sapling by default). When the list is non-empty only those addresses\n"
+            "are consolidated; when the list is cleared all wallet addresses in that\n"
+            "pool are eligible. All addresses must be in the given pool and this wallet\n"
+            "must hold the spending key for them.\n"
             "\nActions:\n"
             "  list              Return the current list of consolidation addresses.\n"
-            "  add \"zaddr\"       Add a Sapling address to the list.\n"
-            "  remove \"zaddr\"    Remove a Sapling address from the list.\n"
-            "  clear             Clear all addresses (consolidate all wallet addresses).\n"
+            "  add \"zaddr\"       Add an address to the list.\n"
+            "  remove \"zaddr\"    Remove an address from the list.\n"
+            "  clear             Clear all addresses (consolidate all wallet addresses in this pool).\n"
+            "\nArguments:\n"
+            "3. \"pool\"    (string, optional, default=\"sapling\") \"sapling\" or \"ironwood\"\n"
             "\nExamples:\n"
             + HelpExampleCli("consolidationaddresses", "list")
             + HelpExampleCli("consolidationaddresses", "add \"zs1...\"")
+            + HelpExampleCli("consolidationaddresses", "add \"iz1...\" \"\" \"ironwood\"")
             + HelpExampleCli("consolidationaddresses", "remove \"zs1...\"")
             + HelpExampleCli("consolidationaddresses", "clear")
         );
 
     std::string action = params[0].get_str();
+    std::string pool = params.size() > 2 ? params[2].get_str() : "sapling";
+    if (pool != "sapling" && pool != "ironwood")
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "pool must be \"sapling\" or \"ironwood\"");
+    bool isIronwood = (pool == "ironwood");
 
     if (action == "list") {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, pwallet->cs_wallet);
+        const std::vector<std::string>& addresses = isIronwood ? pwallet->ironwoodConsolidationAddresses : pwallet->saplingConsolidationAddresses;
         UniValue result(UniValue::VOBJ);
         UniValue arr(UniValue::VARR);
-        if (fSaplingConsolidationMapUsed) {
-            for (const std::string& a : mapMultiArgs["-consolidatesaplingaddress"])
-                arr.push_back(a);
-        }
-        result.push_back(Pair("filterEnabled", fSaplingConsolidationMapUsed));
+        for (const std::string& a : addresses)
+            arr.push_back(a);
+        result.push_back(Pair("filterEnabled", !addresses.empty()));
         result.push_back(Pair("addresses", arr));
         return result;
 
     } else if (action == "add") {
         if (params.size() < 2)
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "add requires a Sapling address argument");
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "add requires an address argument");
 
         std::string addrStr = params[1].get_str();
         auto decoded = DecodePaymentAddress(addrStr);
         if (!IsValidPaymentAddress(decoded))
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Sapling address");
-        auto* saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded);
-        if (!saplingAddr)
-            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling address");
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
 
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        EnsureWalletIsUnlocked();
+        LOCK2(cs_main, pwallet->cs_wallet);
+        EnsureWalletIsUnlocked(pwallet);
 
-        libzcash::SaplingExtendedSpendingKey extsk;
-        if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk))
-            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
-
-        std::vector<std::string>& addrList = mapMultiArgs["-consolidatesaplingaddress"];
+        std::vector<std::string> addrList;
+        if (isIronwood) {
+            auto* addr = std::get_if<libzcash::IronwoodPaymentAddress>(&decoded);
+            if (!addr)
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not an Ironwood address");
+            libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+            if (!pwallet->GetIronwoodExtendedSpendingKey(*addr, extsk))
+                throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
+            addrList = pwallet->ironwoodConsolidationAddresses;
+        } else {
+            auto* addr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded);
+            if (!addr)
+                throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling address");
+            libzcash::SaplingExtendedSpendingKey extsk;
+            if (!pwallet->GetSaplingExtendedSpendingKey(*addr, extsk))
+                throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
+            addrList = pwallet->saplingConsolidationAddresses;
+        }
         for (const std::string& a : addrList) {
             if (a == addrStr)
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "Address is already in the consolidation list");
         }
         addrList.push_back(addrStr);
-        fSaplingConsolidationMapUsed = true;
+        if (isIronwood) pwallet->SetIronwoodConsolidationAddresses(addrList);
+        else pwallet->SetSaplingConsolidationAddresses(addrList);
 
         UniValue result(UniValue::VOBJ);
         result.push_back(Pair("added", addrStr));
@@ -6949,29 +7000,29 @@ UniValue consolidationaddresses(const UniValue& params, bool fHelp, const CPubKe
 
     } else if (action == "remove") {
         if (params.size() < 2)
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "remove requires a Sapling address argument");
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "remove requires an address argument");
 
         std::string addrStr = params[1].get_str();
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK2(cs_main, pwallet->cs_wallet);
 
-        std::vector<std::string>& addrList = mapMultiArgs["-consolidatesaplingaddress"];
+        std::vector<std::string> addrList = isIronwood ? pwallet->ironwoodConsolidationAddresses : pwallet->saplingConsolidationAddresses;
         auto it = std::find(addrList.begin(), addrList.end(), addrStr);
         if (it == addrList.end())
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Address not found in the consolidation list");
         addrList.erase(it);
-        if (addrList.empty())
-            fSaplingConsolidationMapUsed = false;
+        if (isIronwood) pwallet->SetIronwoodConsolidationAddresses(addrList);
+        else pwallet->SetSaplingConsolidationAddresses(addrList);
 
         UniValue result(UniValue::VOBJ);
         result.push_back(Pair("removed", addrStr));
         result.push_back(Pair("totalAddresses", (int)addrList.size()));
-        result.push_back(Pair("filterEnabled", fSaplingConsolidationMapUsed));
+        result.push_back(Pair("filterEnabled", !addrList.empty()));
         return result;
 
     } else if (action == "clear") {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        mapMultiArgs["-consolidatesaplingaddress"].clear();
-        fSaplingConsolidationMapUsed = false;
+        LOCK2(cs_main, pwallet->cs_wallet);
+        if (isIronwood) pwallet->SetIronwoodConsolidationAddresses(std::vector<std::string>());
+        else pwallet->SetSaplingConsolidationAddresses(std::vector<std::string>());
 
         UniValue result(UniValue::VOBJ);
         result.push_back(Pair("cleared", true));
@@ -6985,7 +7036,8 @@ UniValue consolidationaddresses(const UniValue& params, bool fHelp, const CPubKe
 
 UniValue setconsolidationtarget(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -7008,17 +7060,54 @@ UniValue setconsolidationtarget(const UniValue& params, bool fHelp, const CPubKe
     if (qty < 2)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "targetQty must be at least 2");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->targetSaplingConsolidationQty = qty;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetSaplingConsolidationTargetQty(qty);
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("targetQty", pwalletMain->targetSaplingConsolidationQty));
+    result.push_back(Pair("targetQty", pwallet->targetSaplingConsolidationQty));
+    return result;
+}
+
+UniValue setironwoodconsolidationtarget(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setironwoodconsolidationtarget qty\n"
+            "\nSet the minimum number of notes an address must have before automatic\n"
+            "Ironwood consolidation will process it. Must be at least 2.\n"
+            "\nArguments:\n"
+            "1. qty    (numeric, required) Minimum note count threshold per address (>= 2).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"targetQty\": n    (numeric) The updated consolidation target quantity.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setironwoodconsolidationtarget", "50")
+            + HelpExampleRpc("setironwoodconsolidationtarget", "50")
+        );
+
+    int qty = (int)ParseConsolidationInt(params[0]);
+    if (qty < 2)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "targetQty must be at least 2");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetIronwoodConsolidationTargetQty(qty);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("targetQty", pwallet->targetIronwoodConsolidationQty));
     return result;
 }
 
 UniValue setconsolidationfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -7041,16 +7130,54 @@ UniValue setconsolidationfee(const UniValue& params, bool fHelp, const CPubKey& 
     if (fee < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "fee cannot be negative");
 
-    fSaplingConsolidationTxFee = (CAmount)fee;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetSaplingConsolidationTxFee((CAmount)fee);
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("consolidationTxFee", fSaplingConsolidationTxFee));
+    result.push_back(Pair("consolidationTxFee", pwallet->saplingConsolidationTxFee));
+    return result;
+}
+
+UniValue setironwoodconsolidationfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setironwoodconsolidationfee fee\n"
+            "\nSet the fee (in satoshis) used for each automatic Ironwood consolidation transaction.\n"
+            "Use 0 for no fee.\n"
+            "\nArguments:\n"
+            "1. fee    (numeric, required) Fee amount in satoshis (>= 0).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"consolidationTxFee\": n    (numeric) The updated fee in satoshis.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setironwoodconsolidationfee", "10000")
+            + HelpExampleRpc("setironwoodconsolidationfee", "10000")
+        );
+
+    int64_t fee = ParseConsolidationInt(params[0]);
+    if (fee < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "fee cannot be negative");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetIronwoodConsolidationTxFee((CAmount)fee);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("consolidationTxFee", pwallet->ironwoodConsolidationTxFee));
     return result;
 }
 
 UniValue setconsolidationinterval(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -7073,11 +7200,47 @@ UniValue setconsolidationinterval(const UniValue& params, bool fHelp, const CPub
     if (interval < 1)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "interval must be at least 1");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->saplingConsolidationInterval = interval;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetSaplingConsolidationInterval(interval);
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("consolidationInterval", pwalletMain->saplingConsolidationInterval));
+    result.push_back(Pair("consolidationInterval", pwallet->saplingConsolidationInterval));
+    return result;
+}
+
+UniValue setironwoodconsolidationinterval(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setironwoodconsolidationinterval blocks\n"
+            "\nSet the number of blocks between automatic Ironwood consolidation runs.\n"
+            "Must be at least 1.\n"
+            "\nArguments:\n"
+            "1. blocks    (numeric, required) Block interval between consolidation runs (>= 1).\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"consolidationInterval\": n    (numeric) The updated interval.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setironwoodconsolidationinterval", "1008")
+            + HelpExampleRpc("setironwoodconsolidationinterval", "1008")
+        );
+
+    int interval = (int)ParseConsolidationInt(params[0]);
+    if (interval < 1)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "interval must be at least 1");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetIronwoodConsolidationInterval(interval);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("consolidationInterval", pwallet->ironwoodConsolidationInterval));
     return result;
 }
 
@@ -7085,7 +7248,8 @@ UniValue setconsolidationinterval(const UniValue& params, bool fHelp, const CPub
 
 UniValue enablesweep(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -7117,17 +7281,17 @@ UniValue enablesweep(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw JSONRPCError(RPC_TYPE_ERROR, "Invalid type provided. Expected boolean.");
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
     if (enabled) {
-        bool hasAddress = rpcSaplingSweepAddress.has_value() || rpcIronwoodSweepAddress.has_value() ||
-                          (!mapMultiArgs["-sweepaddress"].empty());
+        bool hasAddress = !pwallet->saplingSweepAddress.empty() || !pwallet->ironwoodSweepAddress.empty();
         if (!hasAddress)
             throw JSONRPCError(RPC_WALLET_ERROR,
-                "No sweep address configured. Set one with setsweepaddress or -sweepaddress before enabling sweep.");
+                "No sweep address configured. Set one with setsweepaddress before enabling sweep.");
     }
 
-    pwalletMain->fSweepEnabled = enabled;
+    pwallet->SetSweepEnabled(enabled);
 
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("sweepEnabled", enabled));
@@ -7136,7 +7300,8 @@ UniValue enablesweep(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 0)
@@ -7157,30 +7322,27 @@ UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("sweepstatus", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlockedForReporting();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("sweepEnabled", pwalletMain->fSweepEnabled));
-    result.push_back(Pair("isRunning", pwalletMain->fSweepRunning));
-    if (pwalletMain->fSweepRunning) {
-        result.push_back(Pair("nextSweep", pwalletMain->sweepInterval + chainActive.Tip()->nHeight));
+    result.push_back(Pair("sweepEnabled", pwallet->fSweepEnabled));
+    result.push_back(Pair("isRunning", pwallet->fSweepRunning));
+    if (pwallet->fSweepRunning) {
+        result.push_back(Pair("nextSweep", pwallet->sweepInterval + chainActive.Tip()->nHeight));
     } else {
-        if (pwalletMain->nextSweep == 0) {
+        if (pwallet->nextSweep == 0) {
             result.push_back(Pair("nextSweep", chainActive.Tip()->nHeight + 1));
         } else {
-            result.push_back(Pair("nextSweep", pwalletMain->nextSweep));
+            result.push_back(Pair("nextSweep", pwallet->nextSweep));
         }
     }
-    result.push_back(Pair("sweepInterval", pwalletMain->sweepInterval));
-    result.push_back(Pair("sweepTxFee", fSweepTxFee));
-    if (rpcSaplingSweepAddress.has_value()) {
-        result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcSaplingSweepAddress.value())));
-    } else if (rpcIronwoodSweepAddress.has_value()) {
-        result.push_back(Pair("sweepAddress", EncodePaymentAddress(rpcIronwoodSweepAddress.value())));
-    } else if (fSweepMapUsed) {
-        const vector<string>& v = mapMultiArgs["-sweepaddress"];
-        result.push_back(Pair("sweepAddress", v.empty() ? "(not set)" : v[0]));
+    result.push_back(Pair("sweepInterval", pwallet->sweepInterval));
+    result.push_back(Pair("sweepTxFee", pwallet->sweepTxFee));
+    if (!pwallet->saplingSweepAddress.empty()) {
+        result.push_back(Pair("sweepAddress", pwallet->saplingSweepAddress));
+    } else if (!pwallet->ironwoodSweepAddress.empty()) {
+        result.push_back(Pair("sweepAddress", pwallet->ironwoodSweepAddress));
     } else {
         result.push_back(Pair("sweepAddress", "(not set)"));
     }
@@ -7189,7 +7351,8 @@ UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue setsweepfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -7212,16 +7375,19 @@ UniValue setsweepfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fee < 0)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "fee cannot be negative");
 
-    fSweepTxFee = (CAmount)fee;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetSweepTxFee((CAmount)fee);
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("sweepTxFee", fSweepTxFee));
+    result.push_back(Pair("sweepTxFee", pwallet->sweepTxFee));
     return result;
 }
 
 UniValue setsweepinterval(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -7244,27 +7410,30 @@ UniValue setsweepinterval(const UniValue& params, bool fHelp, const CPubKey& myp
     if (interval < 1)
         throw JSONRPCError(RPC_INVALID_PARAMETER, "interval must be at least 1");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->sweepInterval = interval;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetSweepInterval(interval);
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("sweepInterval", pwalletMain->sweepInterval));
+    result.push_back(Pair("sweepInterval", pwallet->sweepInterval));
     return result;
 }
 
 UniValue setsweepaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
         throw runtime_error(
-            "setsweepaddress \"saplingaddress\"\n"
-            "\nSet the Sapling address that auto-sweep will move funds to.\n"
+            "setsweepaddress \"address\"\n"
+            "\nSet the Sapling or Ironwood address that auto-sweep will move funds to.\n"
             "The address must exist in the wallet (spending key required).\n"
-            "Only one sweep address may be active at a time.\n"
+            "Only one sweep address may be active at a time, in either pool --\n"
+            "setting one clears the other.\n"
             "\nArguments:\n"
-            "1. \"saplingaddress\"    (string, required) The Sapling zs address to sweep funds to.\n"
+            "1. \"address\"    (string, required) The Sapling (zs) or Ironwood address to sweep funds to.\n"
             "\nResult:\n"
             "{\n"
             "  \"sweepAddress\": \"addr\"    (string) The newly set sweep address.\n"
@@ -7277,24 +7446,435 @@ UniValue setsweepaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     std::string addrStr = params[0].get_str();
     auto decoded = DecodePaymentAddress(addrStr);
     if (!IsValidPaymentAddress(decoded))
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid Sapling address");
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
 
-    auto* saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded);
-    if (saplingAddr == nullptr)
-        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling address");
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    EnsureWalletIsUnlocked();
-
-    libzcash::SaplingExtendedSpendingKey extsk;
-    if (!pwalletMain->GetSaplingExtendedSpendingKey(*saplingAddr, extsk))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
-
-    rpcSaplingSweepAddress = *saplingAddr;
-    rpcIronwoodSweepAddress.reset();
+    if (auto* saplingAddr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded)) {
+        libzcash::SaplingExtendedSpendingKey extsk;
+        if (!pwallet->GetSaplingExtendedSpendingKey(*saplingAddr, extsk))
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
+        pwallet->SetSaplingSweepAddress(addrStr);
+    } else if (auto* ironwoodAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&decoded)) {
+        libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+        if (!pwallet->GetIronwoodExtendedSpendingKey(*ironwoodAddr, extsk))
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not have the spending key for this address");
+        pwallet->SetIronwoodSweepAddress(addrStr);
+    } else {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Address is not a Sapling or Ironwood address");
+    }
 
     UniValue result(UniValue::VOBJ);
-    result.push_back(Pair("sweepAddress", EncodePaymentAddress(*saplingAddr)));
+    result.push_back(Pair("sweepAddress", addrStr));
+    return result;
+}
+
+UniValue setchangeaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setchangeaddress \"address\"\n"
+            "\nRoute all z_sendmany change from this wallet to a fixed Sapling or\n"
+            "Ironwood address, regardless of which pool the send spent from.\n"
+            "The wallet must hold the spending key for the address.\n"
+            "\nArguments:\n"
+            "1. \"address\"    (string, required) A Sapling or Ironwood address this wallet can spend from.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"changeAddress\": \"addr\"    (string) The newly configured change address.\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setchangeaddress", "\"zs1...\"")
+            + HelpExampleRpc("setchangeaddress", "\"zs1...\"")
+        );
+
+    std::string addrStr = params[0].get_str();
+    auto decoded = DecodePaymentAddress(addrStr);
+    if (!IsValidPaymentAddress(decoded))
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid address");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+
+    try {
+        pwallet->SetChangeAddress(decoded);
+    } catch (const std::runtime_error& e) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, e.what());
+    }
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("changeAddress", addrStr));
+    return result;
+}
+
+UniValue upgradewallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "upgradewallet\n"
+            "\nUpgrade this wallet's on-disk format to the latest version this node\n"
+            "supports. Equivalent to what -upgradewallet does for the default wallet\n"
+            "at startup, but callable at any time against any loaded wallet.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"walletversion\": xxxxx    (numeric) the wallet version after upgrading\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("upgradewallet", "")
+            + HelpExampleRpc("upgradewallet", "")
+        );
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+
+    pwallet->SetMinVersion(FEATURE_LATEST, nullptr, true);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("walletversion", pwallet->GetVersion()));
+    return result;
+}
+
+// ─── Fee/behavior/pruning RPCs ─────────────────────────────────────────────────
+// These settings used to be process-wide CLI/pirate.conf flags shared by
+// every wallet; Phase 5 of the multiwallet effort made each one a per-wallet
+// setting, persisted in this wallet's own file. All follow the same shape as
+// the consolidation/sweep setters above: validate, call the CWallet::Set*()
+// method (which persists), report the new value back.
+
+UniValue setmintxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setmintxfee amount\n"
+            "\nSet the minimum fee (per kB) below which this wallet treats a transaction as zero-fee.\n"
+            "\nArguments:\n"
+            "1. amount    (numeric, required) Fee in " + chainName.ToString() + "/kB.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setmintxfee", "0.00001")
+            + HelpExampleRpc("setmintxfee", "0.00001")
+        );
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    CAmount nAmount = AmountFromValue(params[0]);
+    pwallet->SetMinTxFee(CFeeRate(nAmount, 1000));
+    return true;
+}
+
+UniValue settxconfirmtarget(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "settxconfirmtarget n\n"
+            "\nSet the target number of blocks for fee estimation when no explicit fee is given.\n"
+            "\nArguments:\n"
+            "1. n    (numeric, required) Target confirmation blocks (>= 1).\n"
+            "\nExamples:\n"
+            + HelpExampleCli("settxconfirmtarget", "2")
+            + HelpExampleRpc("settxconfirmtarget", "2")
+        );
+
+    int64_t target = ParseConsolidationInt(params[0]);
+    // Bounds-checked before the narrowing cast below, not after: validating
+    // the int64_t and then casting to unsigned int separately (as several of
+    // these setters originally did) lets an out-of-range value wrap silently
+    // -- e.g. 4294967296 passes ">= 1" and truncates to 0.
+    if (target < 1 || target > (int64_t)std::numeric_limits<unsigned int>::max())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "n must be between 1 and " + std::to_string(std::numeric_limits<unsigned int>::max()));
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetTxConfirmTarget((unsigned int)target);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("txConfirmTarget", (int)pwallet->nTxConfirmTarget));
+    return result;
+}
+
+UniValue setspendzeroconfchange(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setspendzeroconfchange true|false\n"
+            "\nSet whether this wallet may spend its own unconfirmed change outputs.\n"
+            "\nArguments:\n"
+            "1. enabled    (boolean, required)\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setspendzeroconfchange", "true")
+            + HelpExampleRpc("setspendzeroconfchange", "true")
+        );
+
+    bool enabled = params[0].get_bool();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetSpendZeroConfChange(enabled);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("spendZeroConfChange", enabled));
+    return result;
+}
+
+UniValue setmintxvalue(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setmintxvalue amount\n"
+            "\nSet the minimum value (in satoshis) an incoming shielded note must have to be recorded in this wallet.\n"
+            "\nArguments:\n"
+            "1. amount    (numeric, required) Minimum note value in satoshis (>= 0).\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setmintxvalue", "1")
+            + HelpExampleRpc("setmintxvalue", "1")
+        );
+
+    int64_t value = ParseConsolidationInt(params[0]);
+    if (value < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "amount cannot be negative");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetMinTxValue((CAmount)value);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("minTxValue", pwallet->minTxValue));
+    return result;
+}
+
+UniValue setkeypoolsize(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setkeypoolsize n\n"
+            "\nSet this wallet's target keypool size. Does not immediately refill --\n"
+            "see keypoolrefill to apply it right away.\n"
+            "\nArguments:\n"
+            "1. n    (numeric, required) Target keypool size (>= 0).\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setkeypoolsize", "100")
+            + HelpExampleRpc("setkeypoolsize", "100")
+        );
+
+    int64_t size = ParseConsolidationInt(params[0]);
+    if (size < 0)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "n cannot be negative");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetKeypoolSizeTarget(size);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("keypoolSizeTarget", pwallet->nKeypoolSizeTarget));
+    return result;
+}
+
+UniValue setwalletnotify(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setwalletnotify \"command\"\n"
+            "\nSet the shell command run whenever a transaction in this wallet changes.\n"
+            "%s in the command is replaced with the transaction id. Use an empty\n"
+            "string to disable. Takes effect for this run of the node only -- unlike\n"
+            "every other setting in this RPC family, it is deliberately NOT persisted\n"
+            "into the wallet file, since it would otherwise turn that file into a\n"
+            "portable code-execution payload (this command runs via the shell).\n"
+            "\nArguments:\n"
+            "1. \"command\"    (string, required)\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setwalletnotify", "\"myscript.sh %s\"")
+            + HelpExampleRpc("setwalletnotify", "\"myscript.sh %s\"")
+        );
+
+    std::string command = params[0].get_str();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetWalletNotifyCommand(command);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("walletNotify", command));
+    return result;
+}
+
+UniValue setdeletetx(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setdeletetx true|false\n"
+            "\nEnable or disable automatic old-transaction deletion/pruning for this wallet.\n"
+            "\nArguments:\n"
+            "1. enabled    (boolean, required)\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setdeletetx", "true")
+            + HelpExampleRpc("setdeletetx", "true")
+        );
+
+    bool enabled = params[0].get_bool();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetTxDeleteEnabled(enabled);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("deleteTxEnabled", enabled));
+    return result;
+}
+
+UniValue setdeleteconflicttx(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setdeleteconflicttx true|false\n"
+            "\nEnable or disable deletion of conflicted transactions for this wallet.\n"
+            "\nArguments:\n"
+            "1. enabled    (boolean, required)\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setdeleteconflicttx", "true")
+            + HelpExampleRpc("setdeleteconflicttx", "true")
+        );
+
+    bool enabled = params[0].get_bool();
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetTxConflictDeleteEnabled(enabled);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("deleteConflictTxEnabled", enabled));
+    return result;
+}
+
+UniValue setdeleteinterval(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setdeleteinterval blocks\n"
+            "\nSet how often (in blocks, during initial sync) this wallet checks for\n"
+            "old transactions to delete.\n"
+            "\nArguments:\n"
+            "1. blocks    (numeric, required) >= 1.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setdeleteinterval", "10000")
+            + HelpExampleRpc("setdeleteinterval", "10000")
+        );
+
+    int interval = (int)ParseConsolidationInt(params[0]);
+    if (interval < 1)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "blocks must be at least 1");
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetDeleteInterval(interval);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("deleteInterval", pwallet->fDeleteInterval));
+    return result;
+}
+
+UniValue setkeeptxnum(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setkeeptxnum n\n"
+            "\nSet the number of most-recent transactions this wallet always retains,\n"
+            "regardless of age, when automatic deletion is enabled.\n"
+            "\nArguments:\n"
+            "1. n    (numeric, required) >= 1.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setkeeptxnum", "200")
+            + HelpExampleRpc("setkeeptxnum", "200")
+        );
+
+    int64_t n = ParseConsolidationInt(params[0]);
+    if (n < 1 || n > (int64_t)std::numeric_limits<unsigned int>::max())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "n must be between 1 and " + std::to_string(std::numeric_limits<unsigned int>::max()));
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetKeepLastNTransactions((unsigned int)n);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("keepTxNum", (int)pwallet->fKeepLastNTransactions));
+    return result;
+}
+
+UniValue setkeeptxfornblocks(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "setkeeptxfornblocks n\n"
+            "\nSet the minimum number of blocks a transaction/note must age before it\n"
+            "becomes eligible for automatic deletion. Enforced to be at least\n"
+            "MAX_REORG_LENGTH + 1, same as the old -keeptxfornblocks flag.\n"
+            "\nArguments:\n"
+            "1. n    (numeric, required) >= 1.\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setkeeptxfornblocks", "10000")
+            + HelpExampleRpc("setkeeptxfornblocks", "10000")
+        );
+
+    int64_t n = ParseConsolidationInt(params[0]);
+    if (n < 1 || n > (int64_t)std::numeric_limits<unsigned int>::max())
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "n must be between 1 and " + std::to_string(std::numeric_limits<unsigned int>::max()));
+    if (n < MAX_REORG_LENGTH + 1)
+        n = MAX_REORG_LENGTH + 1;
+
+    LOCK2(cs_main, pwallet->cs_wallet);
+    EnsureWalletIsUnlocked(pwallet);
+    pwallet->SetKeepTransactionsAfterNBlocks((unsigned int)n);
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("keepTxForNBlocks", (int)pwallet->fDeleteTransactionsAfterNBlocks));
     return result;
 }
 
@@ -10774,13 +11354,30 @@ static const CRPCCommand commands[] =
     { "consolidation",         "setconsolidationtarget",   &setconsolidationtarget,    true },
     { "consolidation",         "setconsolidationfee",      &setconsolidationfee,       true },
     { "consolidation",         "setconsolidationinterval", &setconsolidationinterval,  true },
+    { "consolidation",         "setironwoodconsolidationtarget",   &setironwoodconsolidationtarget,   true },
+    { "consolidation",         "setironwoodconsolidationfee",      &setironwoodconsolidationfee,      true },
+    { "consolidation",         "setironwoodconsolidationinterval", &setironwoodconsolidationinterval, true },
     { "consolidation",         "consolidateaddress",       &consolidateaddress,        true },
 
     { "sweep",                 "enablesweep",              &enablesweep,               true },
     { "sweep",                 "sweepstatus",              &sweepstatus,               true },
     { "sweep",                 "setsweepfee",              &setsweepfee,               true },
     { "sweep",                 "setsweepinterval",         &setsweepinterval,          true },
-    { "sweep",                 "setsweepaddress",          &setsweepaddress,           true }
+    { "sweep",                 "setsweepaddress",          &setsweepaddress,           true },
+
+    { "wallet",                "setchangeaddress",         &setchangeaddress,          true },
+    { "wallet",                "upgradewallet",            &upgradewallet,             true },
+    { "wallet",                "setmintxfee",              &setmintxfee,               true },
+    { "wallet",                "settxconfirmtarget",       &settxconfirmtarget,        true },
+    { "wallet",                "setspendzeroconfchange",   &setspendzeroconfchange,    true },
+    { "wallet",                "setmintxvalue",            &setmintxvalue,             true },
+    { "wallet",                "setkeypoolsize",           &setkeypoolsize,            true },
+    { "wallet",                "setwalletnotify",          &setwalletnotify,           true },
+    { "wallet",                "setdeletetx",              &setdeletetx,               true },
+    { "wallet",                "setdeleteconflicttx",      &setdeleteconflicttx,       true },
+    { "wallet",                "setdeleteinterval",        &setdeleteinterval,         true },
+    { "wallet",                "setkeeptxnum",             &setkeeptxnum,              true },
+    { "wallet",                "setkeeptxfornblocks",      &setkeeptxfornblocks,       true }
 
 };
 

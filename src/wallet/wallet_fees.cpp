@@ -5,6 +5,7 @@
 
 #include "wallet/wallet_fees.h"
 
+#include "init.h"
 #include "policy/policy.h"
 #include "txmempool.h"
 #include "util.h"
@@ -12,19 +13,39 @@
 #include "main.h"
 #include "wallet/wallet.h"
 
-
-CAmount GetRequiredFee(unsigned int nTxBytes)
+namespace {
+// minTxFee/payTxFee used to be process-global/static CWallet state; Phase 5
+// made both real per-CWallet fields. Call sites not yet made wallet-aware
+// (Qt's fee-preview code) pass wallet=nullptr and fall back to pwalletMain's
+// setting, or a compiled-in default if no wallet is loaded at all -- the
+// same behavior these call sites had before the settings became per-wallet.
+CFeeRate GetEffectiveMinTxFee(const CWallet* wallet)
 {
-    return std::max(CWallet::minTxFee.GetFee(nTxBytes), ::minRelayTxFee.GetFee(nTxBytes));
+    if (wallet) return wallet->minTxFee;
+    if (pwalletMain) return pwalletMain->minTxFee;
+    return CFeeRate(1000);
 }
 
-CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc)
+CFeeRate GetEffectivePayTxFee(const CWallet* wallet)
+{
+    if (wallet) return wallet->payTxFee;
+    if (pwalletMain) return pwalletMain->payTxFee;
+    return CFeeRate(DEFAULT_TRANSACTION_FEE);
+}
+} // namespace
+
+CAmount GetRequiredFee(unsigned int nTxBytes, const CWallet* wallet)
+{
+    return std::max(GetEffectiveMinTxFee(wallet).GetFee(nTxBytes), ::minRelayTxFee.GetFee(nTxBytes));
+}
+
+CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc, const CWallet* wallet)
 {
     /* User control of how to calculate fee uses the following parameter precedence:
        1. coin_control.m_feerate
        2. coin_control.m_confirm_target
-       3. payTxFee (user-set global variable)
-       4. nTxConfirmTarget (user-set global variable)
+       3. payTxFee (now a per-wallet setting)
+       4. nTxConfirmTarget (now a per-wallet setting)
        The first parameter that is set is used.
     */
 
@@ -36,8 +57,8 @@ CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, c
             // Allow to override automatic min/max check over coin control instance
             if (coin_control->fOverrideFeeRate) return fee_needed;
         }
-        else if (!coin_control->m_confirm_target && ::payTxFee != CFeeRate(0)) { // 3. TODO: remove magic value of 0 for global payTxFee
-            fee_needed = ::payTxFee.GetFee(nTxBytes);
+        else if (!coin_control->m_confirm_target && GetEffectivePayTxFee(wallet) != CFeeRate(0)) { // 3. TODO: remove magic value of 0 for payTxFee
+            fee_needed = GetEffectivePayTxFee(wallet).GetFee(nTxBytes);
             if (feeCalc) feeCalc->reason = FeeReason::PAYTXFEE;
         }
         else { // 2. or 4.
@@ -65,7 +86,7 @@ CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, c
     }
 
     // prevent user from paying a fee below minRelayTxFee or minTxFee
-    CAmount required_fee = GetRequiredFee(nTxBytes);
+    CAmount required_fee = GetRequiredFee(nTxBytes, wallet);
     if (required_fee > fee_needed) {
         fee_needed = required_fee;
         if (feeCalc) feeCalc->reason = FeeReason::REQUIRED;

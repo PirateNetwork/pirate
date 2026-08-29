@@ -301,7 +301,8 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
         if (pwalletMain && pwalletMain->IsCrypted())
             obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
-        obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
+        if (pwalletMain)
+            obj.push_back(Pair("paytxfee",      ValueFromAmount(pwalletMain->payTxFee.GetFeePerK())));
 #endif
         obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
         obj.push_back(Pair("ironwood", ASSETCHAINS_IRONWOOD));

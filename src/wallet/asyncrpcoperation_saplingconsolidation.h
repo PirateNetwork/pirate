@@ -36,17 +36,11 @@ static const CAmount DEFAULT_SAPLING_CONSOLIDATION_FEE = 10000;
  */
 static const int DEFAULT_SAPLING_CONSOLIDATION_INTERVAL = 10080; // 1 week in minutes
 
-/**
- * Global Sapling consolidation fee setting
- * Can be modified via configuration parameters
- */
-extern CAmount fSaplingConsolidationTxFee;
-
-/**
- * Flag indicating whether Sapling consolidation address mapping is used
- * When true, only specific addresses from configuration are consolidated
- */
-extern bool fSaplingConsolidationMapUsed;
+// fSaplingConsolidationTxFee and fSaplingConsolidationMapUsed used to live
+// here as process-globals shared by every wallet. Phase 5 of the multiwallet
+// effort promoted them to per-CWallet fields (saplingConsolidationTxFee,
+// saplingConsolidationAddresses -- wallet.h), so this operation now reads
+// them off wallet_ instead.
 
 /**
  * @class AsyncRPCOperation_saplingconsolidation

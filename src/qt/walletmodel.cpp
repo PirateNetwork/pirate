@@ -1426,7 +1426,7 @@ bool WalletModel::hdEnabled() const
 
 int WalletModel::getDefaultConfirmTarget() const
 {
-    return nTxConfirmTarget;
+    return wallet->nTxConfirmTarget;
 }
 
 bool WalletModel::getDefaultWalletRbf() const

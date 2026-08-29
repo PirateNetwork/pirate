@@ -26,10 +26,11 @@
 
 // Default fee used for sweep transactions
 static const CAmount DEFAULT_SWEEP_FEE = 10000;
-extern CAmount fSweepTxFee;
-extern bool fSweepMapUsed;
-extern std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
-extern std::optional<libzcash::IronwoodPaymentAddress> rpcIronwoodSweepAddress;
+// fSweepTxFee, fSweepMapUsed, rpcSaplingSweepAddress, and
+// rpcIronwoodSweepAddress used to live here as process-globals shared by
+// every wallet. Phase 5 of the multiwallet effort promoted them to
+// per-CWallet fields (sweepTxFee, saplingSweepAddress, ironwoodSweepAddress
+// -- wallet.h), so this operation now reads them off wallet_ instead.
 
 /**
  * @class AsyncRPCOperation_sweeptoaddress
@@ -87,20 +88,6 @@ public:
      * @return UniValue object containing operation status and progress
      */
     virtual UniValue getStatus() const;
-
-    /**
-     * @brief Set Sapling destination address for RPC-initiated sweeps
-     * 
-     * @param address Sapling payment address to sweep funds to
-     */
-    void setSaplingSweepAddress(const libzcash::SaplingPaymentAddress& address);
-    
-    /**
-     * @brief Set Ironwood destination address for RPC-initiated sweeps
-     * 
-     * @param address Ironwood payment address to sweep funds to
-     */
-    void setIronwoodSweepAddress(const libzcash::IronwoodPaymentAddress& address);
 
 private:
     int targetHeight_;    ///< Target blockchain height for transactions

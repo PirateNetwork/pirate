@@ -568,3 +568,130 @@ TEST_F(WalletManagerTest, AsyncOperationBuiltWithoutAWalletDoesNotPinAnything)
 
     EXPECT_TRUE(CWalletManager::Get().UnloadWallet("unrelatedwallet", strError)) << strError;
 }
+
+// ─── Phase 5: per-wallet config persistence ────────────────────────────────
+// Consolidation/sweep/fee/pruning settings are per-CWallet fields, each
+// changed only through a CWallet::Set*() method that also persists it via
+// CWalletDB. These tests exercise that mechanism directly (bypassing the RPC
+// layer, which is exercised separately in test_rpc_wallet_bitcoin.cpp)
+// against two independently loaded secondary wallets, since that's where a
+// setting leaking between wallets or failing to survive a reload would
+// actually surface.
+
+TEST_F(WalletManagerTest, PerWalletConsolidationSweepSettingsAreIndependentAcrossWallets)
+{
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("walleta.dat");
+    CreateWalletFileOnDisk("walletb.dat");
+
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("walleta.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("walletb.dat", strError)) << strError;
+
+    CWallet* walletA = CWalletManager::Get().GetWallet("walleta.dat");
+    CWallet* walletB = CWalletManager::Get().GetWallet("walletb.dat");
+    ASSERT_NE(nullptr, walletA);
+    ASSERT_NE(nullptr, walletB);
+
+    walletA->SetSaplingConsolidationEnabled(true);
+    walletA->SetSaplingConsolidationTargetQty(42);
+    walletA->SetSaplingConsolidationTxFee(12345);
+    walletA->SetSaplingConsolidationAddresses({"addrA1", "addrA2"});
+    walletA->SetSweepTxFee(999);
+    walletA->SetDeleteInterval(500);
+
+    // walletB never touched -- must still read its own compiled-in defaults,
+    // not anything walletA just set.
+    EXPECT_FALSE(walletB->fSaplingConsolidationEnabled);
+    EXPECT_EQ(100, walletB->targetSaplingConsolidationQty);
+    EXPECT_EQ(10000, walletB->saplingConsolidationTxFee);
+    EXPECT_TRUE(walletB->saplingConsolidationAddresses.empty());
+    EXPECT_EQ(10000, walletB->sweepTxFee);
+    EXPECT_EQ(DEFAULT_TX_DELETE_INTERVAL, walletB->fDeleteInterval);
+
+    // walletA's own settings took effect.
+    EXPECT_TRUE(walletA->fSaplingConsolidationEnabled);
+    EXPECT_EQ(42, walletA->targetSaplingConsolidationQty);
+    EXPECT_EQ(12345, walletA->saplingConsolidationTxFee);
+    ASSERT_EQ(2u, walletA->saplingConsolidationAddresses.size());
+    EXPECT_EQ(999, walletA->sweepTxFee);
+    EXPECT_EQ(500, walletA->fDeleteInterval);
+
+    // Give walletB its own, different values and re-confirm neither leaked
+    // into the default wallet either.
+    walletB->SetSaplingConsolidationEnabled(true);
+    walletB->SetSaplingConsolidationTargetQty(7);
+    CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
+    EXPECT_FALSE(defaultWallet->fSaplingConsolidationEnabled);
+    EXPECT_EQ(100, defaultWallet->targetSaplingConsolidationQty);
+    EXPECT_EQ(42, walletA->targetSaplingConsolidationQty); // still walletA's own value
+    EXPECT_EQ(7, walletB->targetSaplingConsolidationQty);
+}
+
+TEST_F(WalletManagerTest, PerWalletSettingsSurviveUnloadAndReload)
+{
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("persistwallet.dat");
+
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("persistwallet.dat", strError)) << strError;
+    CWallet* wallet = CWalletManager::Get().GetWallet("persistwallet.dat");
+    ASSERT_NE(nullptr, wallet);
+
+    // One setting from each of the three groups the plan calls out:
+    // consolidation/sweep, fee/behavior, and pruning.
+    wallet->SetSaplingConsolidationInterval(4321);
+    wallet->SetSpendZeroConfChange(false);
+    wallet->SetKeepLastNTransactions(777);
+
+    ASSERT_TRUE(CWalletManager::Get().UnloadWallet("persistwallet.dat", strError)) << strError;
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("persistwallet.dat"));
+
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("persistwallet.dat", strError)) << strError;
+    CWallet* reloaded = CWalletManager::Get().GetWallet("persistwallet.dat");
+    ASSERT_NE(nullptr, reloaded);
+    ASSERT_NE(wallet, reloaded); // genuinely a fresh CWallet object, not the same pointer
+
+    // Proves the CWalletDB::ReadKeyValue() round-trip actually persisted these
+    // to the file, not just held them in the now-deleted in-memory object.
+    EXPECT_EQ(4321, reloaded->saplingConsolidationInterval);
+    EXPECT_FALSE(reloaded->bSpendZeroConfChange);
+    EXPECT_EQ(777u, reloaded->fKeepLastNTransactions);
+}
+
+TEST_F(WalletManagerTest, SalvageOnOneWalletDoesNotTouchAnotherLoadedWallet)
+{
+    // Closes the exact bug this phase fixed: -salvagewallet used to be read
+    // globally inside CWallet::Verify(), so setting it salvaged every wallet
+    // loaded process-wide. fSalvage is now a per-call LoadWallet() parameter
+    // instead -- this doesn't corrupt a file to prove salvage logic itself
+    // runs (that's CWallet::Verify()'s own concern), just that requesting it
+    // for one wallet's load has no effect on a second, already-loaded one.
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("untouchedwallet.dat");
+    CreateWalletFileOnDisk("salvagedwallet.dat");
+
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("untouchedwallet.dat", strError)) << strError;
+    CWallet* untouched = CWalletManager::Get().GetWallet("untouchedwallet.dat");
+    ASSERT_NE(nullptr, untouched);
+    untouched->SetSaplingConsolidationTargetQty(55);
+
+    ASSERT_TRUE(CWalletManager::Get().UnloadWallet("untouchedwallet.dat", strError)) << strError;
+    // Reload the same wallet fresh so the pointer above is no longer live,
+    // then load a *different* wallet with fSalvage=true.
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("untouchedwallet.dat", strError)) << strError;
+    untouched = CWalletManager::Get().GetWallet("untouchedwallet.dat");
+    ASSERT_NE(nullptr, untouched);
+    EXPECT_EQ(55, untouched->targetSaplingConsolidationQty); // survived its own reload
+
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("salvagedwallet.dat", strError,
+                                                  /*fRescan=*/false, /*nRescanHeight=*/0, /*fSalvage=*/true))
+        << strError;
+
+    // untouchedwallet.dat's own file/registry entry is unaffected by the
+    // fSalvage=true request against a completely different wallet name.
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("untouchedwallet.dat"));
+    EXPECT_EQ(55, untouched->targetSaplingConsolidationQty);
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("salvagedwallet.dat"));
+}

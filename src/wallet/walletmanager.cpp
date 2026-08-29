@@ -111,40 +111,33 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
     return true;
 }
 
-// KNOWN LIMITATION, deliberately not addressed this phase: a loaded secondary
-// wallet is never registered with RegisterValidationInterface() (only
-// pwalletMain is, in init.cpp), so it never receives new-block notifications
-// and is a frozen snapshot of its file as of load time -- getbalance/
-// z_getbalance/listunspent/listtransactions/getwalletinfo on it report stale
-// data indefinitely, not just until the next block.
+// Historical note: earlier phases left this function's secondary-wallet load
+// path without any ChainTip() registration at all -- a permanently frozen
+// snapshot as of load time, with getbalance/z_getbalance/listunspent/
+// listtransactions/getwalletinfo on it reporting stale data indefinitely.
+// Phase 4 added RegisterValidationInterface() plus the synchronous catch-up
+// below (mirroring init.cpp's own startup sequence), and Phase 5 finished
+// retargeting the consolidation/sweep/delete-transaction dispatch this
+// triggers (RunSaplingConsolidation/RunIronwoodConsolidation/RunSaplingSweep/
+// DeleteWalletTransactions, and the settings that control them) to operate on
+// `wallet` specifically rather than the process-global pwalletMain -- so a
+// secondary wallet's own chain-tip notifications now drive its own funds and
+// its own configuration, not the default wallet's.
 //
-// This was deliberately NOT fixed by simply adding RegisterValidationInterface()
-// here -- not primarily because of witness-continuity risk (CWallet's own
-// IncrementSaplingWallet() already detects a height gap and forces a rebuild
-// rather than silently miscomputing), but because CWallet::ChainTip() (the
-// callback that call registers) does far more than update balances:
-//   - It can set the process-global fBuilingWitnessCache (wallet.cpp), which
-//     CRPCTable::execute() checks for *every* RPC on the node (rpc/server.cpp)
-//     -- a secondary wallet's own rebuild would stall the entire RPC
-//     interface for the duration, a real remote-triggerable DoS
-//     (load a stale wallet, wait one block).
-//   - It calls RunSaplingConsolidation/RunIronwoodConsolidation/RunSaplingSweep,
-//     which construct AsyncRPCOperation_* objects that read the global
-//     pwalletMain directly on a background thread with no wallet-identity
-//     tracking (see the async-ops section of the plan) -- a secondary
-//     wallet's block-connect event would trigger fund-moving
-//     consolidation/sweep transactions built against the *default* wallet,
-//     not itself. Fund misdirection, not staleness.
-//   - It also drives DeleteWalletTransactions() (when -deletetx is set),
-//     destructive pruning against a wallet whose own tx/nullifier maps were
-//     never caught up to begin with.
-// None of the default wallet's actual catch-up machinery (RegisterValidationInterface
-// under LOCK(cs_main), ReadWalletBirthday, ScanForWalletTransactions,
-// Sapling/Ironwood witness validation-or-rebuild -- all in init.cpp, run
-// atomically with block connection) is reproduced by a bare
-// RegisterValidationInterface() call here either, so this needs its own
-// scoped design, not a one-line addition.
-bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
+// What's still genuinely unaddressed (see [[project_multiwallet_effort]]
+// backlog items 5/6/8 for the durable tracking):
+//   - fBuilingWitnessCache (wallet.cpp) is still a single process-global
+//     flag, checked by CRPCTable::execute() (rpc/server.cpp) for every RPC
+//     on the node -- a secondary wallet's own witness-cache rebuild still
+//     stalls the whole RPC interface for its duration, the same blast radius
+//     the default wallet's own startup already has, just reachable a second
+//     way (load a stale wallet, wait one block).
+//   - A secondary wallet still receives no notification for a *transaction*
+//     it didn't cause itself, beyond what ChainTip()'s own block-level scan
+//     surfaces -- see backlog item 8 for the retry/double-spend implications
+//     this leaves open.
+bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
+                                 bool fRescan, int nRescanHeight, bool fSalvage, bool fZapWalletTxes)
 {
     if (!IsValidWalletName(name, strError))
         return false;
@@ -265,7 +258,7 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
         }
         if (!fAlreadyTouched) {
             std::string warningString, errorString;
-            if (!CWallet::Verify(name, warningString, errorString) || !errorString.empty()) {
+            if (!CWallet::Verify(name, warningString, errorString, fSalvage) || !errorString.empty()) {
                 strError = !errorString.empty() ? errorString : "Wallet verification failed";
                 return false;
             }
@@ -300,6 +293,59 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
             CloseWalletDbFile(name); // Same as above: don't leave a handle/mapFileUseCount entry behind.
             strError = strprintf("Failed to load wallet %s: %s", name, e.what());
             return false;
+        }
+
+        // Migrate plaintext records that have an encrypted-on-disk form, same as
+        // init.cpp does for the default wallet at startup -- previously only ever
+        // run there, so a secondary wallet loaded here never got this at all. In
+        // practice this is a no-op for a wallet that's encrypted (a freshly loaded
+        // CWallet object starts locked until a passphrase is supplied, and these
+        // migrations require the master key), same dormant situation the default
+        // wallet's own startup hook already has; included for parity regardless.
+        if (wallet->IsCrypted() && !wallet->IsLocked()) {
+            if (!wallet->MigrateDestDataToEncrypted())
+                LogPrintf("Warning: could not migrate destination data to encrypted storage for wallet %s.\n", name);
+            if (!wallet->MigrateSettingsToEncrypted())
+                LogPrintf("Warning: could not migrate consolidation/sweep/fee/pruning settings to encrypted storage for wallet %s.\n", name);
+        }
+
+        if (fZapWalletTxes) {
+            // Mirrors init.cpp's own -zapwallettxes handling for the default
+            // wallet: wipe transaction history and reset the shielded witness
+            // trees, then always force a full rescan below (same as
+            // -zapwallettxes implying -rescan) since there's nothing left to
+            // incrementally catch up from.
+            std::vector<CWalletTx> vWtx;
+            DBErrors nZapWalletRet = wallet->ZapWalletTx(vWtx);
+            if (nZapWalletRet != DB_LOAD_OK) {
+                delete wallet;
+                CloseWalletDbFile(name);
+                strError = strprintf("Failed to zap transactions for wallet %s (error code %d)", name, (int)nZapWalletRet);
+                return false;
+            }
+            // ZapWalletTx() only erases the on-disk tx/arc-tx/nullifier
+            // records (CWalletDB::ZapWalletTx, walletdb.cpp) -- it does not
+            // touch this object's own mapWallet/mapArcTxs/nullifier maps,
+            // already populated by the LoadWallet() call above. init.cpp's
+            // own -zapwallettxes handling avoids this entirely by always
+            // zapping a *fresh*, not-yet-loaded CWallet (construct, zap,
+            // then load) -- discard this object and reload a new one from
+            // the now-zapped file to match, so nothing below still
+            // references data that's gone on disk, or witness positions the
+            // reset just below invalidates.
+            delete wallet;
+            CloseWalletDbFile(name);
+            wallet = new CWallet(name);
+            DBErrors reloadResult = wallet->LoadWallet(fFirstRun);
+            if (reloadResult != DB_LOAD_OK) {
+                delete wallet;
+                CloseWalletDbFile(name);
+                strError = strprintf("Failed to reload wallet %s after zapping transactions (error code %d)", name, (int)reloadResult);
+                return false;
+            }
+            wallet->SaplingWalletReset();
+            wallet->IronwoodWalletReset();
+            fRescan = true;
         }
 
         // Register for chain-tip notifications and catch this wallet up to
@@ -387,7 +433,16 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError)
                         walletdb.ReadWalletBirthday(wallet->nBirthday);
                     }
                     CBlockIndex* pindexRescan = nullptr;
-                    {
+                    if (fRescan) {
+                        // Caller explicitly asked for a full rescan (or this
+                        // load implies one via fZapWalletTxes above) --
+                        // mirrors -rescan/-rescanheight: rescan from the given
+                        // height, or genesis if none given, ignoring whatever
+                        // checkpoint this wallet's file has persisted.
+                        pindexRescan = (nRescanHeight > 0 && nRescanHeight <= chainActive.Height())
+                            ? chainActive[nRescanHeight]
+                            : chainActive.Genesis();
+                    } else {
                         CWalletDB walletdb(name);
                         CBlockLocator locator;
                         pindexRescan = walletdb.ReadBestBlock(locator)

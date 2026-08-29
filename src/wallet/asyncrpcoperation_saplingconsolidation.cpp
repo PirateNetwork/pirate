@@ -14,14 +14,6 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 
-// Global configuration variables
-/**
- * Global variables for Sapling consolidation configuration
- * These are set during initialization from command line parameters
- */
-CAmount fSaplingConsolidationTxFee = DEFAULT_SAPLING_CONSOLIDATION_FEE;
-bool fSaplingConsolidationMapUsed = false;
-
 /**
  * Number of blocks to set as expiration delta for consolidation transactions
  * This provides sufficient time for transaction confirmation while preventing
@@ -137,22 +129,16 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
         if (wallet_->fSweepEnabled) {
             // When sweep is active, consolidation is restricted to the sweep destination
             // address only - consolidating into it prepares funds for the sweep.
-            if (rpcSaplingSweepAddress.has_value()) {
-                candidateAddresses.push_back(rpcSaplingSweepAddress.value());
-            } else if (fSweepMapUsed) {
-                const vector<string>& v = mapMultiArgs["-sweepaddress"];
-                for (int i = 0; i < (int)v.size(); i++) {
-                    auto zAddress = DecodePaymentAddress(v[i]);
-                    if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr)
-                        candidateAddresses.push_back(std::get<libzcash::SaplingPaymentAddress>(zAddress));
-                }
+            if (!wallet_->saplingSweepAddress.empty()) {
+                auto zAddress = DecodePaymentAddress(wallet_->saplingSweepAddress);
+                if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr)
+                    candidateAddresses.push_back(std::get<libzcash::SaplingPaymentAddress>(zAddress));
             }
             // If sweep is enabled but no sweep address is configured, skip consolidation.
-        } else if (fSaplingConsolidationMapUsed) {
+        } else if (!wallet_->saplingConsolidationAddresses.empty()) {
             // Sweep not active: use the explicit consolidation address filter list.
-            const vector<string>& v = mapMultiArgs["-consolidatesaplingaddress"];
-            for (int i = 0; i < (int)v.size(); i++) {
-                auto zAddress = DecodePaymentAddress(v[i]);
+            for (const std::string& a : wallet_->saplingConsolidationAddresses) {
+                auto zAddress = DecodePaymentAddress(a);
                 if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr)
                     candidateAddresses.push_back(std::get<libzcash::SaplingPaymentAddress>(zAddress));
             }
@@ -212,7 +198,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 filterAddresses.insert(addr);
                 wallet_->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
-                                              maxQuantity, fSaplingConsolidationTxFee + 1);
+                                              maxQuantity, wallet_->saplingConsolidationTxFee + 1);
                 // Lock immediately so no other async operation can select the same notes.
                 for (const auto& e : saplingEntries)
                     wallet_->LockNote(e.op);
@@ -233,12 +219,12 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             for (const auto& e : saplingEntries)
                 amountToSend += CAmount(e.note.value());
 
-            if (amountToSend <= fSaplingConsolidationTxFee) {
+            if (amountToSend <= wallet_->saplingConsolidationTxFee) {
                 unlockSaplingEntries();
                 break;
             }
 
-            const CAmount outputAmount = amountToSend - fSaplingConsolidationTxFee;
+            const CAmount outputAmount = amountToSend - wallet_->saplingConsolidationTxFee;
 
             std::vector<SaplingOutPoint> ops;
             std::vector<libzcash::SaplingNote> notes;
@@ -285,7 +271,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 break;
             }
 
-            builder.SetFee(fSaplingConsolidationTxFee);
+            builder.SetFee(wallet_->saplingConsolidationTxFee);
 
             if (!builder.AddSaplingOutputRaw(addr, outputAmount)) {
                 LogPrint("zrpcunsafe", "%s: Failed to add Sapling output. Stopping.\n", getId());

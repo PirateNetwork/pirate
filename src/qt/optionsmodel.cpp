@@ -112,15 +112,20 @@ void OptionsModel::Init(bool resetSettings)
 
     // Wallet
 #ifdef ENABLE_WALLET
+    // -deletetx and -saplingconsolidation no longer exist as CLI/pirate.conf
+    // flags (Phase 5 of the multiwallet effort made both per-wallet RPC
+    // settings instead) -- init.cpp now rejects them outright if still set,
+    // so this can no longer SoftSetBoolArg() them the way it used to. The
+    // QSettings values themselves are left in place (harmless, and avoids
+    // losing a user's prior preference in case a future phase wires this
+    // dialog to the equivalent RPCs instead), just no longer forwarded to
+    // mapArgs. The two checkboxes bound to these settings are disabled in
+    // OptionsDialog for the same reason.
     if (!settings.contains("fTxDeleteEnabled"))
         settings.setValue("fTxDeleteEnabled", true);
-    if (!SoftSetBoolArg("-deletetx", settings.value("fTxDeleteEnabled").toBool()))
-        addOverriddenOption("-deletetx");
 
     if (!settings.contains("fSaplingConsolidationEnabled"))
         settings.setValue("fSaplingConsolidationEnabled", true);
-    if (!SoftSetBoolArg("-saplingconsolidation", settings.value("fSaplingConsolidationEnabled").toBool()))
-        addOverriddenOption("-saplingconsolidation");
 
     if (!settings.contains("fEnableReindex"))
         settings.setValue("fEnableReindex", false);

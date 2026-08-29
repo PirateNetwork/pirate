@@ -40,17 +40,11 @@ static const CAmount DEFAULT_IRONWOOD_CONSOLIDATION_FEE = 10000;
  */
 static const int DEFAULT_IRONWOOD_CONSOLIDATION_INTERVAL = 10080; // 1 week in minutes
 
-/**
- * Global Ironwood consolidation fee setting
- * Can be modified via configuration parameters
- */
-extern CAmount fIronwoodConsolidationTxFee;
-
-/**
- * Flag indicating whether Ironwood consolidation address mapping is used
- * When true, only specific addresses from configuration are consolidated
- */
-extern bool fIronwoodConsolidationMapUsed;
+// fIronwoodConsolidationTxFee and fIronwoodConsolidationMapUsed used to live
+// here as process-globals shared by every wallet. Phase 5 of the multiwallet
+// effort promoted them to per-CWallet fields (ironwoodConsolidationTxFee,
+// ironwoodConsolidationAddresses -- wallet.h), so this operation now reads
+// them off wallet_ instead.
 
 /**
  * @class AsyncRPCOperation_ironwoodconsolidation

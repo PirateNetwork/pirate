@@ -276,6 +276,53 @@ public:
 
     bool WriteMinVersion(int nVersion);
 
+    /**
+     * Per-wallet configuration settings (Phase 5 of the multiwallet effort;
+     * given an encrypted-on-disk form in a follow-up pass once an audit
+     * flagged that an acquired encrypted wallet file still leaked all of
+     * these in plaintext -- addresses in particular). One generic pair
+     * covers every setting, rather than one named Write*() method per
+     * setting as originally written: the corresponding CWallet::Set*()
+     * method (wallet.cpp) decides the key names and, via
+     * CWallet::WriteEncryptableSetting(), whether to write plaintext or
+     * encrypted; RPC handlers never construct a CWalletDB directly for these
+     * settings. Loaded back in automatically by CWalletDB::ReadKeyValue() on
+     * the next CWallet::LoadWallet() call, not by an explicit Read* call
+     * here -- for both the plaintext and encrypted form of each setting.
+     */
+    template <typename T>
+    bool WriteSetting(const std::string& key, const T& value)
+    {
+        nWalletDBUpdated++;
+        return Write(key, value);
+    }
+    bool WriteCryptedSetting(const std::string& key, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret)
+    {
+        nWalletDBUpdated++;
+        return Write(key, std::make_pair(chash, vchCryptedSecret));
+    }
+    // Read-back exposed mainly for tests reading a record's raw (chash, ciphertext)
+    // pair directly (Read() on the CDB base class isn't otherwise reachable from
+    // outside CWalletDB) -- CWallet::LoadWallet()'s normal path goes through
+    // CWalletDB::ReadKeyValue() instead, not this.
+    template <typename T>
+    bool ReadSetting(const std::string& key, T& value)
+    {
+        return Read(key, value);
+    }
+    bool EraseSetting(const std::string& key)
+    {
+        nWalletDBUpdated++;
+        return Erase(key);
+    }
+    // Existence check exposed mainly for tests verifying a plaintext record
+    // was actually erased once its encrypted form was written (Exists() on
+    // the CDB base class isn't otherwise reachable from outside CWalletDB).
+    bool SettingExists(const std::string& key)
+    {
+        return Exists(key);
+    }
+
     bool ReadAccount(const std::string& strAccount, CAccount& account);
     bool WriteAccount(const std::string& strAccount, const CAccount& account);
 

@@ -88,22 +88,18 @@ std::vector<CWalletRef> vpwallets;
 
 /**
  * @section Wallet Configuration Settings
- * 
- * Global configuration variables that control wallet behavior and transaction
- * processing. These can be modified through command-line arguments and RPC calls.
+ *
+ * payTxFee, nTxConfirmTarget, bSpendZeroConfChange, minTxValue, and the
+ * transaction-deletion/pruning settings used to live here as process-wide
+ * globals. Phase 5 of the multiwallet effort promoted them to per-CWallet
+ * members (wallet.h) so each loaded wallet keeps and persists its own
+ * values instead of sharing one process-wide setting -- see wallet.h for
+ * their new declarations and the Set*() methods below for how they're
+ * changed and persisted together.
  */
-
-/** Fee rate for transactions (can be overridden with -paytxfee) */
-CFeeRate payTxFee(DEFAULT_TRANSACTION_FEE);
 
 /** Maximum fee allowed for any transaction (can be overridden with -maxtxfee) */
 CAmount maxTxFee = DEFAULT_TRANSACTION_MAXFEE;
-
-/** Target number of blocks for fee estimation (can be overridden with -txconfirmtarget) */
-unsigned int nTxConfirmTarget = DEFAULT_TX_CONFIRM_TARGET;
-
-/** Whether to spend unconfirmed change outputs (can be overridden with -spendzeroconfchange) */
-bool bSpendZeroConfChange = true;
 
 /** Whether to send transactions with minimal fees (legacy setting) */
 bool fSendFreeTransactions = false;
@@ -111,35 +107,17 @@ bool fSendFreeTransactions = false;
 /** Whether to pay at least the custom fee specified (can be overridden with -payatleastcustomfee) */
 bool fPayAtLeastCustomFee = true;
 
-/** Minimum value for transaction outputs (can be overridden with -mintxvalue) */
-CAmount minTxValue = DEFAULT_MIN_TX_VALUE;
-
 /** Whether to use replace-by-fee (RBF) for transactions */
 bool fWalletRbf = DEFAULT_WALLET_RBF;
 
 /**
  * @section Wallet State Variables
- * 
+ *
  * Variables that track wallet scanning progress and transaction management settings.
  */
 
 /** Progress percentage for blockchain scanning operations */
 int scanperc;
-
-/** Whether transaction deletion is enabled for wallet cleanup */
-bool fTxDeleteEnabled = false;
-
-/** Whether conflicted transaction deletion is enabled */
-bool fTxConflictDeleteEnabled = false;
-
-/** Interval for transaction deletion operations */
-int fDeleteInterval = DEFAULT_TX_DELETE_INTERVAL;
-
-/** Number of blocks to retain transactions before deletion */
-unsigned int fDeleteTransactionsAfterNBlocks = DEFAULT_TX_RETENTION_BLOCKS;
-
-/** Number of recent transactions to always keep */
-unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
 
 /** Recovery seed phrase for wallet restoration */
 std::string recoverySeedPhrase = "";
@@ -157,10 +135,10 @@ int recoveryHeight = 0;
 SecureString *strOpeningWalletPassphrase;
 
 /**
- * Fees smaller than this (in satoshi) are considered zero fee (for transaction creation)
- * Override with -mintxfee
+ * minTxFee (fees smaller than this, in satoshi, are considered zero fee for
+ * transaction creation) is now a per-wallet field (wallet.h) rather than a
+ * static CWallet member, so it no longer has an out-of-line definition here.
  */
-CFeeRate CWallet::minTxFee = CFeeRate(1000);
 
 /**
  * If fee estimation does not have enough data to provide estimates, use this fee instead.
@@ -3613,6 +3591,241 @@ bool CWallet::SetMaxVersion(int nVersion)
 }
 
 /**
+ * @section Per-wallet configuration setters
+ *
+ * All follow SetMinVersion()'s shape: update the in-memory field under
+ * cs_wallet, then -- if this wallet is file-backed -- persist it immediately
+ * via a CWalletDB constructed for this wallet's own file. RPC handlers call
+ * these instead of assigning the fields directly, so a setting is never
+ * changed in memory without also being persisted to this wallet's own file
+ * (Phase 5 of the multiwallet effort; see walletdb.cpp for the matching
+ * Write*() methods and CWalletDB::ReadKeyValue() for how these are loaded
+ * back in on the next CWallet::LoadWallet() call).
+ */
+void CWallet::SetSaplingConsolidationEnabled(bool enabled)
+{
+    LOCK(cs_wallet);
+    fSaplingConsolidationEnabled = enabled;
+    WriteEncryptableSetting("saplingconsolidationenabled", "csaplingconsolidationenabled", enabled);
+}
+
+void CWallet::SetIronwoodConsolidationEnabled(bool enabled)
+{
+    LOCK(cs_wallet);
+    fIronwoodConsolidationEnabled = enabled;
+    WriteEncryptableSetting("ironwoodconsolidationenabled", "cironwoodconsolidationenabled", enabled);
+}
+
+void CWallet::SetSaplingConsolidationInterval(int interval)
+{
+    LOCK(cs_wallet);
+    saplingConsolidationInterval = interval;
+    WriteEncryptableSetting("saplingconsolidationinterval", "csaplingconsolidationinterval", interval);
+}
+
+void CWallet::SetIronwoodConsolidationInterval(int interval)
+{
+    LOCK(cs_wallet);
+    ironwoodConsolidationInterval = interval;
+    WriteEncryptableSetting("ironwoodconsolidationinterval", "cironwoodconsolidationinterval", interval);
+}
+
+void CWallet::SetSaplingConsolidationTargetQty(int qty)
+{
+    LOCK(cs_wallet);
+    targetSaplingConsolidationQty = qty;
+    WriteEncryptableSetting("targetsaplingconsolidationqty", "ctargetsaplingconsolidationqty", qty);
+}
+
+void CWallet::SetIronwoodConsolidationTargetQty(int qty)
+{
+    LOCK(cs_wallet);
+    targetIronwoodConsolidationQty = qty;
+    WriteEncryptableSetting("targetironwoodconsolidationqty", "ctargetironwoodconsolidationqty", qty);
+}
+
+void CWallet::SetSaplingConsolidationTxFee(CAmount fee)
+{
+    LOCK(cs_wallet);
+    saplingConsolidationTxFee = fee;
+    WriteEncryptableSetting("saplingconsolidationtxfee", "csaplingconsolidationtxfee", fee);
+}
+
+void CWallet::SetIronwoodConsolidationTxFee(CAmount fee)
+{
+    LOCK(cs_wallet);
+    ironwoodConsolidationTxFee = fee;
+    WriteEncryptableSetting("ironwoodconsolidationtxfee", "cironwoodconsolidationtxfee", fee);
+}
+
+void CWallet::SetSaplingConsolidationAddresses(const std::vector<std::string>& addresses)
+{
+    LOCK(cs_wallet);
+    saplingConsolidationAddresses = addresses;
+    WriteEncryptableSetting("saplingconsolidationaddresses", "csaplingconsolidationaddresses", addresses);
+}
+
+void CWallet::SetIronwoodConsolidationAddresses(const std::vector<std::string>& addresses)
+{
+    LOCK(cs_wallet);
+    ironwoodConsolidationAddresses = addresses;
+    WriteEncryptableSetting("ironwoodconsolidationaddresses", "cironwoodconsolidationaddresses", addresses);
+}
+
+void CWallet::SetSweepEnabled(bool enabled)
+{
+    LOCK(cs_wallet);
+    fSweepEnabled = enabled;
+    WriteEncryptableSetting("sweepenabled", "csweepenabled", enabled);
+}
+
+void CWallet::SetSweepInterval(int interval)
+{
+    LOCK(cs_wallet);
+    sweepInterval = interval;
+    WriteEncryptableSetting("sweepinterval", "csweepinterval", interval);
+}
+
+void CWallet::SetSweepTxFee(CAmount fee)
+{
+    LOCK(cs_wallet);
+    sweepTxFee = fee;
+    WriteEncryptableSetting("sweeptxfee", "csweeptxfee", fee);
+}
+
+void CWallet::SetSaplingSweepAddress(const std::string& address)
+{
+    // Mutually exclusive with ironwoodSweepAddress, same as the old
+    // rpcSaplingSweepAddress/rpcIronwoodSweepAddress globals were -- only one
+    // sweep destination is ever active at a time, across both pools.
+    LOCK(cs_wallet);
+    saplingSweepAddress = address;
+    ironwoodSweepAddress.clear();
+    WriteEncryptableSetting("saplingsweepaddress", "csaplingsweepaddress", address);
+    WriteEncryptableSetting("ironwoodsweepaddress", "cironwoodsweepaddress", std::string(""));
+}
+
+void CWallet::SetIronwoodSweepAddress(const std::string& address)
+{
+    LOCK(cs_wallet);
+    ironwoodSweepAddress = address;
+    saplingSweepAddress.clear();
+    WriteEncryptableSetting("ironwoodsweepaddress", "cironwoodsweepaddress", address);
+    WriteEncryptableSetting("saplingsweepaddress", "csaplingsweepaddress", std::string(""));
+}
+
+void CWallet::SetChangeAddress(const libzcash::PaymentAddress& address)
+{
+    // Mirrors init.cpp's historical -changeaddress validation exactly: must
+    // be a Sapling or Ironwood address (there's no consensus rule tying a
+    // change output's pool to the spend's pool, so one address covers both),
+    // and this wallet must hold the spending key for it.
+    bool isShielded = std::get_if<libzcash::SaplingPaymentAddress>(&address) ||
+                       std::get_if<libzcash::IronwoodPaymentAddress>(&address);
+    if (!IsValidPaymentAddress(address) || !isShielded) {
+        throw std::runtime_error("changeaddress must be a valid Sapling or Ironwood address");
+    }
+    if (!std::visit(HaveSpendingKeyForPaymentAddress(this), address)) {
+        throw std::runtime_error("Wallet must have the spending key for changeaddress");
+    }
+
+    LOCK(cs_wallet);
+    configuredChangeAddress = address;
+    WriteEncryptableSetting("changeaddress", "cchangeaddress", EncodePaymentAddress(address));
+}
+
+void CWallet::SetPayTxFee(CFeeRate feeRate)
+{
+    LOCK(cs_wallet);
+    payTxFee = feeRate;
+    WriteEncryptableSetting("paytxfee", "cpaytxfee", feeRate);
+}
+
+void CWallet::SetMinTxFee(CFeeRate feeRate)
+{
+    LOCK(cs_wallet);
+    minTxFee = feeRate;
+    WriteEncryptableSetting("mintxfee", "cmintxfee", feeRate);
+}
+
+void CWallet::SetTxConfirmTarget(unsigned int target)
+{
+    LOCK(cs_wallet);
+    nTxConfirmTarget = target;
+    WriteEncryptableSetting("txconfirmtarget", "ctxconfirmtarget", target);
+}
+
+void CWallet::SetSpendZeroConfChange(bool spend)
+{
+    LOCK(cs_wallet);
+    bSpendZeroConfChange = spend;
+    WriteEncryptableSetting("spendzeroconfchange", "cspendzeroconfchange", spend);
+}
+
+void CWallet::SetMinTxValue(CAmount value)
+{
+    LOCK(cs_wallet);
+    minTxValue = value;
+    WriteEncryptableSetting("mintxvalue", "cmintxvalue", value);
+}
+
+void CWallet::SetKeypoolSizeTarget(int64_t size)
+{
+    LOCK(cs_wallet);
+    nKeypoolSizeTarget = size;
+    WriteEncryptableSetting("keypoolsizetarget", "ckeypoolsizetarget", size);
+}
+
+void CWallet::SetWalletNotifyCommand(const std::string& command)
+{
+    // Deliberately NOT persisted to CWalletDB, unlike every other setting in
+    // this section (audit finding, Phase 5): this command runs via system()
+    // on every wallet-tx change (AddToWallet(), below). Writing it into the
+    // wallet file would turn that file into a portable code-execution
+    // payload -- loadwallet on a wallet.dat received from someone else would
+    // silently install and later run their command. Session-only, exactly
+    // like the old -walletnotify CLI flag was: it only lasts as long as this
+    // process runs, and never travels with the file.
+    LOCK(cs_wallet);
+    strWalletNotifyCommand = command;
+}
+
+void CWallet::SetTxDeleteEnabled(bool enabled)
+{
+    LOCK(cs_wallet);
+    fTxDeleteEnabled = enabled;
+    WriteEncryptableSetting("deletetxenabled", "cdeletetxenabled", enabled);
+}
+
+void CWallet::SetTxConflictDeleteEnabled(bool enabled)
+{
+    LOCK(cs_wallet);
+    fTxConflictDeleteEnabled = enabled;
+    WriteEncryptableSetting("deleteconflicttxenabled", "cdeleteconflicttxenabled", enabled);
+}
+
+void CWallet::SetDeleteInterval(int interval)
+{
+    LOCK(cs_wallet);
+    fDeleteInterval = interval;
+    WriteEncryptableSetting("deleteinterval", "cdeleteinterval", interval);
+}
+
+void CWallet::SetKeepTransactionsAfterNBlocks(unsigned int nBlocks)
+{
+    LOCK(cs_wallet);
+    fDeleteTransactionsAfterNBlocks = nBlocks;
+    WriteEncryptableSetting("keeptxfornblocks", "ckeeptxfornblocks", nBlocks);
+}
+
+void CWallet::SetKeepLastNTransactions(unsigned int n)
+{
+    LOCK(cs_wallet);
+    fKeepLastNTransactions = n;
+    WriteEncryptableSetting("keeptxnum", "ckeeptxnum", n);
+}
+
+/**
  * @brief Get all transactions that conflict with the specified transaction
  * @param txid The transaction ID to check for conflicts
  * @return Set of transaction IDs that conflict with the given transaction
@@ -3713,14 +3926,18 @@ void CWallet::Flush(bool shutdown)
  * Performs integrity checks on the specified wallet file. This function:
  * - Attempts to open the wallet database environment
  * - Handles database corruption by moving old database files and retrying
- * - Performs salvage operations if -salvagewallet flag is set
+ * - Performs salvage operations if the caller passes fSalvage=true (the
+ *   default wallet's caller, init.cpp, derives this from -salvagewallet;
+ *   CWalletManager::LoadWallet() derives it from loadwallet's own salvage
+ *   parameter -- this function no longer reads -salvagewallet itself, so
+ *   requesting salvage for one wallet can't affect any other loaded wallet)
  * - Validates wallet data structures and consistency
  * 
  * Any warnings or errors encountered are appended to the provided strings.
  * The function attempts recovery operations when possible, including moving
  * corrupted database files to backup locations.
  */
-bool CWallet::Verify(const string& walletFile, string& warningString, string& errorString)
+bool CWallet::Verify(const string& walletFile, string& warningString, string& errorString, bool fSalvage)
 {
     if (!bitdb->Open(GetDataDir()))
     {
@@ -3743,7 +3960,7 @@ bool CWallet::Verify(const string& walletFile, string& warningString, string& er
         }
     }
 
-    if (GetBoolArg("-salvagewallet", false))
+    if (fSalvage)
     {
         // Recover readable keypairs:
         if (!CWalletDB::Recover(*bitdb, walletFile, true))
@@ -5837,6 +6054,26 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
+        //Encrypt Phase 5 config settings (consolidation/sweep/fee/pruning/change-address).
+        //Same reasoning as destdata just above: this is the point in the actual encryptwallet
+        //transition where the master key is genuinely available (UnlockUnchecked() ran earlier
+        //in this function) -- the separate MigrateSettingsToEncrypted() calls at wallet load
+        //time (init.cpp, CWalletManager::LoadWallet()) only ever help a wallet that was already
+        //encrypted, in a still-unlocked state, before these settings existed.
+        //
+        //Logged, not treated as a hard failure (unlike every encryption step above): everything
+        //above this point is key material -- failing here would leave keys/seed/tx history
+        //genuinely inconsistent between "encrypted" and "not yet marked encrypted", and this
+        //function has no rollback path, so continuing past a key-material failure would be worse
+        //than aborting. A failure here is just configuration: this wallet's own settings falling
+        //back to plaintext-or-defaults is not worth bricking the entire encryption transition
+        //over (SetDefaultKey/SetWalletCrypted/SetDBCrypted/SetMinVersion/CDB::Rewrite below would
+        //all be skipped by an early return here, leaving the file in a half-encrypted state that
+        //fails to reopen next startup).
+        if (!MigrateSettingsToEncrypted()) {
+            LogPrintf("Warning: could not migrate consolidation/sweep/fee/pruning settings to encrypted storage.\n");
+        }
+
         //Encrypt DefaultKey
         if (!SetDefaultKey(vchDefaultKey)) {
             LogPrintf("Setting encrypted default key failed!!!\n");
@@ -6082,6 +6319,188 @@ void CWallet::DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, Wallet
     ss >> wObj2;
     ss >> wObj3;
 }
+
+/**
+ * @brief Persist a simple per-wallet setting, encrypted on disk when this wallet is encrypted+unlocked.
+ * @tparam T Scalar or vector type of the setting (bool/int/unsigned int/int64_t/CAmount/CFeeRate/
+ *           std::string/std::vector<std::string> are all instantiated below, for every Set*()
+ *           method that calls this).
+ * @param plainKey Record name used on an unencrypted wallet (or before this wallet is unlocked).
+ * @param cryptedKey Record name used once encrypted -- by convention "c" + plainKey, matching
+ *                   hdchain/chdchain and destdata/cdestdata.
+ * @param value The current value to persist.
+ *
+ * Mirrors WriteDestDataToDisk()/WriteHDChainToDisk(): an unencrypted wallet keeps writing the
+ * plain record. An encrypted, unlocked wallet instead serializes `value`, derives a content-bound
+ * chash from the serialized bytes (same as the witness-cache blobs use -- there's no natural
+ * "stable identifying field" the way an HD chain's seed fingerprint is, since these are simple
+ * settings, not compound objects), encrypts under the master key, writes the crypted record, and
+ * erases the plaintext one so it doesn't linger once superseded. Locked-but-encrypted fails closed
+ * (returns false) rather than falling back to writing plaintext into an encrypted wallet's file.
+ */
+template <typename T>
+bool CWallet::WriteEncryptableSetting(const std::string& plainKey, const std::string& cryptedKey, const T& value)
+{
+    if (!fFileBacked)
+        return true;
+
+    CWalletDB walletdb(strWalletFile);
+    if (!IsCrypted())
+        return walletdb.WriteSetting(plainKey, value);
+
+    if (IsLocked())
+        return false;
+
+    T valueCopy = value;
+    CKeyingMaterial vchSecret = SerializeForEncryptionInput(valueCopy);
+    // Bound to cryptedKey as well as content -- content alone isn't enough
+    // here (unlike the witness-cache blobs this otherwise mirrors): these
+    // are small-domain scalars/short strings, so e.g. any two `true` bools,
+    // or an empty address list and the sweep address's cleared "", serialize
+    // identically. A content-only chash would make two different settings'
+    // ciphertexts byte-identical whenever their values happen to match,
+    // letting an attacker holding only the file (no passphrase) read the
+    // low-entropy settings straight off which encrypted records are equal,
+    // and would let one record's ciphertext be copied onto a different
+    // same-shaped key without detection (chash only proves "this decrypts to
+    // something whose hash is chash", not "this belongs under this key").
+    std::pair<std::string, CKeyingMaterial> keyBoundSecret = std::make_pair(cryptedKey, vchSecret);
+    uint256 chash = HashWithFP(keyBoundSecret);
+    std::vector<unsigned char> vchCryptedSecret;
+    if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+        LogPrintf("Encrypting wallet setting %s failed!!!\n", plainKey);
+        return false;
+    }
+    if (!walletdb.WriteCryptedSetting(cryptedKey, chash, vchCryptedSecret))
+        return false;
+    // Checked, not fire-and-forget: if this fails, both the plaintext and
+    // encrypted records now exist simultaneously, and CWalletDB::ReadKeyValue()
+    // has no defined tie-break between them beyond BDB cursor order -- the
+    // stale plaintext value could silently win on the next load. Logged
+    // rather than treated as a hard failure since the encrypted write above
+    // already succeeded (this wallet's file is not left worse off than
+    // before this call, just not as clean as intended).
+    if (!walletdb.EraseSetting(plainKey))
+        LogPrintf("Warning: wrote encrypted setting %s but failed to erase its plaintext form %s\n", cryptedKey, plainKey);
+    return true;
+}
+
+/**
+ * @brief Decrypt an on-disk encrypted setting record back into its plaintext value.
+ * @param cryptedKey The record's own key name -- part of what chash is bound to (see
+ *                    WriteEncryptableSetting()'s doc comment); must be the exact key this
+ *                    record was read from, or a genuine, correctly-encrypted record for a
+ *                    different setting will be rejected here as if it were tampered with.
+ * @param chash Hash bound to both cryptedKey and content, stored with the record; verified
+ *              against the decrypted bytes plus the same cryptedKey.
+ * @param vchCryptedSecret Encrypted blob.
+ * @param value[out] Decrypted value.
+ * @return true if decryption succeeds and the key+content hash matches (tamper/corruption/
+ *         cross-record-substitution check).
+ *
+ * See WriteEncryptableSetting() above for the write side. Called only from the 26 named,
+ * non-template Decrypt<Setting>() wrappers below -- CWalletDB::ReadKeyValue() (a different
+ * translation unit) calls those, not this template directly, so this template only ever needs
+ * implicit instantiation within this file.
+ */
+template <typename T>
+bool CWallet::DecryptSettingValue(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, T& value)
+{
+    if (IsLocked())
+        return false;
+
+    CKeyingMaterial vchSecret;
+    if (!DecryptSerializedWalletObjects(vchCryptedSecret, chash, vchSecret)) {
+        LogPrintf("Decrypting wallet setting failed!!!\n");
+        return false;
+    }
+    std::pair<std::string, CKeyingMaterial> keyBoundSecret = std::make_pair(cryptedKey, vchSecret);
+    if (HashWithFP(keyBoundSecret) != chash)
+        return false;
+    DeserializeFromDecryptionOutput(vchSecret, value);
+    return true;
+}
+
+bool CWallet::DecryptSaplingConsolidationEnabled(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, bool& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptIronwoodConsolidationEnabled(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, bool& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSaplingConsolidationInterval(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptIronwoodConsolidationInterval(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSaplingConsolidationTargetQty(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptIronwoodConsolidationTargetQty(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSaplingConsolidationTxFee(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CAmount& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptIronwoodConsolidationTxFee(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CAmount& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSaplingConsolidationAddresses(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, std::vector<std::string>& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptIronwoodConsolidationAddresses(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, std::vector<std::string>& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSweepEnabled(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, bool& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSweepInterval(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSweepTxFee(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CAmount& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSaplingSweepAddress(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, std::string& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptIronwoodSweepAddress(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, std::string& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptChangeAddress(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, std::string& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptPayTxFee(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CFeeRate& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptMinTxFee(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CFeeRate& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptTxConfirmTarget(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, unsigned int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptSpendZeroConfChange(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, bool& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptMinTxValue(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, CAmount& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptKeypoolSizeTarget(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int64_t& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptTxDeleteEnabled(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, bool& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptTxConflictDeleteEnabled(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, bool& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptDeleteInterval(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptKeepTransactionsAfterNBlocks(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, unsigned int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
+
+bool CWallet::DecryptKeepLastNTransactions(const std::string& cryptedKey, const uint256& chash, const std::vector<unsigned char>& vchCryptedSecret, unsigned int& value)
+{ return DecryptSettingValue(cryptedKey, chash, vchCryptedSecret, value); }
 
 /**
  * @brief Increment the wallet's order position counter
@@ -6635,7 +7054,7 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
             NotifyBalanceChanged();
         }
         // notify an external script when a wallet transaction comes in or is updated
-        std::string strCmd = GetArg("-walletnotify", "");
+        std::string strCmd = strWalletNotifyCommand;
 
         if ( !strCmd.empty())
         {
@@ -7120,7 +7539,7 @@ static void DecryptIronwoodNoteWorker(
             nd.fNoteDataInitialized = true;
 
             LogPrintf("\n\nIronwood Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
-            if (nd.value >= minTxValue) {
+            if (nd.value >= wallet->minTxValue) {
                 //Only add notes greater then this value
                 //dust filter
                 {
@@ -7291,7 +7710,7 @@ static void DecryptSaplingNoteWorker(
             nd.address = address;
             nd.fNoteDataInitialized = true;
 
-            if (nd.value >= minTxValue) {
+            if (nd.value >= wallet->minTxValue) {
                 //Only add notes greater then this value
                 //dust filter
                 {
@@ -10316,7 +10735,7 @@ bool CWalletTx::IsTrusted() const
         return true;
     if (nDepth < 0)
         return false;
-    if (!bSpendZeroConfChange || !IsFromMe(ISMINE_ALL)) // using wtx's cached debit
+    if (!pwallet->bSpendZeroConfChange || !IsFromMe(ISMINE_ALL)) // using wtx's cached debit
         return false;
 
     // Trusted if all inputs are from us and are in the mempool:
@@ -11593,7 +12012,7 @@ bool CWallet::CreateTransaction(const vector<CRecipient>& vecSend, CWalletTx& wt
                         break;
                 }
 
-                CAmount nFeeNeeded = GetMinimumFee(nBytes, coinControl, ::mempool, ::feeEstimator, &feeCalc);
+                CAmount nFeeNeeded = GetMinimumFee(nBytes, coinControl, ::mempool, ::feeEstimator, &feeCalc, this);
 
                 if ( nFeeNeeded < nMinFeeOverride )
                     nFeeNeeded = nMinFeeOverride;
@@ -12166,7 +12585,7 @@ bool CWallet::NewKeyPool()
             walletdb.ErasePool(nIndex);
         setKeyPool.clear();
 
-        int64_t nKeys = max(GetArg("-keypool", 100), (int64_t)0);
+        int64_t nKeys = max(nKeypoolSizeTarget, (int64_t)0);
         for (int i = 0; i < nKeys; i++)
         {
             int64_t nIndex = i+1;
@@ -12215,7 +12634,7 @@ bool CWallet::TopUpKeyPool(unsigned int kpSize)
         if (kpSize > 0)
             nTargetSize = kpSize;
         else
-            nTargetSize = max(GetArg("-keypool", 100), (int64_t) 0);
+            nTargetSize = max(nKeypoolSizeTarget, (int64_t) 0);
 
         while (setKeyPool.size() < (nTargetSize + 1))
         {
@@ -12961,6 +13380,67 @@ bool CWallet::MigrateDestDataToEncrypted()
         }
     }
     return true;
+}
+
+/**
+ * @brief Re-persist every currently-plaintext Phase 5 config setting in encrypted form.
+ *
+ * Mirrors MigrateDestDataToEncrypted() immediately above: used to migrate a wallet that
+ * was encrypted before these settings gained an encrypted-on-disk form (or one whose
+ * settings were written while the wallet was still locked -- WriteEncryptableSetting()
+ * fails closed rather than falling back to plaintext in that case, so the plaintext
+ * record can genuinely still be the current one on an encrypted wallet). No-op unless
+ * the wallet is encrypted and unlocked. Each call re-derives every setting's current
+ * in-memory value and re-persists it through the same Set*()-adjacent path -- calling
+ * the private WriteEncryptableSetting() directly (not the public Set*() methods, which
+ * would re-run validation/side-effects like SetChangeAddress()'s spending-key check
+ * that a stored, already-once-validated value doesn't need to repeat).
+ */
+bool CWallet::MigrateSettingsToEncrypted()
+{
+    if (!fFileBacked || !IsCrypted() || IsLocked())
+        return true;
+
+    LOCK(cs_wallet);
+    bool ok = true;
+    ok &= WriteEncryptableSetting("saplingconsolidationenabled", "csaplingconsolidationenabled", fSaplingConsolidationEnabled);
+    ok &= WriteEncryptableSetting("ironwoodconsolidationenabled", "cironwoodconsolidationenabled", fIronwoodConsolidationEnabled);
+    ok &= WriteEncryptableSetting("saplingconsolidationinterval", "csaplingconsolidationinterval", saplingConsolidationInterval);
+    ok &= WriteEncryptableSetting("ironwoodconsolidationinterval", "cironwoodconsolidationinterval", ironwoodConsolidationInterval);
+    ok &= WriteEncryptableSetting("targetsaplingconsolidationqty", "ctargetsaplingconsolidationqty", targetSaplingConsolidationQty);
+    ok &= WriteEncryptableSetting("targetironwoodconsolidationqty", "ctargetironwoodconsolidationqty", targetIronwoodConsolidationQty);
+    ok &= WriteEncryptableSetting("saplingconsolidationtxfee", "csaplingconsolidationtxfee", saplingConsolidationTxFee);
+    ok &= WriteEncryptableSetting("ironwoodconsolidationtxfee", "cironwoodconsolidationtxfee", ironwoodConsolidationTxFee);
+    ok &= WriteEncryptableSetting("saplingconsolidationaddresses", "csaplingconsolidationaddresses", saplingConsolidationAddresses);
+    ok &= WriteEncryptableSetting("ironwoodconsolidationaddresses", "cironwoodconsolidationaddresses", ironwoodConsolidationAddresses);
+    ok &= WriteEncryptableSetting("sweepenabled", "csweepenabled", fSweepEnabled);
+    ok &= WriteEncryptableSetting("sweepinterval", "csweepinterval", sweepInterval);
+    ok &= WriteEncryptableSetting("sweeptxfee", "csweeptxfee", sweepTxFee);
+    ok &= WriteEncryptableSetting("saplingsweepaddress", "csaplingsweepaddress", saplingSweepAddress);
+    ok &= WriteEncryptableSetting("ironwoodsweepaddress", "cironwoodsweepaddress", ironwoodSweepAddress);
+    // Written unconditionally, even when unset: a prior configuration's stale
+    // plaintext or encrypted record (e.g. one whose address no longer decodes
+    // under different network params, silently leaving configuredChangeAddress
+    // unset on load -- see the "changeaddress"/"cchangeaddress" ReadKeyValue
+    // branch) must still be erased/re-encrypted here, or an address the user
+    // once configured could survive in plaintext form inside an otherwise
+    // fully encrypted wallet file.
+    ok &= WriteEncryptableSetting("changeaddress", "cchangeaddress",
+        configuredChangeAddress.has_value() ? EncodePaymentAddress(configuredChangeAddress.value()) : std::string(""));
+    ok &= WriteEncryptableSetting("paytxfee", "cpaytxfee", payTxFee);
+    ok &= WriteEncryptableSetting("mintxfee", "cmintxfee", minTxFee);
+    ok &= WriteEncryptableSetting("txconfirmtarget", "ctxconfirmtarget", nTxConfirmTarget);
+    ok &= WriteEncryptableSetting("spendzeroconfchange", "cspendzeroconfchange", bSpendZeroConfChange);
+    ok &= WriteEncryptableSetting("mintxvalue", "cmintxvalue", minTxValue);
+    ok &= WriteEncryptableSetting("keypoolsizetarget", "ckeypoolsizetarget", nKeypoolSizeTarget);
+    ok &= WriteEncryptableSetting("deletetxenabled", "cdeletetxenabled", fTxDeleteEnabled);
+    ok &= WriteEncryptableSetting("deleteconflicttxenabled", "cdeleteconflicttxenabled", fTxConflictDeleteEnabled);
+    ok &= WriteEncryptableSetting("deleteinterval", "cdeleteinterval", fDeleteInterval);
+    ok &= WriteEncryptableSetting("keeptxfornblocks", "ckeeptxfornblocks", fDeleteTransactionsAfterNBlocks);
+    ok &= WriteEncryptableSetting("keeptxnum", "ckeeptxnum", fKeepLastNTransactions);
+    // strWalletNotifyCommand deliberately excluded -- never persisted at all, see
+    // CWallet::SetWalletNotifyCommand().
+    return ok;
 }
 
 bool CWallet::LoadDestData(const CTxDestination &dest, const std::string &key, const std::string &value)

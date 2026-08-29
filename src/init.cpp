@@ -554,52 +554,24 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageGroup(_("Wallet options:"));
     strUsage += HelpMessageOpt("-seedphrase=<phrase>", _("Recover wallet from seed phrase if a wallet file does not exist."));
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
-    strUsage += HelpMessageOpt("-mintxvalue=<amt>", strprintf(_("Set minimum incoming value of notes that will be added to the wallet in Arrtoshis (default: %u)"), 1));
-    strUsage += HelpMessageOpt("-keypool=<n>", strprintf(_("Set key pool size to <n> (default: %u)"), 100));
-
-    // Protocol-specific consolidation commands
-    strUsage += HelpMessageOpt("-saplingconsolidation", _("Enable auto Sapling note consolidation"));
-    strUsage += HelpMessageOpt("-saplingconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Sapling consolidation transactions. (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_FEE));
-    strUsage += HelpMessageOpt("-saplingconsolidationinterval=<n>", strprintf(_("Interval in blocks between Sapling note consolidation (default %i)"), DEFAULT_SAPLING_CONSOLIDATION_INTERVAL));
-    strUsage += HelpMessageOpt("-ironwoodconsolidation", _("Enable auto Ironwood note consolidation"));
-    strUsage += HelpMessageOpt("-ironwoodconsolidationtxfee", strprintf(_("Fee amount in Satoshis used for Ironwood consolidation transactions. (default %i)"), DEFAULT_IRONWOOD_CONSOLIDATION_FEE));
-    strUsage += HelpMessageOpt("-ironwoodconsolidationinterval=<n>", strprintf(_("Interval in blocks between Ironwood note consolidation (default %i)"), DEFAULT_IRONWOOD_CONSOLIDATION_INTERVAL));
-    strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling address to consolidate (default: all). Must match sweep address when sweep is enabled."));
-    strUsage += HelpMessageOpt("-consolidateironwoodaddress=<zaddr>", _("Specify Ironwood address to consolidate (default: all). Must match sweep address when sweep is enabled."));
-    strUsage += HelpMessageOpt("-consolidationtargetqty=<n>", strprintf(_("Minimum number of notes an address must have before auto-consolidation processes it (default: %i, minimum: 2)"), 100));
-    strUsage += HelpMessageOpt("-changeaddress=<zaddr>", _("Route all z_sendmany change (from either a Sapling or Ironwood source address) to this Sapling or Ironwood address instead of the auto-derived internal address. Wallet must hold the spending key for it."));
-
-    // Deprecated consolidation commands
-    strUsage += HelpMessageOpt("-consolidation", _("(DEPRECATED) Use -saplingconsolidation instead"));
-    strUsage += HelpMessageOpt("-consolidationtxfee", _("(DEPRECATED) Use -saplingconsolidationtxfee instead"));
-    strUsage += HelpMessageOpt("-consolidateaddress=<zaddr>", _("(DEPRECATED) Use protocol-specific address options instead"));
-
+    // Consolidation, sweep, fee/behavior, and transaction-deletion/pruning
+    // settings used to be configurable here as CLI/pirate.conf flags. Phase 5
+    // of the multiwallet effort made every one of them a per-wallet RPC
+    // setting instead (enablesaplingconsolidation, enableironwoodconsolidation,
+    // consolidationaddresses, setconsolidationtarget/fee/interval and their
+    // Ironwood counterparts, enablesweep, setsweepfee/interval/address,
+    // setchangeaddress, settxfee, setmintxfee, settxconfirmtarget,
+    // setspendzeroconfchange, setmintxvalue, setkeypoolsize, setwalletnotify,
+    // setdeletetx, setdeleteconflicttx, setdeleteinterval, setkeeptxnum,
+    // setkeeptxfornblocks), persisted in each wallet's own file -- see their
+    // RPC help text, or getwalletinfo/consolidationstatus/sweepstatus for
+    // reporting. The flags themselves are rejected explicitly below, not
+    // silently ignored, if still set.
     strUsage += HelpMessageOpt("-usedpowconfs", _("Use dPoW confirmation count instead of raw chain depth when filtering notes (default: true)"));
-
-    // Sweep commands
-    strUsage += HelpMessageOpt("-sweep", _("Enable auto note sweep, automatically move all funds to a single address periodically"));
-    strUsage += HelpMessageOpt("-sweepaddress=<zaddr>", _("Specify address to sweep funds to (supports both Sapling and Ironwood addresses)"));
-    strUsage += HelpMessageOpt("-sweeptxfee", strprintf(_("Fee amount in Satoshis used for sweep transactions. (default %i)"), DEFAULT_SWEEP_FEE));
-    strUsage += HelpMessageOpt("-sweepinterval=<n>", _("Number of blocks between automatic sweep runs (default: ~15 minutes of blocks)"));
-
-    // Deprecated sweep commands
-    strUsage += HelpMessageOpt("-sweepsaplingaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
-    strUsage += HelpMessageOpt("-sweepironwoodaddress=<zaddr>", _("(DEPRECATED) Use -sweepaddress instead"));
-    strUsage += HelpMessageOpt("-deletetx", _("Enable Old Transaction Deletion"));
-    strUsage += HelpMessageOpt("-deleteinterval", strprintf(_("Delete transaction every <n> blocks during inital block download (default: %i)"), DEFAULT_TX_DELETE_INTERVAL));
-    strUsage += HelpMessageOpt("-keeptxnum", strprintf(_("Keep the last <n> transactions (default: %i)"), DEFAULT_TX_RETENTION_LASTTX));
-    strUsage += HelpMessageOpt("-keeptxfornblocks", strprintf(_("Keep transactions for at least <n> blocks (default: %i)"), DEFAULT_TX_RETENTION_BLOCKS));
-    if (showDebug)
-        strUsage += HelpMessageOpt("-mintxfee=<amt>", strprintf("Fees (in %s/kB) smaller than this are considered zero fee for transaction creation (default: %s)",
-            CURRENCY_UNIT, FormatMoney(CWallet::minTxFee.GetFeePerK())));
-    strUsage += HelpMessageOpt("-paytxfee=<amt>", strprintf(_("Fee (in %s/kB) to add to transactions you send (default: %s)"),
-        CURRENCY_UNIT, FormatMoney(payTxFee.GetFeePerK())));
     strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-rescanheight", _("Start block height for rescanning (works with -rescan, -zapwallettxes, or GUI rescan). Default: 0 (genesis)"));
     strUsage += HelpMessageOpt("-salvagewallet", _("Attempt to recover private keys from a corrupt wallet.dat") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-sendfreetransactions", strprintf(_("Send transactions as zero-fee transactions if possible (default: %u)"), 0));
-    strUsage += HelpMessageOpt("-spendzeroconfchange", strprintf(_("Spend unconfirmed change when sending transactions (default: %u)"), 1));
-    strUsage += HelpMessageOpt("-txconfirmtarget=<n>", strprintf(_("If paytxfee is not set, include enough fee so transactions begin confirmation on average within n blocks (default: %u)"), DEFAULT_TX_CONFIRM_TARGET));
     strUsage += HelpMessageOpt("-txexpirydelta", strprintf(_("Set the number of blocks after which a transaction that has not been mined will become invalid (default: %u)"), DEFAULT_TX_EXPIRY_DELTA));
     strUsage += HelpMessageOpt("-maxtxfee=<amt>", strprintf(_("Maximum total fees (in %s) to use in a single wallet transaction; setting this too low may abort large transactions (default: %s)"),
         CURRENCY_UNIT, FormatMoney(maxTxFee)));
@@ -607,7 +579,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-unlockforreporting", _("Allow reporting of transactional and metadata on an encrypted wallet while locked.") + " " + strprintf(_("(default: %u)"), false));
     strUsage += HelpMessageOpt("-wallet=<file>", _("Specify wallet file (within data directory)") + " " + strprintf(_("(default: %s)"), "wallet.dat"));
     strUsage += HelpMessageOpt("-walletbroadcast", _("Make the wallet broadcast transactions") + " " + strprintf(_("(default: %u)"), true));
-    strUsage += HelpMessageOpt("-walletnotify=<cmd>", _("Execute command when a wallet transaction changes (%s in cmd is replaced by TxID)"));
     strUsage += HelpMessageOpt("-whitelistaddress=<Raddress>", _("Enable the wallet filter for notary nodes and add one Raddress to the whitelist of the wallet filter. If -whitelistaddress= is used, then the wallet filter is automatically activated. Several Raddresses can be defined using several -whitelistaddress= (similar to -addnode). The wallet filter will filter the utxo to only ones coming from my own Raddress (derived from pubkey) and each Raddress defined using -whitelistaddress= this option is mostly for Notary Nodes)."));
     strUsage += HelpMessageOpt("-zapwallettxes=1", _("Delete all wallet transactions and rescan the blockchain to rebuild them on startup"));
 #endif
@@ -1533,28 +1504,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
 #ifdef ENABLE_WALLET
-    if (mapArgs.count("-mintxfee"))
-    {
-        CAmount n = 0;
-        if (ParseMoney(mapArgs["-mintxfee"], n) && n > 0)
-            CWallet::minTxFee = CFeeRate(n);
-        else
-            return InitError(strprintf(_("Invalid amount for -mintxfee=<amount>: '%s'"), mapArgs["-mintxfee"]));
-    }
-    if (mapArgs.count("-paytxfee"))
-    {
-        CAmount nFeePerK = 0;
-        if (!ParseMoney(mapArgs["-paytxfee"], nFeePerK))
-            return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s'"), mapArgs["-paytxfee"]));
-        if (nFeePerK > nHighTransactionFeeWarning)
-            InitWarning(_("Warning: -paytxfee is set very high! This is the transaction fee you will pay if you send a transaction."));
-        payTxFee = CFeeRate(nFeePerK, 1000);
-        if (payTxFee < ::minRelayTxFee)
-        {
-            return InitError(strprintf(_("Invalid amount for -paytxfee=<amount>: '%s' (must be at least %s)"),
-                                       mapArgs["-paytxfee"], ::minRelayTxFee.ToString()));
-        }
-    }
+    // -mintxfee and -paytxfee were validated and applied here, against the
+    // process-global CWallet::minTxFee/payTxFee. Phase 5 of the multiwallet
+    // effort made both per-wallet fields instead (setmintxfee/settxfee RPCs);
+    // the flags themselves are rejected explicitly further down, once
+    // pwalletMain exists, rather than silently accepted and ignored here.
     if (mapArgs.count("-maxtxfee"))
     {
         CAmount nMaxFee = 0;
@@ -1569,10 +1523,69 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                                        mapArgs["-maxtxfee"], ::minRelayTxFee.ToString()));
         }
     }
-    nTxConfirmTarget = GetArg("-txconfirmtarget", DEFAULT_TX_CONFIRM_TARGET);
+    // -txconfirmtarget and -spendzeroconfchange were applied here, against the
+    // process-global nTxConfirmTarget/bSpendZeroConfChange. Phase 5 made both
+    // per-wallet fields instead (settxconfirmtarget/setspendzeroconfchange
+    // RPCs); rejected explicitly further down if still set.
     expiryDelta = GetArg("-txexpirydelta", DEFAULT_TX_EXPIRY_DELTA);
-    bSpendZeroConfChange = GetBoolArg("-spendzeroconfchange", true);
     fSendFreeTransactions = GetBoolArg("-sendfreetransactions", false);
+
+    // Phase 5 of the multiwallet effort removed all of the following as
+    // CLI/pirate.conf flags entirely, in favor of per-wallet RPC
+    // configuration persisted in each wallet's own file -- rejected
+    // explicitly here, rather than silently ignored, so an operator
+    // upgrading with one of these still set finds out immediately instead
+    // of wondering why it stopped having any effect. The wallet's own
+    // settings now come from whatever's persisted in its file (nothing, for
+    // a pre-existing wallet, until the RPC is run once), defaulting to the
+    // same compiled-in values these flags used to default to. Checked here,
+    // before any wallet object exists or any startup work has run (an
+    // earlier audit pass flagged the original placement -- deep inside
+    // wallet construction, after a first-run wallet could already have
+    // generated a seed and a first Sapling address -- as failing later than
+    // necessary for a check that only ever needs mapArgs/mapMultiArgs).
+    {
+        static const std::vector<std::pair<std::string, std::string>> removedWalletFlags = {
+            {"-consolidation", "enablesaplingconsolidation / enableironwoodconsolidation"},
+            {"-consolidationtxfee", "setconsolidationfee / setironwoodconsolidationfee"},
+            {"-consolidateaddress", "consolidationaddresses"},
+            {"-saplingconsolidation", "enablesaplingconsolidation"},
+            {"-ironwoodconsolidation", "enableironwoodconsolidation"},
+            {"-saplingconsolidationtxfee", "setconsolidationfee"},
+            {"-ironwoodconsolidationtxfee", "setironwoodconsolidationfee"},
+            {"-consolidatesaplingaddress", "consolidationaddresses"},
+            {"-consolidateironwoodaddress", "consolidationaddresses ... \"ironwood\""},
+            {"-consolidationtargetqty", "setconsolidationtarget / setironwoodconsolidationtarget"},
+            {"-saplingconsolidationinterval", "setconsolidationinterval"},
+            {"-ironwoodconsolidationinterval", "setironwoodconsolidationinterval"},
+            {"-changeaddress", "setchangeaddress"},
+            {"-sweepsaplingaddress", "setsweepaddress"},
+            {"-sweepironwoodaddress", "setsweepaddress"},
+            {"-sweep", "enablesweep"},
+            {"-sweepaddress", "setsweepaddress"},
+            {"-sweeptxfee", "setsweepfee"},
+            {"-sweepinterval", "setsweepinterval"},
+            {"-mintxvalue", "setmintxvalue"},
+            {"-deletetx", "setdeletetx"},
+            {"-deleteconflicttx", "setdeleteconflicttx"},
+            {"-deleteinterval", "setdeleteinterval"},
+            {"-keeptxnum", "setkeeptxnum"},
+            {"-keeptxfornblocks", "setkeeptxfornblocks"},
+            {"-paytxfee", "settxfee"},
+            {"-mintxfee", "setmintxfee"},
+            {"-txconfirmtarget", "settxconfirmtarget"},
+            {"-spendzeroconfchange", "setspendzeroconfchange"},
+            {"-keypool", "setkeypoolsize"},
+            {"-walletnotify", "setwalletnotify"},
+        };
+        for (const auto& flag : removedWalletFlags) {
+            if (mapArgs.count(flag.first) || mapMultiArgs.count(flag.first)) {
+                return InitError(strprintf(
+                    "%s is no longer supported as a startup flag. Configure this per wallet"
+                    " with the %s RPC instead.", flag.first, flag.second));
+            }
+        }
+    }
 
     std::string strWalletFile = GetArg("-wallet", "wallet.dat");
 #endif // ENABLE_WALLET
@@ -1940,7 +1953,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         std::string warningString;
         std::string errorString;
 
-        if (!CWallet::Verify(strWalletFile, warningString, errorString))
+        if (!CWallet::Verify(strWalletFile, warningString, errorString, GetBoolArg("-salvagewallet", false)))
             return false;
 
         if (!warningString.empty())
@@ -2411,6 +2424,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             if (!pwalletMain->MigrateDestDataToEncrypted()) {
                 LogPrintf("Warning: could not migrate destination data to encrypted storage.\n");
             }
+            if (!pwalletMain->MigrateSettingsToEncrypted()) {
+                LogPrintf("Warning: could not migrate consolidation/sweep/fee/pruning settings to encrypted storage.\n");
+            }
         }
 
         bool fInitializeArcTx = true;
@@ -2606,213 +2622,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
         }
 
-        //Set Minimum value of incoming notes accepted
-        minTxValue = GetArg("-mintxvalue", DEFAULT_MIN_TX_VALUE);
-
-        //Set Consolidation Configuration
-        // Check for deprecated consolidation parameters and throw errors
-        if (mapArgs.count("-consolidation")) {
-            return InitError("Deprecated parameter -consolidation is no longer supported. Use -saplingconsolidation and/or -ironwoodconsolidation instead.");
-        }
-        if (mapArgs.count("-consolidationtxfee")) {
-            return InitError("Deprecated parameter -consolidationtxfee is no longer supported. Use -saplingconsolidationtxfee and/or -ironwoodconsolidationtxfee instead.");
-        }
-        if (mapArgs.count("-consolidateaddress")) {
-            return InitError("Deprecated parameter -consolidateaddress is no longer supported. Use -consolidatesaplingaddress and/or -consolidateironwoodaddress instead.");
-        }
-
-        // Protocol-specific consolidation configuration
-        pwalletMain->fSaplingConsolidationEnabled = GetBoolArg("-saplingconsolidation", false);
-        pwalletMain->fIronwoodConsolidationEnabled = GetBoolArg("-ironwoodconsolidation", false);
-
-        // Set protocol-specific fees
-        fSaplingConsolidationTxFee = GetArg("-saplingconsolidationtxfee", DEFAULT_SAPLING_CONSOLIDATION_FEE);
-        fIronwoodConsolidationTxFee = GetArg("-ironwoodconsolidationtxfee", DEFAULT_IRONWOOD_CONSOLIDATION_FEE);
-
-        // Address configuration
-        fSaplingConsolidationMapUsed = !mapMultiArgs["-consolidatesaplingaddress"].empty();
-        fIronwoodConsolidationMapUsed = !mapMultiArgs["-consolidateironwoodaddress"].empty();
-
-        // Initialize consolidation target quantity (shared across protocols)
-        {
-            int targetQty = (int)GetArg("-consolidationtargetqty", 100);
-            if (targetQty < 2) {
-                return InitError("-consolidationtargetqty must be at least 2");
-            }
-            pwalletMain->targetSaplingConsolidationQty = targetQty;
-            pwalletMain->targetIronwoodConsolidationQty = targetQty;
-        }
-
-        // Initialize consolidation intervals with bounds validation
-        if (mapArgs.count("-saplingconsolidationinterval")) {
-            int interval = (int)GetArg("-saplingconsolidationinterval", 0);
-            if (interval < 1) {
-                return InitError("-saplingconsolidationinterval must be at least 1");
-            }
-            pwalletMain->saplingConsolidationInterval = interval;
-        }
-        if (mapArgs.count("-ironwoodconsolidationinterval")) {
-            int interval = (int)GetArg("-ironwoodconsolidationinterval", 0);
-            if (interval < 1) {
-                return InitError("-ironwoodconsolidationinterval must be at least 1");
-            }
-            pwalletMain->ironwoodConsolidationInterval = interval;
-        }
-
-        //Validate Sapling Consolidation Addresses
-        vector<string>& vsaplingaddresses = mapMultiArgs["-consolidatesaplingaddress"];
-        for (int i = 0; i < (int)vsaplingaddresses.size(); i++) {
-            LogPrintf("Consolidating Sapling Address: %s\n", vsaplingaddresses[i]);
-            auto zAddress = DecodePaymentAddress(vsaplingaddresses[i]);
-            if (!IsValidPaymentAddress(zAddress)) {
-                return InitError("Invalid Sapling consolidation address");
-            }
-            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), zAddress);
-            if (!hasSpendingKey) {
-                return InitError("Wallet must have the spending key for consolidation address: " + vsaplingaddresses[i]);
-            }
-        }
-
-        //Validate Ironwood Consolidation Addresses
-        vector<string>& vironwoodaddresses = mapMultiArgs["-consolidateironwoodaddress"];
-        for (int i = 0; i < (int)vironwoodaddresses.size(); i++) {
-            LogPrintf("Consolidating Ironwood Address: %s\n", vironwoodaddresses[i]);
-            auto ironwoodAddress = DecodePaymentAddress(vironwoodaddresses[i]);
-            if (!IsValidPaymentAddress(ironwoodAddress)) {
-                return InitError("Invalid Ironwood consolidation address");
-            }
-            auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), ironwoodAddress);
-            if (!hasSpendingKey) {
-                return InitError("Wallet must have the spending key for Ironwood consolidation address: " + vironwoodaddresses[i]);
-            }
-        }
-
-        // Validate a configured shielded change address override. One address
-        // covers change for sends from either pool — a Sapling-input send's
-        // change is just another Sapling/Ironwood output, and there is no
-        // consensus rule requiring it to stay in the pool that was spent from.
-        // Must be a Sapling or Ironwood address (Sprout is disabled) this
-        // wallet holds the spending key for, so change can never be silently
-        // routed to funds this wallet doesn't control.
-        if (mapArgs.count("-changeaddress")) {
-            const std::string& strChangeAddress = mapArgs["-changeaddress"];
-            auto changeAddress = DecodePaymentAddress(strChangeAddress);
-            bool isShielded = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress) ||
-                               std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress);
-            if (!IsValidPaymentAddress(changeAddress) || !isShielded) {
-                return InitError("-changeaddress must be a valid Sapling or Ironwood address: " + strChangeAddress);
-            }
-            if (!std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), changeAddress)) {
-                return InitError("Wallet must have the spending key for -changeaddress: " + strChangeAddress);
-            }
-            pwalletMain->configuredChangeAddress = changeAddress;
-            LogPrintf("Change address override: %s\n", strChangeAddress);
-        }
-
-        //Set Sweep Configuration
-        // Check for deprecated protocol-specific sweep parameters and throw errors
-        if (mapArgs.count("-sweepsaplingaddress")) {
-            return InitError("Deprecated parameter -sweepsaplingaddress is no longer supported. Use -sweepaddress instead.");
-        }
-        if (mapArgs.count("-sweepironwoodaddress")) {
-            return InitError("Deprecated parameter -sweepironwoodaddress is no longer supported. Use -sweepaddress instead.");
-        }
-        
         pwalletMain->fUseDpowConfs = GetBoolArg("-usedpowconfs", true);
-
-        // Unified sweep support
-        bool hasSweep = GetBoolArg("-sweep", false) || !mapMultiArgs["-sweepaddress"].empty();
-        
-        // Enable sweep flags
-        pwalletMain->fSweepEnabled = hasSweep;
-
-        if (pwalletMain->fSweepEnabled) {
-            fSweepTxFee = GetArg("-sweeptxfee", DEFAULT_SWEEP_FEE);
-
-            // Sweep interval with bounds validation
-            if (mapArgs.count("-sweepinterval")) {
-                int interval = (int)GetArg("-sweepinterval", 0);
-                if (interval < 1) {
-                    return InitError("-sweepinterval must be at least 1");
-                }
-                pwalletMain->sweepInterval = interval;
-            }
-
-            // Handle unified sweep address configuration
-            bool hasSweepAddress = !mapMultiArgs["-sweepaddress"].empty();
-            fSweepMapUsed = hasSweepAddress;
-
-            // Validate sweep addresses
-            vector<string> allSweepAddresses;
-
-            // Collect sweep addresses from unified parameter
-            if (hasSweepAddress) {
-                vector<string>& vSweep = mapMultiArgs["-sweepaddress"];
-                allSweepAddresses.insert(allSweepAddresses.end(), vSweep.begin(), vSweep.end());
-            }
-
-            // Validate that only one sweep address is specified total
-            if (allSweepAddresses.size() != 1) {
-                return InitError("Exactly one sweep address must be specified across all sweep parameters.");
-            }
-
-            // Validate the sweep address
-            for (const auto& sweepAddr : allSweepAddresses) {
-                LogPrintf("Sweep Address: %s\n", sweepAddr);
-                auto zSweep = DecodePaymentAddress(sweepAddr);
-                if (!IsValidPaymentAddress(zSweep)) {
-                    return InitError("Invalid sweep address");
-                }
-                auto hasSpendingKey = std::visit(HaveSpendingKeyForPaymentAddress(pwalletMain), zSweep);
-                if (!hasSpendingKey) {
-                    return InitError("Wallet must have the spending key of sweep address");
-                }
-            }
-
-            // Validate consolidation compatibility with sweep
-            if (pwalletMain->fSaplingConsolidationEnabled) {
-                // When sweep is active, consolidation is automatically restricted to the
-                // sweep address at runtime regardless of the consolidation address list.
-                // A configured consolidation address list will be ignored while sweep is active.
-                vector<string>& vcons = mapMultiArgs["-consolidatesaplingaddress"];
-                if (!vcons.empty() && (vcons.size() != 1 || vcons[0] != allSweepAddresses[0])) {
-                    LogPrintf("WARNING: Sapling consolidation address list will be ignored while sweep is enabled. "
-                              "Consolidation will only process the sweep address.\n");
-                }
-            }
-
-            if (pwalletMain->fIronwoodConsolidationEnabled) {
-                // When sweep is active, Ironwood consolidation is automatically restricted to the
-                // sweep address at runtime regardless of the consolidation address list.
-                // A configured consolidation address list will be ignored while sweep is active.
-                vector<string>& vcons = mapMultiArgs["-consolidateironwoodaddress"];
-                if (!vcons.empty() && (vcons.size() != 1 || vcons[0] != allSweepAddresses[0])) {
-                    LogPrintf("WARNING: Ironwood consolidation address list will be ignored while sweep is enabled. "
-                              "Consolidation will only process the sweep address.\n");
-                }
-            }
-        }
-
-        //Set Transaction Deletion Options
-        fTxDeleteEnabled = GetBoolArg("-deletetx", false);
-        fTxConflictDeleteEnabled = GetBoolArg("-deleteconflicttx", true);
-
-        fDeleteInterval = GetArg("-deleteinterval", DEFAULT_TX_DELETE_INTERVAL);
-        if (fDeleteInterval < 1)
-          return InitError("deleteinterval must be greater than 0");
-
-        fKeepLastNTransactions = GetArg("-keeptxnum", DEFAULT_TX_RETENTION_LASTTX);
-        if (fKeepLastNTransactions < 1)
-          return InitError("keeptxnum must be greater than 0");
-
-        fDeleteTransactionsAfterNBlocks = GetArg("-keeptxfornblocks", DEFAULT_TX_RETENTION_BLOCKS);
-        if (fDeleteTransactionsAfterNBlocks < 1)
-          return InitError("keeptxfornblocks must be greater than 0");
-
-        if (fDeleteTransactionsAfterNBlocks < MAX_REORG_LENGTH + 1 ) {
-          LogPrintf("keeptxfornblock is less the MAX_REORG_LENGTH, Setting to %i\n", MAX_REORG_LENGTH + 1);
-          fDeleteTransactionsAfterNBlocks = MAX_REORG_LENGTH + 1;
-        }
 
         //Set up Reporting while encrypted options
         fUnlockedForReporting = GetBoolArg("-unlockforreporting", false);

@@ -12,6 +12,7 @@ class CBlockPolicyEstimator;
 class CCoinControl;
 class CFeeRate;
 class CTxMemPool;
+class CWallet;
 
 /* Enumeration of reason for returned fee estimate */
 enum class FeeReason {
@@ -68,14 +69,22 @@ struct FeeCalculation
 
 /**
  * Return the minimum required fee taking into account the
- * floating relay fee and user set minimum transaction fee
+ * floating relay fee and user set minimum transaction fee.
+ *
+ * minTxFee (and payTxFee below) used to be a process-wide setting shared by
+ * every wallet; Phase 5 of the multiwallet effort made it a per-CWallet
+ * field instead. `wallet`, when given, is the wallet whose own minTxFee
+ * applies -- CWallet::CreateTransaction() always passes `this`. Left null
+ * (the default, for call sites not yet made wallet-aware, e.g. Qt's fee
+ * preview code), falls back to pwalletMain's setting, or a compiled-in
+ * default if no wallet is loaded at all.
  */
-CAmount GetRequiredFee(unsigned int nTxBytes);
+CAmount GetRequiredFee(unsigned int nTxBytes, const CWallet* wallet = nullptr);
 
 /**
  * Estimate the minimum fee considering user set parameters
- * and the required fee
+ * and the required fee. See GetRequiredFee() above re: `wallet`.
  */
-CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc);
+CAmount GetMinimumFee(unsigned int nTxBytes, const CCoinControl* coin_control, const CTxMemPool& pool, const CBlockPolicyEstimator& estimator, FeeCalculation *feeCalc, const CWallet* wallet = nullptr);
 
 #endif // KOMODO_WALLET_FEES_H

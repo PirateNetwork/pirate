@@ -35,7 +35,16 @@ public:
 
     void RegisterDefaultWallet(const std::string& name, CWallet* wallet);
 
-    bool LoadWallet(const std::string& name, std::string& strError);
+    // fRescan/nRescanHeight/fSalvage/fZapWalletTxes mirror what init.cpp's
+    // startup path offers the default wallet via -rescan/-rescanheight/
+    // -salvagewallet/-zapwallettxes -- Phase 5 of the multiwallet effort
+    // exposed the same actions for a secondary wallet loaded here instead of
+    // only ever applying to the default wallet (or, for -salvagewallet,
+    // applying process-wide to every wallet loaded regardless of intent).
+    // fZapWalletTxes implies fRescan, same as -zapwallettxes implies -rescan.
+    bool LoadWallet(const std::string& name, std::string& strError,
+                     bool fRescan = false, int nRescanHeight = 0,
+                     bool fSalvage = false, bool fZapWalletTxes = false);
     bool UnloadWallet(const std::string& name, std::string& strError);
 
     std::vector<std::string> ListWalletNames() const;

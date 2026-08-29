@@ -20,36 +20,12 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 
-// Global configuration variables
-/**
- * Global variables for sweep configuration
- * These are set during initialization from command line parameters
- */
-CAmount fSweepTxFee = DEFAULT_SWEEP_FEE;
-bool fSweepMapUsed = false;
-
 /**
  * Number of blocks to set as expiration delta for sweep transactions
  * This provides sufficient time for transaction confirmation while preventing
  * transactions from staying in mempool indefinitely
  */
 const int SWEEP_EXPIRY_DELTA = 40;
-
-/**
- * @brief Sapling destination address for RPC-initiated sweep operations
- * 
- * Target address for Sapling sweeps or cross-protocol sweeps from Ironwood.
- * Mutually exclusive with rpcIronwoodSweepAddress.
- */
-std::optional<libzcash::SaplingPaymentAddress> rpcSaplingSweepAddress;
-
-/**
- * @brief Ironwood destination address for RPC-initiated sweep operations
- * 
- * Target address for Ironwood sweeps or cross-protocol sweeps from Sapling.
- * Mutually exclusive with rpcSaplingSweepAddress.
- */
-std::optional<libzcash::IronwoodPaymentAddress> rpcIronwoodSweepAddress;
 
 /**
  * @brief Constructor for sweep-to-address operation
@@ -145,30 +121,20 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     bool hasSaplingTarget = false;
     bool hasIronwoodTarget = false;
     {
-        if (rpcSaplingSweepAddress.has_value()) {
-            saplingSweepAddress = rpcSaplingSweepAddress.value();
-            hasSaplingTarget = true;
-        } else if (rpcIronwoodSweepAddress.has_value()) {
-            ironwoodSweepAddress = rpcIronwoodSweepAddress.value();
-            hasIronwoodTarget = true;
-        } else if (!fromRPC_ && fSweepMapUsed) {
-            const vector<string>& v = mapMultiArgs["-sweepaddress"];
-            if (v.size() != 1) {
-                LogPrint("zrpcunsafe", "%s: Exactly one sweep address must be specified.\n", getId());
-                return false;
-            }
-            libzcash::PaymentAddress zAddress = DecodePaymentAddress(v[0]);
+        if (!wallet_->saplingSweepAddress.empty()) {
+            libzcash::PaymentAddress zAddress = DecodePaymentAddress(wallet_->saplingSweepAddress);
             if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
                 saplingSweepAddress = *std::get_if<libzcash::SaplingPaymentAddress>(&zAddress);
                 hasSaplingTarget = true;
-            } else if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
+            }
+        } else if (!wallet_->ironwoodSweepAddress.empty()) {
+            libzcash::PaymentAddress zAddress = DecodePaymentAddress(wallet_->ironwoodSweepAddress);
+            if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
                 ironwoodSweepAddress = *std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress);
                 hasIronwoodTarget = true;
-            } else {
-                LogPrint("zrpcunsafe", "%s: Invalid sweep address format.\n", getId());
-                return false;
             }
-        } else {
+        }
+        if (!hasSaplingTarget && !hasIronwoodTarget) {
             LogPrint("zrpcunsafe", "%s: No destination address specified for sweep operation.\n", getId());
             return false;
         }
@@ -298,7 +264,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 break;
             }
 
-            const CAmount fee = fSweepTxFee;
+            const CAmount fee = wallet_->sweepTxFee;
             std::vector<SaplingOutPoint> ops;
             std::vector<libzcash::SaplingNote> notes;
             CAmount amountToSend = 0;
@@ -421,7 +387,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 break;
             }
 
-            const CAmount fee = fSweepTxFee;
+            const CAmount fee = wallet_->sweepTxFee;
             std::vector<IronwoodNoteEntry> selectedIronwoodEntries;
             std::vector<IronwoodOutPoint> ops;
             CAmount amountToSend = 0;
@@ -597,22 +563,3 @@ UniValue AsyncRPCOperation_sweeptoaddress::getStatus() const {
     return obj;
 }
 
-/**
- * @brief Configure Sapling destination address for RPC-initiated sweeps
- * 
- * @param address Valid Sapling payment address for sweep destination
- */
-void AsyncRPCOperation_sweeptoaddress::setSaplingSweepAddress(const libzcash::SaplingPaymentAddress& address) {
-    rpcSaplingSweepAddress = address;
-    rpcIronwoodSweepAddress.reset(); // Clear Ironwood address to ensure only one destination
-}
-
-/**
- * @brief Configure Ironwood destination address for RPC-initiated sweeps
- * 
- * @param address Valid Ironwood payment address for sweep destination
- */
-void AsyncRPCOperation_sweeptoaddress::setIronwoodSweepAddress(const libzcash::IronwoodPaymentAddress& address) {
-    rpcIronwoodSweepAddress = address;
-    rpcSaplingSweepAddress.reset(); // Clear Sapling address to ensure only one destination
-}

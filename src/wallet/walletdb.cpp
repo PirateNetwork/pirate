@@ -1083,6 +1083,18 @@ bool CWalletDB::WriteMinVersion(int nVersion)
     return Write(std::string("minversion"), nVersion);
 }
 
+// The individual WriteSaplingConsolidationEnabled()/WriteKeepLastNTransactions()/etc.
+// one-liners that used to live here were replaced by the generic
+// WriteSetting<T>()/WriteCryptedSetting()/EraseSetting() template pair
+// declared in walletdb.h, once these settings gained an encrypted-on-disk
+// form -- see CWallet::WriteEncryptableSetting() (wallet.cpp) for why a
+// single generic pair replaces one named method per setting.
+//
+// WriteWalletNotifyCommand deliberately does not exist at all, encrypted or
+// plaintext -- see the comment on CWallet::SetWalletNotifyCommand()
+// (wallet.cpp): this one setting is intentionally never persisted to the
+// wallet file.
+
 bool CWalletDB::ReadAccount(const string& strAccount, CAccount& account)
 {
     LogPrintf("Updating db %s\n", __func__);
@@ -1259,6 +1271,417 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
             ssValue >> wss.nFileVersion;
             if (wss.nFileVersion == 10300)
                 wss.nFileVersion = 300;
+        }
+
+        // Per-wallet configuration settings (Phase 5 of the multiwallet
+        // effort). Deliberately part of this generic dispatch -- run
+        // automatically for every CWallet::LoadWallet() call, default or
+        // secondary -- rather than a separate explicit Read*() call a caller
+        // has to remember to make (the pattern ReadWalletBirthday()/
+        // ReadBestBlock() use below): an explicit-call design is exactly what
+        // let a previous phase's nBirthday read go missing from a second
+        // caller. Fields keep their compiled-in default (wallet.h) when no
+        // record exists yet, e.g. for a wallet file written before this
+        // phase.
+        //
+        // Each plaintext key has a matching "c"-prefixed encrypted form
+        // (an audit flagged that an acquired encrypted wallet file still
+        // leaked every one of these settings in plaintext, addresses
+        // especially) -- same shape as hdchain/chdchain and destdata/
+        // cdestdata above: on an encrypted wallet CWallet::Set*() writes the
+        // "c..." record and erases the plaintext one, so a given setting is
+        // never on disk in both forms at once. The "c..." branch decrypts
+        // via the matching named CWallet::Decrypt<Setting>() wrapper (see
+        // CWallet::WriteEncryptableSetting()'s doc comment in wallet.cpp for
+        // why these are named non-template wrappers rather than calling the
+        // generic decrypt template directly from here) and fails the load
+        // (strErr set, return false) on a decrypt/integrity failure, exactly
+        // like the "cdestdata"/"chdchain" cases above -- a value that fails
+        // to decrypt or verify isn't safe to silently fall back to a
+        // default for, unlike a merely-unparseable plaintext address.
+        else if (strType == "saplingconsolidationenabled")
+        {
+            ssValue >> pwallet->fSaplingConsolidationEnabled;
+        }
+        else if (strType == "csaplingconsolidationenabled")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSaplingConsolidationEnabled(strType, chash, vchCryptedSecret, pwallet->fSaplingConsolidationEnabled)) {
+                strErr = "Error reading wallet database: DecryptSaplingConsolidationEnabled failed";
+                return false;
+            }
+        }
+        else if (strType == "ironwoodconsolidationenabled")
+        {
+            ssValue >> pwallet->fIronwoodConsolidationEnabled;
+        }
+        else if (strType == "cironwoodconsolidationenabled")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptIronwoodConsolidationEnabled(strType, chash, vchCryptedSecret, pwallet->fIronwoodConsolidationEnabled)) {
+                strErr = "Error reading wallet database: DecryptIronwoodConsolidationEnabled failed";
+                return false;
+            }
+        }
+        else if (strType == "saplingconsolidationinterval")
+        {
+            ssValue >> pwallet->saplingConsolidationInterval;
+        }
+        else if (strType == "csaplingconsolidationinterval")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSaplingConsolidationInterval(strType, chash, vchCryptedSecret, pwallet->saplingConsolidationInterval)) {
+                strErr = "Error reading wallet database: DecryptSaplingConsolidationInterval failed";
+                return false;
+            }
+        }
+        else if (strType == "ironwoodconsolidationinterval")
+        {
+            ssValue >> pwallet->ironwoodConsolidationInterval;
+        }
+        else if (strType == "cironwoodconsolidationinterval")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptIronwoodConsolidationInterval(strType, chash, vchCryptedSecret, pwallet->ironwoodConsolidationInterval)) {
+                strErr = "Error reading wallet database: DecryptIronwoodConsolidationInterval failed";
+                return false;
+            }
+        }
+        else if (strType == "targetsaplingconsolidationqty")
+        {
+            ssValue >> pwallet->targetSaplingConsolidationQty;
+        }
+        else if (strType == "ctargetsaplingconsolidationqty")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSaplingConsolidationTargetQty(strType, chash, vchCryptedSecret, pwallet->targetSaplingConsolidationQty)) {
+                strErr = "Error reading wallet database: DecryptSaplingConsolidationTargetQty failed";
+                return false;
+            }
+        }
+        else if (strType == "targetironwoodconsolidationqty")
+        {
+            ssValue >> pwallet->targetIronwoodConsolidationQty;
+        }
+        else if (strType == "ctargetironwoodconsolidationqty")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptIronwoodConsolidationTargetQty(strType, chash, vchCryptedSecret, pwallet->targetIronwoodConsolidationQty)) {
+                strErr = "Error reading wallet database: DecryptIronwoodConsolidationTargetQty failed";
+                return false;
+            }
+        }
+        else if (strType == "saplingconsolidationtxfee")
+        {
+            ssValue >> pwallet->saplingConsolidationTxFee;
+        }
+        else if (strType == "csaplingconsolidationtxfee")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSaplingConsolidationTxFee(strType, chash, vchCryptedSecret, pwallet->saplingConsolidationTxFee)) {
+                strErr = "Error reading wallet database: DecryptSaplingConsolidationTxFee failed";
+                return false;
+            }
+        }
+        else if (strType == "ironwoodconsolidationtxfee")
+        {
+            ssValue >> pwallet->ironwoodConsolidationTxFee;
+        }
+        else if (strType == "cironwoodconsolidationtxfee")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptIronwoodConsolidationTxFee(strType, chash, vchCryptedSecret, pwallet->ironwoodConsolidationTxFee)) {
+                strErr = "Error reading wallet database: DecryptIronwoodConsolidationTxFee failed";
+                return false;
+            }
+        }
+        else if (strType == "saplingconsolidationaddresses")
+        {
+            ssValue >> pwallet->saplingConsolidationAddresses;
+        }
+        else if (strType == "csaplingconsolidationaddresses")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSaplingConsolidationAddresses(strType, chash, vchCryptedSecret, pwallet->saplingConsolidationAddresses)) {
+                strErr = "Error reading wallet database: DecryptSaplingConsolidationAddresses failed";
+                return false;
+            }
+        }
+        else if (strType == "ironwoodconsolidationaddresses")
+        {
+            ssValue >> pwallet->ironwoodConsolidationAddresses;
+        }
+        else if (strType == "cironwoodconsolidationaddresses")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptIronwoodConsolidationAddresses(strType, chash, vchCryptedSecret, pwallet->ironwoodConsolidationAddresses)) {
+                strErr = "Error reading wallet database: DecryptIronwoodConsolidationAddresses failed";
+                return false;
+            }
+        }
+        else if (strType == "sweepenabled")
+        {
+            ssValue >> pwallet->fSweepEnabled;
+        }
+        else if (strType == "csweepenabled")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSweepEnabled(strType, chash, vchCryptedSecret, pwallet->fSweepEnabled)) {
+                strErr = "Error reading wallet database: DecryptSweepEnabled failed";
+                return false;
+            }
+        }
+        else if (strType == "sweepinterval")
+        {
+            ssValue >> pwallet->sweepInterval;
+        }
+        else if (strType == "csweepinterval")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSweepInterval(strType, chash, vchCryptedSecret, pwallet->sweepInterval)) {
+                strErr = "Error reading wallet database: DecryptSweepInterval failed";
+                return false;
+            }
+        }
+        else if (strType == "sweeptxfee")
+        {
+            ssValue >> pwallet->sweepTxFee;
+        }
+        else if (strType == "csweeptxfee")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSweepTxFee(strType, chash, vchCryptedSecret, pwallet->sweepTxFee)) {
+                strErr = "Error reading wallet database: DecryptSweepTxFee failed";
+                return false;
+            }
+        }
+        else if (strType == "saplingsweepaddress")
+        {
+            ssValue >> pwallet->saplingSweepAddress;
+        }
+        else if (strType == "csaplingsweepaddress")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSaplingSweepAddress(strType, chash, vchCryptedSecret, pwallet->saplingSweepAddress)) {
+                strErr = "Error reading wallet database: DecryptSaplingSweepAddress failed";
+                return false;
+            }
+        }
+        else if (strType == "ironwoodsweepaddress")
+        {
+            ssValue >> pwallet->ironwoodSweepAddress;
+        }
+        else if (strType == "cironwoodsweepaddress")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptIronwoodSweepAddress(strType, chash, vchCryptedSecret, pwallet->ironwoodSweepAddress)) {
+                strErr = "Error reading wallet database: DecryptIronwoodSweepAddress failed";
+                return false;
+            }
+        }
+        else if (strType == "changeaddress" || strType == "cchangeaddress")
+        {
+            // Decoded and stored as-is, without re-validating spending-key
+            // ownership the way CWallet::SetChangeAddress() does: this
+            // record can be processed before the key records that would
+            // make that check meaningful, since ReadKeyValue() sees records
+            // in on-disk order, not a fixed one. It was already validated
+            // once, when it was written.
+            std::string strAddress;
+            if (strType == "cchangeaddress") {
+                uint256 chash; vector<unsigned char> vchCryptedSecret;
+                ssValue >> chash; ssValue >> vchCryptedSecret;
+                if (!pwallet->DecryptChangeAddress(strType, chash, vchCryptedSecret, strAddress)) {
+                    strErr = "Error reading wallet database: DecryptChangeAddress failed";
+                    return false;
+                }
+            } else {
+                ssValue >> strAddress;
+            }
+            libzcash::PaymentAddress decoded = DecodePaymentAddress(strAddress);
+            if (IsValidPaymentAddress(decoded)) {
+                pwallet->configuredChangeAddress = decoded;
+            } else {
+                LogPrintf("%s: skipping stored changeaddress \"%s\": no longer decodes to a valid address\n", __func__, strAddress);
+            }
+        }
+        else if (strType == "paytxfee")
+        {
+            ssValue >> pwallet->payTxFee;
+        }
+        else if (strType == "cpaytxfee")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptPayTxFee(strType, chash, vchCryptedSecret, pwallet->payTxFee)) {
+                strErr = "Error reading wallet database: DecryptPayTxFee failed";
+                return false;
+            }
+        }
+        else if (strType == "mintxfee")
+        {
+            ssValue >> pwallet->minTxFee;
+        }
+        else if (strType == "cmintxfee")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptMinTxFee(strType, chash, vchCryptedSecret, pwallet->minTxFee)) {
+                strErr = "Error reading wallet database: DecryptMinTxFee failed";
+                return false;
+            }
+        }
+        else if (strType == "txconfirmtarget")
+        {
+            ssValue >> pwallet->nTxConfirmTarget;
+        }
+        else if (strType == "ctxconfirmtarget")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptTxConfirmTarget(strType, chash, vchCryptedSecret, pwallet->nTxConfirmTarget)) {
+                strErr = "Error reading wallet database: DecryptTxConfirmTarget failed";
+                return false;
+            }
+        }
+        else if (strType == "spendzeroconfchange")
+        {
+            ssValue >> pwallet->bSpendZeroConfChange;
+        }
+        else if (strType == "cspendzeroconfchange")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptSpendZeroConfChange(strType, chash, vchCryptedSecret, pwallet->bSpendZeroConfChange)) {
+                strErr = "Error reading wallet database: DecryptSpendZeroConfChange failed";
+                return false;
+            }
+        }
+        else if (strType == "mintxvalue")
+        {
+            ssValue >> pwallet->minTxValue;
+        }
+        else if (strType == "cmintxvalue")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptMinTxValue(strType, chash, vchCryptedSecret, pwallet->minTxValue)) {
+                strErr = "Error reading wallet database: DecryptMinTxValue failed";
+                return false;
+            }
+        }
+        else if (strType == "keypoolsizetarget")
+        {
+            ssValue >> pwallet->nKeypoolSizeTarget;
+        }
+        else if (strType == "ckeypoolsizetarget")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptKeypoolSizeTarget(strType, chash, vchCryptedSecret, pwallet->nKeypoolSizeTarget)) {
+                strErr = "Error reading wallet database: DecryptKeypoolSizeTarget failed";
+                return false;
+            }
+        }
+        // No "walletnotifycommand"/"cwalletnotifycommand" case here --
+        // deliberately never written in either form, see
+        // CWallet::SetWalletNotifyCommand() (wallet.cpp).
+        else if (strType == "deletetxenabled")
+        {
+            ssValue >> pwallet->fTxDeleteEnabled;
+        }
+        else if (strType == "cdeletetxenabled")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptTxDeleteEnabled(strType, chash, vchCryptedSecret, pwallet->fTxDeleteEnabled)) {
+                strErr = "Error reading wallet database: DecryptTxDeleteEnabled failed";
+                return false;
+            }
+        }
+        else if (strType == "deleteconflicttxenabled")
+        {
+            ssValue >> pwallet->fTxConflictDeleteEnabled;
+        }
+        else if (strType == "cdeleteconflicttxenabled")
+        {
+            uint256 chash; vector<unsigned char> vchCryptedSecret;
+            ssValue >> chash; ssValue >> vchCryptedSecret;
+            if (!pwallet->DecryptTxConflictDeleteEnabled(strType, chash, vchCryptedSecret, pwallet->fTxConflictDeleteEnabled)) {
+                strErr = "Error reading wallet database: DecryptTxConflictDeleteEnabled failed";
+                return false;
+            }
+        }
+        else if (strType == "deleteinterval" || strType == "cdeleteinterval")
+        {
+            // Clamped here rather than trusted as-is: this value is used as
+            // a modulus (pindex->nHeight % fDeleteInterval, wallet.cpp) --
+            // zero from a corrupted or hand-crafted file would be a SIGFPE,
+            // not just a bad setting. The RPC setter already enforces this;
+            // a load from disk gets the same floor the setter would have
+            // applied, same shape as the "changeaddress" validate-or-skip
+            // case above.
+            if (strType == "cdeleteinterval") {
+                uint256 chash; vector<unsigned char> vchCryptedSecret;
+                ssValue >> chash; ssValue >> vchCryptedSecret;
+                if (!pwallet->DecryptDeleteInterval(strType, chash, vchCryptedSecret, pwallet->fDeleteInterval)) {
+                    strErr = "Error reading wallet database: DecryptDeleteInterval failed";
+                    return false;
+                }
+            } else {
+                ssValue >> pwallet->fDeleteInterval;
+            }
+            if (pwallet->fDeleteInterval < 1)
+                pwallet->fDeleteInterval = DEFAULT_TX_DELETE_INTERVAL;
+        }
+        else if (strType == "keeptxfornblocks" || strType == "ckeeptxfornblocks")
+        {
+            // Re-applies the same MAX_REORG_LENGTH+1 floor the RPC setter
+            // enforces -- a corrupted or hand-crafted value here would
+            // otherwise let automatic deletion prune transactions still
+            // inside reorg depth.
+            if (strType == "ckeeptxfornblocks") {
+                uint256 chash; vector<unsigned char> vchCryptedSecret;
+                ssValue >> chash; ssValue >> vchCryptedSecret;
+                if (!pwallet->DecryptKeepTransactionsAfterNBlocks(strType, chash, vchCryptedSecret, pwallet->fDeleteTransactionsAfterNBlocks)) {
+                    strErr = "Error reading wallet database: DecryptKeepTransactionsAfterNBlocks failed";
+                    return false;
+                }
+            } else {
+                ssValue >> pwallet->fDeleteTransactionsAfterNBlocks;
+            }
+            if (pwallet->fDeleteTransactionsAfterNBlocks < (unsigned int)(MAX_REORG_LENGTH + 1))
+                pwallet->fDeleteTransactionsAfterNBlocks = MAX_REORG_LENGTH + 1;
+        }
+        else if (strType == "keeptxnum" || strType == "ckeeptxnum")
+        {
+            if (strType == "ckeeptxnum") {
+                uint256 chash; vector<unsigned char> vchCryptedSecret;
+                ssValue >> chash; ssValue >> vchCryptedSecret;
+                if (!pwallet->DecryptKeepLastNTransactions(strType, chash, vchCryptedSecret, pwallet->fKeepLastNTransactions)) {
+                    strErr = "Error reading wallet database: DecryptKeepLastNTransactions failed";
+                    return false;
+                }
+            } else {
+                ssValue >> pwallet->fKeepLastNTransactions;
+            }
+            if (pwallet->fKeepLastNTransactions < 1)
+                pwallet->fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;
         }
         //End general wallet data records
 
@@ -3114,6 +3537,10 @@ void ThreadFlushWalletDB(const string& strFile)
     if (!GetBoolArg("-flushwallet", true))
         return;
 
+    // strFile (historically always the default wallet's own file, the only
+    // caller being init.cpp) is no longer used to pick which file to flush --
+    // see below. Kept as a parameter only so the existing call site doesn't
+    // need to change.
     unsigned int nLastSeen = nWalletDBUpdated;
     unsigned int nLastFlushed = nWalletDBUpdated;
     int64_t nLastWalletUpdate = GetTime();
@@ -3150,19 +3577,28 @@ void ThreadFlushWalletDB(const string& strFile)
                 if (nRefCount == 0)
                 {
                     boost::this_thread::interruption_point();
-                    map<string, int>::iterator mi = bitdb->mapFileUseCount.find(strFile);
-                    if (mi != bitdb->mapFileUseCount.end())
+                    nLastFlushed = nWalletDBUpdated;
+
+                    // Flush every wallet file currently open in the shared
+                    // environment, not just one hardcoded name -- this used
+                    // to only ever flush the default wallet's file (the only
+                    // name ever passed in), so a secondary wallet loaded via
+                    // loadwallet got no periodic flush coverage at all for as
+                    // long as it stayed loaded. Snapshot the names first:
+                    // CloseDb()/erase() below mutate mapFileUseCount as they go.
+                    std::vector<std::string> filesToFlush;
+                    for (const auto& entry : bitdb->mapFileUseCount)
+                        filesToFlush.push_back(entry.first);
+                    for (const std::string& file : filesToFlush)
                     {
-                        LogPrint("db", "Flushing wallet.dat\n");
-                        nLastFlushed = nWalletDBUpdated;
+                        LogPrint("db", "Flushing %s\n", file);
                         int64_t nStart = GetTimeMillis();
 
-                        // Flush wallet.dat so it's self contained
-                        bitdb->CloseDb(strFile);
-                        bitdb->CheckpointLSN(strFile);
+                        bitdb->CloseDb(file);
+                        bitdb->CheckpointLSN(file);
+                        bitdb->mapFileUseCount.erase(file);
 
-                        bitdb->mapFileUseCount.erase(mi++);
-                        LogPrint("db", "Flushed wallet.dat %dms\n", GetTimeMillis() - nStart);
+                        LogPrint("db", "Flushed %s %dms\n", file, GetTimeMillis() - nStart);
                     }
                 }
             }

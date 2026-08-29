@@ -14,14 +14,6 @@
 #include "utilmoneystr.h"
 #include "wallet.h"
 
-// Global configuration variables
-/**
- * Global variables for Ironwood consolidation configuration
- * These are set during initialization from command line parameters
- */
-CAmount fIronwoodConsolidationTxFee = DEFAULT_IRONWOOD_CONSOLIDATION_FEE;
-bool fIronwoodConsolidationMapUsed = false;
-
 /**
  * Number of blocks to set as expiration delta for consolidation transactions
  * This provides sufficient time for transaction confirmation while preventing
@@ -137,22 +129,16 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
         if (wallet_->fSweepEnabled) {
             // When sweep is active, consolidation is restricted to the sweep destination
             // address only - consolidating into it prepares funds for the sweep.
-            if (rpcIronwoodSweepAddress.has_value()) {
-                candidateAddresses.push_back(rpcIronwoodSweepAddress.value());
-            } else if (fSweepMapUsed) {
-                const vector<string>& v = mapMultiArgs["-sweepaddress"];
-                for (int i = 0; i < (int)v.size(); i++) {
-                    auto zAddress = DecodePaymentAddress(v[i]);
-                    if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr)
-                        candidateAddresses.push_back(std::get<libzcash::IronwoodPaymentAddress>(zAddress));
-                }
+            if (!wallet_->ironwoodSweepAddress.empty()) {
+                auto zAddress = DecodePaymentAddress(wallet_->ironwoodSweepAddress);
+                if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr)
+                    candidateAddresses.push_back(std::get<libzcash::IronwoodPaymentAddress>(zAddress));
             }
             // If sweep is enabled but no Ironwood address is configured, skip consolidation.
-        } else if (fIronwoodConsolidationMapUsed) {
+        } else if (!wallet_->ironwoodConsolidationAddresses.empty()) {
             // Sweep not active: use the explicit consolidation address filter list.
-            const vector<string>& v = mapMultiArgs["-consolidateironwoodaddress"];
-            for (int i = 0; i < (int)v.size(); i++) {
-                auto zAddress = DecodePaymentAddress(v[i]);
+            for (const std::string& a : wallet_->ironwoodConsolidationAddresses) {
+                auto zAddress = DecodePaymentAddress(a);
                 if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr)
                     candidateAddresses.push_back(std::get<libzcash::IronwoodPaymentAddress>(zAddress));
             }
@@ -212,7 +198,7 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
                 filterAddresses.insert(addr);
                 wallet_->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses,
                                               11, INT_MAX, true, true, true,
-                                              maxQuantity, fIronwoodConsolidationTxFee + 1);
+                                              maxQuantity, wallet_->ironwoodConsolidationTxFee + 1);
                 // Lock immediately so no other async operation can select the same notes.
                 for (const auto& e : ironwoodEntries)
                     wallet_->LockNote(e.op);
@@ -233,12 +219,12 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
             for (const auto& e : ironwoodEntries)
                 amountToSend += CAmount(e.note.value());
 
-            if (amountToSend <= fIronwoodConsolidationTxFee) {
+            if (amountToSend <= wallet_->ironwoodConsolidationTxFee) {
                 unlockIronwoodEntries();
                 break;
             }
 
-            const CAmount outputAmount = amountToSend - fIronwoodConsolidationTxFee;
+            const CAmount outputAmount = amountToSend - wallet_->ironwoodConsolidationTxFee;
 
             std::vector<IronwoodOutPoint> ops;
             for (const auto& entry : ironwoodEntries)
@@ -289,7 +275,7 @@ bool AsyncRPCOperation_ironwoodconsolidation::main_impl() {
                 break;
             }
 
-            builder.SetFee(fIronwoodConsolidationTxFee);
+            builder.SetFee(wallet_->ironwoodConsolidationTxFee);
 
             if (!builder.AddIronwoodOutputRaw(addr, outputAmount, std::nullopt)) {
                 LogPrint("zrpcunsafe", "%s: Failed to add Ironwood output. Stopping.\n", getId());

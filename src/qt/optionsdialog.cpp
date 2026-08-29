@@ -211,6 +211,21 @@ void OptionsDialog::setModel(OptionsModel *_model)
         setMapper();
         mapper->toFirst();
 
+        // -deletetx and -saplingconsolidation (the CLI/pirate.conf flags
+        // these two checkboxes used to toggle via SoftSetBoolArg in
+        // OptionsModel::Init()) were removed in favor of per-wallet RPC
+        // configuration (Phase 5 of the multiwallet effort) -- these
+        // checkboxes have nothing left to control until the Qt multiwallet
+        // wiring phase points them at a specific loaded wallet's RPCs
+        // instead. Disabled rather than silently made inert, so a user
+        // doesn't toggle one and wonder why nothing happened. (chkZapWalletTxes
+        // is unaffected: -zapwallettxes/-rescan are still real startup flags
+        // for the default wallet, untouched by this phase.)
+        ui->enableDeleteTx->setEnabled(false);
+        ui->enableDeleteTx->setToolTip(tr("Now configured per-wallet via the setdeletetx RPC."));
+        ui->saplingConsolidationEnabled->setEnabled(false);
+        ui->saplingConsolidationEnabled->setToolTip(tr("Now configured per-wallet via the enablesaplingconsolidation RPC."));
+
         updateDefaultProxyNets();
 
         evaluateOfflineSigning( ui->enableOfflineSigning->isChecked() );

@@ -317,7 +317,6 @@ def initialize_chain(test_dir, num_nodes, cachedir, cache_behavior='current'):
             args.extend([
                 '-regtest=1',
                 '-datadir='+datadir,
-                '-keypool=100',
                 '-discover=0',
                 #'-nuparams=5ba81b19:1', # Overwinter
                 #'-nuparams=76b809bb:1', # Sapling
@@ -544,7 +543,6 @@ def start_node(i, dirname, extra_args=None, rpchost=None, timewait=None, binary=
     daemon_args = [
         '-regtest=1',
         '-datadir='+datadir,
-        '-keypool=100',
         '-discover=0',
         '-rest',
         #'-nuparams=5ba81b19:1', # Overwinter

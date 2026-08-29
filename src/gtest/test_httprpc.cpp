@@ -241,16 +241,16 @@ TEST_F(MultiWalletDispatchTest, RootUriWithNoWalletSegmentAlsoRunsWalletRPCsNorm
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksOrdinaryWalletRPCs)
 {
-    // settxfee is deliberately NOT in IsMultiWalletAwareRPC(): it assigns the
-    // process-global payTxFee (wallet/rpcwallet.cpp), so making it "work" on
-    // a secondary would still change every wallet's fee behavior, not just
-    // the selected one -- it needs its own design, not a mechanical
-    // pwalletMain->pwallet substitution. Good stand-in for "an ordinary,
-    // still-gated 'wallet'-category RPC" now that getbalance is rewired.
+    // encryptwallet is deliberately NOT in IsMultiWalletAwareRPC(): it
+    // unconditionally calls StartShutdown() on success (rpcmultiwallet.cpp),
+    // so encrypting one secondary wallet would restart the whole node -- it
+    // needs its own design, not a mechanical pwalletMain->pwallet
+    // substitution. Good stand-in for "an ordinary, still-gated 'wallet'-
+    // category RPC" now that settxfee (Phase 5) and getbalance are rewired.
     RPCWalletRequestGuard guard("secondarytestwallet");
     try {
-        tableRPC.execute("settxfee", UniValue(UniValue::VARR));
-        FAIL() << "expected settxfee to be refused against a non-default wallet";
+        tableRPC.execute("encryptwallet", UniValue(UniValue::VARR));
+        FAIL() << "expected encryptwallet to be refused against a non-default wallet";
     } catch (const UniValue& objError) {
         EXPECT_EQ((int)RPC_WALLET_NOT_SPECIFIED, find_value(objError, "code").get_int());
     }
