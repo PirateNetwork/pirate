@@ -137,7 +137,8 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
 //     surfaces -- see backlog item 8 for the retry/double-spend implications
 //     this leaves open.
 bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
-                                 bool fRescan, int nRescanHeight, bool fSalvage, bool fZapWalletTxes)
+                                 bool fRescan, int nRescanHeight, bool fSalvage, bool fZapWalletTxes,
+                                 bool fAllowCreate)
 {
     if (!IsValidWalletName(name, strError))
         return false;
@@ -151,7 +152,7 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
     // wallet's load.
     try {
         boost::filesystem::path candidatePath = GetDataDir() / name;
-        if (!boost::filesystem::exists(candidatePath)) {
+        if (!fAllowCreate && !boost::filesystem::exists(candidatePath)) {
             strError = strprintf("Wallet file does not exist: %s", name);
             return false;
         }
@@ -515,6 +516,72 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
         strError = strprintf("Failed to load wallet %s: %s", name, e.what());
         return false;
     }
+}
+
+bool CWalletManager::CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut)
+{
+    if (!IsValidWalletName(name, strError))
+        return false;
+
+    // The one check LoadWallet() doesn't make: "create" must refuse a name
+    // that already resolves to a file, rather than silently adopting/
+    // reopening whatever's already there -- that's what loadwallet is for.
+    // Narrow, accepted TOCTOU: something else creating a file under this
+    // exact name in between this check and LoadWallet()'s own is not a
+    // realistic concern for a single-operator node datadir.
+    try {
+        if (boost::filesystem::exists(GetDataDir() / name)) {
+            strError = strprintf("Wallet file already exists: %s", name);
+            return false;
+        }
+    } catch (const std::exception& e) {
+        strError = strprintf("Failed to check for existing wallet file %s: %s", name, e.what());
+        return false;
+    }
+
+    // Delegates entirely to LoadWallet(): CWallet::LoadWallet() (the
+    // per-instance DB open, not this function) already auto-creates a file
+    // that doesn't exist and reports fFirstRun=true, which LoadWallet()'s
+    // own registration/catch-up tail already special-cases (pins the
+    // checkpoint at the current tip, nothing to rescan). Reusing it here
+    // avoids duplicating that already-audited locking/exception-safety
+    // sequence for what is otherwise an identical code path.
+    if (!LoadWallet(name, strError, /*fRescan=*/false, /*nRescanHeight=*/0,
+                     /*fSalvage=*/false, /*fZapWalletTxes=*/false, /*fAllowCreate=*/true))
+        return false;
+
+    CWallet* wallet = GetWallet(name);
+    if (!wallet) {
+        // Shouldn't happen: LoadWallet() just returned true, which only
+        // happens after committing the entry to mapWallets.
+        strError = strprintf("Internal error: wallet %s created but not found in registry", name);
+        return false;
+    }
+
+    // Fresh wallet: seed it, mirroring init.cpp's own fresh-default-wallet
+    // setup (GenerateNewSeed() then a first Sapling address) -- minus the
+    // interactive GUI seed-phrase-confirmation flow that only makes sense
+    // during first-run node startup, not for adding a wallet to an
+    // already-running one. The generated phrase is handed back so the
+    // caller can prompt the user to back it up immediately; there is no way
+    // to retrieve it again later.
+    try {
+        wallet->GenerateNewSeed();
+        wallet->GetSeedPhrase(seedPhraseOut);
+        LOCK(wallet->cs_wallet);
+        auto zAddress = wallet->GenerateNewSaplingZKey();
+        wallet->SetZAddressBook(zAddress, "Sapling", "");
+    } catch (const std::exception& e) {
+        // The wallet is already fully registered and usable at this point
+        // (LoadWallet() above succeeded) -- a seeding failure here doesn't
+        // warrant unwinding that; surface it and leave the (seedless, so
+        // unusable for shielded sends until the caller retries seeding or
+        // unloads/reloads) wallet loaded rather than silently deleting
+        // something already visible to any concurrent listwallets caller.
+        strError = strprintf("Wallet %s created but seeding failed: %s", name, e.what());
+        return false;
+    }
+    return true;
 }
 
 bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError)

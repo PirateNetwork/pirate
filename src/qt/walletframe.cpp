@@ -168,6 +168,12 @@ bool WalletFrame::setCurrentWallet(const QString& name)
     WalletView *walletView = mapWalletViews.value(name);
     walletStack->setCurrentWidget(walletView);
     assert(walletView);
+    // Exactly one view is ever "current" -- see WalletView::setIsCurrentView()'s
+    // doc comment for why every other view must be marked not-current here,
+    // not just the new one marked current.
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->setIsCurrentView(i.value() == walletView);
     walletView->updateEncryptionStatus();
     return true;
 }
@@ -179,14 +185,25 @@ bool WalletFrame::removeWallet(const QString &name)
 
     WalletView *walletView = mapWalletViews.take(name);
     walletStack->removeWidget(walletView);
+    // removeWidget() only detaches the page from the stack -- it does not
+    // delete it (Qt keeps its parent as this WalletFrame's stack unchanged),
+    // so without this the view (and its own 250ms poll timer, and the
+    // settings page's timer nested inside it) would keep running forever
+    // against a WalletModel that PirateOceanGUI::removeWallet() deletes
+    // right after this call returns, dereferencing freed memory on the very
+    // next tick. Deleting it here, before that happens, is what makes the
+    // model deletion actually safe.
+    delete walletView;
     return true;
 }
 
 void WalletFrame::removeAllWallets()
 {
     QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i) {
         walletStack->removeWidget(i.value());
+        delete i.value(); // see removeWallet() above for why this can't be skipped
+    }
     mapWalletViews.clear();
 }
 
@@ -222,47 +239,63 @@ void WalletFrame::resetUnlockTimer()
         i.value()->resetUnlockTimer();
 }
 
+// gotoOverviewPage/gotoHistoryPage/gotoReceiveCoinsPage/gotoZSendCoinsPage/
+// gotoZSignPage used to iterate every entry in mapWalletViews and switch its
+// internal page, rather than routing through currentWalletView() the way
+// gotoSignMessageTab/encryptWallet/backupWallet/etc. below already correctly
+// do -- invisible with exactly one wallet loaded (the only case that existed
+// before Phase 6), but with a second wallet loaded this would silently flip
+// every background wallet's page too every time the visible one navigates,
+// so switching back to it later would land on the wrong page. Fixed to match
+// the single-target pattern every other navigation slot in this file uses.
 void WalletFrame::gotoOverviewPage()
 {
-    QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
-        i.value()->gotoOverviewPage();
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoOverviewPage();
 }
 
 void WalletFrame::gotoHistoryPage()
 {
-    QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
-        i.value()->gotoHistoryPage();
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoHistoryPage();
 }
 
 void WalletFrame::gotoReceiveCoinsPage()
 {
-    QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
-        i.value()->gotoReceiveCoinsPage();
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoReceiveCoinsPage();
 }
 
 /*
 void WalletFrame::gotoSendCoinsPage(QString addr)
 {
-    QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
-        i.value()->gotoSendCoinsPage(addr);
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoSendCoinsPage(addr);
 }
 */
 void WalletFrame::gotoZSendCoinsPage(QString addr)
 {
-    QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
-        i.value()->gotoZSendCoinsPage(addr);
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoZSendCoinsPage(addr);
 }
 
 void WalletFrame::gotoZSignPage( )
 {
-    QMap<QString, WalletView*>::const_iterator i;
-    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
-        i.value()->gotoZSignPage( );
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoZSignPage( );
+}
+
+void WalletFrame::gotoWalletSettingsPage()
+{
+    WalletView *walletView = currentWalletView();
+    if (walletView)
+        walletView->gotoWalletSettingsPage();
 }
 
 void WalletFrame::gotoSignMessageTab(QString addr)

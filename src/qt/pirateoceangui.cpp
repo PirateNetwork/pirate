@@ -26,6 +26,7 @@
 #include "walletframe.h"
 #include "walletmodel.h"
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 #include "verifypaymentdisclosuredialog.h"
 #endif // ENABLE_WALLET
 
@@ -42,6 +43,8 @@
 #include <QDateTime>
 #include <QDesktopWidget>
 #include <QDragEnterEvent>
+#include <QInputDialog>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -121,6 +124,13 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     openRPCConsoleAction(0),
     openAction(0),
     showHelpMessageAction(0),
+#ifdef ENABLE_WALLET
+    walletSettingsAction(0),
+    loadWalletAction(0),
+    newWalletAction(0),
+    closeWalletAction(0),
+    walletsMenu(0),
+#endif
     trayIcon(0),
     trayIconMenu(0),
     notificator(0),
@@ -177,7 +187,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
 
     rpcConsole = new RPCConsole(_platformStyle, 0);
     connect(rpcConsole, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
-    connect(rpcConsole, SIGNAL(cmdRequest(QString)), this, SLOT(resetUnlockTimer()));
+    connect(rpcConsole, SIGNAL(cmdRequest(QString,QString)), this, SLOT(resetUnlockTimer()));
     helpMessageDialog = new HelpMessageDialog(this, false);
 #ifdef ENABLE_WALLET
     if(enableWallet)
@@ -299,6 +309,15 @@ PirateOceanGUI::~PirateOceanGUI()
 #endif
 
     delete rpcConsole;
+
+#ifdef ENABLE_WALLET
+    // Any wallet still present here is one WalletFrame never detached (i.e.
+    // still open at shutdown) -- KomodoApplication::requestShutdown() has
+    // already called removeAllWallets() by this point in the normal
+    // shutdown path, so this is just a safety net against a leaked model.
+    qDeleteAll(mapWalletModels);
+    mapWalletModels.clear();
+#endif
 }
 
 void PirateOceanGUI::createActions()
@@ -380,6 +399,15 @@ void PirateOceanGUI::createActions()
     tabGroup->addAction(historyAction);
 
 #ifdef ENABLE_WALLET
+    walletSettingsAction = new QAction(platformStyle->SingleColorIcon(":/icons/options"), tr("&Wallet Settings"), this);
+    walletSettingsAction->setStatusTip(tr("Configure consolidation, sweep and fee settings for this wallet"));
+    walletSettingsAction->setToolTip(walletSettingsAction->statusTip());
+    walletSettingsAction->setCheckable(true);
+    walletSettingsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
+    tabGroup->addAction(walletSettingsAction);
+#endif
+
+#ifdef ENABLE_WALLET
     // These showNormalIfMinimized are needed because Send Coins and Receive Coins
     // can be triggered from the tray menu, and need to show the GUI to be useful.
     connect(overviewAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
@@ -405,6 +433,23 @@ void PirateOceanGUI::createActions()
     connect(receiveCoinsMenuAction, SIGNAL(triggered()), this, SLOT(gotoReceiveCoinsPage()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
+
+    connect(walletSettingsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(walletSettingsAction, SIGNAL(triggered()), this, SLOT(gotoWalletSettingsPage()));
+
+    loadWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("&Load Wallet..."), this);
+    loadWalletAction->setStatusTip(tr("Load an existing wallet file as a secondary wallet"));
+    newWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/filesave"), tr("&New Wallet..."), this);
+    newWalletAction->setStatusTip(tr("Create a brand-new, freshly-seeded secondary wallet"));
+    closeWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/remove"), tr("&Close Wallet"), this);
+    closeWalletAction->setStatusTip(tr("Unload the currently-active secondary wallet"));
+    closeWalletAction->setEnabled(false); // starts pointed at the default wallet, which can't be closed
+
+    walletsMenu = new QMenu(tr("&Wallets"), this);
+    connect(walletsMenu, SIGNAL(aboutToShow()), this, SLOT(rebuildWalletsMenu()));
+    connect(loadWalletAction, SIGNAL(triggered()), this, SLOT(loadWalletClicked()));
+    connect(newWalletAction, SIGNAL(triggered()), this, SLOT(newWalletClicked()));
+    connect(closeWalletAction, SIGNAL(triggered()), this, SLOT(closeWalletClicked()));
 
 #endif // ENABLE_WALLET
 
@@ -536,6 +581,8 @@ void PirateOceanGUI::createMenuBar()
     if(walletFrame)
     {
 
+        file->addMenu(walletsMenu);
+        file->addSeparator();
         file->addAction(openAction);
         file->addAction(backupWalletAction);
         file->addAction(signMessageAction);
@@ -590,6 +637,7 @@ void PirateOceanGUI::createToolBars()
         toolbar->addAction(zsignAction);
         toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
+        toolbar->addAction(walletSettingsAction);
         overviewAction->setChecked(true);
     }
 }
@@ -711,19 +759,77 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
 }
 
 #ifdef ENABLE_WALLET
+QString PirateOceanGUI::guiKeyForWalletName(const std::string& walletManagerName) const
+{
+    if (walletManagerName == CWalletManager::Get().GetDefaultWalletName())
+        return PirateOceanGUI::DEFAULT_WALLET;
+    return QString::fromStdString(walletManagerName);
+}
+
 bool PirateOceanGUI::addWallet(const QString& name, WalletModel *walletModel)
 {
     if(!walletFrame)
         return false;
+    if (mapWalletModels.contains(name))
+        return false;
+    if (!walletFrame->addWallet(name, walletModel))
+        return false;
+    mapWalletModels[name] = walletModel;
+    // CWalletManager::UnloadWallet() only refuses while an RPCWalletRequestGuard
+    // or AsyncRPCOperation holds a ref -- a WalletModel open in the GUI held
+    // none, so `unloadwallet` (RPC or another session) could free the CWallet*
+    // this WalletModel still points at. Holding a ref for as long as this
+    // wallet stays open here closes that gap (skipped for the default wallet,
+    // which is refused unconditionally regardless of refcount and is never
+    // closed through this path anyway).
+    if (name != PirateOceanGUI::DEFAULT_WALLET)
+        CWalletManager::Get().AddRef(name.toStdString());
     setWalletActionsEnabled(true);
-    return walletFrame->addWallet(name, walletModel);
+    return true;
 }
 
 bool PirateOceanGUI::setCurrentWallet(const QString& name)
 {
     if(!walletFrame)
         return false;
-    return walletFrame->setCurrentWallet(name);
+    bool fOk = walletFrame->setCurrentWallet(name);
+    if (fOk) {
+        currentWalletName = name;
+        // closeWalletClicked() refuses to unload the default wallet -- keep
+        // its menu action in sync with which wallet is actually selected.
+        if (closeWalletAction)
+            closeWalletAction->setEnabled(name != PirateOceanGUI::DEFAULT_WALLET);
+        if (rpcConsole) {
+            // DEFAULT_WALLET ("~Default") is only a GUI-internal map key for
+            // WalletFrame/mapWalletModels, not the real name CWalletManager
+            // registered the default wallet under -- translate it to empty
+            // here, which RPCWalletRequestGuard/GetWalletForRequest() already
+            // treat as "the default wallet". Every other entry is keyed by,
+            // and passed through as, its real CWalletManager name.
+            QString walletName = (name == PirateOceanGUI::DEFAULT_WALLET) ? QString() : name;
+            rpcConsole->setCurrentWalletName(walletName);
+        }
+    }
+    return fOk;
+}
+
+bool PirateOceanGUI::removeWallet(const QString& name)
+{
+    if(!walletFrame || !mapWalletModels.contains(name))
+        return false;
+    walletFrame->removeWallet(name);
+    delete mapWalletModels.take(name);
+    // Release the ref taken in addWallet() -- must happen after the model
+    // (and the WalletView it drove) are gone, not before, so nothing here
+    // could still be mid-access when a racing unloadwallet call sees the
+    // refcount drop to zero and proceeds to delete the CWallet*.
+    if (name != PirateOceanGUI::DEFAULT_WALLET)
+        CWalletManager::Get().ReleaseRef(name.toStdString());
+    if (currentWalletName == name)
+        currentWalletName.clear();
+    if (mapWalletModels.isEmpty())
+        setWalletActionsEnabled(false);
+    return true;
 }
 
 void PirateOceanGUI::removeAllWallets()
@@ -732,6 +838,15 @@ void PirateOceanGUI::removeAllWallets()
         return;
     setWalletActionsEnabled(false);
     walletFrame->removeAllWallets();
+    // Release every ref taken in addWallet(), same reasoning as removeWallet()
+    // above -- after the views/models are gone, before this function returns.
+    for (auto it = mapWalletModels.constBegin(); it != mapWalletModels.constEnd(); ++it) {
+        if (it.key() != PirateOceanGUI::DEFAULT_WALLET)
+            CWalletManager::Get().ReleaseRef(it.key().toStdString());
+    }
+    qDeleteAll(mapWalletModels);
+    mapWalletModels.clear();
+    currentWalletName.clear();
 }
 #endif // ENABLE_WALLET
 
@@ -756,6 +871,15 @@ void PirateOceanGUI::setWalletActionsEnabled(bool enabled)
     usedReceivingAddressesAction->setEnabled(enabled);
     usedReceivingZAddressesAction->setEnabled(enabled);
     openAction->setEnabled(enabled);
+#ifdef ENABLE_WALLET
+    walletSettingsAction->setEnabled(enabled);
+    loadWalletAction->setEnabled(enabled);
+    newWalletAction->setEnabled(enabled);
+    // closeWalletAction's enabled state otherwise tracks which wallet is
+    // selected (see setCurrentWallet) -- only force it off here, never on.
+    if (!enabled)
+        closeWalletAction->setEnabled(false);
+#endif
 }
 
 void PirateOceanGUI::createTrayIcon(const NetworkStyle *networkStyle)
@@ -1011,6 +1135,225 @@ void PirateOceanGUI::gotoVerifyPaymentDisclosure()
 
     VerifyPaymentDisclosureDialog dlg(this);
     dlg.exec();
+}
+
+void PirateOceanGUI::gotoWalletSettingsPage()
+{
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
+    walletSettingsAction->setChecked(true);
+    if (walletFrame) walletFrame->gotoWalletSettingsPage();
+}
+
+void PirateOceanGUI::rebuildWalletsMenu()
+{
+    if (!walletsMenu)
+        return;
+    walletsMenu->clear();
+
+    // Lists mapWalletModels, not CWalletManager::Get().ListWalletNames() --
+    // the latter also includes wallets loaded some other way (e.g. directly
+    // via RPC) that this window has no WalletModel/WalletView for at all;
+    // listing those here would show an entry that silently does nothing
+    // when clicked (setCurrentWallet() has nothing to switch to). Loading a
+    // wallet through Load Wallet below is the only way to actually attach
+    // one to this window right now.
+    for (auto it = mapWalletModels.constBegin(); it != mapWalletModels.constEnd(); ++it) {
+        QString guiKey = it.key();
+        QString displayName = (guiKey == PirateOceanGUI::DEFAULT_WALLET)
+            ? QString::fromStdString(CWalletManager::Get().GetDefaultWalletName())
+            : guiKey;
+        QAction *action = walletsMenu->addAction(displayName);
+        action->setCheckable(true);
+        action->setChecked(guiKey == currentWalletName);
+        action->setData(guiKey);
+        connect(action, SIGNAL(triggered()), this, SLOT(switchWalletActionTriggered()));
+    }
+    walletsMenu->addSeparator();
+    walletsMenu->addAction(loadWalletAction);
+    walletsMenu->addAction(newWalletAction);
+    walletsMenu->addAction(closeWalletAction);
+}
+
+void PirateOceanGUI::switchWalletActionTriggered()
+{
+    QAction *action = qobject_cast<QAction*>(sender());
+    if (!action)
+        return;
+    QString guiKey = action->data().toString();
+    if (guiKey != currentWalletName)
+        setCurrentWallet(guiKey);
+}
+
+void PirateOceanGUI::loadWalletClicked()
+{
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
+    bool ok = false;
+    QString name = QInputDialog::getText(this, tr("Load Wallet"),
+        tr("Wallet file name (in the data directory):"), QLineEdit::Normal, QString(), &ok);
+    if (!ok || name.isEmpty())
+        return;
+
+    QString guiKey = guiKeyForWalletName(name.toStdString());
+    if (mapWalletModels.contains(guiKey)) {
+        QMessageBox::warning(this, tr("Load Wallet"), tr("That wallet is already loaded."));
+        return;
+    }
+
+    // This runs synchronously on the GUI thread and can rescan the wallet
+    // from its last checkpoint while holding cs_main the whole time -- same
+    // blocking shape the loadwallet RPC and the default wallet's own startup
+    // sequence already have (walletmanager.cpp's own comment on this), just
+    // reachable from the main window's event loop instead of an HTTP worker
+    // thread here. Not backgrounded in this phase; the wait cursor is a
+    // stopgap so a slow load reads as "working" rather than "hung" -- a
+    // worker-thread + progress UI (mirroring the startup splash screen) is
+    // deferred.
+    qApp->setOverrideCursor(Qt::WaitCursor);
+    std::string strError;
+    bool fLoaded = CWalletManager::Get().LoadWallet(name.toStdString(), strError);
+    qApp->restoreOverrideCursor();
+    if (!fLoaded) {
+        QMessageBox::critical(this, tr("Load Wallet"), QString::fromStdString(strError));
+        return;
+    }
+
+    CWallet *wallet = CWalletManager::Get().GetWallet(name.toStdString());
+    if (!wallet) {
+        QMessageBox::critical(this, tr("Load Wallet"), tr("Wallet loaded but could not be found in the registry."));
+        return;
+    }
+
+    WalletModel *model = new WalletModel(platformStyle, wallet, clientModel ? clientModel->getOptionsModel() : nullptr, this);
+    if (!addWallet(guiKey, model)) {
+        delete model;
+        // Roll the backend load back rather than leaving a wallet loaded and
+        // registered (visible to listwallets/RPC) but with no GUI entry at
+        // all and no way back into the GUI for it short of a restart.
+        std::string unloadError;
+        CWalletManager::Get().UnloadWallet(name.toStdString(), unloadError);
+        QMessageBox::critical(this, tr("Load Wallet"), tr("Failed to attach the loaded wallet to the interface."));
+        return;
+    }
+    setCurrentWallet(guiKey);
+}
+
+void PirateOceanGUI::newWalletClicked()
+{
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
+    bool ok = false;
+    QString name = QInputDialog::getText(this, tr("New Wallet"),
+        tr("New wallet file name (in the data directory):"), QLineEdit::Normal, QString(), &ok);
+    if (!ok || name.isEmpty())
+        return;
+
+    std::string strError, seedPhrase;
+    qApp->setOverrideCursor(Qt::WaitCursor);
+    bool fCreateOk = CWalletManager::Get().CreateWallet(name.toStdString(), strError, seedPhrase);
+    qApp->restoreOverrideCursor();
+    // CreateWallet() deliberately leaves the wallet registered and loaded
+    // even when it returns false for a seeding failure specifically (see its
+    // own doc comment in walletmanager.h) -- check the registry rather than
+    // just the return value, so that case still gets a GUI entry instead of
+    // being silently stranded loaded-but-invisible until a restart.
+    CWallet *wallet = CWalletManager::Get().GetWallet(name.toStdString());
+    if (!fCreateOk && !wallet) {
+        QMessageBox::critical(this, tr("New Wallet"), QString::fromStdString(strError));
+        return;
+    }
+    if (!wallet) {
+        QMessageBox::critical(this, tr("New Wallet"), tr("Wallet created but could not be found in the registry."));
+        return;
+    }
+
+    WalletModel *model = new WalletModel(platformStyle, wallet, clientModel ? clientModel->getOptionsModel() : nullptr, this);
+    QString guiKey = guiKeyForWalletName(name.toStdString());
+    if (!addWallet(guiKey, model)) {
+        delete model;
+        // Roll the backend load back rather than leaving a wallet loaded and
+        // registered but with no GUI entry and no way back into the GUI for
+        // it short of a restart.
+        std::string unloadError;
+        CWalletManager::Get().UnloadWallet(name.toStdString(), unloadError);
+        QMessageBox::critical(this, tr("New Wallet"), tr("Failed to attach the new wallet to the interface."));
+        return;
+    }
+    setCurrentWallet(guiKey);
+
+    if (!fCreateOk) {
+        // Loaded, but GenerateNewSeed()/the first Sapling address failed --
+        // seedPhrase is empty in this branch, nothing to show or back up.
+        QMessageBox::warning(this, tr("New Wallet"),
+            tr("Wallet \"%1\" was created and is loaded, but seeding it failed: %2\n\n"
+               "It has no usable seed phrase or shielded address yet.").arg(name, QString::fromStdString(strError)));
+        return;
+    }
+
+    // The seed phrase is returned exactly once by CreateWallet() -- there is
+    // no way to retrieve it again later except via the wallet's own backup/
+    // export once it's loaded.
+    // Built directly rather than via QMessageBox::information() so the seed
+    // phrase text can be made explicitly selectable -- the user needs to
+    // copy or transcribe it, and this is the only time it is ever shown.
+    QMessageBox seedBox(QMessageBox::Information, tr("New Wallet Created"),
+        tr("Wallet \"%1\" was created. Write down its seed phrase now -- it will not be shown again:\n\n%2")
+            .arg(name, QString::fromStdString(seedPhrase)),
+        QMessageBox::Ok, this);
+    seedBox.setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    seedBox.exec();
+}
+
+void PirateOceanGUI::closeWalletClicked()
+{
+    if (walletFrame) walletFrame->resetUnlockTimer();
+
+    if (currentWalletName.isEmpty() || currentWalletName == PirateOceanGUI::DEFAULT_WALLET)
+        return; // the default wallet can never be closed
+
+    QString guiKey = currentWalletName;
+    if (QMessageBox::question(this, tr("Close Wallet"),
+            tr("Close wallet \"%1\"? It will stop being loaded until you load it again.").arg(guiKey),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
+        return;
+
+    // Secondary wallets: guiKey and CWalletManager's own name are identical
+    // (only the default wallet's GUI key differs -- and it can never reach
+    // here, guarded above).
+    std::string managerName = guiKey.toStdString();
+
+    // addWallet() took a ref on this wallet specifically so an *external*
+    // unload (RPC, another session) can't free the CWallet* out from under
+    // this GUI's WalletModel/WalletView -- release it here first, since this
+    // close is the GUI's own deliberate hand-off, not the race that ref
+    // exists to prevent. Held past this point, it would make the
+    // UnloadWallet() call below always fail on the GUI's own ref.
+    CWalletManager::Get().ReleaseRef(managerName);
+
+    std::string strError;
+    if (!CWalletManager::Get().UnloadWallet(managerName, strError)) {
+        // Still in use by something else (an unpolled async operation, or a
+        // ref held by a concurrent RPC request) -- restore the protective
+        // ref and leave the GUI side untouched. Detaching here anyway would
+        // strand a wallet that's still actually loaded, with no way back
+        // into the GUI short of a restart (see the audit finding this
+        // guards against).
+        CWalletManager::Get().AddRef(managerName);
+        QMessageBox::warning(this, tr("Close Wallet"),
+            tr("Could not close wallet \"%1\": %2").arg(guiKey, QString::fromStdString(strError)));
+        return;
+    }
+
+    // Backend unload succeeded -- the CWallet* is gone. Detaching the GUI
+    // side now is safe: nothing runs on this thread between UnloadWallet()
+    // returning and removeWallet() running (no nested event loop turn), so
+    // no queued timer tick or signal can have touched the freed wallet
+    // through the WalletModel/WalletView in between. removeWallet() below
+    // calls ReleaseRef() again for this now-already-unregistered name --
+    // harmless no-op, per ReleaseRef()'s own contract.
+    removeWallet(guiKey);
+    setCurrentWallet(PirateOceanGUI::DEFAULT_WALLET);
 }
 
 #endif // ENABLE_WALLET

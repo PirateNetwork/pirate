@@ -24,6 +24,7 @@ class AddressBookPage;
 class ZAddressBookPage;
 class OpenSKDialog;
 class OpenVKDialog;
+class WalletSettingsPage;
 
 QT_BEGIN_NAMESPACE
 class QModelIndex;
@@ -45,6 +46,14 @@ public:
     ~WalletView();
 
     void setPirateOceanGUI(PirateOceanGUI *gui);
+    // Marks whether this is the wallet currently shown in the main window --
+    // set by WalletFrame::setCurrentWallet()/addWallet() (true for exactly
+    // one view at a time). Gates which view's status-bar/notification/
+    // message forwards actually reach PirateOceanGUI, so a background
+    // wallet's own encryption-lock timer, incoming transactions, etc. don't
+    // drive the shared status bar or pop a balloon while a different wallet
+    // is the one visible.
+    void setIsCurrentView(bool current);
     /** Set the client model.
         The client model represents the part of the core that communicates with the P2P network, and is wallet-agnostic.
     */
@@ -62,6 +71,9 @@ public:
     void showOutOfSyncWarning(bool fShow);
 
 private:
+    PirateOceanGUI *gui = nullptr;
+    bool fIsCurrentView = false;
+
     ClientModel *clientModel;
     WalletModel *walletModel;
 
@@ -71,6 +83,7 @@ private:
     //SendCoinsDialog *sendCoinsPage;
     ZSendCoinsDialog *zsendCoinsPage;
     ZSignDialog *zsignPage;
+    WalletSettingsPage *walletSettingsPage;
     AddressBookPage *usedSendingAddressesPage;
     AddressBookPage *usedReceivingAddressesPage;
     ZAddressBookPage *usedReceivingZAddressesPage;
@@ -104,6 +117,8 @@ public Q_SLOTS:
     void gotoZSignPage();
     /** Switch to z-send coins page */
     void gotoZSendCoinsPage(QString addr = "");
+    /** Switch to per-wallet settings page */
+    void gotoWalletSettingsPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
@@ -148,6 +163,15 @@ public Q_SLOTS:
     void requestedSyncWarningInfo();
 
     void openUnlockTimerDialog();
+
+private Q_SLOTS:
+    // Gate this view's own message/encryptionStatusChanged/incomingTransaction/
+    // hdEnabledStatusChanged signals on fIsCurrentView before forwarding into
+    // PirateOceanGUI -- see setIsCurrentView()'s doc comment above.
+    void forwardMessage(const QString &title, const QString &message, unsigned int style);
+    void forwardEncryptionStatusChanged(int status);
+    void forwardIncomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address, const QString& label);
+    void forwardHDStatusChanged(int hdEnabled);
 
 Q_SIGNALS:
     /** Signal that we want to show the main window */

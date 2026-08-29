@@ -68,6 +68,10 @@ public:
     */
     bool addWallet(const QString& name, WalletModel *walletModel);
     bool setCurrentWallet(const QString& name);
+    // Closes one wallet: detaches it from WalletFrame, deletes its
+    // WalletModel, then unloads it from CWalletManager, in that order -- see
+    // closeWalletClicked() for why the ordering matters.
+    bool removeWallet(const QString& name);
     void removeAllWallets();
 #endif // ENABLE_WALLET
     bool enableWallet;
@@ -125,6 +129,27 @@ private:
     QAction *showSeedAction;
     QAction *rescanAction;
     QAction *verifyPaymentDisclosureAction;
+#ifdef ENABLE_WALLET
+    QAction *walletSettingsAction;
+    QAction *loadWalletAction;
+    QAction *newWalletAction;
+    QAction *closeWalletAction;
+    QMenu *walletsMenu;
+    // Per-wallet WalletModel instances for every wallet currently shown in
+    // this window, keyed the same way WalletFrame's own mapWalletViews is
+    // (DEFAULT_WALLET for the default wallet, the real CWalletManager name
+    // for every other wallet). Owned here since this window already owns
+    // the WalletFrame lifecycle these models are paired with.
+    QMap<QString, WalletModel*> mapWalletModels;
+    // GUI-internal map key (DEFAULT_WALLET or a real CWalletManager name) of
+    // whichever wallet is currently shown; kept in sync by setCurrentWallet().
+    QString currentWalletName;
+    // Translates a CWalletManager wallet name to the GUI-internal map key
+    // used by WalletFrame/mapWalletModels above: identical for every wallet
+    // except the default one, which those maps key on DEFAULT_WALLET
+    // ("~Default") instead of its real on-disk name.
+    QString guiKeyForWalletName(const std::string& walletManagerName) const;
+#endif
 
     QSystemTrayIcon *trayIcon;
     QMenu *trayIconMenu;
@@ -149,6 +174,13 @@ private:
     void createTrayIcon(const NetworkStyle *networkStyle);
     /** Create system tray menu (or setup the dock menu) */
     void createTrayIconMenu();
+#ifdef ENABLE_WALLET
+    /** Rebuild the File > Wallets submenu from CWalletManager's current
+     *  wallet list; called each time the submenu is about to be shown so it
+     *  never goes stale relative to a load/create/close since it was last
+     *  opened. */
+    void rebuildWalletsMenu();
+#endif
 
     /** Enable or disable all wallet-related actions */
     void setWalletActionsEnabled(bool enabled);
@@ -237,6 +269,16 @@ private Q_SLOTS:
     void openClicked();
     /** Show verify payment disclosure dialog */
     void gotoVerifyPaymentDisclosure();
+    /** Switch to per-wallet settings page */
+    void gotoWalletSettingsPage();
+    /** Prompt for a filename and load it as a secondary wallet */
+    void loadWalletClicked();
+    /** Prompt for a filename and create a brand-new, freshly-seeded secondary wallet */
+    void newWalletClicked();
+    /** Close the currently-active secondary wallet (disabled for the default wallet) */
+    void closeWalletClicked();
+    /** One checkable action per loaded wallet in the Wallets submenu; switches to the one triggered */
+    void switchWalletActionTriggered();
 #endif // ENABLE_WALLET
     /** Show configuration dialog */
     void optionsClicked();

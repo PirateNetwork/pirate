@@ -25,6 +25,7 @@
 #include "transactiontablemodel.h"
 #include "transactionview.h"
 #include "walletmodel.h"
+#include "walletsettingspage.h"
 #include "importkeydialog.h"
 #include "openphrasedialog.h"
 #include "unlocktimerdialog.h"
@@ -78,6 +79,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     //sendCoinsPage = new SendCoinsDialog(platformStyle);
     zsendCoinsPage = new ZSendCoinsDialog(platformStyle);
     zsignPage      = new ZSignDialog(platformStyle);
+    walletSettingsPage = new WalletSettingsPage(this);
 
     usedSendingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::SendingTab, this);
     usedReceivingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::ReceivingTab, this);
@@ -89,6 +91,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     //addWidget(sendCoinsPage);
     addWidget(zsendCoinsPage);
     addWidget(zsignPage);
+    addWidget(walletSettingsPage);
 
     // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
@@ -127,25 +130,60 @@ WalletView::~WalletView()
 {
 }
 
-void WalletView::setPirateOceanGUI(PirateOceanGUI *gui)
+void WalletView::setPirateOceanGUI(PirateOceanGUI *_gui)
 {
+    this->gui = _gui;
     if (gui)
     {
         // Clicking on a transaction on the overview page simply sends you to transaction history page
         connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), gui, SLOT(gotoHistoryPage()));
 
-        // Receive and report messages
-        connect(this, SIGNAL(message(QString,QString,unsigned int)), gui, SLOT(message(QString,QString,unsigned int)));
+        // Receive and report messages -- routed through this view's own
+        // forward*() slots rather than straight to `gui`, so a background
+        // wallet's status changes/notifications don't drive the single
+        // shared main window while a different wallet is the one visible.
+        connect(this, SIGNAL(message(QString,QString,unsigned int)), this, SLOT(forwardMessage(QString,QString,unsigned int)));
 
         // Pass through encryption status changed signals
-        connect(this, SIGNAL(encryptionStatusChanged(int)), gui, SLOT(setEncryptionStatus(int)));
+        connect(this, SIGNAL(encryptionStatusChanged(int)), this, SLOT(forwardEncryptionStatusChanged(int)));
 
         // Pass through transaction notifications
-        connect(this, SIGNAL(incomingTransaction(QString,int,CAmount,QString,QString,QString)), gui, SLOT(incomingTransaction(QString,int,CAmount,QString,QString,QString)));
+        connect(this, SIGNAL(incomingTransaction(QString,int,CAmount,QString,QString,QString)), this, SLOT(forwardIncomingTransaction(QString,int,CAmount,QString,QString,QString)));
 
         // Connect HD enabled state signal
-        connect(this, SIGNAL(hdEnabledStatusChanged(int)), gui, SLOT(setHDStatus(int)));
+        connect(this, SIGNAL(hdEnabledStatusChanged(int)), this, SLOT(forwardHDStatusChanged(int)));
     }
+}
+
+void WalletView::setIsCurrentView(bool current)
+{
+    fIsCurrentView = current;
+    if (current)
+        updateEncryptionStatus(); // re-sync the status bar to this wallet now that it's the visible one
+}
+
+void WalletView::forwardMessage(const QString &title, const QString &message, unsigned int style)
+{
+    if (fIsCurrentView && gui)
+        gui->message(title, message, style);
+}
+
+void WalletView::forwardEncryptionStatusChanged(int status)
+{
+    if (fIsCurrentView && gui)
+        gui->setEncryptionStatus(status);
+}
+
+void WalletView::forwardIncomingTransaction(const QString& date, int unit, const CAmount& amount, const QString& type, const QString& address, const QString& label)
+{
+    if (fIsCurrentView && gui)
+        gui->incomingTransaction(date, unit, amount, type, address, label);
+}
+
+void WalletView::forwardHDStatusChanged(int hdEnabled)
+{
+    if (fIsCurrentView && gui)
+        gui->setHDStatus(hdEnabled);
 }
 
 void WalletView::setClientModel(ClientModel *_clientModel)
@@ -170,6 +208,7 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     //sendCoinsPage->setModel(_walletModel);
     zsendCoinsPage->setModel(_walletModel);
     zsignPage->setModel(_walletModel);
+    walletSettingsPage->setWalletModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());
     // usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
     usedSendingAddressesPage->setModel(_walletModel->getAddressTableModel());
@@ -316,6 +355,11 @@ void WalletView::gotoZSignPage( )
     setCurrentWidget(zsignPage);
     //Clear the page upon enter.
     zsignPage->clear();
+}
+
+void WalletView::gotoWalletSettingsPage()
+{
+    setCurrentWidget(walletSettingsPage);
 }
 
 void WalletView::gotoSignMessageTab(QString addr)

@@ -262,6 +262,82 @@ public:
 
     int getDefaultConfirmTarget() const;
 
+    // Per-wallet consolidation/sweep/fee/behavior/pruning settings -- thin,
+    // direct wrappers over the corresponding CWallet fields/Set*() methods
+    // (Phase 5), following the same no-RPC-round-trip pattern as
+    // getDefaultConfirmTarget() above. Setters lock internally (see the
+    // CWallet::Set*() implementations); getters read the field directly,
+    // same as getDefaultConfirmTarget() already does. Used by
+    // WalletSettingsPage.
+    bool getSaplingConsolidationEnabled() const;
+    void setSaplingConsolidationEnabled(bool enabled);
+    int getSaplingConsolidationInterval() const;
+    void setSaplingConsolidationInterval(int interval);
+    int getSaplingConsolidationTargetQty() const;
+    void setSaplingConsolidationTargetQty(int qty);
+    CAmount getSaplingConsolidationTxFee() const;
+    void setSaplingConsolidationTxFee(CAmount fee);
+    QString getSaplingConsolidationAddresses() const;
+    // Returns false (and changes nothing) if any address in the list is not
+    // a decodable Sapling address this wallet holds the spending key for --
+    // the same checks the consolidationaddresses RPC's "add" action enforces.
+    bool setSaplingConsolidationAddresses(const QString &commaSeparated);
+    bool getSaplingConsolidationRunning() const;
+    int getNextSaplingConsolidation() const;
+
+    bool getIronwoodConsolidationEnabled() const;
+    void setIronwoodConsolidationEnabled(bool enabled);
+    int getIronwoodConsolidationInterval() const;
+    void setIronwoodConsolidationInterval(int interval);
+    int getIronwoodConsolidationTargetQty() const;
+    void setIronwoodConsolidationTargetQty(int qty);
+    CAmount getIronwoodConsolidationTxFee() const;
+    void setIronwoodConsolidationTxFee(CAmount fee);
+    QString getIronwoodConsolidationAddresses() const;
+    bool setIronwoodConsolidationAddresses(const QString &commaSeparated);
+    bool getIronwoodConsolidationRunning() const;
+    int getNextIronwoodConsolidation() const;
+
+    bool getSweepEnabled() const;
+    void setSweepEnabled(bool enabled);
+    int getSweepInterval() const;
+    void setSweepInterval(int interval);
+    CAmount getSweepTxFee() const;
+    void setSweepTxFee(CAmount fee);
+    QString getSaplingSweepAddress() const;
+    // Returns false (and does not change anything) if the address is not a
+    // decodable Sapling address, or this wallet has no spending key for it --
+    // the same two checks the setsweepaddress RPC enforces. An empty string
+    // always succeeds (clears the configured destination).
+    bool setSaplingSweepAddress(const QString &address);
+    QString getIronwoodSweepAddress() const;
+    bool setIronwoodSweepAddress(const QString &address);
+    bool getSweepRunning() const;
+    int getNextSweep() const;
+
+    CAmount getPayTxFee() const;
+    void setPayTxFee(CAmount fee);
+    CAmount getMinTxFee() const;
+    void setMinTxFee(CAmount fee);
+    unsigned int getTxConfirmTarget() const;
+    void setTxConfirmTarget(unsigned int target);
+    bool getSpendZeroConfChange() const;
+    void setSpendZeroConfChange(bool spend);
+    CAmount getMinTxValue() const;
+    void setMinTxValue(CAmount value);
+    int64_t getKeypoolSizeTarget() const;
+    void setKeypoolSizeTarget(int64_t size);
+    bool getTxDeleteEnabled() const;
+    void setTxDeleteEnabled(bool enabled);
+    bool getTxConflictDeleteEnabled() const;
+    void setTxConflictDeleteEnabled(bool enabled);
+    int getDeleteInterval() const;
+    void setDeleteInterval(int interval);
+    unsigned int getKeepTransactionsAfterNBlocks() const;
+    void setKeepTransactionsAfterNBlocks(unsigned int n);
+    unsigned int getKeepLastNTransactions() const;
+    void setKeepLastNTransactions(unsigned int n);
+
     bool getDefaultWalletRbf() const;
     std::map<CTxDestination, CAmount> getTAddressBalances();
     std::map<libzcash::PaymentAddress, CAmount> getZAddressBalances(int minDepth, bool requireSpendingKey);

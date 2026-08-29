@@ -42,9 +42,40 @@ public:
     // only ever applying to the default wallet (or, for -salvagewallet,
     // applying process-wide to every wallet loaded regardless of intent).
     // fZapWalletTxes implies fRescan, same as -zapwallettxes implies -rescan.
+    // fAllowCreate is for CreateWallet()'s own internal delegation below
+    // ONLY -- every other caller (the loadwallet RPC, multi-`-wallet=`
+    // startup parsing, tests) must leave it false. When true, it skips the
+    // leading "file must already exist" check so a brand-new file can be
+    // auto-created by CWallet::LoadWallet() (the per-instance DB open,
+    // called further down this same function -- a different method that
+    // happens to share the name) the same way it already does for a
+    // legitimately missing file; every check afterwards (alias detection,
+    // concurrent-load reservation, etc.) still runs unchanged either way.
     bool LoadWallet(const std::string& name, std::string& strError,
                      bool fRescan = false, int nRescanHeight = 0,
-                     bool fSalvage = false, bool fZapWalletTxes = false);
+                     bool fSalvage = false, bool fZapWalletTxes = false,
+                     bool fAllowCreate = false);
+
+    // Phase 6: LoadWallet() above only ever loads a file that already
+    // exists by default (see fAllowCreate just above) -- CreateWallet() is
+    // the opposite: it rejects a name whose file already exists, then
+    // delegates straight to LoadWallet(name, ..., /*fAllowCreate=*/true),
+    // which handles "no file yet" correctly once that flag lets it past its
+    // own existence check (CWallet::LoadWallet() then auto-creates the file,
+    // returning fFirstRun=true, which LoadWallet()'s own registration/catch-up
+    // tail already special-cases). This deliberately reuses that whole tail
+    // unchanged rather than duplicating it, since it's the same delicate,
+    // already-audited locking/exception-safety sequence either way. All
+    // that's added on top is the seed generation a brand-new wallet needs --
+    // mirroring init.cpp's own fresh-default-wallet setup, minus the
+    // interactive GUI seed-phrase-confirmation flow that only makes sense
+    // during first-run startup, not for adding a wallet to an already-running
+    // node. `seedPhraseOut` receives the newly-generated seed phrase so the
+    // caller (RPC result, then the GUI) can prompt the user to back it up
+    // immediately -- restoring a new wallet from a caller-supplied phrase is
+    // out of scope (use -seedphrase/-wallet= at startup instead).
+    bool CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut);
+
     bool UnloadWallet(const std::string& name, std::string& strError);
 
     std::vector<std::string> ListWalletNames() const;

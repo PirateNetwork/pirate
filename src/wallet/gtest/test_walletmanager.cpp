@@ -695,3 +695,51 @@ TEST_F(WalletManagerTest, SalvageOnOneWalletDoesNotTouchAnotherLoadedWallet)
     EXPECT_EQ(55, untouched->targetSaplingConsolidationQty);
     EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("salvagedwallet.dat"));
 }
+
+TEST_F(WalletManagerTest, CreateWalletRejectsAnAlreadyExistingFile)
+{
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("existingwallet.dat");
+
+    std::string strError, seedPhrase;
+    EXPECT_FALSE(CWalletManager::Get().CreateWallet("existingwallet.dat", strError, seedPhrase));
+    EXPECT_NE(std::string::npos, strError.find("already exists"));
+    EXPECT_TRUE(seedPhrase.empty());
+    // Rejected: never registered, and the on-disk file untouched by loadwallet.
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("existingwallet.dat"));
+}
+
+TEST_F(WalletManagerTest, CreateWalletSucceedsOnANewNameAndReturnsASeedPhrase)
+{
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+
+    std::string strError, seedPhrase;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("brandnewwallet.dat", strError, seedPhrase)) << strError;
+    EXPECT_FALSE(seedPhrase.empty());
+
+    CWallet* wallet = CWalletManager::Get().GetWallet("brandnewwallet.dat");
+    ASSERT_NE(nullptr, wallet);
+    EXPECT_FALSE(CWalletManager::Get().IsDefaultWallet("brandnewwallet.dat"));
+
+    std::vector<std::string> names = CWalletManager::Get().ListWalletNames();
+    EXPECT_EQ(2u, names.size());
+
+    // The seed phrase returned matches what the wallet itself now holds --
+    // this is the only time it is ever available; there is no error in it
+    // having been generated but not actually installed as the wallet's seed.
+    std::string phraseFromWallet;
+    ASSERT_TRUE(wallet->GetSeedPhrase(phraseFromWallet));
+    EXPECT_EQ(seedPhrase, phraseFromWallet);
+}
+
+TEST_F(WalletManagerTest, CreateWalletProducesAWalletWithASaplingAddress)
+{
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+
+    std::string strError, seedPhrase;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("seededwallet.dat", strError, seedPhrase)) << strError;
+
+    CWallet* wallet = CWalletManager::Get().GetWallet("seededwallet.dat");
+    ASSERT_NE(nullptr, wallet);
+    EXPECT_GE(wallet->mapZAddressBook.size(), 1u);
+}

@@ -1429,6 +1429,148 @@ int WalletModel::getDefaultConfirmTarget() const
     return wallet->nTxConfirmTarget;
 }
 
+namespace {
+// std::vector<std::string> <-> comma-separated QString, for the address-
+// filter fields (empty list/string both mean "no filter").
+QString JoinAddresses(const std::vector<std::string>& addresses)
+{
+    QStringList list;
+    for (const std::string& addr : addresses)
+        list << QString::fromStdString(addr);
+    return list.join(",");
+}
+std::vector<std::string> SplitAddresses(const QString& commaSeparated)
+{
+    std::vector<std::string> addresses;
+    for (const QString& addr : commaSeparated.split(',', Qt::SkipEmptyParts))
+        addresses.push_back(addr.trimmed().toStdString());
+    return addresses;
+}
+
+// Same two checks the consolidationaddresses ("add" action) and
+// setsweepaddress RPCs enforce on every address they accept: it must decode
+// as a payment address of the expected pool, and this wallet must hold the
+// spending key for it (never just "looks like a valid address") -- without
+// this, these fields could silently be pointed at an address the wallet
+// doesn't control at all, misdirecting funds with no error anywhere.
+bool IsSpendableSaplingAddress(CWallet* wallet, const std::string& addrStr)
+{
+    auto decoded = DecodePaymentAddress(addrStr);
+    if (!IsValidPaymentAddress(decoded))
+        return false;
+    auto* addr = std::get_if<libzcash::SaplingPaymentAddress>(&decoded);
+    if (!addr)
+        return false;
+    libzcash::SaplingExtendedSpendingKey extsk;
+    return wallet->GetSaplingExtendedSpendingKey(*addr, extsk);
+}
+bool IsSpendableIronwoodAddress(CWallet* wallet, const std::string& addrStr)
+{
+    auto decoded = DecodePaymentAddress(addrStr);
+    if (!IsValidPaymentAddress(decoded))
+        return false;
+    auto* addr = std::get_if<libzcash::IronwoodPaymentAddress>(&decoded);
+    if (!addr)
+        return false;
+    libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+    return wallet->GetIronwoodExtendedSpendingKey(*addr, extsk);
+}
+} // namespace
+
+bool WalletModel::getSaplingConsolidationEnabled() const { return wallet->fSaplingConsolidationEnabled; }
+void WalletModel::setSaplingConsolidationEnabled(bool enabled) { wallet->SetSaplingConsolidationEnabled(enabled); }
+int WalletModel::getSaplingConsolidationInterval() const { return wallet->saplingConsolidationInterval; }
+void WalletModel::setSaplingConsolidationInterval(int interval) { wallet->SetSaplingConsolidationInterval(interval); }
+int WalletModel::getSaplingConsolidationTargetQty() const { return wallet->targetSaplingConsolidationQty; }
+void WalletModel::setSaplingConsolidationTargetQty(int qty) { wallet->SetSaplingConsolidationTargetQty(qty); }
+CAmount WalletModel::getSaplingConsolidationTxFee() const { return wallet->saplingConsolidationTxFee; }
+void WalletModel::setSaplingConsolidationTxFee(CAmount fee) { wallet->SetSaplingConsolidationTxFee(fee); }
+QString WalletModel::getSaplingConsolidationAddresses() const { LOCK(wallet->cs_wallet); return JoinAddresses(wallet->saplingConsolidationAddresses); }
+bool WalletModel::setSaplingConsolidationAddresses(const QString &commaSeparated)
+{
+    std::vector<std::string> addresses = SplitAddresses(commaSeparated);
+    for (const std::string& addr : addresses) {
+        if (!IsSpendableSaplingAddress(wallet, addr))
+            return false;
+    }
+    wallet->SetSaplingConsolidationAddresses(addresses);
+    return true;
+}
+bool WalletModel::getSaplingConsolidationRunning() const { return wallet->fSaplingConsolidationRunning; }
+int WalletModel::getNextSaplingConsolidation() const { return wallet->nextSaplingConsolidation; }
+
+bool WalletModel::getIronwoodConsolidationEnabled() const { return wallet->fIronwoodConsolidationEnabled; }
+void WalletModel::setIronwoodConsolidationEnabled(bool enabled) { wallet->SetIronwoodConsolidationEnabled(enabled); }
+int WalletModel::getIronwoodConsolidationInterval() const { return wallet->ironwoodConsolidationInterval; }
+void WalletModel::setIronwoodConsolidationInterval(int interval) { wallet->SetIronwoodConsolidationInterval(interval); }
+int WalletModel::getIronwoodConsolidationTargetQty() const { return wallet->targetIronwoodConsolidationQty; }
+void WalletModel::setIronwoodConsolidationTargetQty(int qty) { wallet->SetIronwoodConsolidationTargetQty(qty); }
+CAmount WalletModel::getIronwoodConsolidationTxFee() const { return wallet->ironwoodConsolidationTxFee; }
+void WalletModel::setIronwoodConsolidationTxFee(CAmount fee) { wallet->SetIronwoodConsolidationTxFee(fee); }
+QString WalletModel::getIronwoodConsolidationAddresses() const { LOCK(wallet->cs_wallet); return JoinAddresses(wallet->ironwoodConsolidationAddresses); }
+bool WalletModel::setIronwoodConsolidationAddresses(const QString &commaSeparated)
+{
+    std::vector<std::string> addresses = SplitAddresses(commaSeparated);
+    for (const std::string& addr : addresses) {
+        if (!IsSpendableIronwoodAddress(wallet, addr))
+            return false;
+    }
+    wallet->SetIronwoodConsolidationAddresses(addresses);
+    return true;
+}
+bool WalletModel::getIronwoodConsolidationRunning() const { return wallet->fIronwoodConsolidationRunning; }
+int WalletModel::getNextIronwoodConsolidation() const { return wallet->nextIronwoodConsolidation; }
+
+bool WalletModel::getSweepEnabled() const { return wallet->fSweepEnabled; }
+void WalletModel::setSweepEnabled(bool enabled) { wallet->SetSweepEnabled(enabled); }
+int WalletModel::getSweepInterval() const { return wallet->sweepInterval; }
+void WalletModel::setSweepInterval(int interval) { wallet->SetSweepInterval(interval); }
+CAmount WalletModel::getSweepTxFee() const { return wallet->sweepTxFee; }
+void WalletModel::setSweepTxFee(CAmount fee) { wallet->SetSweepTxFee(fee); }
+QString WalletModel::getSaplingSweepAddress() const { LOCK(wallet->cs_wallet); return QString::fromStdString(wallet->saplingSweepAddress); }
+bool WalletModel::setSaplingSweepAddress(const QString &address)
+{
+    std::string addrStr = address.toStdString();
+    if (!addrStr.empty() && !IsSpendableSaplingAddress(wallet, addrStr))
+        return false;
+    wallet->SetSaplingSweepAddress(addrStr);
+    return true;
+}
+QString WalletModel::getIronwoodSweepAddress() const { LOCK(wallet->cs_wallet); return QString::fromStdString(wallet->ironwoodSweepAddress); }
+bool WalletModel::setIronwoodSweepAddress(const QString &address)
+{
+    std::string addrStr = address.toStdString();
+    if (!addrStr.empty() && !IsSpendableIronwoodAddress(wallet, addrStr))
+        return false;
+    wallet->SetIronwoodSweepAddress(addrStr);
+    return true;
+}
+bool WalletModel::getSweepRunning() const { return wallet->fSweepRunning; }
+int WalletModel::getNextSweep() const { return wallet->nextSweep; }
+
+CAmount WalletModel::getPayTxFee() const { return wallet->payTxFee.GetFeePerK(); }
+void WalletModel::setPayTxFee(CAmount fee) { wallet->SetPayTxFee(CFeeRate(fee)); }
+CAmount WalletModel::getMinTxFee() const { return wallet->minTxFee.GetFeePerK(); }
+void WalletModel::setMinTxFee(CAmount fee) { wallet->SetMinTxFee(CFeeRate(fee)); }
+unsigned int WalletModel::getTxConfirmTarget() const { return wallet->nTxConfirmTarget; }
+void WalletModel::setTxConfirmTarget(unsigned int target) { wallet->SetTxConfirmTarget(target); }
+bool WalletModel::getSpendZeroConfChange() const { return wallet->bSpendZeroConfChange; }
+void WalletModel::setSpendZeroConfChange(bool spend) { wallet->SetSpendZeroConfChange(spend); }
+CAmount WalletModel::getMinTxValue() const { return wallet->minTxValue; }
+void WalletModel::setMinTxValue(CAmount value) { wallet->SetMinTxValue(value); }
+int64_t WalletModel::getKeypoolSizeTarget() const { return wallet->nKeypoolSizeTarget; }
+void WalletModel::setKeypoolSizeTarget(int64_t size) { wallet->SetKeypoolSizeTarget(size); }
+bool WalletModel::getTxDeleteEnabled() const { return wallet->fTxDeleteEnabled; }
+void WalletModel::setTxDeleteEnabled(bool enabled) { wallet->SetTxDeleteEnabled(enabled); }
+bool WalletModel::getTxConflictDeleteEnabled() const { return wallet->fTxConflictDeleteEnabled; }
+void WalletModel::setTxConflictDeleteEnabled(bool enabled) { wallet->SetTxConflictDeleteEnabled(enabled); }
+int WalletModel::getDeleteInterval() const { return wallet->fDeleteInterval; }
+void WalletModel::setDeleteInterval(int interval) { wallet->SetDeleteInterval(interval); }
+unsigned int WalletModel::getKeepTransactionsAfterNBlocks() const { return wallet->fDeleteTransactionsAfterNBlocks; }
+void WalletModel::setKeepTransactionsAfterNBlocks(unsigned int n) { wallet->SetKeepTransactionsAfterNBlocks(n); }
+unsigned int WalletModel::getKeepLastNTransactions() const { return wallet->fKeepLastNTransactions; }
+void WalletModel::setKeepLastNTransactions(unsigned int n) { wallet->SetKeepLastNTransactions(n); }
+
 bool WalletModel::getDefaultWalletRbf() const
 {
     return fWalletRbf;

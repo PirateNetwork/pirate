@@ -104,6 +104,43 @@ UniValue loadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return result;
 }
 
+UniValue createwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "createwallet \"filename\"\n"
+            "\nCreates a brand-new, freshly-seeded wallet file in the data directory and\n"
+            "loads it (same restrictions as loadwallet once loaded). Refuses if a file\n"
+            "already exists under this name -- use loadwallet for that.\n"
+            "\nIMPORTANT: the seed phrase for the new wallet is returned exactly once, in\n"
+            "this call's result. Record it immediately; there is no way to retrieve it\n"
+            "again later except via the wallet's own z_exportwallet/dumpwallet-style\n"
+            "backup once it's loaded. Restoring a new wallet from an existing seed phrase\n"
+            "is not supported by this RPC -- use -seedphrase together with -wallet=\n"
+            "at node startup instead.\n"
+            "\nArguments:\n"
+            "1. \"filename\"    (string, required) the wallet file name to create, in the data directory\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"name\" : \"filename\",     (string) the wallet name\n"
+            "  \"seedphrase\" : \"...\"      (string) the newly-generated seed phrase -- back this up now\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("createwallet", "\"second\"")
+            + HelpExampleRpc("createwallet", "\"second\"")
+        );
+
+    std::string name = params[0].get_str();
+    std::string strError, seedPhrase;
+    if (!CWalletManager::Get().CreateWallet(name, strError, seedPhrase))
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("name", name);
+    result.pushKV("seedphrase", seedPhrase);
+    return result;
+}
+
 UniValue unloadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     if (fHelp || params.size() != 1)
@@ -137,6 +174,7 @@ static const CRPCCommand commands[] =
   //  --------------------- ------------------- --------------------- ----------
     { "wallet",             "listwallets",      &listwallets,         true  },
     { "wallet",             "loadwallet",       &loadwallet,          true  },
+    { "wallet",             "createwallet",     &createwallet,        true  },
     { "wallet",             "unloadwallet",     &unloadwallet,        true  },
 };
 
@@ -169,7 +207,7 @@ bool IsMultiWalletAwareRPC(const std::string& name)
     // rest of that settings family) to genuine per-CWallet fields, so these
     // are now safe to include below.
     static const std::set<std::string> aware = {
-        "loadwallet", "unloadwallet", "listwallets",
+        "loadwallet", "unloadwallet", "listwallets", "createwallet",
         "getbalance", "getnewaddress", "sendtoaddress",
         "listtransactions", "listunspent", "gettransaction",
         "getwalletinfo", "listaddressgroupings", "z_getbalance",

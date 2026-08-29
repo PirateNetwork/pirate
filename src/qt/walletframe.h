@@ -83,6 +83,8 @@ public Q_SLOTS:
     void gotoZSignPage();
     /** Switch to z-send coins page */
     void gotoZSendCoinsPage(QString addr = "");
+    /** Switch to per-wallet settings page */
+    void gotoWalletSettingsPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");

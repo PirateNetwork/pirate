@@ -26,6 +26,7 @@
 #ifdef ENABLE_WALLET
 #include <db_cxx.h>
 #include <wallet/wallet.h>
+#include <wallet/walletmanager.h>
 #endif
 
 #include <QDesktopWidget>
@@ -86,7 +87,7 @@ class RPCExecutor : public QObject
     Q_OBJECT
 
 public Q_SLOTS:
-    void request(const QString &command);
+    void request(const QString &command, const QString &walletName);
 
 Q_SIGNALS:
     void reply(int category, const QString &command);
@@ -147,7 +148,7 @@ public:
  * @param[out]   pstrFilteredOut  Command line, filtered to remove any sensitive data
  */
 
-bool RPCConsole::RPCParseCommandLine(std::string &strResult, const std::string &strCommand, const bool fExecute, std::string * const pstrFilteredOut)
+bool RPCConsole::RPCParseCommandLine(std::string &strResult, const std::string &strCommand, const bool fExecute, std::string * const pstrFilteredOut, const std::string &walletName)
 {
     std::vector< std::vector<std::string> > stack;
     stack.push_back(std::vector<std::string>());
@@ -305,12 +306,14 @@ bool RPCConsole::RPCParseCommandLine(std::string &strResult, const std::string &
                             req.params = RPCConvertValues(stack.back()[0], std::vector<std::string>(stack.back().begin() + 1, stack.back().end()));
                             req.strMethod = stack.back()[0];
 #ifdef ENABLE_WALLET
-                            // TODO: Move this logic to WalletModel
-                            if (!vpwallets.empty()) {
-                                // in Qt, use always the wallet with index 0 when running with multiple wallets
-                                QByteArray encodedName = QUrl::toPercentEncoding(QString::fromStdString(vpwallets[0]->GetName()));
-                                req.URI = "/wallet/"+std::string(encodedName.constData(), encodedName.length());
-                            }
+                            // Targets whichever wallet is currently active in
+                            // the GUI (empty name = default wallet), the same
+                            // mechanism the HTTP server uses per-request --
+                            // this replaces the old req.URI-based approach,
+                            // which CRPCTable::execute() never consulted.
+                            RPCWalletRequestGuard walletGuard(walletName);
+                            if (!walletGuard.IsResolved())
+                                throw JSONRPCError(RPC_WALLET_NOT_FOUND, "Requested wallet does not exist or is not currently loaded");
 #endif
                             lastResult = tableRPC.execute(req.strMethod, req.params);
                         }
@@ -387,13 +390,13 @@ bool RPCConsole::RPCParseCommandLine(std::string &strResult, const std::string &
     }
 }
 
-void RPCExecutor::request(const QString &command)
+void RPCExecutor::request(const QString &command, const QString &walletName)
 {
     try
     {
         std::string result;
         std::string executableCommand = command.toStdString() + "\n";
-        if(!RPCConsole::RPCExecuteCommandLine(result, executableCommand))
+        if(!RPCConsole::RPCExecuteCommandLine(result, executableCommand, nullptr, walletName.toStdString()))
         {
             Q_EMIT reply(RPCConsole::CMD_ERROR, QString("Parse error: unbalanced ' or \""));
             return;
@@ -542,6 +545,11 @@ bool RPCConsole::eventFilter(QObject* obj, QEvent *event)
         }
     }
     return QWidget::eventFilter(obj, event);
+}
+
+void RPCConsole::setCurrentWalletName(const QString &name)
+{
+    currentWalletName = name;
 }
 
 void RPCConsole::setClientModel(ClientModel *model)
@@ -890,7 +898,7 @@ void RPCConsole::on_lineEdit_returnPressed()
         cmdBeforeBrowsing = QString();
 
         message(CMD_REQUEST, QString::fromStdString(strFilteredCmd));
-        Q_EMIT cmdRequest(cmd);
+        Q_EMIT cmdRequest(cmd, currentWalletName);
 
         cmd = QString::fromStdString(strFilteredCmd);
 
@@ -942,7 +950,7 @@ void RPCConsole::startExecutor()
     // Replies from executor object must go to this object
     connect(executor, SIGNAL(reply(int,QString)), this, SLOT(message(int,QString)));
     // Requests from this object must go to executor
-    connect(this, SIGNAL(cmdRequest(QString)), executor, SLOT(request(QString)));
+    connect(this, SIGNAL(cmdRequest(QString,QString)), executor, SLOT(request(QString,QString)));
 
     // On stopExecutor signal
     // - quit the Qt event loop in the execution thread

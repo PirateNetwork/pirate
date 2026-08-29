@@ -270,7 +270,11 @@ private:
     QTimer *pollShutdownTimer;
 #ifdef ENABLE_WALLET
     PaymentServer* paymentServer=NULL;
-    WalletModel *walletModel=NULL;
+    // No WalletModel member here: ownership of every wallet's WalletModel
+    // (default plus any secondary wallets loaded/created later via the
+    // File > Wallets menu) belongs to PirateOceanGUI's own mapWalletModels,
+    // which is what removeAllWallets()/removeWallet() actually delete --
+    // keeping a second owning pointer here would double-free it at shutdown.
 #endif
     int returnValue;
     const PlatformStyle *platformStyle;
@@ -404,7 +408,6 @@ KomodoApplication::KomodoApplication(int &argc, char **argv):
     pollShutdownTimer(0),
 #ifdef ENABLE_WALLET
     paymentServer(0),
-    walletModel(0),
 #endif
     returnValue(0)
 {
@@ -527,9 +530,10 @@ void KomodoApplication::requestShutdown()
     pollShutdownTimer->stop();
 
 #ifdef ENABLE_WALLET
+    // Deletes every WalletModel it owns (default plus any secondary wallets)
+    // as part of detaching them from WalletFrame -- see the comment on
+    // PirateOceanGUI's now-absent walletModel member above.
     window->removeAllWallets();
-    delete walletModel;
-    walletModel = 0;
 #endif
     delete clientModel;
     clientModel = 0;
@@ -560,10 +564,15 @@ void KomodoApplication::initializeResult(bool success)
         window->setClientModel(clientModel);
 
 #ifdef ENABLE_WALLET
-        // TODO: Expose secondary wallets
-        if (!vpwallets.empty())
+        // vpwallets is a startup-only snapshot (init.cpp), never updated by
+        // CWalletManager -- pwalletMain is the one global guaranteed to stay
+        // in sync with the manager's own idea of "the default wallet", so it
+        // is used here instead. Secondary wallets loaded/created later via
+        // the File > Wallets menu are added straight to window's own wallet-
+        // model map (see PirateOceanGUI), not through this startup path.
+        if (pwalletMain)
         {
-            walletModel = new WalletModel(platformStyle, vpwallets[0], optionsModel);
+            WalletModel *walletModel = new WalletModel(platformStyle, pwalletMain, optionsModel);
 
             window->addWallet(PirateOceanGUI::DEFAULT_WALLET, walletModel);
             window->setCurrentWallet(PirateOceanGUI::DEFAULT_WALLET);

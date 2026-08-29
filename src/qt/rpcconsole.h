@@ -36,12 +36,21 @@ public:
     explicit RPCConsole(const PlatformStyle *platformStyle, QWidget *parent);
     ~RPCConsole();
 
-    static bool RPCParseCommandLine(std::string &strResult, const std::string &strCommand, bool fExecute, std::string * const pstrFilteredOut = nullptr);
-    static bool RPCExecuteCommandLine(std::string &strResult, const std::string &strCommand, std::string * const pstrFilteredOut = nullptr) {
-        return RPCParseCommandLine(strResult, strCommand, true, pstrFilteredOut);
+    // walletName selects which loaded wallet a resulting tableRPC.execute()
+    // call runs against (via RPCWalletRequestGuard) -- empty means the
+    // default wallet, same as an RPC request with no wallet segment. Callers
+    // that only parse without executing (fExecute == false) never reach the
+    // point that consults it.
+    static bool RPCParseCommandLine(std::string &strResult, const std::string &strCommand, bool fExecute, std::string * const pstrFilteredOut = nullptr, const std::string &walletName = std::string());
+    static bool RPCExecuteCommandLine(std::string &strResult, const std::string &strCommand, std::string * const pstrFilteredOut = nullptr, const std::string &walletName = std::string()) {
+        return RPCParseCommandLine(strResult, strCommand, true, pstrFilteredOut, walletName);
     }
 
     void setClientModel(ClientModel *model);
+    /** Target the Debug Console's RPC dispatch at a specific loaded wallet
+     *  (empty name = default wallet) -- kept in sync with the GUI's
+     *  currently-active wallet by PirateOceanGUI::setCurrentWallet(). */
+    void setCurrentWalletName(const QString &name);
 
     enum MessageClass {
         MC_ERROR,
@@ -121,7 +130,7 @@ public Q_SLOTS:
 Q_SIGNALS:
     // For RPC command executor
     void stopExecutor();
-    void cmdRequest(const QString &command);
+    void cmdRequest(const QString &command, const QString &walletName);
     /** Activity detected in the GUI, reset the lock timer */
     void resetUnlockTimerEvent();
 
@@ -155,6 +164,7 @@ private:
     int consoleFontSize;
     QCompleter *autoCompleter;
     QThread thread;
+    QString currentWalletName;
 
     /** Update UI with latest network info from model. */
     void updateNetworkState();

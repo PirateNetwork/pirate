@@ -191,7 +191,8 @@ QT_MOC_CPP = \
   qt/moc_verifypaymentdisclosuredialog.cpp \
   qt/moc_walletframe.cpp \
   qt/moc_walletmodel.cpp \
-  qt/moc_walletview.cpp 
+  qt/moc_walletsettingspage.cpp \
+  qt/moc_walletview.cpp
 
 KOMODO_MM =
 
@@ -283,6 +284,7 @@ KOMODO_QT_H = \
   qt/walletframe.h \
   qt/walletmodel.h \
   qt/walletmodeltransaction.h \
+  qt/walletsettingspage.h \
   qt/walletview.h \
   qt/winshutdownmonitor.h
 
@@ -412,6 +414,7 @@ KOMODO_QT_WALLET_CPP = \
   qt/walletmodel.cpp \
   qt/walletmodeltransaction.cpp \
   qt/walletmodelztransaction.cpp \
+  qt/walletsettingspage.cpp \
   qt/walletview.cpp
 
 
