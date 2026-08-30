@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2018-2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -51,7 +52,13 @@
 
 /* from rpcwallet.cpp */
 extern CAmount getBalanceTaddr(CWallet* pwallet, std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
-extern uint64_t komodo_interestsum();
+// Phase 10 of the multiwallet effort gave this a trailing CWallet* pwallet=nullptr
+// (declared in wallet/rpcwallet.h, already visible here via wallet/wallet.h above)
+// -- this stale zero-arg redeclaration was left behind uncaught until Phase 11's
+// qt rebuild, since qt wasn't rebuilt as part of Phase 10's own verification. The
+// default argument is only spelled out on the first declaration seen by the
+// compiler (rpcwallet.h's); repeating it here would be a redefinition error.
+extern uint64_t komodo_interestsum(CWallet *pwallet);
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 extern int nMaxConnections;          // from net.cpp
@@ -130,7 +137,7 @@ CAmount WalletModel::getPrivateWatchBalance() const
 
 CAmount WalletModel::getInterestBalance() const
 {
-    return (chainName.isKMD()) ? komodo_interestsum() : 0;
+    return (chainName.isKMD()) ? komodo_interestsum(wallet) : 0;
 }
 
 bool WalletModel::haveWatchOnly() const
@@ -391,7 +398,7 @@ void WalletModel::checkBalanceChanged()
     CAmount newWatchImmatureBalance = 0;
     CAmount newWatchPrivateBalance = 0;
     CAmount newprivateBalance = getBalanceZaddr("", 1, true);
-    CAmount newinterestBalance = (chainName.isKMD()) ? komodo_interestsum() : 0;
+    CAmount newinterestBalance = (chainName.isKMD()) ? komodo_interestsum(wallet) : 0;
     if (haveWatchOnly())
     {
         newWatchOnlyBalance = getWatchBalance();

@@ -15,6 +15,7 @@
 #include <vector>
 
 class CWallet;
+struct CBlockLocator;
 
 /**
  * Multiwallet registry: tracks every CWallet the process has loaded (the
@@ -77,6 +78,16 @@ public:
     bool CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut);
 
     bool UnloadWallet(const std::string& name, std::string& strError);
+
+    // Writes a best-chain checkpoint to every currently loaded wallet
+    // (including the default one). Called from StartShutdown() (init.cpp) so
+    // a secondary wallet's on-disk checkpoint doesn't go stale by however
+    // many blocks passed since its last periodic flush -- previously only
+    // pwalletMain ever got this checkpoint written on shutdown. Caller is
+    // expected to already hold cs_main while reading the chain state passed
+    // in here (SetBestChain() itself only asserts cs_wallet, taken per-entry
+    // below).
+    void CheckpointAllWallets(const CBlockLocator& locator, int height);
 
     std::vector<std::string> ListWalletNames() const;
     CWallet* GetWallet(const std::string& name) const;

@@ -25,6 +25,7 @@
 #include "txdb.h"
 #include "utiltest.h"
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 
 #include "zcbenchmarks.h"
 
@@ -468,6 +469,12 @@ double benchmark_loadwallet()
     pwalletMain = new CWallet("wallet.dat");
     DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRunRet);
     auto res = timer_stop(tv_start);
+    // Re-point the multiwallet registry's default entry at the new object --
+    // pre_wallet_load() deleted the old pwalletMain without deregistering it,
+    // so without this the registry's "wallet.dat" entry is left dangling on
+    // the freed wallet until the next real startup. A shutdown landing in
+    // that window would otherwise have CheckpointAllWallets() dereference it.
+    CWalletManager::Get().RegisterDefaultWallet("wallet.dat", pwalletMain);
     post_wallet_load();
     return res;
 }

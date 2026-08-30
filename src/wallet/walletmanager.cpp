@@ -81,6 +81,19 @@ void CWalletManager::RegisterDefaultWallet(const std::string& name, CWallet* wal
 {
     LOCK(cs_wallets);
     defaultWalletName = name;
+    // Erase any existing entry for `name` first rather than try_emplace's
+    // no-op-if-present behavior (and Entry isn't assignable in place, since
+    // it holds a std::atomic<int> refcount, so insert_or_assign isn't an
+    // option either): zcbenchmarks.cpp's benchmark_loadwallet() deletes and
+    // replaces pwalletMain, then calls this again so the registry's default
+    // entry repoints at the new object instead of being left pointing at the
+    // just-deleted one (which CheckpointAllWallets(), reachable from
+    // StartShutdown(), would otherwise dereference on the next shutdown).
+    // No outstanding ref/generation state is lost by erasing: the default
+    // wallet is never refcount-pinned by ResolveAndHoldForRequest() (it
+    // returns ResolveOutcome::IsDefault without taking a ref, since the
+    // default can't be unloaded anyway).
+    mapWallets.erase(name);
     mapWallets.try_emplace(name, wallet, true, nextGeneration.fetch_add(1, std::memory_order_relaxed));
 }
 
@@ -439,10 +452,28 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                         // load implies one via fZapWalletTxes above) --
                         // mirrors -rescan/-rescanheight: rescan from the given
                         // height, or genesis if none given, ignoring whatever
-                        // checkpoint this wallet's file has persisted.
-                        pindexRescan = (nRescanHeight > 0 && nRescanHeight <= chainActive.Height())
-                            ? chainActive[nRescanHeight]
-                            : chainActive.Genesis();
+                        // checkpoint this wallet's file has persisted. Also
+                        // mirrors init.cpp's own forced-rescan branch in
+                        // resetting nBirthday to 0 -- ReadWalletBirthday()
+                        // just above loaded whatever this wallet's file had
+                        // persisted, but a forced rescan means genuinely
+                        // re-scanning every block, not silently skipping
+                        // everything before that birthday.
+                        wallet->nBirthday = 0;
+                        if (nRescanHeight > 0 && nRescanHeight > chainActive.Height()) {
+                            // Same clamp-to-tip-with-log as init.cpp's default-
+                            // wallet path: an out-of-range height shouldn't
+                            // silently fall back to a full genesis rescan
+                            // instead (the only other branch below), which
+                            // would otherwise make this flag behave
+                            // oppositely for a secondary wallet vs. the
+                            // default one on the exact same typo.
+                            pindexRescan = chainActive.Tip();
+                            LogPrintf("Wallet \"%s\": rescan height %d exceeds chain tip, starting from tip at height %d\n",
+                                      name, nRescanHeight, pindexRescan->nHeight);
+                        } else {
+                            pindexRescan = (nRescanHeight > 0) ? chainActive[nRescanHeight] : chainActive.Genesis();
+                        }
                     } else {
                         CWalletDB walletdb(name);
                         CBlockLocator locator;
@@ -646,6 +677,39 @@ bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError
     CloseWalletDbFile(name);
     mapWallets.erase(it);
     return true;
+}
+
+void CWalletManager::CheckpointAllWallets(const CBlockLocator& locator, int height)
+{
+    // Snapshot under cs_wallets, then release it before taking any wallet's
+    // cs_wallet -- the established order elsewhere in this class (see
+    // UnloadWallet/FlushAndUnloadAllSecondaryWallets, and the deadlock
+    // warning in asyncrpcoperation.cpp) is cs_main -> cs_wallet -> cs_wallets,
+    // never the reverse. Locking cs_wallet while still holding cs_wallets
+    // here would invert that against, e.g., CWallet::ChainTip()'s
+    // LOCK2(cs_main, cs_wallet) leading into a consolidation/sweep operation
+    // that itself takes cs_wallets via ResolveAndHoldForRequest().
+    // Snapshotting the raw pointers is safe without holding cs_wallets for
+    // the rest of the function only because the caller (StartShutdown())
+    // holds cs_main for the whole call, and both UnloadWallet() and
+    // FlushAndUnloadAllSecondaryWallets() take cs_main before cs_wallets --
+    // so no entry can be deleted out from under us in between.
+    AssertLockHeld(cs_main);
+    std::vector<std::pair<std::string, CWallet*>> snapshot;
+    {
+        LOCK(cs_wallets);
+        snapshot.reserve(mapWallets.size());
+        for (auto& entry : mapWallets) {
+            if (entry.second.wallet != nullptr)
+                snapshot.emplace_back(entry.first, entry.second.wallet);
+        }
+    }
+    for (auto& item : snapshot) {
+        CWallet* wallet = item.second;
+        LOCK(wallet->cs_wallet);
+        LogPrintf("Flushing wallet \"%s\" to disk on shutdown.\n", item.first);
+        wallet->SetBestChain(locator, height);
+    }
 }
 
 std::vector<std::string> CWalletManager::ListWalletNames() const

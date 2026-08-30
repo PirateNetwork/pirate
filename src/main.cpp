@@ -2,6 +2,7 @@
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Copyright (c) 2015-2022 The Zcash developers
 // Copyright (c) 2015-2023 The Komodo Platform developers
+// Copyright (c) 2018-2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -4840,8 +4841,13 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
         {
 #ifdef ENABLE_WALLET
              // new staking tx cannot be accepted to mempool and expires in 1 block, so no need for this! :D
+             // EraseFromWallets() (validationinterface.cpp) broadcasts to every
+             // loaded wallet's own EraseFromWallet(), not just pwalletMain --
+             // matches the else branch below (SyncWithWallets()), which was
+             // already registry-wide; this direct pwalletMain-only call was the
+             // one place in this loop that wasn't.
              if ( !GetBoolArg("-disablewallet", false) && KOMODO_NSPV_FULLNODE )
-                 pwalletMain->EraseFromWallet(tx.GetHash());
+                 EraseFromWallets(tx.GetHash());
 #endif
         } else {
             std::vector<CTransaction> vtx;

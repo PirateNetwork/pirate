@@ -194,11 +194,15 @@ void StartShutdown()
       //Write all transactions and block locator to the wallet
 #ifdef ENABLE_WALLET
     if ( pwalletMain && (loadComplete) && (nMaxConnections>0) ) {
-        LogPrintf("Flushing wallet to disk on shutdown.\n");
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        LOCK(cs_main);
         CBlockLocator currentBlock = chainActive.GetLocator();
         int chainHeight = chainActive.Tip()->nHeight;
-        pwalletMain->SetBestChain(currentBlock, chainHeight);
+        // Checkpoints every loaded wallet, not just pwalletMain -- a
+        // secondary wallet unloaded via FlushAndUnloadAllSecondaryWallets()
+        // during the rest of shutdown otherwise never gets a final
+        // SetBestChain() write, leaving its on-disk checkpoint stale by
+        // however many blocks passed since its last periodic flush.
+        CWalletManager::Get().CheckpointAllWallets(currentBlock, chainHeight);
     }
 #endif
 
@@ -2285,6 +2289,23 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         LogPrintf("Wallet disabled!\n");
     } else {
 
+        // Snapshot the CLI-derived rescan/salvage/zap flags for the
+        // secondary -wallet= loading loop far below now, before the default
+        // wallet's own load sequence in this block gets a chance to
+        // SoftSetBoolArg("-rescan", true) on itself (its archived-tx
+        // validation-failure recovery path does exactly this further down).
+        // Reading these later, at the point they're used, would leak that
+        // default-wallet-specific recovery state onto every secondary
+        // wallet's load too, forcing an unrelated full-chain rescan on each
+        // of them. This is still taken after InitParameterInteraction()'s own
+        // -salvagewallet/-zapwallettxes -> -rescan soft-sets (Step 2, already
+        // run by this point), so "zap/salvage implies rescan" still holds for
+        // secondaries exactly as it does for the default wallet.
+        const bool fSecondaryRescan = GetBoolArg("-rescan", false);
+        const int nSecondaryRescanHeight = GetArg("-rescanheight", 0);
+        const bool fSecondarySalvage = GetBoolArg("-salvagewallet", false);
+        const bool fSecondaryZapWalletTxes = GetBoolArg("-zapwallettxes", false);
+
         // needed to restore wallet transaction meta data after -zapwallettxes
         std::vector<CWalletTx> vWtx;
 
@@ -2756,11 +2777,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // Best-effort secondary wallets: skip whichever entry became strWalletFile
         // above (already loaded through the full default-wallet sequence) and try
         // the rest. Unlike the default wallet, a failure here doesn't abort startup.
+        //
+        // -rescan/-rescanheight/-salvagewallet/-zapwallettxes are applied to
+        // every secondary wallet too, same as the default wallet above --
+        // LoadWallet() already accepts these as parameters (Phase 5), they
+        // were just never fed the CLI values before this. -upgradewallet and
+        // -rederiverironwoodscopes are deliberately not threaded through here:
+        // the former has its own per-wallet `upgradewallet` RPC (Phase 5), and
+        // the latter is a rare manual-recovery flag not worth the extra
+        // LoadWallet() parameters for a startup-only, all-wallets-at-once path.
+        // (fSecondary* were snapshotted at the top of this block, not read
+        // here -- see the comment there for why.)
         for (const std::string& strSecondaryWallet : mapMultiArgs["-wallet"]) {
             if (strSecondaryWallet == strWalletFile)
                 continue;
             std::string strWalletLoadError;
-            if (CWalletManager::Get().LoadWallet(strSecondaryWallet, strWalletLoadError))
+            if (CWalletManager::Get().LoadWallet(strSecondaryWallet, strWalletLoadError,
+                                                  fSecondaryRescan, nSecondaryRescanHeight,
+                                                  fSecondarySalvage, fSecondaryZapWalletTxes))
                 LogPrintf("Loaded secondary wallet \"%s\"\n", strSecondaryWallet);
             else
                 LogPrintf("Warning: failed to load secondary wallet \"%s\": %s\n", strSecondaryWallet, strWalletLoadError);
@@ -2929,20 +2963,51 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // ********************************************************* Step 11: finished
 
+#ifdef ENABLE_WALLET
+    if (pwalletMain) {
+        // Add wallet transactions that aren't already in a block to
+        // mapTransactions, and lock any wallet that's encrypted -- for every
+        // wallet loaded so far (default + secondaries loaded via -wallet=
+        // above), not just the default one. Secondary wallets previously got
+        // neither of these at startup: their own unconfirmed transactions
+        // were never re-broadcast, and an encrypted secondary wallet started
+        // out unlocked instead of locked.
+        //
+        // Deliberately runs *before* SetRPCWarmupFinished() below: the RPC
+        // server has already been accepting connections since Step 10, and a
+        // client calling unloadwallet on a secondary the instant warmup ends
+        // would otherwise race this loop's GetWallet(name)/dereference pair
+        // (CWalletManager::GetWallet() returns a raw pointer with no ref
+        // held) -- running here, while every RPC command is still refused
+        // with "still in warmup" errors, closes that window structurally
+        // instead of pinning each wallet individually. A per-wallet try/catch
+        // keeps one secondary's failure from aborting startup for everyone
+        // else, matching the -wallet= loading loop's own "a failure here
+        // doesn't abort startup" contract just above.
+        for (const std::string& walletName : CWalletManager::Get().ListWalletNames()) {
+            CWallet* wallet = CWalletManager::Get().GetWallet(walletName);
+            if (wallet == nullptr)
+                continue;
+            try {
+                wallet->ReacceptWalletTransactions();
+                if (wallet->IsCrypted())
+                    wallet->Lock();
+            } catch (const std::exception& e) {
+                LogPrintf("Wallet \"%s\": exception during startup reaccept/lock: %s\n", walletName, e.what());
+            }
+        }
+    }
+#endif
+
     SetRPCWarmupFinished();
     uiInterface.InitMessage(_("Done loading"));
 
 #ifdef ENABLE_WALLET
     if (pwalletMain) {
-        // Add wallet transactions that aren't already in a block to mapTransactions
-        pwalletMain->ReacceptWalletTransactions();
-
-        //Lock the wallet if crypted
-        if (pwalletMain->IsCrypted()) {
-            pwalletMain->Lock();
-        }
-
-        // Run a thread to flush wallet periodically
+        // Run a thread to flush wallet periodically. ThreadFlushWalletDB
+        // (wallet/walletdb.cpp) already flushes every wallet file currently
+        // open in the shared BDB environment on its own, not just strFile --
+        // one thread here covers every wallet loaded now or later.
         threadGroup.create_thread(boost::bind(&ThreadFlushWalletDB, boost::ref(pwalletMain->strWalletFile)));
     }
 #endif

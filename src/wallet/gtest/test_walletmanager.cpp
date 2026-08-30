@@ -6,6 +6,7 @@
 
 #include "asyncrpcoperation.h"
 #include "init.h"
+#include "net.h"
 #include "util.h"
 #include "wallet/wallet.h"
 #include "wallet/walletmanager.h"
@@ -413,6 +414,55 @@ TEST_F(WalletManagerTest, FlushAndUnloadAllSecondaryWalletsLeavesDefaultAloneAnd
     // Calling it again with nothing left to unload must be a harmless no-op.
     CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
     EXPECT_EQ(defaultWallet, CWalletManager::Get().GetWallet("default_test.dat"));
+}
+
+TEST_F(WalletManagerTest, CheckpointAllWalletsWritesToEveryLoadedWallet)
+{
+    // Regression test for Phase 11 of the multiwallet effort: StartShutdown()
+    // (init.cpp) used to write its best-chain checkpoint straight to
+    // pwalletMain only, so a secondary wallet's on-disk record could be many
+    // blocks stale by however long it had been since its own last periodic
+    // flush. CheckpointAllWallets() generalizes that write to every currently
+    // loaded wallet.
+    // Unlike most other tests in this file, this one actually needs the
+    // default wallet's file to exist on disk (SetBestChain()'s own
+    // CWalletDB open uses mode "r+", which doesn't auto-create), since it's
+    // exercising a real write-then-read-back round trip, not just registry
+    // bookkeeping.
+    CreateWalletFileOnDisk("default_test.dat");
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("secondtestwallet");
+
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
+
+    // CWallet::SetBestChain() is a no-op (see wallet.cpp) unless
+    // nMaxConnections > 0; pin it explicitly rather than relying on
+    // net.cpp's default value happening to still be in place (test_init.cpp
+    // mutates this same global, restoring it in TearDown -- if this test ran
+    // interleaved with a bug in that restore, relying on the ambient default
+    // here would turn into a confusing ReadBestBlock() failure instead of an
+    // obviously-related one).
+    int savedMaxConnections = nMaxConnections;
+    nMaxConnections = 8;
+
+    CBlockLocator locator(std::vector<uint256>{uint256S(std::string(63, '0') + "1")});
+    // height is deliberately not asserted on below: SetBestChainINTERNAL()
+    // (wallet.h) takes a height parameter but never actually persists it
+    // anywhere -- pre-existing, unrelated to Phase 11 -- so there is nothing
+    // on disk to read back for it. The locator round trip below is the only
+    // observable effect of CheckpointAllWallets() there is to verify.
+    CWalletManager::Get().CheckpointAllWallets(locator, 123);
+
+    nMaxConnections = savedMaxConnections;
+
+    CBlockLocator readLocatorDefault;
+    ASSERT_TRUE(CWalletDB("default_test.dat").ReadBestBlock(readLocatorDefault));
+    EXPECT_EQ(locator.vHave, readLocatorDefault.vHave);
+
+    CBlockLocator readLocatorSecondary;
+    ASSERT_TRUE(CWalletDB("secondtestwallet").ReadBestBlock(readLocatorSecondary));
+    EXPECT_EQ(locator.vHave, readLocatorSecondary.vHave);
 }
 
 TEST_F(WalletManagerTest, ResetIsIdempotentAndDoesNotDeleteTheDefaultWalletObject)
