@@ -14,9 +14,11 @@
 #include "init.h"
 #include "key_io.h"
 #include "rpc/register.h"
+#include "transaction_builder.h"
 #include "wallet/rpcwallet.h"
 #include "wallet/wallet.h"
 #include "wallet/walletmanager.h"
+#include "zcash/Address.hpp"
 
 #include <boost/filesystem.hpp>
 #endif
@@ -654,5 +656,223 @@ TEST_F(MultiWalletDispatchTest, AsyncOperationStatusIsScopedToTheRequestingWalle
     }
     EXPECT_TRUE(foundSecondaryOwn);
     EXPECT_FALSE(foundDefaultForeign);
+}
+
+// Builds a minimal, degenerate hex-encoded TransactionBuilder blob referencing one
+// Sapling spend from `addr` -- enough to drive z_buildrawtransaction's own decode
+// and wallet-search logic without needing a real spendable note (SaplingOutPoint,
+// merkle path, and rcm are all left default/zero, matching the same degenerate-args
+// pattern test_transaction_builder.cpp itself uses to exercise a specific failure
+// point in isolation). `anchor` distinguishes "stopped at the wallet-search stage"
+// (pass uint256(), the null anchor z_buildrawtransaction rejects immediately after
+// finding the owning wallet) from "got past it" (pass any non-null value, so the
+// next real failure is deep inside ConvertRawSaplingSpend's note conversion).
+static std::string BuildDegenerateSaplingSpendHex(const libzcash::SaplingPaymentAddress& addr, const uint256& anchor)
+{
+    // AddSaplingSpendRaw() rejects a pre-Sapling mtx.nVersion outright -- the
+    // bare TransactionBuilder() ctor leaves mtx at its plain default (nVersion
+    // = SPROUT_MIN_CURRENT_VERSION), unlike the parameterized ctor z_createbuild-
+    // instructions itself uses, which derives a real nVersion via
+    // CreateNewContextualCMutableTransaction() for the given height. 300000 is
+    // comfortably past TESTNET's Sapling activation (280000, chainparams.cpp).
+    TransactionBuilder tb(Params().GetConsensus(), 300000, nullptr);
+    libzcash::MerklePath saplingMerklePath;
+    EXPECT_TRUE(tb.AddSaplingSpendRaw(SaplingOutPoint(), addr, 10000, uint256(), saplingMerklePath, anchor));
+    tb.SetChecksum();
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << tb;
+    return HexStr(ss.begin(), ss.end());
+}
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesWhenNoLoadedWalletOwnsTheAddress)
+{
+    // Phase 12: when no wallet is explicitly selected for the request,
+    // z_buildrawtransaction searches every loaded wallet for whichever one
+    // recognizes the address a builder blob's spends reference -- an address
+    // neither the default nor the secondary wallet has ever generated must be
+    // refused outright, not silently misattributed to some fallback wallet.
+    auto sk = libzcash::SaplingSpendingKey::random();
+    auto expsk = sk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    libzcash::SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
+    libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    libzcash::SaplingPaymentAddress unownedAddr;
+    ASSERT_TRUE(ivk.DeriveAddress(&unownedAddr, d));
+
+    UniValue params(UniValue::VARR);
+    params.push_back(BuildDegenerateSaplingSpendHex(unownedAddr, uint256()));
+
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected z_buildrawtransaction to refuse an address no loaded wallet owns";
+    } catch (const UniValue& objError) {
+        EXPECT_NE(std::string::npos, find_value(objError, "message").get_str().find("No loaded wallet recognizes"));
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionFindsTheOwningWalletEvenWhenItIsNotTheDefault)
+{
+    // The real correctness property this phase exists for: z_buildrawtransaction
+    // must locate and use whichever wallet actually holds the address's keys, even
+    // when that's a secondary wallet, not just fall through to pwalletMain the way
+    // it unconditionally did before. Proven here by generating the address in the
+    // secondary wallet specifically (never touching the default wallet at all) and
+    // confirming the call gets past both the "no wallet recognizes this" stage and
+    // the spending-key-lookup stage -- the only way it could reach the null-anchor
+    // check below is if it resolved and used the secondary wallet's own keys.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_NE(secondaryWallet, pwalletMain);
+
+    libzcash::SaplingPaymentAddress ownedAddr;
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryWallet->GenerateNewSeed();
+        ownedAddr = secondaryWallet->GenerateNewSaplingZKey();
+    }
+
+    UniValue params(UniValue::VARR);
+    params.push_back(BuildDegenerateSaplingSpendHex(ownedAddr, uint256()));
+
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected the degenerate null anchor to be rejected once the owning wallet is found";
+    } catch (const UniValue& objError) {
+        std::string message = find_value(objError, "message").get_str();
+        EXPECT_EQ(std::string::npos, message.find("No loaded wallet recognizes"));
+        EXPECT_EQ(std::string::npos, message.find("not found"));
+        EXPECT_NE(std::string::npos, message.find("Anchor cannot be null"));
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionHonorsAnExplicitWalletSelectionInsteadOfFallingThroughToSearch)
+{
+    // Audit finding: adding z_buildrawtransaction to IsMultiWalletAwareRPC() means a
+    // request explicitly scoped to one wallet (e.g. /wallet/<name>/) is let through
+    // the dispatch gate -- if the handler then searched *every* loaded wallet
+    // regardless, a request scoped to a wallet that does NOT hold the needed key
+    // could still succeed by silently using a *different* wallet's key, breaking the
+    // invariant every other multiwallet-aware RPC upholds (a request scoped to one
+    // wallet only ever touches that wallet). This proves the fix: the default
+    // wallet owns the address, the secondary does not, and explicitly selecting the
+    // secondary must be refused, not silently fall back to the default.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    // Unlike "secondarytestwallet", SetUp() never calls LoadWallet() on pwalletMain
+    // itself (most tests in this file never need it to persist anything) -- do so
+    // here so its CWalletDB actually has a file to open ("r+" mode, used by every
+    // write below, doesn't auto-create one).
+    libzcash::SaplingPaymentAddress addr;
+    {
+        LOCK(pwalletMain->cs_wallet);
+        bool fFirstRun;
+        ASSERT_EQ(DB_LOAD_OK, pwalletMain->LoadWallet(fFirstRun));
+        pwalletMain->GenerateNewSeed();
+        addr = pwalletMain->GenerateNewSaplingZKey();
+    }
+
+    UniValue params(UniValue::VARR);
+    params.push_back(BuildDegenerateSaplingSpendHex(addr, uint256()));
+
+    RPCWalletRequestGuard guard("secondarytestwallet");
+    ASSERT_TRUE(guard.IsResolved());
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected the explicitly-selected secondary wallet to be checked "
+                  "on its own, not silently bypassed in favor of the default wallet";
+    } catch (const UniValue& objError) {
+        std::string message = find_value(objError, "message").get_str();
+        EXPECT_NE(std::string::npos, message.find("selected wallet does not recognize"));
+        // Must NOT have proceeded using the default wallet's key.
+        EXPECT_EQ(std::string::npos, message.find("Anchor cannot be null"));
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesAnAmbiguousMatchAcrossMultipleWallets)
+{
+    // Audit finding: two loaded wallets can legitimately hold the same spending key
+    // (the same seed restored twice, or a key imported into a second wallet), and
+    // each may carry its own -changeaddress override -- silently picking whichever
+    // sorts first by name could route this send's change to an address the user
+    // wasn't thinking about. Confirms this is refused outright instead.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    libzcash::SaplingPaymentAddress addr;
+    libzcash::SaplingExtendedSpendingKey extsk;
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryWallet->GenerateNewSeed();
+        addr = secondaryWallet->GenerateNewSaplingZKey();
+        ASSERT_TRUE(secondaryWallet->GetSaplingExtendedSpendingKey(addr, extsk));
+    }
+    {
+        // Import the exact same spending key into the default wallet too, so both
+        // wallets now genuinely hold it. LoadWallet() first for the same reason as
+        // the explicit-selection test above -- pwalletMain's file was never created
+        // by SetUp(), and AddSaplingZKey() writes through to disk.
+        LOCK(pwalletMain->cs_wallet);
+        bool fFirstRun;
+        ASSERT_EQ(DB_LOAD_OK, pwalletMain->LoadWallet(fFirstRun));
+        ASSERT_TRUE(pwalletMain->AddSaplingZKey(extsk));
+    }
+
+    UniValue params(UniValue::VARR);
+    params.push_back(BuildDegenerateSaplingSpendHex(addr, uint256()));
+
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected an ambiguous match across two wallets to be refused";
+    } catch (const UniValue& objError) {
+        std::string message = find_value(objError, "message").get_str();
+        EXPECT_NE(std::string::npos, message.find("Multiple loaded wallets"));
+        EXPECT_NE(std::string::npos, message.find("default_test.dat"));
+        EXPECT_NE(std::string::npos, message.find("secondarytestwallet"));
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesAWatchOnlyMatchWithNoSpendableWallet)
+{
+    // Audit finding: GetSaplingIncomingViewingKey (ownership) is a strictly weaker
+    // test than GetSaplingExtendedSpendingKey (ability to actually sign) -- a
+    // watch-only import (e.g. via z_importviewingkey) recognizes an address but can
+    // never produce a valid spend. Confirms this is reported as a specific
+    // "watch-only, can't spend" error rather than the generic "not found" a
+    // corrupted/foreign blob would get, and rather than silently failing deeper in
+    // the pipeline with a confusing message.
+    auto sk = libzcash::SaplingSpendingKey::random();
+    auto expsk = sk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    libzcash::SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
+    libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    libzcash::SaplingPaymentAddress addr;
+    ASSERT_TRUE(ivk.DeriveAddress(&addr, d));
+
+    {
+        // Only the viewing key is ever added -- no wallet ever holds expsk/extsk.
+        // LoadWallet() first for the same reason as the tests above.
+        LOCK(pwalletMain->cs_wallet);
+        bool fFirstRun;
+        ASSERT_EQ(DB_LOAD_OK, pwalletMain->LoadWallet(fFirstRun));
+        ASSERT_TRUE(pwalletMain->AddSaplingIncomingViewingKey(ivk, addr));
+    }
+
+    UniValue params(UniValue::VARR);
+    params.push_back(BuildDegenerateSaplingSpendHex(addr, uint256()));
+
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected a watch-only-only match to be refused with a specific error";
+    } catch (const UniValue& objError) {
+        std::string message = find_value(objError, "message").get_str();
+        EXPECT_EQ(std::string::npos, message.find("No loaded wallet recognizes"));
+        EXPECT_NE(std::string::npos, message.find("only holds a viewing key"));
+        EXPECT_NE(std::string::npos, message.find("default_test.dat"));
+    }
 }
 #endif // ENABLE_WALLET

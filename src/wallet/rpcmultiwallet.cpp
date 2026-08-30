@@ -306,6 +306,16 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "z_exportkey", "z_exportviewingkey", "z_setaddressbook",
         "getinfo", "validateaddress", "z_validateaddress", "nn_getwalletinfo",
         "getwalletburntransactions", "signrawtransaction",
+        // Phase 12: the offline-signing trio (rpc/rawtransaction.cpp).
+        // z_createbuildinstructions/z_createbuildinstructionscoincontrol are
+        // rewired the standard way (GetWalletForRequest()). z_buildrawtransaction
+        // is listed here purely so selecting a wallet in its request URI doesn't
+        // get refused outright -- the handler itself ignores any such selection
+        // and searches every loaded wallet for whichever one holds the needed
+        // spending key instead, since the two-step offline round trip gives it
+        // no other way to know in advance which wallet that is.
+        "z_createbuildinstructions", "z_createbuildinstructionscoincontrol",
+        "z_buildrawtransaction",
     };
     return aware.count(name) != 0;
 }

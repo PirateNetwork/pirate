@@ -37,6 +37,7 @@
 #include "wallet/wallet.h"
 #include "key_io.h"
 #include "wallet/asyncrpcoperation_sendmany.h"
+#include "wallet/walletmanager.h"
 #include "rpc/server.h"
 #include "utilmoneystr.h"
 #include "zaddresstablemodel.h"
@@ -385,8 +386,21 @@ void ZSendCoinsDialog::handleOfflineSigning(const WalletModelZTransaction &trans
         params.push_back(1);  // minconf
         params.push_back(ValueFromAmount(txFee));
         
-        // Execute RPC to get transaction builder hex
-        UniValue buildResult = tableRPC.execute("z_createbuildinstructions", params);
+        // Execute RPC to get transaction builder hex, scoped to this dialog's own
+        // selected wallet -- z_createbuildinstructions reads the from-address's notes
+        // out of whichever wallet is resolved for the request, so calling it with no
+        // guard here would always operate on the default wallet regardless of which
+        // wallet's tab this dialog belongs to.
+        UniValue buildResult;
+        {
+            RPCWalletRequestGuard walletGuard(model->getWalletName().toStdString());
+            if (!walletGuard.IsResolved()) {
+                setResult("Transaction preparation failed",
+                         "Selected wallet is no longer loaded");
+                return;
+            }
+            buildResult = tableRPC.execute("z_createbuildinstructions", params);
+        }
         
         if (buildResult.isNull() || !buildResult.isStr())
         {

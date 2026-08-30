@@ -249,7 +249,9 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_createbuildinstructions", 3 },
 
     { "z_createbuildinstructionscoincontrol", 0 },
-    { "z_createbuildinstructionscoincontrol", 1 }
+    { "z_createbuildinstructionscoincontrol", 1 },
+    { "z_createbuildinstructionscoincontrol", 2 },
+    { "z_createbuildinstructionscoincontrol", 3 }
 };
 
 class CRPCConvertTable

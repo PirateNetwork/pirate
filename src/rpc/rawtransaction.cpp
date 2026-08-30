@@ -1870,6 +1870,12 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           "\nBuild and finalize a shielded transaction from transaction builder data.\n"
           "Processes hex-encoded transaction builder instructions to create a complete\n"
           "shielded transaction for Sapling or Ironwood pools.\n"
+          "\nIf called against a specific wallet (e.g. via the /wallet/<name>/ URI), only\n"
+          "that wallet is checked for the spending key this transaction needs, and the\n"
+          "call fails if that wallet doesn't hold it -- it will NOT fall through to a\n"
+          "different loaded wallet. If called with no wallet selected, every loaded\n"
+          "wallet is searched for whichever one holds the needed key, since the builder\n"
+          "data itself carries no record of which wallet originally created it.\n"
 
           "\nArguments:\n"
           "1. \"hex\"      (string, required) The transaction builder hex string\n"
@@ -1882,7 +1888,16 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           + HelpExampleRpc("z_buildrawtransaction", "\"hexstring\"")
       );
 
-  LOCK2(cs_main, pwalletMain->cs_wallet);
+  // Deliberately NOT wallet-selection-aware, unlike z_createbuildinstructions/
+  // z_createbuildinstructionscoincontrol just below: this RPC is the "finish" half
+  // of an offline-signing round trip, called from a request that has no way to know
+  // in advance which loaded wallet holds the spending key(s) a given builder blob
+  // needs (the blob carries no wallet-identifying data by design -- see those two
+  // RPCs' own comments). So instead of resolving a single selected wallet, this
+  // searches every currently loaded wallet for whichever one recognizes the
+  // relevant address(es) and uses that one, once the blob is decoded far enough to
+  // know what to search for.
+  LOCK(cs_main);
   RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR));
 
   string strHexTb = params[0].get_str();
@@ -1920,6 +1935,125 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder does not contain Sapling Spends or Ironwood Spends, coins must be spent from Sapling or Ironwood.");
   }
 
+  // Search for whichever loaded wallet holds the *spending* key these spends
+  // reference. If the request explicitly selected a wallet (a /wallet/<name>/
+  // URI, or the console's wallet picker), only that one is checked -- honoring
+  // an explicit selection matches every other multiwallet-aware RPC's contract,
+  // rather than letting a request scoped to one wallet silently sign with a
+  // different wallet's keys. Only when nothing was explicitly selected (the
+  // offline-signing dialog's own case -- see the class comment above) does
+  // this fall back to searching every loaded wallet.
+  bool haveSapling = tb.vSaplingSpends.size() > 0;
+  libzcash::SaplingPaymentAddress saplingAddr;
+  libzcash::IronwoodPaymentAddress ironwoodAddr;
+  if (haveSapling)
+      saplingAddr = tb.vSaplingSpends[0].addr;
+  else
+      ironwoodAddr = tb.vIronwoodSpends[0].addr;
+
+  const std::string strRequestedWallet = CWalletManager::GetRequestedWalletName();
+  std::vector<std::string> candidateNames;
+  if (!strRequestedWallet.empty())
+      candidateNames.push_back(strRequestedWallet);
+  else
+      candidateNames = CWalletManager::Get().ListWalletNames();
+
+  // Classify every candidate rather than stopping at the first one that merely
+  // recognizes the address (its incoming viewing key): a spendable match also
+  // has the spending key available right now; a locked match has it but needs
+  // unlocking first; a watch-only match never had it at all. Collecting all
+  // spendable matches (instead of breaking on the first) is what lets this
+  // refuse an ambiguous double-match instead of silently picking one -- two
+  // loaded wallets can legitimately share an address (the same seed restored
+  // twice, an exported/imported viewing key), and each may carry its own
+  // -changeaddress override, so silently picking one here could route this
+  // send's change to an address the user wasn't thinking about.
+  // GetWallet() below returns a raw pointer after dropping cs_wallets, which the
+  // very next line dereferences -- safe only because cs_main (held for this
+  // entire function, see the top of it) is taken before cs_wallets by every
+  // deletion path (CWalletManager::UnloadWallet/FlushAndUnloadAllSecondaryWallets,
+  // both LOCK2(cs_main, cs_wallets)), so nothing can free `candidate` while this
+  // function is running. Asserted explicitly since nothing else at this call site
+  // makes that dependency visible.
+  AssertLockHeld(cs_main);
+  std::vector<std::string> spendableMatches;
+  std::vector<std::string> lockedMatches;
+  std::vector<std::string> watchOnlyMatches;
+  for (const std::string& name : candidateNames) {
+      CWallet* candidate = CWalletManager::Get().GetWallet(name);
+      if (candidate == nullptr)
+          continue;
+      LOCK(candidate->cs_wallet);
+      bool ownsAddress;
+      if (haveSapling) {
+          libzcash::SaplingIncomingViewingKey ivk;
+          ownsAddress = candidate->GetSaplingIncomingViewingKey(saplingAddr, ivk);
+      } else {
+          libzcash::IronwoodIncomingViewingKey ivk;
+          ownsAddress = candidate->GetIronwoodIncomingViewingKey(ironwoodAddr, ivk);
+      }
+      if (!ownsAddress)
+          continue;
+      if (candidate->IsLocked()) {
+          lockedMatches.push_back(name);
+          continue;
+      }
+      bool hasSpendKey;
+      if (haveSapling) {
+          libzcash::SaplingExtendedSpendingKey extsk;
+          hasSpendKey = candidate->GetSaplingExtendedSpendingKey(saplingAddr, extsk);
+      } else {
+          libzcash::IronwoodExtendedSpendingKeyPirate extsk;
+          hasSpendKey = candidate->GetIronwoodExtendedSpendingKey(ironwoodAddr, extsk);
+      }
+      if (hasSpendKey)
+          spendableMatches.push_back(name);
+      else
+          watchOnlyMatches.push_back(name);
+  }
+
+  std::string strFoundWalletName;
+  if (spendableMatches.size() == 1) {
+      strFoundWalletName = spendableMatches.front();
+  } else if (spendableMatches.size() > 1) {
+      std::string joined;
+      for (size_t i = 0; i < spendableMatches.size(); i++) {
+          if (i) joined += ", ";
+          joined += "\"" + spendableMatches[i] + "\"";
+      }
+      throw JSONRPCError(RPC_WALLET_ERROR, "Multiple loaded wallets (" + joined + ") hold the spending key for this address; unload all but the intended one before retrying.");
+  } else if (!lockedMatches.empty()) {
+      throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet \"" + lockedMatches.front() + "\" holds the spending key for this address but is locked; unlock it with walletpassphrase and try again.");
+  } else if (!watchOnlyMatches.empty()) {
+      throw JSONRPCError(RPC_WALLET_ERROR, "Wallet \"" + watchOnlyMatches.front() + "\" recognizes this address but only holds a viewing key for it, not a spending key.");
+  } else if (!strRequestedWallet.empty()) {
+      throw JSONRPCError(RPC_WALLET_ERROR, "The selected wallet does not recognize the address(es) referenced by this transaction builder.");
+  } else {
+      throw JSONRPCError(RPC_WALLET_ERROR, "No loaded wallet recognizes the address(es) referenced by this transaction builder.");
+  }
+
+  LogPrintf("z_buildrawtransaction: using wallet \"%s\"\n", strFoundWalletName);
+
+  // Re-select onto the identified wallet for the rest of this call, reusing the same
+  // refcounted resolve/hold machinery every other wallet-scoped RPC request already gets
+  // from CRPCTable::execute() -- keeps this wallet from being unloaded out from under us
+  // between the search above and the key lookups below. Nesting is explicitly supported
+  // by RPCWalletRequestGuard's own save/restore-prior-value design (see its class comment
+  // in wallet/walletmanager.h), even though nothing else in this codebase nests one yet.
+  RPCWalletRequestGuard walletGuard(strFoundWalletName);
+  if (!walletGuard.IsResolved()) {
+      throw JSONRPCError(RPC_WALLET_ERROR, "Wallet \"" + strFoundWalletName + "\" was unloaded while processing this request.");
+  }
+  CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+  // Opens a new nested scope for this lock rather than a second bare LOCK() at the
+  // same brace depth as the LOCK(cs_main) above: the LOCK()/LOCK2() macros always name
+  // their guard variable "criticalblock"/"criticalblock1"/"criticalblock2", so two
+  // LOCK() calls at the same scope depth don't compile (a real redeclaration, not
+  // just a lint warning). cs_main stays held throughout regardless, since this block
+  // runs out to the function's own closing brace.
+  {
+  LOCK(pwallet->cs_wallet);
+
   //Outgoing viewing key to be set by either the Sapling spending key or the Ironwood spending key
   uint256 ovk;
 
@@ -1935,11 +2069,11 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           libzcash::SaplingPaymentAddress addr = tb.vSaplingSpends[i].addr;
 
           libzcash::SaplingIncomingViewingKey ivk;
-          if (!pwalletMain->GetSaplingIncomingViewingKey(addr, ivk))
-              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Incoming Viewing key for Sapling Spend not found.");
+          if (!pwallet->GetSaplingIncomingViewingKey(addr, ivk))
+              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Sapling spend " + std::to_string(i) + " references an address wallet \"" + strFoundWalletName + "\" does not recognize -- builders mixing addresses from different wallets are not supported.");
 
           libzcash::SaplingExtendedSpendingKey extsk;
-          if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk))
+          if (!pwallet->GetSaplingExtendedSpendingKey(addr, extsk))
               throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for Sapling Spend not found.");
 
           //Validate the all of the spending keys are the same. Not a consensus rule, better for wallet useability.
@@ -1986,12 +2120,12 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           libzcash::IronwoodPaymentAddress addr = tb.vIronwoodSpends[i].addr;
 
           libzcash::IronwoodIncomingViewingKey ivk;
-          if (!pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk))
-              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Incoming Viewing key for Sapling Spend not found.");
+          if (!pwallet->GetIronwoodIncomingViewingKey(addr, ivk))
+              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Ironwood spend " + std::to_string(i) + " references an address wallet \"" + strFoundWalletName + "\" does not recognize -- builders mixing addresses from different wallets are not supported.");
 
           libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-          if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk))
-              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for Sapling Spend not found.");
+          if (!pwallet->GetIronwoodExtendedSpendingKey(addr, extsk))
+              throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Spending key for Ironwood Spend not found.");
 
           //Validate the all of the spending keys are the same. Not a consensus rule, better for wallet useability.
           if (i == 0) {
@@ -2078,8 +2212,12 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   //still recognize this change note as its own. Must run after the output-conversion calls
   //above (not before): those are what would otherwise be the pool's only initializer, and
   //initializing twice for the same pool would hit the same discard-the-builder bug just fixed.
-  if (pwalletMain->configuredChangeAddress.has_value()) {
-      const auto& changeAddress = pwalletMain->configuredChangeAddress.value();
+  //Reads pwallet's own override here, not pwalletMain's -- otherwise a default wallet with
+  //-changeaddress configured would silently redirect a *different* wallet's change output to
+  //an address that wallet never chose, purely because it happened to be the one processing
+  //this request.
+  if (pwallet->configuredChangeAddress.has_value()) {
+      const auto& changeAddress = pwallet->configuredChangeAddress.value();
       if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
           if (!saplingInitialized) {
               tb.InitializeSapling(uint256());
@@ -2101,6 +2239,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   ssTx << rtx;
   return HexStr(ssTx.begin(), ssTx.end());
 
+  }
 }
 
 /**
@@ -2116,6 +2255,10 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
  * @return UniValue Hex-encoded transaction builder instructions
  */
 UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPubKey& mypk) {
+  CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+  if (!EnsureWalletIsAvailable(pwallet, fHelp))
+      return NullUniValue;
+
   if (fHelp || params.size() < 2 || params.size() > 4)
       throw runtime_error(
           "z_createbuildinstructions \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
@@ -2144,16 +2287,16 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           + HelpExampleRpc("z_createbuildinstructions", "\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\", [{\"address\": \"zs14d8tc0hl9q0vg5l28uec5vk6sk34fkj2n8s7jalvw5fxpy6v39yn4s2ga082lymrkjk0x2nqg37\" ,\"amount\": 5.0}]")
       );
 
-      LOCK2(cs_main, pwalletMain->cs_wallet);
+      LOCK2(cs_main, pwallet->cs_wallet);
 
-      EnsureWalletIsUnlocked();
+      EnsureWalletIsUnlocked(pwallet);
 
       //THROW_IF_SYNCING(KOMODO_INSYNC);
 
       //Initalize Transaction Builder
       CAmount totalOut = 0;
       int nHeight = chainActive.Tip()->nHeight;
-      TransactionBuilder tb = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwalletMain);
+      TransactionBuilder tb = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwallet);
 
       CAmount nFee = 10000;
       if (!params[3].isNull()) {
@@ -2313,9 +2456,9 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
       CAmount totalIn = 0;
 
       {
-          LOCK2(cs_main, pwalletMain->cs_wallet);
+          LOCK2(cs_main, pwallet->cs_wallet);
           // Offline transaction, Does not require the spending key in this wallet
-          pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress, nMinDepth, true, false);
+          pwallet->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress, nMinDepth, true, false);
 
 
           // Select Sapling notes
@@ -2325,12 +2468,12 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           for (auto entry : saplingEntries) {
 
               libzcash::MerklePath saplingMerklePath;
-              if (!pwalletMain->SaplingWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, saplingMerklePath)) {
+              if (!pwallet->SaplingWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, saplingMerklePath)) {
                   throw JSONRPCError(RPC_INVALID_PARAMETER, "Getting Sapling Merkle Path failed");
               }
 
               uint256 anchor;
-              if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, entry.note.cmu().value(), anchor)) {
+              if (!pwallet->SaplingWalletGetPathRootWithCMU(saplingMerklePath, entry.note.cmu().value(), anchor)) {
                   throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Anchor failed.");
               }
 
@@ -2347,12 +2490,12 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           for (auto entry : ironwoodEntries) {
 
               libzcash::MerklePath ironwoodMerklePath;
-              if (!pwalletMain->IronwoodWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, ironwoodMerklePath)) {
+              if (!pwallet->IronwoodWalletGetMerklePathOfNote(entry.op.hash, entry.op.n, ironwoodMerklePath)) {
                   throw JSONRPCError(RPC_WALLET_ERROR, "Merkle Path not found for Ironwood note. Stopping.");
               }
 
               uint256 anchor;
-              if (!pwalletMain->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, entry.note.cmx(), anchor)) {
+              if (!pwallet->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, entry.note.cmx(), anchor)) {
                   throw JSONRPCError(RPC_WALLET_ERROR,"Getting Ironwood Anchor failed. Stopping.");
               }
 
@@ -2389,6 +2532,10 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
  */
 UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+  CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+  if (!EnsureWalletIsAvailable(pwallet, fHelp))
+      return NullUniValue;
+
   if (fHelp)
       throw runtime_error(
           "z_createbuildinstructionscoincontrol inputs outputs ( fee ) ( expiryBlocks )\n"
@@ -2423,7 +2570,7 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
           + HelpExampleCli("z_createbuildinstructionscoincontrol", "\"[{\\\"txid\\\":\\\"myid\\\",\\\"index\\\":0},...]\" \"[{\\\"address\\\":\\\"sendtoaddress\\\",\\\"amount\\\":1.0000,\\\"memo\\\":\\\"memostring\\\"},...]\" 0.0001 200")
       );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VARR)(UniValue::VARR)(UniValue::VNUM)(UniValue::VNUM), true);
     if (params[0].isNull() || params[1].isNull())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, arguments 1 and 2 must be non-null");
@@ -2433,7 +2580,7 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
 
     CAmount total = 0;
     int nHeight = chainActive.Tip()->nHeight;
-    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwalletMain);
+    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwallet);
 
     CAmount nFee = 10000;
     if (!params[2].isNull()) {
@@ -2466,7 +2613,7 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
         if (nOutput < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, index must be positive");
 
-        const CWalletTx* wtx = pwalletMain->GetWalletTx(txid);
+        const CWalletTx* wtx = pwallet->GetWalletTx(txid);
         if (wtx != NULL) {
             SaplingOutPoint op = SaplingOutPoint(txid, nOutput);
 
@@ -2483,11 +2630,11 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
             total += value;
 
             libzcash::MerklePath saplingMerklePath;
-            if (!pwalletMain->SaplingWalletGetMerklePathOfNote(op.hash, op.n, saplingMerklePath))
+            if (!pwallet->SaplingWalletGetMerklePathOfNote(op.hash, op.n, saplingMerklePath))
                throw JSONRPCError(RPC_INVALID_PARAMETER, "Getting Sapling Merkle Path failed");
 
            uint256 anchor;
-           if (!pwalletMain->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().value(), anchor))
+           if (!pwallet->SaplingWalletGetPathRootWithCMU(saplingMerklePath, note.cmu().value(), anchor))
                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Anchor failed.");
 
            if (!tx.AddSaplingSpendRaw(op, pa, note.value(), note.rcm(), saplingMerklePath, anchor))
