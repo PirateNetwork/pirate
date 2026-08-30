@@ -288,6 +288,24 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "importgatewaypartialsign", "importgatewaycompletesigning",
         "importgatewaymarkdone", "importgatewaypendingwithdraws",
         "importgatewayprocessed",
+        // Phase 10: the 46 mechanical NEEDS-REWIRING functions from Phase 8's
+        // census (wallet/rpcwallet.cpp, wallet/rpcdump.cpp, and a handful of
+        // misc RPC files) -- plain pwalletMain -> GetWalletForRequest() swaps,
+        // same shape as Phases 2/5's original rewiring.
+        "getaccountaddress", "getrawchangeaddress", "setaccount", "getaccount",
+        "getaddressesbyaccount", "signmessage", "getreceivedbyaddress",
+        "getreceivedbyaccount", "cleanwallettransactions", "getunconfirmedbalance",
+        "sendfrom", "sendmany", "listreceivedbyaddress", "listreceivedbyaccount",
+        "listaccounts", "listsinceblock", "walletpassphrasechange", "lockunspent",
+        "listlockunspent", "getkeypoolsize", "resendwallettransactions",
+        "z_listunspent", "z_getnewaddresskey", "z_getnewaddress",
+        "z_setprimaryspendingkey", "z_listaddresses", "z_listreceivedbyaddress",
+        "z_getbalances", "z_gettotalbalance", "z_viewtransaction",
+        "z_exportsaplingdisclosure", "z_exportironwooddisclosure", "getbalance64",
+        "importaddress", "rescan", "z_importkey", "z_importviewingkey",
+        "z_exportkey", "z_exportviewingkey", "z_setaddressbook",
+        "getinfo", "validateaddress", "z_validateaddress", "nn_getwalletinfo",
+        "getwalletburntransactions", "signrawtransaction",
     };
     return aware.count(name) != 0;
 }

@@ -21,9 +21,15 @@
 #define BITCOIN_WALLET_RPCWALLET_H
 
 class CRPCTable;
+class CWallet;
 
 void RegisterWalletRPCCommands(CRPCTable &tableRPC);
-uint64_t komodo_interestsum();
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's
+// convention (see cc/CCtx.cpp) -- lets z_gettotalbalance pass the
+// request-resolved wallet, while komodo_update_interest() (background
+// maintenance thread, komodo_gateway.cpp) and qt/walletmodel.cpp's polling
+// keep calling with no wallet argument at all, unchanged.
+uint64_t komodo_interestsum(CWallet *pwallet=nullptr);
 int32_t ensure_CCrequirements(uint8_t evalcode);
 /**
  * @brief Search for 10k sat. P2PK notary utxos and make proof tx (txNew) from it for further include in block.

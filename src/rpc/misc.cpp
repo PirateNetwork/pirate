@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
@@ -39,6 +43,7 @@
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
 #include "wallet/walletdb.h"
+#include "wallet/walletmanager.h"
 #endif
 #include "tls/utiltls.h"
 
@@ -241,7 +246,8 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("getinfo", "")
         );
     #ifdef ENABLE_WALLET
-       LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
+        CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+        LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : NULL);
     #else
         LOCK(cs_main);
     #endif
@@ -272,16 +278,16 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         obj.push_back(Pair("notarized_confirms", txid_height < kmdnotarized_height ? (kmdnotarized_height - txid_height + 1) : 0));
         //fprintf(stderr,"after notarized_confirms %u\n",(uint32_t)time(NULL));
 #ifdef ENABLE_WALLET
-        if (pwalletMain) {
-            obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
+        if (pwallet) {
+            obj.push_back(Pair("walletversion", pwallet->GetVersion()));
             if ( chainName.isKMD() )
             {
                 obj.push_back(Pair("interest",       ValueFromAmount(KOMODO_INTERESTSUM)));
-                obj.push_back(Pair("balance",       ValueFromAmount(KOMODO_WALLETBALANCE))); //pwalletMain->GetBalance()
+                obj.push_back(Pair("balance",       ValueFromAmount(KOMODO_WALLETBALANCE))); //pwallet->GetBalance()
             }
             else
             {
-                obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance()))); //
+                obj.push_back(Pair("balance",       ValueFromAmount(pwallet->GetBalance()))); //
             }
         }
 #endif
@@ -295,14 +301,14 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("tiptime", (int)chainActive.Tip()->nTime));
         obj.push_back(Pair("difficulty",    (double)GetDifficulty()));
 #ifdef ENABLE_WALLET
-        if (pwalletMain) {
-            obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
-            obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
+        if (pwallet) {
+            obj.push_back(Pair("keypoololdest", pwallet->GetOldestKeyPoolTime()));
+            obj.push_back(Pair("keypoolsize",   (int)pwallet->GetKeyPoolSize()));
         }
-        if (pwalletMain && pwalletMain->IsCrypted())
-            obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
-        if (pwalletMain)
-            obj.push_back(Pair("paytxfee",      ValueFromAmount(pwalletMain->payTxFee.GetFeePerK())));
+        if (pwallet && pwallet->IsCrypted())
+            obj.push_back(Pair("unlocked_until", GetWalletUnlockTimeForRequest(pwallet)));
+        if (pwallet)
+            obj.push_back(Pair("paytxfee",      ValueFromAmount(pwallet->payTxFee.GetFeePerK())));
 #endif
         obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
         obj.push_back(Pair("ironwood", ASSETCHAINS_IRONWOOD));
@@ -400,13 +406,18 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 class DescribeAddressVisitor : public boost::static_visitor<UniValue>
 {
 public:
+    // Defaults to pwalletMain when not given, per the multiwallet effort's
+    // convention (see cc/CCtx.cpp), so validateaddress can pass the
+    // request-resolved wallet instead of always the default one.
+    DescribeAddressVisitor(CWallet *pwalletIn = nullptr) : pwallet(pwalletIn ? pwalletIn : pwalletMain) {}
+
     UniValue operator()(const CNoDestination &dest) const { return UniValue(UniValue::VOBJ); }
 
     UniValue operator()(const CKeyID &keyID) const {
         UniValue obj(UniValue::VOBJ);
         CPubKey vchPubKey;
         obj.push_back(Pair("isscript", false));
-        if (pwalletMain && pwalletMain->GetPubKey(keyID, vchPubKey)) {
+        if (pwallet && pwallet->GetPubKey(keyID, vchPubKey)) {
             obj.push_back(Pair("pubkey", HexStr(vchPubKey))); // should return pubkeyhash, but not sure about compatibility impact
             obj.push_back(Pair("iscompressed", vchPubKey.IsCompressed()));
         }
@@ -416,7 +427,7 @@ public:
     UniValue operator()(const CPubKey &key) const {
         UniValue obj(UniValue::VOBJ);
         obj.push_back(Pair("isscript", false));
-        if (pwalletMain && key.IsValid()) {
+        if (pwallet && key.IsValid()) {
             obj.push_back(Pair("pubkey", HexStr(key)));
             obj.push_back(Pair("iscompressed", key.IsCompressed()));
         }
@@ -431,7 +442,7 @@ public:
         UniValue obj(UniValue::VOBJ);
         CScript subscript;
         obj.push_back(Pair("isscript", true));
-        if (pwalletMain && pwalletMain->GetCScript(scriptID, subscript)) {
+        if (pwallet && pwallet->GetCScript(scriptID, subscript)) {
             std::vector<CTxDestination> addresses;
             txnouttype whichType;
             int nRequired;
@@ -448,6 +459,9 @@ public:
         }
         return obj;
     }
+
+private:
+    CWallet *pwallet;
 };
 #endif
 
@@ -541,7 +555,8 @@ UniValue validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         );
 
 #ifdef ENABLE_WALLET
-    LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : NULL);
 #else
     LOCK(cs_main);
 #endif
@@ -560,13 +575,13 @@ UniValue validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         ret.push_back(Pair("scriptPubKey", HexStr(scriptPubKey.begin(), scriptPubKey.end())));
         ret.push_back(Pair("segid", (int32_t)komodo_segid32((char *)params[0].get_str().c_str()) & 0x3f));
 #ifdef ENABLE_WALLET
-        isminetype mine = pwalletMain ? IsMine(*pwalletMain, dest) : ISMINE_NO;
+        isminetype mine = pwallet ? IsMine(*pwallet, dest) : ISMINE_NO;
         ret.push_back(Pair("ismine", (mine & ISMINE_SPENDABLE) ? true : false));
         ret.push_back(Pair("iswatchonly", (mine & ISMINE_WATCH_ONLY) ? true: false));
-        UniValue detail = std::visit(DescribeAddressVisitor(), dest);
+        UniValue detail = std::visit(DescribeAddressVisitor(pwallet), dest);
         ret.pushKVs(detail);
-        if (pwalletMain && pwalletMain->mapAddressBook.count(dest))
-            ret.push_back(Pair("account", pwalletMain->mapAddressBook[dest].name));
+        if (pwallet && pwallet->mapAddressBook.count(dest))
+            ret.push_back(Pair("account", pwallet->mapAddressBook[dest].name));
 #endif
     }
     return ret;
@@ -576,6 +591,13 @@ UniValue validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
 class DescribePaymentAddressVisitor : public boost::static_visitor<UniValue>
 {
 public:
+#ifdef ENABLE_WALLET
+    // Defaults to pwalletMain when not given, per the multiwallet effort's
+    // convention (see cc/CCtx.cpp), so z_validateaddress can pass the
+    // request-resolved wallet instead of always the default one.
+    DescribePaymentAddressVisitor(CWallet *pwalletIn = nullptr) : pwallet(pwalletIn ? pwalletIn : pwalletMain) {}
+#endif
+
     UniValue operator()(const libzcash::InvalidEncoding &zaddr) const { return UniValue(UniValue::VOBJ); }
 
     UniValue operator()(const libzcash::SproutPaymentAddress &zaddr) const {
@@ -584,8 +606,8 @@ public:
         obj.push_back(Pair("payingkey", zaddr.a_pk.GetHex()));
         obj.push_back(Pair("transmissionkey", zaddr.pk_enc.GetHex()));
 #ifdef ENABLE_WALLET
-        if (pwalletMain) {
-            obj.push_back(Pair("ismine", pwalletMain->HaveSproutSpendingKey(zaddr)));
+        if (pwallet) {
+            obj.push_back(Pair("ismine", pwallet->HaveSproutSpendingKey(zaddr)));
         }
 #endif
         return obj;
@@ -597,12 +619,12 @@ public:
         obj.push_back(Pair("diversifier", HexStr(zaddr.d)));
         obj.push_back(Pair("diversifiedtransmissionkey", zaddr.pk_d.GetHex()));
 #ifdef ENABLE_WALLET
-        if (pwalletMain) {
+        if (pwallet) {
             libzcash::SaplingIncomingViewingKey ivk;
             libzcash::SaplingExtendedFullViewingKey extfvk;
-            bool isMine = pwalletMain->GetSaplingIncomingViewingKey(zaddr, ivk) &&
-                pwalletMain->GetSaplingFullViewingKey(ivk, extfvk) &&
-                pwalletMain->HaveSaplingSpendingKey(extfvk);
+            bool isMine = pwallet->GetSaplingIncomingViewingKey(zaddr, ivk) &&
+                pwallet->GetSaplingFullViewingKey(ivk, extfvk) &&
+                pwallet->HaveSaplingSpendingKey(extfvk);
             obj.push_back(Pair("ismine", isMine));
         }
 #endif
@@ -615,17 +637,22 @@ public:
         obj.push_back(Pair("diversifier", HexStr(zaddr.d)));
         obj.push_back(Pair("diversifiedtransmissionkey", zaddr.pk_d.GetHex()));
 #ifdef ENABLE_WALLET
-        if (pwalletMain) {
+        if (pwallet) {
             libzcash::IronwoodIncomingViewingKey ivk;
             libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-            bool isMine = pwalletMain->GetIronwoodIncomingViewingKey(zaddr, ivk) &&
-                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk) &&
-                pwalletMain->HaveIronwoodSpendingKey(extfvk);
+            bool isMine = pwallet->GetIronwoodIncomingViewingKey(zaddr, ivk) &&
+                pwallet->GetIronwoodFullViewingKey(ivk, extfvk) &&
+                pwallet->HaveIronwoodSpendingKey(extfvk);
             obj.push_back(Pair("ismine", isMine));
         }
 #endif
         return obj;
     }
+
+private:
+#ifdef ENABLE_WALLET
+    CWallet *pwallet;
+#endif
 };
 
 UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -655,7 +682,8 @@ UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& my
 
 
 #ifdef ENABLE_WALLET
-    LOCK2(cs_main, pwalletMain ? &pwalletMain->cs_wallet : NULL);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : NULL);
 #else
     LOCK(cs_main);
 #endif
@@ -669,7 +697,11 @@ UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& my
     if (isValid)
     {
         ret.push_back(Pair("address", strAddress));
+#ifdef ENABLE_WALLET
+        UniValue detail = std::visit(DescribePaymentAddressVisitor(pwallet), address);
+#else
         UniValue detail = std::visit(DescribePaymentAddressVisitor(), address);
+#endif
         ret.pushKVs(detail);
     }
     return ret;

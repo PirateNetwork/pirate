@@ -1379,10 +1379,11 @@ UniValue getwalletburntransactions(const UniValue& params, bool fHelp, const CPu
             + HelpExampleRpc("getwalletburntransactions", "")
         );
 
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     string strAccount = "*";
     isminefilter filter = ISMINE_SPENDABLE;
@@ -1396,7 +1397,7 @@ UniValue getwalletburntransactions(const UniValue& params, bool fHelp, const CPu
     UniValue ret(UniValue::VARR);
 
     std::list<CAccountingEntry> acentries;
-    CWallet::TxItems txOrdered = pwalletMain->OrderedTxItems(acentries, strAccount);
+    CWallet::TxItems txOrdered = pwallet->OrderedTxItems(acentries, strAccount);
 
     // iterate backwards until we have nCount items to return:
     for (CWallet::TxItems::reverse_iterator it = txOrdered.rbegin(); it != txOrdered.rend(); ++it)

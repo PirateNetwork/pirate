@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /* Notaries RPC Tools */
 
 // Copyright (c) 2021-2022 DeckerSU, https://github.com/DeckerSU
@@ -7,6 +11,7 @@
 #include <stdexcept>
 
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 #include "init.h"
 #include "main.h"
 #include "random.h"
@@ -15,6 +20,7 @@
 #include "coincontrol.h"
 #include "utilmoneystr.h"
 #include "transaction_builder.h"
+#include "komodo_bitcoind.h"
 
 #include "komodo_notary.h"
 #include "komodo_structs.h"
@@ -40,6 +46,10 @@ std::string b2str(bool x) {
 
 UniValue nn_getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "nn_getwalletinfo\n"
@@ -51,27 +61,25 @@ UniValue nn_getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& myp
             + HelpExampleRpc("nn_getwalletinfo", "")
         );
 
-    if (!pwalletMain)
-        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not available.");
-    if (pwalletMain->IsLocked())
+    if (pwallet->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is locked.");
-    
+
     std::string pubkeyStr = GetArg("-pubkey", "");
     if (!(pubkeyStr.size() == 2 * CPubKey::COMPRESSED_PUBLIC_KEY_SIZE && IsHex(pubkeyStr)))
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Notary pubkey is not set.");
-    
+
     CPubKey nn_pubkey(ParseHex(pubkeyStr));
     CScript nn_p2pk_script = CScript() << ToByteVector(nn_pubkey) << OP_CHECKSIG;
     CScript nn_p2pkh_script = CScript() << OP_DUP << OP_HASH160 << ToByteVector(nn_pubkey.GetID()) << OP_EQUALVERIFY << OP_CHECKSIG;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
     int32_t currentSeason = chainName.isKMD() ? (
         chainActive.Tip() ? (
             chainActive.Tip()->nHeight >= KOMODO_NOTARIES_HARDCODED ? getkmdseason(chainActive.Tip()->nHeight) : 0
         ) : 0
     ) : getacseason(GetTime());
 
-    bool fHavePrivateKey = pwalletMain->HaveKey(nn_pubkey.GetID());
+    bool fHavePrivateKey = pwallet->HaveKey(nn_pubkey.GetID());
 
     int nn_index = -1; 
     std::string nn_name = "";
@@ -100,7 +108,7 @@ UniValue nn_getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& myp
        filtering in AvailableCoins, for example we can fill the output only with notary vins,
        or with regular utxos */
 
-    for (const std::pair<uint256, CWalletTx>& pairWtx : pwalletMain->mapWallet) {
+    for (const std::pair<uint256, CWalletTx>& pairWtx : pwallet->mapWallet) {
         const CWalletTx& wtx = pairWtx.second;
         int nDepth = wtx.GetDepthInMainChain();
         for (int i = 0; i < wtx.vout.size(); i++) {
@@ -127,7 +135,7 @@ UniValue nn_getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& myp
         we call IsTrusted (nDepth >= 1 - trusted, nDepth < 0 - not trusted) and second
         time explicit in next conditions in AvailableCoins.
     */ 
-    pwalletMain->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
+    pwallet->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
 
     size_t count_ccNotaryVins = 0;
     size_t count_ccOthers = 0;
@@ -157,7 +165,7 @@ UniValue nn_getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& myp
     result.pushKV("pubkey_address", pubkey_address);
     result.pushKV("ismine", fHavePrivateKey);
 
-    result.pushKV("transactions_count", (int64_t)pwalletMain->mapWallet.size());
+    result.pushKV("transactions_count", (int64_t)pwallet->mapWallet.size());
     result.pushKV("available_coins_count", (int64_t)vecOutputs.size());
     
     // UniValue obj(UniValue::VOBJ);

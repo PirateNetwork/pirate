@@ -211,6 +211,16 @@ extern std::string HelpExampleRpc(const std::string& methodname, const std::stri
 
 extern void EnsureWalletIsUnlocked();
 extern void EnsureWalletIsUnlockedForReporting();
+// Overloads taking an explicit wallet (CWalletManager::GetWalletForRequest())
+// so non-wallet-library callers can be multiwallet-aware without linking
+// against wallet/rpcwallet.cpp's request-context machinery.
+class CWallet;
+extern void EnsureWalletIsUnlocked(CWallet* pwallet);
+extern void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
+// Reads a wallet's own auto-lock deadline (walletpassphrase/walletlock),
+// unlike the plain nWalletUnlockTime global which only ever reflects the
+// default wallet.
+extern int64_t GetWalletUnlockTimeForRequest(CWallet* pwallet);
 
 bool StartRPC();
 void InterruptRPC();

@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2018-2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -287,7 +288,8 @@ void ImportAddress(const CTxDestination& dest, const string& strLabel)
 
 UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 1 || params.size() > 3)
@@ -308,9 +310,9 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("importaddress", "\"myaddress\", \"testing\", false")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     CScript script;
 
@@ -334,26 +336,26 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fRescan = params[2].get_bool();
 
     {
-        if (::IsMine(*pwalletMain, script) == ISMINE_SPENDABLE)
+        if (::IsMine(*pwallet, script) == ISMINE_SPENDABLE)
             throw JSONRPCError(RPC_WALLET_ERROR, "The wallet already contains the private key for this address or script");
 
         // add to address book or update label
         if (IsValidDestination(dest))
-            pwalletMain->SetAddressBook(dest, strLabel, "receive");
+            pwallet->SetAddressBook(dest, strLabel, "receive");
 
         // Don't throw error in case an address is already there
-        if (pwalletMain->HaveWatchOnly(script))
+        if (pwallet->HaveWatchOnly(script))
             return NullUniValue;
 
-        pwalletMain->MarkDirty();
+        pwallet->MarkDirty();
 
-        if (!pwalletMain->AddWatchOnly(script))
+        if (!pwallet->AddWatchOnly(script))
             throw JSONRPCError(RPC_WALLET_ERROR, "Error adding address to wallet");
 
         if (fRescan)
         {
-            pwalletMain->ScanForWalletTransactions(chainActive.Genesis(), true, true, true, true);
-            pwalletMain->ReacceptWalletTransactions();
+            pwallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, true, true);
+            pwallet->ReacceptWalletTransactions();
         }
     }
 
@@ -1078,7 +1080,8 @@ UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& m
 
 UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 0)
@@ -1090,18 +1093,19 @@ UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("rescan", "")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlockedForReporting();
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
-    pwalletMain->ScanForWalletTransactions(chainActive[0], true, true, true, true);
+    pwallet->ScanForWalletTransactions(chainActive[0], true, true, true, true);
 
     return NullUniValue;
 }
 
 UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 1 || params.size() > 3)
@@ -1126,9 +1130,9 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("z_importkey", "\"mykey\", \"no\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     // Whether to perform rescan after import
     bool fRescan = true;
@@ -1175,26 +1179,26 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     // Sapling support
-    auto addResult = std::visit(AddSpendingKeyToWallet(pwalletMain, Params().GetConsensus()), spendingkey);
+    auto addResult = std::visit(AddSpendingKeyToWallet(pwallet, Params().GetConsensus()), spendingkey);
     if (addResult == KeyAlreadyExists && fIgnoreExistingKey) {
         return NullUniValue;
     }
 
-    pwalletMain->MarkDirty();
+    pwallet->MarkDirty();
     if (addResult == KeyNotAdded) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding spending key to wallet");
     }
 
     //Add to ZAddress book
     auto zInfo = std::visit(libzcash::AddressInfoFromSpendingKey{}, spendingkey);
-    pwalletMain->SetZAddressBook(zInfo.second, zInfo.first, "");
+    pwallet->SetZAddressBook(zInfo.second, zInfo.first, "");
 
     // whenever a key is imported, we need to scan the whole chain
-    pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
+    pwallet->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
     // We want to scan for transactions and notes
     if (fRescan) {
-        pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true, true, true);
+        pwallet->ScanForWalletTransactions(chainActive[nRescanHeight], true, true, true, true);
     }
 
     return NullUniValue;
@@ -1202,7 +1206,8 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-  if (!EnsureWalletIsAvailable(fHelp))
+  CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+  if (!EnsureWalletIsAvailable(pwallet, fHelp))
       return NullUniValue;
 
   if (fHelp || params.size() < 1 || params.size() > 3)
@@ -1232,9 +1237,9 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
           + HelpExampleRpc("z_importviewingkey", "\"vkey\", \"no\"")
       );
 
-  LOCK2(cs_main, pwalletMain->cs_wallet);
+  LOCK2(cs_main, pwallet->cs_wallet);
 
-  EnsureWalletIsUnlocked();
+  EnsureWalletIsUnlocked(pwallet);
 
   // Whether to perform rescan after import
   bool fRescan = true;
@@ -1278,7 +1283,7 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
       throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid viewing key, Sprout not supported");
   }
 
-  auto addResult = std::visit(AddViewingKeyToWallet(pwalletMain), viewingkey);
+  auto addResult = std::visit(AddViewingKeyToWallet(pwallet), viewingkey);
   if (addResult == SpendingKeyExists) {
       throw JSONRPCError(
           RPC_WALLET_ERROR,
@@ -1286,20 +1291,20 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
   } else if (addResult == KeyAlreadyExists && fIgnoreExistingKey) {
       return result;
   }
-  pwalletMain->MarkDirty();
+  pwallet->MarkDirty();
   if (addResult == KeyNotAdded) {
       throw JSONRPCError(RPC_WALLET_ERROR, "Error adding viewing key to wallet");
   }
 
   //Add to ZAddress book
-  pwalletMain->SetZAddressBook(addrInfo.second, addrInfo.first, "");
+  pwallet->SetZAddressBook(addrInfo.second, addrInfo.first, "");
 
   // whenever a key is imported, we need to scan the whole chain
-  pwalletMain->nTimeFirstKey = 1; // 0 would be considered 'no value'
+  pwallet->nTimeFirstKey = 1; // 0 would be considered 'no value'
 
   // We want to scan for transactions and notes
   if (fRescan) {
-      pwalletMain->ScanForWalletTransactions(chainActive[nRescanHeight], true, true, true, true);
+      pwallet->ScanForWalletTransactions(chainActive[nRescanHeight], true, true, true, true);
   }
 
   return result;
@@ -1307,7 +1312,8 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
 
 UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -1325,9 +1331,9 @@ UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("z_exportkey", "\"myaddress\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     string strAddress = params[0].get_str();
 
@@ -1337,7 +1343,7 @@ UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     // Sapling support
-    auto sk = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), address);
+    auto sk = std::visit(GetSpendingKeyForPaymentAddress(pwallet), address);
     if (!sk) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet does not hold private zkey for this zaddr");
     }
@@ -1346,7 +1352,8 @@ UniValue z_exportkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -1363,9 +1370,9 @@ UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
             + HelpExampleRpc("z_exportviewingkey", "\"myaddress\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     string strAddress = params[0].get_str();
 
@@ -1374,7 +1381,7 @@ UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid zaddr");
     }
 
-    auto vk = std::visit(GetViewingKeyForPaymentAddress(pwalletMain), address);
+    auto vk = std::visit(GetViewingKeyForPaymentAddress(pwallet), address);
     if (vk) {
         return EncodeViewingKey(vk.value());
     } else {
@@ -1384,7 +1391,8 @@ UniValue z_exportviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
 
 UniValue z_setaddressbook(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() < 2 || params.size() > 3)
@@ -1403,9 +1411,9 @@ UniValue z_setaddressbook(const UniValue& params, bool fHelp, const CPubKey& myp
             HelpExampleRpc("z_setaddressbook", "\"zs1...\", \"My Shielded Address\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     string strAddress = params[0].get_str();
     string strLabel = params[1].get_str();
@@ -1420,7 +1428,7 @@ UniValue z_setaddressbook(const UniValue& params, bool fHelp, const CPubKey& myp
     }
 
     // Set the address book entry
-    pwalletMain->SetZAddressBook(address, strLabel, strPurpose, false);
+    pwallet->SetZAddressBook(address, strLabel, strPurpose, false);
 
     return NullUniValue;
 }

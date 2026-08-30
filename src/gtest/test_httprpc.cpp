@@ -262,13 +262,15 @@ TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksNonWalletCategoryRPCsToo
     // read directly by RPCs registered under other categories too (e.g.
     // "rawtransactions", "pirate Exclusive"), and a category allowlist would
     // silently let those reach the wrong wallet instead of being refused.
-    // signrawtransaction ("rawtransactions") is registered by
-    // RegisterAllCoreRPCCommands in SetUp() and reads pwalletMain when a key
-    // isn't supplied in the params -- the gate must fire before that ever runs.
+    // fundrawtransaction ("rawtransactions") is registered by
+    // RegisterAllCoreRPCCommands in SetUp() and reads pwalletMain directly --
+    // the gate must fire before that ever runs. (signrawtransaction, the
+    // previous stand-in here, was itself made multiwallet-aware in Phase 10
+    // and is no longer a valid "still refused" example.)
     RPCWalletRequestGuard guard("secondarytestwallet");
     try {
-        tableRPC.execute("signrawtransaction", UniValue(UniValue::VARR));
-        FAIL() << "expected signrawtransaction to be refused against a non-default wallet";
+        tableRPC.execute("fundrawtransaction", UniValue(UniValue::VARR));
+        FAIL() << "expected fundrawtransaction to be refused against a non-default wallet";
     } catch (const UniValue& objError) {
         EXPECT_EQ((int)RPC_WALLET_NOT_SPECIFIED, find_value(objError, "code").get_int());
     }
@@ -328,6 +330,23 @@ TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRewiredCoreSubset)
     EXPECT_NO_THROW(tableRPC.execute("keypoolrefill", UniValue(UniValue::VARR)));
 }
 
+TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsThePhase10RewiredSubset)
+{
+    // Same property as SecondaryWalletUriNowAllowsTheRewiredCoreSubset above,
+    // for the 46 functions Phase 10 rewired -- a zero-arg-safe, read-only
+    // sample spanning all three source locations (rpcwallet.cpp, rpcdump.cpp,
+    // and the misc RPC files) is enough to prove the gate lets them through.
+    RPCWalletRequestGuard guard("secondarytestwallet");
+    EXPECT_NO_THROW(tableRPC.execute("getinfo", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("listaccounts", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("listlockunspent", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("getkeypoolsize", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("getunconfirmedbalance", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("resendwallettransactions", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("z_listaddresses", UniValue(UniValue::VARR)));
+    EXPECT_NO_THROW(tableRPC.execute("z_listunspent", UniValue(UniValue::VARR)));
+}
+
 TEST_F(MultiWalletDispatchTest, GetNewAddressOperatesOnTheSelectedWalletNotTheDefault)
 {
     // The real correctness property phase 2 exists for: a rewired RPC must
@@ -354,6 +373,69 @@ TEST_F(MultiWalletDispatchTest, GetNewAddressOperatesOnTheSelectedWalletNotTheDe
         LOCK(pwalletMain->cs_wallet);
         EXPECT_FALSE(pwalletMain->mapAddressBook.count(dest));
     }
+}
+
+TEST_F(MultiWalletDispatchTest, GetWalletUnlockTimeForRequestReflectsTheSelectedWalletOnly)
+{
+    // Phase 10 regression: getinfo's "unlocked_until" used to read the plain
+    // nWalletUnlockTime global directly, which only ever reflects the
+    // *default* wallet -- calling getinfo against an unlocked secondary
+    // wallet reported it as still locked, and calling it against the default
+    // wallet while only the secondary was unlocked leaked the secondary's
+    // deadline onto an unrelated request. Fixed by having getinfo call the
+    // new GetWalletUnlockTimeForRequest(pwallet) (rpc/server.h) instead; this
+    // test exercises that accessor directly (rather than through a full
+    // getinfo call) to avoid an unrelated, pre-existing BDB hazard where
+    // opening a fresh CWalletDB (as getinfo's keypool fields do) immediately
+    // after EncryptWallet()'s CDB::Rewrite() in the same live process can
+    // fail with "can't open database" -- see the CDB::Rewrite() comment on
+    // UnloadSucceedsCleanlyWithAPendingAutoRelockTimerArmed below for the
+    // same hazard in a different test.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_NE(secondaryWallet, pwalletMain);
+
+    // walletpassphrase arms a process-wide RPCRunLater auto-relock timer,
+    // which throws unless some RPCTimerInterface is registered -- see
+    // UnloadSucceedsCleanlyWithAPendingAutoRelockTimerArmed below. This test
+    // doesn't need to observe the timer firing/being destroyed, just a no-op
+    // stand-in so RPCRunLater() doesn't throw.
+    class NoopRPCTimer : public RPCTimerBase {};
+    class NoopRPCTimerInterface : public RPCTimerInterface {
+    public:
+        const char* Name() override { return "noop"; }
+        RPCTimerBase* NewTimer(boost::function<void(void)>&, int64_t) override { return new NoopRPCTimer(); }
+    };
+    NoopRPCTimerInterface timerInterface;
+    RPCRegisterTimerInterface(&timerInterface);
+    struct TimerInterfaceGuard {
+        RPCTimerInterface* iface;
+        ~TimerInterfaceGuard() { RPCUnregisterTimerInterface(iface); }
+    } timerGuard{&timerInterface};
+
+    // EncryptWallet() requires an HD seed to already exist -- see the same
+    // comment on UnloadSucceedsCleanlyWithAPendingAutoRelockTimerArmed below.
+    secondaryWallet->GenerateNewSeed();
+    SecureString passphrase;
+    passphrase.reserve(64);
+    passphrase = "unittestpassphrase";
+    ASSERT_TRUE(secondaryWallet->EncryptWallet(passphrase));
+
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        UniValue params(UniValue::VARR);
+        params.push_back("unittestpassphrase");
+        params.push_back(3600);
+        ASSERT_NO_THROW(tableRPC.execute("walletpassphrase", params));
+    }
+
+    EXPECT_GT(GetWalletUnlockTimeForRequest(secondaryWallet), 0)
+        << "the unlocked secondary wallet's own deadline must be visible via its own CWallet*";
+    EXPECT_EQ(0, GetWalletUnlockTimeForRequest(pwalletMain))
+        << "the default wallet (never unlocked here) must not pick up the secondary wallet's deadline";
+
+    std::string strError;
+    EXPECT_TRUE(CWalletManager::Get().UnloadWallet("secondarytestwallet", strError)) << strError;
 }
 
 TEST_F(MultiWalletDispatchTest, UnloadSucceedsCleanlyWithAPendingAutoRelockTimerArmed)
