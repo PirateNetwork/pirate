@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -708,7 +712,7 @@ int32_t payments_parsehexdata(std::vector<uint8_t> &hexdata,cJSON *item,int32_t 
     } else return(-1);
 }
 
-UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     LOCK(cs_main);
     CMutableTransaction tmpmtx,mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(),komodo_nextheight()); UniValue result(UniValue::VOBJ); uint256 createtxid,hashBlock,tokenid;
@@ -933,7 +937,7 @@ UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
                 mtx.vout[0].nValue = inputsum - newamount - PAYMENTS_TXFEE; // only 1 txfee, so the minimum in this vout is a tx fee.
                 GetCCaddress1of2(cp,destaddr,Paymentspk,txidpk);
                 CCaddr1of2set(cp,Paymentspk,txidpk,cp->CCpriv,destaddr);
-                rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,onlyopret);
+                rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,onlyopret,NULL_pubkeys,pwallet);
                 if ( params != 0 )
                     free_json(params);
                 result.push_back(Pair("amount",ValueFromAmount(amount)));
@@ -962,7 +966,7 @@ UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr)
     return(result);
 }
 
-UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); UniValue result(UniValue::VOBJ);
     CPubKey Paymentspk,mypk,txidpk; uint256 txid,hashBlock; int64_t amount,totalallocations; CScript opret; CTransaction tx; char txidaddr[64]; std::string rawtx; int32_t n,useopret = 0,broadcast=0,lockedblocks,minrelease; std::vector<uint256> txidoprets;
@@ -984,7 +988,7 @@ UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr)
             result.push_back(Pair("result","error"));
             result.push_back(Pair("error","invalid createtxid"));
         }
-        else if ( AddNormalinputs(mtx,mypk,amount+PAYMENTS_TXFEE,60) > 0 )
+        else if ( AddNormalinputs(mtx,mypk,amount+PAYMENTS_TXFEE,60,false,pwallet) > 0 )
         {
             if ( lockedblocks < 0 || minrelease < 0 || (totalallocations <= 0 && top <= 0 ) )
             {
@@ -1006,7 +1010,7 @@ UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr)
                 if ( makeCCopret(opret, vData) )
                     mtx.vout.push_back(MakeCC1vout(EVAL_PAYMENTS,amount,Paymentspk,&vData));
             }
-            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,CScript()); 
+            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,CScript(),NULL_pubkeys,pwallet);
             if ( params != 0 )
                 free_json(params); 
             return(payments_rawtxresult(result,rawtx,1));
@@ -1027,7 +1031,7 @@ UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr)
     return(result);
 }
 
-UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); UniValue result(UniValue::VOBJ);
     CPubKey Paymentspk,mypk,txidpk; uint256 createtxid,hashBlock; int64_t inputsum,totalallocations=0; CScript opret; CTransaction tx; char txidaddr[64],destaddr[64]; std::string rawtx; 
@@ -1063,7 +1067,7 @@ UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr)
                     mtx.vout.push_back(MakeCC1of2vout(EVAL_PAYMENTS,inputsum-PAYMENTS_TXFEE,Paymentspk,txidpk,&vData));
                 GetCCaddress1of2(cp,destaddr,Paymentspk,txidpk);
                 CCaddr1of2set(cp,Paymentspk,txidpk,cp->CCpriv,destaddr);
-                rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,CScript());
+                rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,CScript(),NULL_pubkeys,pwallet);
                 if ( params != 0 )
                     free_json(params);
                 return(payments_rawtxresult(result,rawtx,1));
@@ -1085,7 +1089,7 @@ UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr)
     return(result);
 }
 
-UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); UniValue result(UniValue::VOBJ); CPubKey mypk; std::string rawtx;
     std::vector<uint8_t> scriptPubKey,opret; int32_t n,retval0,retval1=0; int64_t allocation; CScript test; txnouttype whichType;
@@ -1118,9 +1122,9 @@ UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr)
         {
             if ( n == 3 )
                 retval1 = payments_parsehexdata(opret,jitem(params,2),0);
-            if ( allocation > 0 && retval0 == 0 && retval1 == 0 && AddNormalinputs(mtx,mypk,PAYMENTS_TXFEE*2,10) > 0 )
+            if ( allocation > 0 && retval0 == 0 && retval1 == 0 && AddNormalinputs(mtx,mypk,PAYMENTS_TXFEE*2,10,false,pwallet) > 0 )
             {
-                rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,EncodePaymentsTxidOpRet(allocation,scriptPubKey,opret));
+                rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,EncodePaymentsTxidOpRet(allocation,scriptPubKey,opret),NULL_pubkeys,pwallet);
                 if ( params != 0 )
                     free_json(params);
                 return(payments_rawtxresult(result,rawtx,1));
@@ -1141,7 +1145,7 @@ UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr)
     return(result);
 }
 
-UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     UniValue result(UniValue::VOBJ); CTransaction tx; CPubKey Paymentspk,mypk; char markeraddr[64]; std::vector<uint256> txidoprets; uint256 hashBlock; int32_t i,n,numoprets=0,lockedblocks,minrelease; std::string rawtx; int64_t totalallocations = 0;
@@ -1192,10 +1196,10 @@ UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr)
         }
         mypk = pubkey2pk(Mypubkey());
         Paymentspk = GetUnspendable(cp,0);
-        if ( AddNormalinputs(mtx,mypk,2*PAYMENTS_TXFEE,60) > 0 )
+        if ( AddNormalinputs(mtx,mypk,2*PAYMENTS_TXFEE,60,false,pwallet) > 0 )
         {
             mtx.vout.push_back(MakeCC1of2vout(cp->evalcode,PAYMENTS_TXFEE,Paymentspk,Paymentspk));
-            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,EncodePaymentsOpRet(lockedblocks,minrelease,totalallocations,txidoprets));
+            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,EncodePaymentsOpRet(lockedblocks,minrelease,totalallocations,txidoprets),NULL_pubkeys,pwallet);
             if ( params != 0 )
                 free_json(params);
             return(payments_rawtxresult(result,rawtx,1));
@@ -1213,7 +1217,7 @@ UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr)
     return(result);
 }
 
-UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     UniValue result(UniValue::VOBJ); 
@@ -1275,7 +1279,7 @@ UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr)
         }
         mypk = pubkey2pk(Mypubkey());
         Paymentspk = GetUnspendable(cp,0);
-        if ( AddNormalinputs(mtx,mypk,2*PAYMENTS_TXFEE,60) > 0 )
+        if ( AddNormalinputs(mtx,mypk,2*PAYMENTS_TXFEE,60,false,pwallet) > 0 )
         {
             mtx.vout.push_back(MakeCC1of2vout(cp->evalcode,PAYMENTS_TXFEE,Paymentspk,Paymentspk));
             CScript tempopret = EncodePaymentsSnapsShotOpRet(lockedblocks,minrelease,minimum,top,bottom,fixedAmount,excludeScriptPubKeys);
@@ -1287,7 +1291,7 @@ UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr)
                     free_json(params);
                 return(result);
             }
-            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,tempopret);
+            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,tempopret,NULL_pubkeys,pwallet);
             if ( params != 0 )
                 free_json(params);
             return(payments_rawtxresult(result,rawtx,1));
@@ -1305,7 +1309,7 @@ UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr)
     return(result);
 }
 
-UniValue PaymentsAirdropTokens(struct CCcontract_info *cp,char *jsonstr)
+UniValue PaymentsAirdropTokens(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     UniValue result(UniValue::VOBJ); 
@@ -1357,7 +1361,7 @@ UniValue PaymentsAirdropTokens(struct CCcontract_info *cp,char *jsonstr)
         }
         mypk = pubkey2pk(Mypubkey());
         Paymentspk = GetUnspendable(cp,0);
-        if ( AddNormalinputs(mtx,mypk,2*PAYMENTS_TXFEE,60) > 0 )
+        if ( AddNormalinputs(mtx,mypk,2*PAYMENTS_TXFEE,60,false,pwallet) > 0 )
         {
             mtx.vout.push_back(MakeCC1of2vout(cp->evalcode,PAYMENTS_TXFEE,Paymentspk,Paymentspk));
             CScript tempopret = EncodePaymentsTokensOpRet(lockedblocks,minrelease,minimum,top,bottom,fixedAmount,excludeScriptPubKeys,tokenid);
@@ -1369,7 +1373,7 @@ UniValue PaymentsAirdropTokens(struct CCcontract_info *cp,char *jsonstr)
                     free_json(params);
                 return(result);
             }
-            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,tempopret);
+            rawtx = FinalizeCCTx(0,cp,mtx,mypk,PAYMENTS_TXFEE,tempopret,NULL_pubkeys,pwallet);
             if ( params != 0 )
                 free_json(params);
             return(payments_rawtxresult(result,rawtx,0));

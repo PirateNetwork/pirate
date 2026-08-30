@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -24,6 +28,10 @@
 #include "komodo_globals.h"
 
 bool EnsureWalletIsAvailable(bool avoidException);
+// Overload taking an explicit wallet (CWalletManager::GetWalletForRequest()) so
+// non-wallet-library callers (e.g. rpc/crosschain.cpp) can be multiwallet-aware
+// without linking against wallet/rpcwallet.cpp's request-context machinery.
+bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException);
 
 uint32_t komodo_heightstamp(int32_t height);
 

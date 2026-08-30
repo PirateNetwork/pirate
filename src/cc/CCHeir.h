@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -27,10 +31,11 @@ bool HeirValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, 
 class CoinHelper;
 class TokenHelper;
 
-UniValue HeirFundCoinCaller(int64_t txfee, int64_t coins, std::string heirName, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string memo);
-UniValue HeirFundTokenCaller(int64_t txfee, int64_t satoshis, std::string heirName, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string memo, uint256 tokenid);
-UniValue HeirClaimCaller(uint256 fundingtxid, int64_t txfee, std::string amount);
-UniValue HeirAddCaller(uint256 fundingtxid, int64_t txfee, std::string amount);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+UniValue HeirFundCoinCaller(int64_t txfee, int64_t coins, std::string heirName, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string memo, CWallet *pwallet=nullptr);
+UniValue HeirFundTokenCaller(int64_t txfee, int64_t satoshis, std::string heirName, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string memo, uint256 tokenid, CWallet *pwallet=nullptr);
+UniValue HeirClaimCaller(uint256 fundingtxid, int64_t txfee, std::string amount, CWallet *pwallet=nullptr);
+UniValue HeirAddCaller(uint256 fundingtxid, int64_t txfee, std::string amount, CWallet *pwallet=nullptr);
 UniValue HeirInfo(uint256 fundingtxid);
 UniValue HeirList();
 

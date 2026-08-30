@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -54,12 +58,15 @@ UniValue AssetOrders(uint256 tokenid, CPubKey pubkey, uint8_t additionalEvalCode
 //std::string AssetTransfer(int64_t txfee,uint256 assetid,std::vector<uint8_t> destpubkey,int64_t total);
 //std::string AssetConvert(int64_t txfee,uint256 assetid,std::vector<uint8_t> destpubkey,int64_t total,int32_t evalcode);
 
-std::string CreateBuyOffer(int64_t txfee,int64_t bidamount,uint256 assetid,int64_t pricetotal);
-std::string CancelBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid);
-std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t fillamount);
-std::string CreateSell(int64_t txfee,int64_t askamount,uint256 assetid,int64_t pricetotal);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's
+// convention (see CCtx.cpp). CreateSwap is intentionally left unparameterized:
+// its only caller, tokenswapask, is unregistered in the RPC command table (dead).
+std::string CreateBuyOffer(int64_t txfee,int64_t bidamount,uint256 assetid,int64_t pricetotal,CWallet *pwallet=nullptr);
+std::string CancelBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,CWallet *pwallet=nullptr);
+std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t fillamount,CWallet *pwallet=nullptr);
+std::string CreateSell(int64_t txfee,int64_t askamount,uint256 assetid,int64_t pricetotal,CWallet *pwallet=nullptr);
 std::string CreateSwap(int64_t txfee,int64_t askamount,uint256 assetid,uint256 assetid2,int64_t pricetotal);
-std::string CancelSell(int64_t txfee,uint256 assetid,uint256 asktxid);
-std::string FillSell(int64_t txfee,uint256 assetid,uint256 assetid2,uint256 asktxid,int64_t fillamount);
+std::string CancelSell(int64_t txfee,uint256 assetid,uint256 asktxid,CWallet *pwallet=nullptr);
+std::string FillSell(int64_t txfee,uint256 assetid,uint256 assetid2,uint256 asktxid,int64_t fillamount,CWallet *pwallet=nullptr);
 
 #endif

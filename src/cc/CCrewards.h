@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -26,9 +30,9 @@ bool RewardsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &t
 UniValue RewardsInfo(uint256 rewardid);
 UniValue RewardsList();
 
-std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t APR,int64_t minseconds,int64_t maxseconds,int64_t mindeposit);
-std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount);
-std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount);
-std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 locktxid);
+std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t APR,int64_t minseconds,int64_t maxseconds,int64_t mindeposit,CWallet *pwallet=nullptr);
+std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount,CWallet *pwallet=nullptr);
+std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount,CWallet *pwallet=nullptr);
+std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 locktxid,CWallet *pwallet=nullptr);
 
 #endif

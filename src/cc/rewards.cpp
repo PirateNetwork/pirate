@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -522,7 +526,7 @@ UniValue RewardsList()
     return(result);
 }
 
-std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t APR,int64_t minseconds,int64_t maxseconds,int64_t mindeposit)
+std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t APR,int64_t minseconds,int64_t maxseconds,int64_t mindeposit,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,rewardspk; CScript opret; uint64_t sbits,a,b,c,d; struct CCcontract_info *cp,C;
@@ -547,17 +551,17 @@ std::string RewardsCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int6
         fprintf(stderr,"Rewards plan (%s) already exists\n",planstr);
         return("");
     }
-    if ( AddNormalinputs(mtx,mypk,funds+2*txfee,64) > 0 )
+    if ( AddNormalinputs(mtx,mypk,funds+2*txfee,64,false,pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,funds,rewardspk));
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(rewardspk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsFundingOpRet('F',sbits,APR,minseconds,maxseconds,mindeposit)));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsFundingOpRet('F',sbits,APR,minseconds,maxseconds,mindeposit),NULL_pubkeys,pwallet));
     }
     fprintf(stderr,"cant find enough inputs\n");
     return("");
 }
 
-std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount)
+std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,rewardspk; CScript opret; uint64_t sbits,a,b,c,d; struct CCcontract_info *cp,C;
@@ -579,10 +583,10 @@ std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,i
         return("");
     }
     sbits = stringbits(planstr);
-    if ( AddNormalinputs(mtx,mypk,amount+txfee,64) > 0 )
+    if ( AddNormalinputs(mtx,mypk,amount+txfee,64,false,pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,amount,rewardspk));
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('A',sbits,fundingtxid)));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('A',sbits,fundingtxid),NULL_pubkeys,pwallet));
     } else {
         CCerror = "cant find enough inputs";
         fprintf(stderr,"%s\n", CCerror.c_str());
@@ -592,7 +596,7 @@ std::string RewardsAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,i
     return("");
 }
 
-std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t deposit)
+std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t deposit,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,rewardspk; CScript opret; uint64_t lockedfunds,sbits,funding,APR,minseconds,maxseconds,mindeposit; struct CCcontract_info *cp,C;
@@ -622,11 +626,11 @@ std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t
     }
     if ( (funding= RewardsPlanFunds(lockedfunds,sbits,cp,rewardspk,fundingtxid)) >= deposit ) // arbitrary cmpval
     {
-        if ( AddNormalinputs(mtx,mypk,deposit+2*txfee,64) > 0 )
+        if ( AddNormalinputs(mtx,mypk,deposit+2*txfee,64,false,pwallet) > 0 )
         {
             mtx.vout.push_back(MakeCC1vout(cp->evalcode,deposit,rewardspk));
             mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('L',sbits,fundingtxid)));
+            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeRewardsOpRet('L',sbits,fundingtxid),NULL_pubkeys,pwallet));
         } else {
             CCerror = strprintf("cant find enough inputs %.8f not enough for %.8f, make sure you imported privkey for the -pubkey address\n",(double)funding/COIN,(double)deposit/COIN);
             fprintf(stderr,"%s\n",CCerror.c_str());
@@ -636,7 +640,7 @@ std::string RewardsLock(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t
     return("");
 }
 
-std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 locktxid)
+std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 locktxid,CWallet *pwallet)
 {
     CMutableTransaction firstmtx,mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction tx; char coinaddr[64]; CPubKey mypk,rewardspk; CScript scriptPubKey,ignore; uint256 hashBlock; uint64_t sbits,APR,minseconds,maxseconds,mindeposit; int64_t funding,reward=0,amount=0,inputs,CCchange=0; struct CCcontract_info *cp,C;
@@ -697,13 +701,13 @@ std::string RewardsUnlock(uint64_t txfee,char *planstr,uint256 fundingtxid,uint2
                     fprintf(stderr,"inputs %.8f CCchange %.8f amount %.8f reward %.8f\n",(double)inputs/COIN,(double)CCchange/COIN,(double)amount/COIN,(double)reward/COIN);
                     mtx.vout.push_back(MakeCC1vout(cp->evalcode,CCchange,rewardspk));
                     mtx.vout.push_back(CTxOut(amount+reward,scriptPubKey));
-                    return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid)));
+                    return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid),NULL_pubkeys,pwallet));
                 }
                 else
                 {
                     firstmtx.vout.push_back(CTxOut(amount-txfee*2,scriptPubKey));
                     fprintf(stderr,"not enough rewards funds to payout %.8f, recover mode tx\n",(double)(reward+txfee)/COIN);
-                    return(FinalizeCCTx(-1LL,cp,firstmtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid)));
+                    return(FinalizeCCTx(-1LL,cp,firstmtx,mypk,txfee,EncodeRewardsOpRet('U',sbits,fundingtxid),NULL_pubkeys,pwallet));
                 }
             }
             else

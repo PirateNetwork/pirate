@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -1336,7 +1340,7 @@ UniValue DiceList()
     return(result);
 }
 
-std::string DiceCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t minbet,int64_t maxbet,int64_t maxodds,int64_t timeoutblocks)
+std::string DiceCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t minbet,int64_t maxbet,int64_t maxodds,int64_t timeoutblocks,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     uint256 zero; CScript fundingPubKey; CPubKey mypk,dicepk; int64_t a,b,c,d; uint64_t sbits; struct CCcontract_info *cp,C;
@@ -1359,19 +1363,19 @@ std::string DiceCreateFunding(uint64_t txfee,char *planstr,int64_t funds,int64_t
         fprintf(stderr,"%s\n", CCerror.c_str() );
         return("");
     }
-    if ( AddNormalinputs(mtx,mypk,funds+3*txfee,60) > 0 )
+    if ( AddNormalinputs(mtx,mypk,funds+3*txfee,60,false,pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,funds,dicepk));
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(dicepk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeDiceFundingOpRet('F',sbits,minbet,maxbet,maxodds,timeoutblocks)));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeDiceFundingOpRet('F',sbits,minbet,maxbet,maxodds,timeoutblocks),NULL_pubkeys,pwallet));
     }
     CCerror = "cant find enough inputs";
     fprintf(stderr,"%s\n", CCerror.c_str() );
     return("");
 }
 
-std::string DiceAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount)
+std::string DiceAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t amount,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CScript fundingPubKey,scriptPubKey; uint256 entropy,hentropy; CPubKey mypk,dicepk; uint64_t sbits; struct CCcontract_info *cp,C; int64_t minbet,maxbet,maxodds,timeoutblocks;
@@ -1403,7 +1407,7 @@ std::string DiceAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int6
             hentropy = DiceHashEntropy(entropy,mtx.vin[0].prevout.hash,mtx.vin[0].prevout.n,1);
             mtx.vout.push_back(MakeCC1vout(cp->evalcode,amount,dicepk));
             mtx.vout.push_back(CTxOut(txfee,fundingPubKey));
-            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeDiceOpRet('E',sbits,fundingtxid,hentropy,zeroid)));
+            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeDiceOpRet('E',sbits,fundingtxid,hentropy,zeroid),NULL_pubkeys,pwallet));
         } else {
             CCerror = "cant find enough inputs";
             fprintf(stderr,"%s\n", CCerror.c_str() );
@@ -1415,7 +1419,7 @@ std::string DiceAddfunding(uint64_t txfee,char *planstr,uint256 fundingtxid,int6
     return("");
 }
 
-std::string DiceBet(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t bet,int32_t odds)
+std::string DiceBet(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t bet,int32_t odds,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CScript fundingPubKey; CPubKey mypk,dicepk; uint64_t sbits,entropyval,entropyval2; int64_t funding,minbet,maxbet,maxodds,timeoutblocks; uint256 entropytxid,entropytxid2,entropy,hentropy; struct CCcontract_info *cp,C;
@@ -1458,13 +1462,13 @@ std::string DiceBet(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t bet
             return("");
         }
         mtx.vin.push_back(CTxIn(entropytxid,0,CScript()));
-        if ( AddNormalinputs(mtx,mypk,bet+2*txfee+odds,60) > 0 )
+        if ( AddNormalinputs(mtx,mypk,bet+2*txfee+odds,60,false,pwallet) > 0 )
         {
             hentropy = DiceHashEntropy(entropy,mtx.vin[0].prevout.hash,mtx.vin[0].prevout.n,1);
             mtx.vout.push_back(MakeCC1vout(cp->evalcode,entropyval,dicepk));
             mtx.vout.push_back(MakeCC1vout(cp->evalcode,bet,dicepk));
             mtx.vout.push_back(CTxOut(txfee+odds,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeDiceOpRet('B',sbits,fundingtxid,entropy,zeroid)));
+            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeDiceOpRet('B',sbits,fundingtxid,entropy,zeroid),NULL_pubkeys,pwallet));
         } else CCerror = "cant find enough normal inputs for %.8f, plan funding %.8f\n";
     }
     if ( entropyval == 0 && funding != 0 )
@@ -1474,7 +1478,7 @@ std::string DiceBet(uint64_t txfee,char *planstr,uint256 fundingtxid,int64_t bet
     return("");
 }
 
-std::string DiceBetFinish(uint8_t &funcid,uint256 &entropyused,int32_t &entropyvout,int32_t *resultp,uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 bettxid,int32_t winlosetimeout,uint256 vin0txid,int32_t vin0vout)
+std::string DiceBetFinish(uint8_t &funcid,uint256 &entropyused,int32_t &entropyvout,int32_t *resultp,uint64_t txfee,char *planstr,uint256 fundingtxid,uint256 bettxid,int32_t winlosetimeout,uint256 vin0txid,int32_t vin0vout,CWallet *pwallet)
 {
     CMutableTransaction savemtx,mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CScript scriptPubKey,fundingPubKey; CTransaction oldbetTx,betTx,entropyTx; uint256 hentropyproof,entropytxid,hashBlock,bettorentropy,entropy,hentropy,oldbettxid; CPubKey mypk,dicepk,fundingpk; struct CCcontract_info *cp,C; int64_t inputs=0,CCchange=0,odds,fundsneeded,minbet,maxbet,maxodds,timeoutblocks; int32_t oldentropyvout,retval=0,iswin=0; uint64_t entropyval,sbits;
@@ -1547,7 +1551,7 @@ std::string DiceBetFinish(uint8_t &funcid,uint256 &entropyused,int32_t &entropyv
                         mtx.vout.push_back(CTxOut(txfee,fundingPubKey));
                         mtx.vout.push_back(CTxOut(betTx.vout[1].nValue,betTx.vout[2].scriptPubKey));
                         *resultp = 1;
-                        return(FinalizeCCTx(0,cp,mtx,fundingpk,txfee,EncodeDiceOpRet(funcid,sbits,fundingtxid,entropyused,oldbettxid))); // need to change opreturn to include oldbetTx to allow validation
+                        return(FinalizeCCTx(0,cp,mtx,fundingpk,txfee,EncodeDiceOpRet(funcid,sbits,fundingtxid,entropyused,oldbettxid),NULL_pubkeys,pwallet)); // need to change opreturn to include oldbetTx to allow validation
                     }
                     else
                     {
@@ -1640,7 +1644,7 @@ std::string DiceBetFinish(uint8_t &funcid,uint256 &entropyused,int32_t &entropyv
                 *resultp = 1;
                 //char str[65],str2[65];
                 //fprintf(stderr,"iswin.%d house entropy %s vs bettor %s\n",iswin,uint256_str(str,hentropyproof),uint256_str(str2,bettorentropy));
-                return(FinalizeCCTx(0,cp,mtx,fundingpk,txfee,EncodeDiceOpRet(funcid,sbits,fundingtxid,hentropy,hentropyproof)));
+                return(FinalizeCCTx(0,cp,mtx,fundingpk,txfee,EncodeDiceOpRet(funcid,sbits,fundingtxid,hentropy,hentropyproof),NULL_pubkeys,pwallet));
             } else fprintf(stderr,"iswin.%d does not match.%d\n",iswin,winlosetimeout);
         }
         else

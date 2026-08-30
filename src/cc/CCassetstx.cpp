@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -253,7 +257,7 @@ UniValue AssetOrders(uint256 refassetid, CPubKey pk, uint8_t additionalEvalCode)
 } */
 
 // rpc tokenbid implementation, locks 'bidamount' coins for the 'pricetotal' of tokens
-std::string CreateBuyOffer(int64_t txfee, int64_t bidamount, uint256 assetid, int64_t pricetotal)
+std::string CreateBuyOffer(int64_t txfee, int64_t bidamount, uint256 assetid, int64_t pricetotal, CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; 
@@ -288,7 +292,7 @@ std::string CreateBuyOffer(int64_t txfee, int64_t bidamount, uint256 assetid, in
 
     mypk = pubkey2pk(Mypubkey());
 
-    if ((inputs = AddNormalinputs(mtx, mypk, bidamount+(2*txfee), 64)) > 0)
+    if ((inputs = AddNormalinputs(mtx, mypk, bidamount+(2*txfee), 64, false, pwallet)) > 0)
     {
 		std::cerr << "CreateBuyOffer() inputs=" << inputs << std::endl;
 		if (inputs < bidamount+txfee) {
@@ -302,16 +306,16 @@ std::string CreateBuyOffer(int64_t txfee, int64_t bidamount, uint256 assetid, in
         mtx.vout.push_back(MakeCC1vout(EVAL_ASSETS, txfee, mypk));
 		std::vector<CPubKey> voutTokenPubkeys;  // should be empty - no token vouts
 
-        return FinalizeCCTx(0, cpAssets, mtx, mypk, txfee, 
+        return FinalizeCCTx(0, cpAssets, mtx, mypk, txfee,
 			EncodeTokenOpRet(assetid, voutTokenPubkeys,     // TODO: actually this tx is not 'tokens', maybe it is better not to have token opret here but only asset opret.
-				std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('b', zeroid, pricetotal, Mypubkey()))));   // But still such token opret should not make problems because no token eval in these vouts
+				std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('b', zeroid, pricetotal, Mypubkey()))), NULL_pubkeys, pwallet);   // But still such token opret should not make problems because no token eval in these vouts
     }
 	CCerror = strprintf("no coins found to make buy offer");
     return("");
 }
 
 // rpc tokenask implementation, locks 'askamount' tokens for the 'pricetotal' 
-std::string CreateSell(int64_t txfee,int64_t askamount,uint256 assetid,int64_t pricetotal)
+std::string CreateSell(int64_t txfee,int64_t askamount,uint256 assetid,int64_t pricetotal,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; 
@@ -334,7 +338,7 @@ std::string CreateSell(int64_t txfee,int64_t askamount,uint256 assetid,int64_t p
         txfee = 10000;
 
     mypk = pubkey2pk(Mypubkey());
-    if (AddNormalinputs(mtx, mypk, 2*txfee, 3) > 0)
+    if (AddNormalinputs(mtx, mypk, 2*txfee, 3, false, pwallet) > 0)
     {
         std::vector<uint8_t> vopretNonfungible;
         mask = ~((1LL << mtx.vin.size()) - 1);
@@ -366,9 +370,9 @@ std::string CreateSell(int64_t txfee,int64_t askamount,uint256 assetid,int64_t p
 			std::vector<CPubKey> voutTokenPubkeys;
 			voutTokenPubkeys.push_back(unspendableAssetsPubkey);   
 
-            return FinalizeCCTx(mask, cpTokens, mtx, mypk, txfee, 
-                EncodeTokenOpRet(assetid, voutTokenPubkeys, 
-                    std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('s', zeroid, pricetotal, Mypubkey()))));
+            return FinalizeCCTx(mask, cpTokens, mtx, mypk, txfee,
+                EncodeTokenOpRet(assetid, voutTokenPubkeys,
+                    std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('s', zeroid, pricetotal, Mypubkey()))), NULL_pubkeys, pwallet);
 		}
 		else {
 			fprintf(stderr, "need some tokens to place ask\n");
@@ -450,7 +454,7 @@ std::string CreateSwap(int64_t txfee,int64_t askamount,uint256 assetid,uint256 a
 }  ////////////////////////// NOT IMPLEMENTED YET/////////////////////////////////
 
 // unlocks coins
-std::string CancelBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid)
+std::string CancelBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction vintx;	uint64_t mask;
@@ -465,7 +469,7 @@ std::string CancelBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid)
 
     mypk = pubkey2pk(Mypubkey());
 
-    if (AddNormalinputs(mtx, mypk, txfee, 3) > 0)
+    if (AddNormalinputs(mtx, mypk, txfee, 3, false, pwallet) > 0)
     {
         mask = ~((1LL << mtx.vin.size()) - 1);
         if (myGetTransaction(bidtxid, vintx, hashBlock) != 0)
@@ -480,23 +484,23 @@ std::string CancelBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid)
             {
                 if (funcid == 's') mtx.vin.push_back(CTxIn(bidtxid, 1, CScript()));		// spend marker if funcid='b'
                 else if (funcid=='S') mtx.vin.push_back(CTxIn(bidtxid, 3, CScript()));		// spend marker if funcid='B'
-            }   
+            }
 
             mtx.vout.push_back(CTxOut(bidamount,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
             mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
 
-			std::vector<CPubKey> voutTokenPubkeys;  // should be empty, no token vouts 
-													
-            return(FinalizeCCTx(mask, cpAssets, mtx, mypk, txfee, 
-				EncodeTokenOpRet(assetid, voutTokenPubkeys, 
-                    std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('o', zeroid, 0, Mypubkey())))));
+			std::vector<CPubKey> voutTokenPubkeys;  // should be empty, no token vouts
+
+            return(FinalizeCCTx(mask, cpAssets, mtx, mypk, txfee,
+				EncodeTokenOpRet(assetid, voutTokenPubkeys,
+                    std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('o', zeroid, 0, Mypubkey()))), NULL_pubkeys, pwallet));
         }
     }
     return("");
 }
 
 //unlocks tokens
-std::string CancelSell(int64_t txfee,uint256 assetid,uint256 asktxid)
+std::string CancelSell(int64_t txfee,uint256 assetid,uint256 asktxid,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction vintx; uint64_t mask; 
@@ -515,7 +519,7 @@ std::string CancelSell(int64_t txfee,uint256 assetid,uint256 asktxid)
 
     mypk = pubkey2pk(Mypubkey());
 
-   if (AddNormalinputs(mtx, mypk, txfee, 3) > 0)
+   if (AddNormalinputs(mtx, mypk, txfee, 3, false, pwallet) > 0)
     {
         mask = ~((1LL << mtx.vin.size()) - 1);
         if (myGetTransaction(asktxid, vintx, hashBlock) != 0)
@@ -555,16 +559,16 @@ std::string CancelSell(int64_t txfee,uint256 assetid,uint256 asktxid)
 			// add additional eval-tokens unspendable assets privkey:
 			CCaddr2set(cpAssets, EVAL_TOKENS, unspendableAssetsPk, unspendableAssetsPrivkey, unspendableAssetsAddr);
 
-            return(FinalizeCCTx(mask, cpAssets, mtx, mypk, txfee, 
-				EncodeTokenOpRet(assetid, voutTokenPubkeys,  
-                    std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('x', zeroid, 0, Mypubkey())))));
+            return(FinalizeCCTx(mask, cpAssets, mtx, mypk, txfee,
+				EncodeTokenOpRet(assetid, voutTokenPubkeys,
+                    std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('x', zeroid, 0, Mypubkey()))), NULL_pubkeys, pwallet));
         }
     }
     return("");
 }
 
 //send tokens, receive coins:
-std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t fillamount)
+std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t fillamount,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction vintx; 
@@ -589,7 +593,7 @@ std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t f
 
     mypk = pubkey2pk(Mypubkey());
 
-    if (AddNormalinputs(mtx, mypk, 2*txfee, 3) > 0)
+    if (AddNormalinputs(mtx, mypk, 2*txfee, 3, false, pwallet) > 0)
     {
         mask = ~((1LL << mtx.vin.size()) - 1);
         if (myGetTransaction(bidtxid, vintx, hashBlock) != 0)
@@ -642,9 +646,9 @@ std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t f
 				std::vector<CPubKey> voutTokenPubkeys;
 				voutTokenPubkeys.push_back(pubkey2pk(origpubkey));
 
-                return(FinalizeCCTx(mask, cpTokens, mtx, mypk, txfee, 
-					EncodeTokenOpRet(assetid, voutTokenPubkeys, 
-                        std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('B', zeroid, remaining_required, origpubkey)))));
+                return(FinalizeCCTx(mask, cpTokens, mtx, mypk, txfee,
+					EncodeTokenOpRet(assetid, voutTokenPubkeys,
+                        std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet('B', zeroid, remaining_required, origpubkey))), NULL_pubkeys, pwallet));
             } else return("dont have any assets to fill bid");
         }
     }
@@ -652,8 +656,8 @@ std::string FillBuyOffer(int64_t txfee,uint256 assetid,uint256 bidtxid,int64_t f
 }
 
 
-// send coins, receive tokens 
-std::string FillSell(int64_t txfee, uint256 assetid, uint256 assetid2, uint256 asktxid, int64_t fillunits)
+// send coins, receive tokens
+std::string FillSell(int64_t txfee, uint256 assetid, uint256 assetid2, uint256 asktxid, int64_t fillunits, CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction vintx,filltx; 
@@ -707,7 +711,7 @@ std::string FillSell(int64_t txfee, uint256 assetid, uint256 assetid2, uint256 a
             }
             else
             {
-                inputs = AddNormalinputs(mtx, mypk, 2 * txfee + paid_nValue, 60);  // Better to use single AddNormalinputs() to allow payment if user has only single utxo with normal funds
+                inputs = AddNormalinputs(mtx, mypk, 2 * txfee + paid_nValue, 60, false, pwallet);  // Better to use single AddNormalinputs() to allow payment if user has only single utxo with normal funds
                 mask = ~((1LL << mtx.vin.size()) - 1);
             }
             if (inputs > 0)
@@ -768,8 +772,8 @@ std::string FillSell(int64_t txfee, uint256 assetid, uint256 assetid2, uint256 a
                 cpAssets->additionalTokensEvalcode2 = additionalTokensEvalcode2;
 
                 return(FinalizeCCTx(mask, cpAssets, mtx, mypk, txfee,
-					EncodeTokenOpRet(assetid, voutTokenPubkeys, 
-                        std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet(assetid2 != zeroid ? 'E' : 'S', assetid2, remaining_nValue, origpubkey)))));
+					EncodeTokenOpRet(assetid, voutTokenPubkeys,
+                        std::make_pair(OPRETID_ASSETSDATA, EncodeAssetOpRet(assetid2 != zeroid ? 'E' : 'S', assetid2, remaining_nValue, origpubkey))), NULL_pubkeys, pwallet));
             } else {
                 CCerror = strprintf("filltx not enough utxos");
                 fprintf(stderr,"%s\n", CCerror.c_str());

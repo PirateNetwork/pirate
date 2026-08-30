@@ -239,6 +239,55 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "setdeletetx", "setdeleteconflicttx", "setdeleteinterval",
         "setkeeptxnum", "setkeeptxfornblocks",
         "setchangeaddress", "upgradewallet",
+        // Phase 9: the Crypto-Conditions (CC) smart-contract RPCs. These now
+        // resolve CWalletManager::GetWalletForRequest() instead of always
+        // pwalletMain (see CCtx.cpp/CCutils.cpp for the choke-point threading,
+        // and rpcwallet.cpp's CNSPVWalletLockGuard for the former
+        // Lock2NSPV/Unlock2NSPV pair). Read-only RPCs in the same modules are
+        // included too even where they never touch pwalletMain at all -- they're
+        // chain-derived and wallet-independent, so allowlisting them is a
+        // formality that stops them being refused against a secondary wallet
+        // for no reason. Left out (see cc/ and rpc/crosschain.cpp comments for
+        // why): tokenswapask/tokenfillswap (commented out of the command
+        // table), importgatewaydumpprivkey (not registered; its
+        // pwalletMain->GetKey() call is itself already commented out), lotto/
+        // auction (only lottoaddress/auctionaddress are live, no wallet touch),
+        // musig (not part of the node build at all).
+        "assetsaddress", "tokeninfo", "tokenlist", "tokenorders", "mytokenorders",
+        "tokenaddress", "tokenbalance", "tokencreate", "tokentransfer",
+        "tokenbid", "tokencancelbid", "tokenfillbid", "tokenask",
+        "tokencancelask", "tokenfillask", "tokenconvert",
+        "dicelist", "diceinfo", "dicefund", "diceaddfunds", "dicebet",
+        "dicefinish", "dicestatus", "diceaddress",
+        "rewardslist", "rewardsinfo", "rewardscreatefunding", "rewardsaddfunding",
+        "rewardslock", "rewardsunlock", "rewardsaddress",
+        "faucetinfo", "faucetfund", "faucetget", "faucetaddress",
+        "heiraddress", "heirfund", "heiradd", "heirclaim", "heirinfo", "heirlist",
+        "paymentsaddress", "paymentstxidopret", "paymentscreate", "paymentsairdrop",
+        "paymentsairdroptokens", "paymentslist", "paymentsinfo", "paymentsfund",
+        "paymentsmerge", "paymentsrelease",
+        "FSMaddress", "FSMcreate", "FSMlist", "FSMinfo",
+        "cclibaddress", "cclibinfo", "cclib",
+        "gatewaysaddress", "gatewayslist", "gatewaysexternaladdress",
+        "gatewaysdumpprivkey", "gatewaysinfo", "gatewaysbind", "gatewaysdeposit",
+        "gatewaysclaim", "gatewayswithdraw", "gatewayspartialsign",
+        "gatewayscompletesigning", "gatewaysmarkdone", "gatewayspendingdeposits",
+        "gatewayspendingwithdraws", "gatewaysprocessed",
+        "oraclesaddress", "oracleslist", "oraclesinfo", "oraclescreate",
+        "oraclesfund", "oraclesregister", "oraclessubscribe", "oraclesdata",
+        "oraclessample", "oraclessamples",
+        "channelsaddress", "channelslist", "channelsinfo", "channelsopen",
+        "channelspayment", "channelsclose", "channelsrefund",
+        // Phase 9: the crosschain.cpp import/self-import/migrate RPCs.
+        // importdual and importgatewaydeposit never touch pwalletMain (they
+        // build unsigned proof transactions, not wallet-signed ones) but are
+        // included for the same read-only-consistency reason as above.
+        "migrate_checkburntransactionsource", "migrate_createnotaryapprovaltransaction",
+        "selfimport", "importdual", "importgatewayddress", "importgatewayinfo",
+        "importgatewaybind", "importgatewaydeposit", "importgatewaywithdraw",
+        "importgatewaypartialsign", "importgatewaycompletesigning",
+        "importgatewaymarkdone", "importgatewaypendingwithdraws",
+        "importgatewayprocessed",
     };
     return aware.count(name) != 0;
 }

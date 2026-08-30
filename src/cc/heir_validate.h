@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef HEIR_VALIDATE_H
 #define HEIR_VALIDATE_H
 
@@ -24,8 +28,8 @@ class CoinHelper {
 public:
     
     static uint8_t getMyEval() { return EVAL_HEIR; }
-    static int64_t addOwnerInputs(uint256 dummyid, CMutableTransaction& mtx, CPubKey ownerPubkey, int64_t total, int32_t maxinputs) {
-        return AddNormalinputs(mtx, ownerPubkey, total, maxinputs);
+    static int64_t addOwnerInputs(uint256 dummyid, CMutableTransaction& mtx, CPubKey ownerPubkey, int64_t total, int32_t maxinputs, CWallet *pwallet=nullptr) {
+        return AddNormalinputs(mtx, ownerPubkey, total, maxinputs, false, pwallet);
     }
     
     static CScript makeCreateOpRet(uint256 dummyid, std::vector<CPubKey> dummyPubkeys, CPubKey ownerPubkey, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string heirName, std::string memo) {
@@ -64,7 +68,9 @@ public:
 class TokenHelper {
 public:
     static uint8_t getMyEval() { return EVAL_TOKENS; }
-    static int64_t addOwnerInputs(uint256 tokenid, CMutableTransaction& mtx, CPubKey ownerPubkey, int64_t total, int32_t maxinputs) {
+    static int64_t addOwnerInputs(uint256 tokenid, CMutableTransaction& mtx, CPubKey ownerPubkey, int64_t total, int32_t maxinputs, CWallet *pwallet=nullptr) {
+        // pwallet unused: token inputs are found via the CC address index, not a wallet;
+        // the param exists only so CoinHelper/TokenHelper share one call signature for the _Heir* templates.
         struct CCcontract_info *cpHeir, heirC;
         cpHeir = CCinit(&heirC, EVAL_TOKENS);
         return AddTokenCCInputs(cpHeir, mtx, ownerPubkey, tokenid, total, maxinputs);

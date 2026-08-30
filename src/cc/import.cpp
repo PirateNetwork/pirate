@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -716,13 +720,13 @@ bool Eval::ImportCoin(const std::vector<uint8_t> params, const CTransaction &imp
  * @param amount the amount
  * @returns a transaction based on the inputs
  */
-CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount)
+CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount, CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
 
     const int64_t txfee = 10000;
     CPubKey myPubKey = Mypubkey();
-    if (AddNormalinputs(mtx, myPubKey, 2 * txfee, 4) == 0) {
+    if (AddNormalinputs(mtx, myPubKey, 2 * txfee, 4, false, pwallet) == 0) {
         LOGSTREAM("importcoin", CCLOG_INFO, stream
                 << "MakeSelfImportSourceTx() warning: cannot find normal inputs for txfee" << std::endl);
     }
@@ -736,7 +740,7 @@ CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t a
     cpDummy = CCinit(&C, EVAL_TOKENS);  // this is just for FinalizeCCTx to work
     FinalizeCCTx(0, cpDummy, mtx, myPubKey, txfee, CScript()
             << OP_RETURN
-            << E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN << (uint8_t)'A' << amount));
+            << E_MARSHAL(ss << (uint8_t)EVAL_IMPORTCOIN << (uint8_t)'A' << amount), NULL_pubkeys, pwallet);
     return mtx;
 }
 

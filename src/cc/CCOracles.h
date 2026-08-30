@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -20,11 +24,11 @@
 #include "CCinclude.h"
 
 bool OraclesValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
-UniValue OracleCreate(const CPubKey& pk, int64_t txfee,std::string name,std::string description,std::string format);
-UniValue OracleFund(const CPubKey& pk, int64_t txfee,uint256 oracletxid);
-UniValue OracleRegister(const CPubKey& pk, int64_t txfee,uint256 oracletxid,int64_t datafee);
-UniValue OracleSubscribe(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CPubKey publisher,int64_t amount);
-UniValue OracleData(const CPubKey& pk, int64_t txfee,uint256 oracletxid,std::vector <uint8_t> data);
+UniValue OracleCreate(const CPubKey& pk, int64_t txfee,std::string name,std::string description,std::string format,CWallet *pwallet=nullptr);
+UniValue OracleFund(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CWallet *pwallet=nullptr);
+UniValue OracleRegister(const CPubKey& pk, int64_t txfee,uint256 oracletxid,int64_t datafee,CWallet *pwallet=nullptr);
+UniValue OracleSubscribe(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CPubKey publisher,int64_t amount,CWallet *pwallet=nullptr);
+UniValue OracleData(const CPubKey& pk, int64_t txfee,uint256 oracletxid,std::vector <uint8_t> data,CWallet *pwallet=nullptr);
 // CCcustom
 UniValue OracleDataSample(uint256 reforacletxid,uint256 txid);
 UniValue OracleDataSamples(uint256 reforacletxid,char* batonaddr,int32_t num);

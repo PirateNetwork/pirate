@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -481,7 +485,17 @@ bool Myprivkey(uint8_t myprivkey[])
         if ( address.SetString(strAddress) != 0 && address.GetKeyID(keyID) != 0 )
         {
 #ifdef ENABLE_WALLET
-            if ( pwalletMain->GetKey(keyID,vchSecret) != 0 )
+            // Deliberately always pwalletMain, never a request-selected wallet:
+            // this resolves the privkey for the process-global CC identity
+            // (-pubkey/NOTARY_PUBKEY33/Mypubkey(), not anything wallet-derived),
+            // and is reachable from block validation via
+            // DiceValidate -> DiceIsWinner -> DiceHashEntropy -> Myprivkey, on
+            // scriptcheckqueue worker threads -- there is no "selected wallet"
+            // concept to consult there, and there must never be one. The null
+            // guard below is the actual fix: under -disablewallet, pwalletMain
+            // is null, and this call used to dereference it unconditionally,
+            // a null-deref reachable from inside block validation.
+            if ( pwalletMain != NULL && pwalletMain->GetKey(keyID,vchSecret) != 0 )
             {
                 memcpy(myprivkey,vchSecret.begin(),32);
                 memset((uint8_t *)vchSecret.begin(),0,32);

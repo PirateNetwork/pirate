@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -25,8 +29,8 @@
 bool FaucetValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
 
 // CCcustom
-UniValue FaucetFund(const CPubKey& mypk,uint64_t txfee,int64_t funds);
-UniValue FaucetGet(const CPubKey& mypk,uint64_t txfee);
+UniValue FaucetFund(const CPubKey& mypk,uint64_t txfee,int64_t funds,CWallet *pwallet=nullptr);
+UniValue FaucetGet(const CPubKey& mypk,uint64_t txfee,CWallet *pwallet=nullptr);
 UniValue FaucetInfo();
 
 #endif

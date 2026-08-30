@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -28,13 +32,14 @@ extern int32_t lastSnapShotHeight;
 bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
 
 // CCcustom
-UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr);
-UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr);
-UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr);
-UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr);
-UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr);
-UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr);
-UniValue PaymentsAirdropTokens(struct CCcontract_info *cp,char *jsonstr);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
+UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
+UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
+UniValue PaymentsTxidopret(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
+UniValue PaymentsCreate(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
+UniValue PaymentsAirdrop(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
+UniValue PaymentsAirdropTokens(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
 UniValue PaymentsInfo(struct CCcontract_info *cp,char *jsonstr);
 UniValue PaymentsList(struct CCcontract_info *cp,char *jsonstr);
 

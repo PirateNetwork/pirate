@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -854,7 +858,7 @@ int64_t AddMyOraclesFunds(struct CCcontract_info *cp,CMutableTransaction &mtx,CP
     return (0);
 }
 
-UniValue OracleCreate(const CPubKey& pk, int64_t txfee,std::string name,std::string description,std::string format)
+UniValue OracleCreate(const CPubKey& pk, int64_t txfee,std::string name,std::string description,std::string format,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,Oraclespk; struct CCcontract_info *cp,C; char fmt; 
@@ -884,15 +888,15 @@ UniValue OracleCreate(const CPubKey& pk, int64_t txfee,std::string name,std::str
         txfee = 10000;
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     Oraclespk = GetUnspendable(cp,0);
-    if ( AddNormalinputs(mtx,mypk,2*txfee,3,pk.IsValid()) > 0 )
+    if ( AddNormalinputs(mtx,mypk,2*txfee,3,pk.IsValid(),pwallet) > 0 )
     {
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(Oraclespk)) << OP_CHECKSIG));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesCreateOpRet('C',name,description,format)));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesCreateOpRet('C',name,description,format),NULL_pubkeys,pwallet));
     }
     CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "error adding normal inputs");
 }
 
-UniValue OracleFund(const CPubKey& pk, int64_t txfee,uint256 oracletxid)
+UniValue OracleFund(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); CTransaction tx;
     CPubKey mypk,oraclespk; struct CCcontract_info *cp,C; std::string name,desc,format; int32_t numvouts; uint256 hashBlock;
@@ -907,15 +911,15 @@ UniValue OracleFund(const CPubKey& pk, int64_t txfee,uint256 oracletxid)
     if ( txfee == 0 )
         txfee = 10000;
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
-    if (AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,2,pk.IsValid()))    
+    if (AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,2,pk.IsValid(),pwallet))
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,CC_MARKER_VALUE,mypk));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesOpRet('F',oracletxid,mypk,CC_MARKER_VALUE)));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesOpRet('F',oracletxid,mypk,CC_MARKER_VALUE),NULL_pubkeys,pwallet));
     }
     CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "error adding normal inputs");
 }
 
-UniValue OracleRegister(const CPubKey& pk, int64_t txfee,uint256 oracletxid,int64_t datafee)
+UniValue OracleRegister(const CPubKey& pk, int64_t txfee,uint256 oracletxid,int64_t datafee,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,markerpubkey,batonpk,oraclespk; struct CCcontract_info *cp,C; char markeraddr[64],batonaddr[64];
@@ -934,19 +938,19 @@ UniValue OracleRegister(const CPubKey& pk, int64_t txfee,uint256 oracletxid,int6
     oraclespk = GetUnspendable(cp,0);
     batonpk = OracleBatonPk(batonaddr,cp);
     markerpubkey = CCtxidaddr(markeraddr,oracletxid);
-    if (AddNormalinputs(mtx,mypk,3*txfee,4,pk.IsValid()))
+    if (AddNormalinputs(mtx,mypk,3*txfee,4,pk.IsValid(),pwallet))
     {
         if (GetLatestTimestamp(komodo_currentheight())>PUBKEY_SPOOFING_FIX_ACTIVATION && AddMyOraclesFunds(cp,mtx,mypk,oracletxid)!=CC_MARKER_VALUE)
             CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "error adding inputs from your Oracles CC address, please fund it first with oraclesfund rpc!");
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(markerpubkey)) << OP_CHECKSIG));
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,txfee,batonpk));
         if (GetLatestTimestamp(komodo_get_current_height())>PUBKEY_SPOOFING_FIX_ACTIVATION) mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesOpRet('R',oracletxid,mypk,datafee)));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesOpRet('R',oracletxid,mypk,datafee),NULL_pubkeys,pwallet));
     }
     CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "error adding normal inputs");
 }
 
-UniValue OracleSubscribe(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CPubKey publisher,int64_t amount)
+UniValue OracleSubscribe(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CPubKey publisher,int64_t amount,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight()); CTransaction tx;
     CPubKey mypk,markerpubkey; struct CCcontract_info *cp,C; char markeraddr[64]; std::string name,desc,format; int32_t numvouts; uint256 hashBlock;
@@ -959,16 +963,16 @@ UniValue OracleSubscribe(const CPubKey& pk, int64_t txfee,uint256 oracletxid,CPu
         CCERR_RESULT("oraclecc",CCLOG_INFO, stream << "invalid oracletxid " << oracletxid.GetHex());
     mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     markerpubkey = CCtxidaddr(markeraddr,oracletxid);
-    if ( AddNormalinputs(mtx,mypk,amount + 2*txfee,64,pk.IsValid()) > 0 )
+    if ( AddNormalinputs(mtx,mypk,amount + 2*txfee,64,pk.IsValid(),pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,amount,publisher));
         mtx.vout.push_back(CTxOut(txfee,CScript() << ParseHex(HexStr(markerpubkey)) << OP_CHECKSIG));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesOpRet('S',oracletxid,mypk,amount)));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesOpRet('S',oracletxid,mypk,amount),NULL_pubkeys,pwallet));
     }
     CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "error adding normal inputs");
 }
 
-UniValue OracleData(const CPubKey& pk, int64_t txfee,uint256 oracletxid,std::vector <uint8_t> data)
+UniValue OracleData(const CPubKey& pk, int64_t txfee,uint256 oracletxid,std::vector <uint8_t> data,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CScript pubKey; CPubKey mypk,batonpk; int64_t offset,datafee,inputs,CCchange = 0; struct CCcontract_info *cp,C; uint256 batontxid,hashBlock;
@@ -995,7 +999,7 @@ UniValue OracleData(const CPubKey& pk, int64_t txfee,uint256 oracletxid,std::vec
     if ( txfee == 0 )
         txfee = 10000;
     GetCCaddress(cp,coinaddr,mypk);
-    if ( AddNormalinputs(mtx,mypk,2*txfee,3,pk.IsValid()) > 0 ) // have enough funds even if baton utxo not there
+    if ( AddNormalinputs(mtx,mypk,2*txfee,3,pk.IsValid(),pwallet) > 0 ) // have enough funds even if baton utxo not there
     {
         batonpk = OracleBatonPk(batonaddr,cp);
         batontxid = OracleBatonUtxo(txfee,cp,oracletxid,batonaddr,mypk,prevdata);
@@ -1009,7 +1013,7 @@ UniValue OracleData(const CPubKey& pk, int64_t txfee,uint256 oracletxid,std::vec
             mtx.vout.push_back(MakeCC1vout(cp->evalcode,CCchange,mypk));
             mtx.vout.push_back(MakeCC1vout(cp->evalcode,CC_MARKER_VALUE,batonpk));
             mtx.vout.push_back(CTxOut(datafee,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-            return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesData('D',oracletxid,batontxid,mypk,data)));
+            return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeOraclesData('D',oracletxid,batontxid,mypk,data),NULL_pubkeys,pwallet));
         } else
             CCERR_RESULT("oraclescc",CCLOG_INFO, stream << "couldnt find enough oracle inputs " << coinaddr << ", limit 1 per utxo");
     }

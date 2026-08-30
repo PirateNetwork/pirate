@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -20,10 +24,12 @@ std::vector<CPubKey> NULL_pubkeys;
 struct NSPV_CCmtxinfo NSPV_U;
 
 /* see description to function definition in CCinclude.h */
-bool SignTx(CMutableTransaction &mtx,const PrecomputedTransactionData& txToDataIn, int32_t vini,int64_t utxovalue,const CScript scriptPubKey)
+bool SignTx(CMutableTransaction &mtx,const PrecomputedTransactionData& txToDataIn, int32_t vini,int64_t utxovalue,const CScript scriptPubKey,CWallet *pwallet)
 {
 #ifdef ENABLE_WALLET
-    CTransaction txNewConst(mtx); SignatureData sigdata; const CKeyStore& keystore = *pwalletMain;
+    if (pwallet == nullptr) pwallet = pwalletMain;
+    if (pwallet == nullptr) return false;
+    CTransaction txNewConst(mtx); SignatureData sigdata; const CKeyStore& keystore = *pwallet;
     auto consensusBranchId = CurrentEpochBranchId(chainActive.Height() + 1, Params().GetConsensus());
     if ( ProduceSignature(TransactionSignatureCreator(&keystore,&txNewConst,txToDataIn, vini,utxovalue,SIGHASH_ALL),scriptPubKey,sigdata,consensusBranchId) != 0 )
     {
@@ -41,15 +47,15 @@ This allows the contract transaction functions to create the appropriate vins an
 
 By using -addressindex=1, it allows tracking of all the CC addresses
 */
-std::string FinalizeCCTx(uint64_t CCmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys)
+std::string FinalizeCCTx(uint64_t CCmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys, CWallet *pwallet)
 {
-    UniValue sigData = FinalizeCCTxExt(false, CCmask, cp, mtx, mypk, txfee, opret, pubkeys);
+    UniValue sigData = FinalizeCCTxExt(false, CCmask, cp, mtx, mypk, txfee, opret, pubkeys, pwallet);
     return sigData[JSON_HEXTX].getValStr();
 }
 
 
 // extended version that supports signInfo object with conds to vins map for remote cc calls
-UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys)
+UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys, CWallet *pwallet)
 {
     auto consensusBranchId = CurrentEpochBranchId(chainActive.Height() + 1, Params().GetConsensus());
     CTransaction vintx; std::string hex; CPubKey globalpk; uint256 hashBlock; uint64_t mask=0,nmask=0,vinimask=0;
@@ -81,11 +87,33 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
 
     //Myprivkey(myprivkey);  // for NSPV mode we need to add myprivkey for the explicitly defined mypk param
 #ifdef ENABLE_WALLET
+    if (pwallet == nullptr) pwallet = pwalletMain;
     // get privkey for mypk
-    CKeyID keyID = mypk.GetID();
-    CKey vchSecret;
-    if (pwalletMain->GetKey(keyID, vchSecret))
-        memcpy(myprivkey, vchSecret.begin(), sizeof(myprivkey));
+    if (pwallet != nullptr)
+    {
+        CKeyID keyID = mypk.GetID();
+        CKey vchSecret;
+        if (pwallet->GetKey(keyID, vchSecret))
+            memcpy(myprivkey, vchSecret.begin(), sizeof(myprivkey));
+    }
+    // Multiwallet fund-safety guard (found by the Phase 9 multiwallet audit,
+    // 2026-08-29): in local (non-remote) mode mypk is always the CC identity
+    // (Mypubkey()), and every vout this function creates on its own behalf --
+    // change, token-issuance/marker vouts, etc. -- is addressed to mypk, never
+    // to "whichever wallet happened to fund the tx". AddNormalinputsLocal
+    // selects UTXOs from the resolved wallet without filtering by address (see
+    // its own doc comment), so without this check a wallet that holds spendable
+    // coins but NOT mypk's privkey could still fund and sign a transaction
+    // whose proceeds land on an address that wallet can never reach -- silently
+    // moving value out of the wallet the caller selected. Refuse outright
+    // instead. Remote (NSPV client-supplied pk) calls are exempt: there mypk is
+    // the client's own pubkey and is never expected to be in any local wallet.
+    if (!remote && (pwallet == nullptr || !pwallet->HaveKey(mypk.GetID())))
+    {
+        fprintf(stderr, "FinalizeCCTx: wallet does not hold the privkey for mypk (%s), refusing\n", HexStr(mypk).c_str());
+        CCerror = "wallet does not hold the CC identity's (-pubkey) private key";
+        return sigDataNull;
+    }
 #endif
 
     GetCCaddress(cp,myaddr,mypk);
@@ -188,8 +216,23 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
                 {
                     if (!remote)
                     {
-                        if (SignTx(mtx, txdata, i, vintx.vout[utxovout].nValue, vintx.vout[utxovout].scriptPubKey) == 0)
+                        if (SignTx(mtx, txdata, i, vintx.vout[utxovout].nValue, vintx.vout[utxovout].scriptPubKey, pwallet) == 0)
+                        {
+                            // Was previously fprintf-only, falling through to still
+                            // return the (partially unsigned) tx hex as if it had
+                            // succeeded -- found by the Phase 9 multiwallet audit
+                            // (2026-08-29): under multiwallet a normal vin can be
+                            // funded from an address the resolved wallet doesn't
+                            // actually hold the key for (e.g. AddNormalinputs2/
+                            // AddNormalinputsRemote fund from the CC identity's own
+                            // address via the address index, independent of which
+                            // wallet is selected), so this failure is now reachable
+                            // in practice, not just theoretical. Match the CC-vin
+                            // signing-failure convention below: fail closed.
                             fprintf(stderr, "signing error for vini.%d of %llx\n", i, (long long)vinimask);
+                            memset(myprivkey, 0, sizeof(myprivkey));
+                            return sigDataNull;
+                        }
                     }
                     else
                     {
@@ -636,7 +679,7 @@ int32_t CC_vinselect(int32_t *aboveip,int64_t *abovep,int32_t *belowip,int64_t *
     else return(belowi);
 }
 
-int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs)
+int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs,CWallet *pwallet)
 {
     int32_t abovei,belowi,ind,vout,i,n = 0; int64_t sum,threshold,above,below; int64_t remains,nValue,totalinputs = 0; uint256 txid,hashBlock; std::vector<COutput> vecOutputs; CTransaction tx; struct CC_utxo *utxos,*up;
     if ( KOMODO_NSPV_SUPERLITE )
@@ -646,10 +689,11 @@ int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total
     //     return(AddNormalinputs3(mtx, mypk, total, maxinputs));
 
 #ifdef ENABLE_WALLET
-    assert(pwalletMain != NULL);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
+    if (pwallet == nullptr) pwallet = pwalletMain;
+    assert(pwallet != NULL);
+    const CKeyStore& keystore = *pwallet;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    pwallet->AvailableCoins(vecOutputs, false, NULL, true);
     utxos = (struct CC_utxo *)calloc(CC_MAXVINS,sizeof(*utxos));
     if ( maxinputs > CC_MAXVINS )
         maxinputs = CC_MAXVINS;
@@ -836,9 +880,9 @@ int64_t AddNormalinputsRemote(CMutableTransaction &mtx, CPubKey mypk, int64_t to
     return(0);
 }
 
-int64_t AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs,bool remote)
+int64_t AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs,bool remote,CWallet *pwallet)
 {
-    if (!remote)  return (AddNormalinputsLocal(mtx,mypk,total,maxinputs));
+    if (!remote)  return (AddNormalinputsLocal(mtx,mypk,total,maxinputs,pwallet));
     else return (AddNormalinputsRemote(mtx,mypk,total,maxinputs));
 }
 

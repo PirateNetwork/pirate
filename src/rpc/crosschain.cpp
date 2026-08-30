@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -44,6 +48,7 @@
 #include "cc/CCImportGateway.h"
 #include "cc/CCtokens.h"
 #include "cc/import.h"
+#include "wallet/walletmanager.h"
 
 #include <stdint.h>
 #include <univalue.h>
@@ -669,17 +674,21 @@ UniValue migrate_createnotaryapprovaltransaction(const UniValue& params, bool fH
     if (std::find(prooftxids.begin(), prooftxids.end(), burntxid) == prooftxids.end())
         throw runtime_error("No burntxid in txoutproof");
 
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
     const int64_t txfee = 10000;
     struct CCcontract_info *cpDummy, C;
-    cpDummy = CCinit(&C, EVAL_TOKENS);  // just for FinalizeCCtx to work 
+    cpDummy = CCinit(&C, EVAL_TOKENS);  // just for FinalizeCCtx to work
 
     // creating a tx with proof:
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
-    if (AddNormalinputs(mtx, Mypubkey(), txfee*2, 4) == 0) 
+    if (AddNormalinputs(mtx, Mypubkey(), txfee*2, 4, false, pwallet) == 0)
         throw runtime_error("Cannot find normal inputs\n");
-    
+
     mtx.vout.push_back(CTxOut(txfee, CScript() << ParseHex(HexStr(Mypubkey())) << OP_CHECKSIG));
-    std::string notaryTxHex = FinalizeCCTx(0, cpDummy, mtx, Mypubkey(), txfee, CScript() << OP_RETURN << E_MARSHAL(ss << proofData;));
+    std::string notaryTxHex = FinalizeCCTx(0, cpDummy, mtx, Mypubkey(), txfee, CScript() << OP_RETURN << E_MARSHAL(ss << proofData;), NULL_pubkeys, pwallet);
 
     UniValue result(UniValue::VOBJ);
     result.push_back(Pair("NotaryTxHex", notaryTxHex));
@@ -710,6 +719,10 @@ UniValue selfimport(const UniValue& params, bool fHelp, const CPubKey& mypk)
                   //TODO:   "or selfimport rawburntx burntxid {nvout|\"find\"} rawproof source bindtxid height} \n"
                             "\ncreates self import coin transaction");
 
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
     destaddr = params[0].get_str();
     burnAmount = atof(params[1].get_str().c_str()) * COIN + 0.00000000499999;
 
@@ -735,7 +748,7 @@ UniValue selfimport(const UniValue& params, bool fHelp, const CPubKey& mypk)
     {
         ImportProof proofNull;
         CTxDestination dest = DecodeDestination(destaddr.c_str());
-        CMutableTransaction sourceMtx = MakeSelfImportSourceTx(dest, burnAmount);  // make self-import source tx
+        CMutableTransaction sourceMtx = MakeSelfImportSourceTx(dest, burnAmount, pwallet);  // make self-import source tx
         vscript_t rawProofEmpty;
         
         CMutableTransaction templateMtx;
@@ -845,6 +858,9 @@ UniValue importgatewaybind(const UniValue& params, bool fHelp, const CPubKey& my
         throw runtime_error("use \'importgatewaybind coin orcletxid M N pubkeys pubtype p2shtype wiftype [taddr]\' to bind an import gateway\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     CCerror = "";
     coin = params[0].get_str();
     oracletxid = Parseuint256(params[1].get_str().c_str()); 
@@ -875,7 +891,7 @@ UniValue importgatewaybind(const UniValue& params, bool fHelp, const CPubKey& my
         ERR_RESULT("source coin not equal to ac_import name");
         return result;
     }
-    hex = ImportGatewayBind(0, coin, oracletxid, M, N, pubkeys, p1, p2, p3, p4);
+    hex = ImportGatewayBind(0, coin, oracletxid, M, N, pubkeys, p1, p2, p3, p4, pwallet);
     RETURN_IF_ERROR(CCerror);
     if ( hex.size() > 0 )
     {
@@ -941,8 +957,11 @@ UniValue importgatewaywithdraw(const UniValue& params, bool fHelp, const CPubKey
         throw runtime_error("use \'importgatewaywithdraw bindtxid coin withdrawpub amount\' to burn imported coins and withdraw them on external chain\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     CCerror = "";
-    bindtxid = Parseuint256(params[0].get_str().c_str()); 
+    bindtxid = Parseuint256(params[0].get_str().c_str());
     coin = params[1].get_str();
     destpub = ParseHex(params[2].get_str());
     amount = atof((char *)params[3].get_str().c_str()) * COIN + 0.00000000499999;
@@ -956,7 +975,7 @@ UniValue importgatewaywithdraw(const UniValue& params, bool fHelp, const CPubKey
         ERR_RESULT("source coin not equal to ac_import name");
         return result;
     }
-    hex = ImportGatewayWithdraw(0, bindtxid, coin, destpub, amount);
+    hex = ImportGatewayWithdraw(0, bindtxid, coin, destpub, amount, pwallet);
     RETURN_IF_ERROR(CCerror);
     if ( hex.size() > 0 )
     {
@@ -976,10 +995,13 @@ UniValue importgatewaypartialsign(const UniValue& params, bool fHelp, const CPub
         throw runtime_error("importgatewayspartialsign txidaddr refcoin hex\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     txid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     parthex = params[2].get_str();
-    hex = ImportGatewayPartialSign(0,txid,coin,parthex);
+    hex = ImportGatewayPartialSign(0,txid,coin,parthex,pwallet);
     RETURN_IF_ERROR(CCerror);
     if ( hex.size() > 0 )
     {
@@ -999,10 +1021,13 @@ UniValue importgatewaycompletesigning(const UniValue& params, bool fHelp, const 
         throw runtime_error("importgatewaycompletesigning withdrawtxid coin hex\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     withdrawtxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     txhex = params[2].get_str();
-    hex = ImportGatewayCompleteSigning(0,withdrawtxid,coin,txhex);
+    hex = ImportGatewayCompleteSigning(0,withdrawtxid,coin,txhex,pwallet);
     RETURN_IF_ERROR(CCerror);
     if ( hex.size() > 0 )
     {
@@ -1019,9 +1044,12 @@ UniValue importgatewaymarkdone(const UniValue& params, bool fHelp, const CPubKey
         throw runtime_error("importgatewaymarkdone completesigningtx coin\n");
     if ( ensure_CCrequirements(EVAL_IMPORTGATEWAY) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     completetxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
-    hex = ImportGatewayMarkDone(0,completetxid,coin);
+    hex = ImportGatewayMarkDone(0,completetxid,coin,pwallet);
     RETURN_IF_ERROR(CCerror);
     if ( hex.size() > 0 )
     {

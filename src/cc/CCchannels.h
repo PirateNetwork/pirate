@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -21,10 +25,10 @@
 #define CHANNELS_MAXPAYMENTS 1000
 
 bool ChannelsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
-UniValue ChannelOpen(const CPubKey& pk,uint64_t txfee,CPubKey destpub,int32_t numpayments,int64_t payment,uint256 tokenid);
-UniValue ChannelPayment(const CPubKey& pk,uint64_t txfee,uint256 opentxid,int64_t amount, uint256 secret);
-UniValue ChannelClose(const CPubKey& pk,uint64_t txfee,uint256 opentxid);
-UniValue ChannelRefund(const CPubKey& pk,uint64_t txfee,uint256 opentxid,uint256 closetxid);
+UniValue ChannelOpen(const CPubKey& pk,uint64_t txfee,CPubKey destpub,int32_t numpayments,int64_t payment,uint256 tokenid,CWallet *pwallet=nullptr);
+UniValue ChannelPayment(const CPubKey& pk,uint64_t txfee,uint256 opentxid,int64_t amount, uint256 secret,CWallet *pwallet=nullptr);
+UniValue ChannelClose(const CPubKey& pk,uint64_t txfee,uint256 opentxid,CWallet *pwallet=nullptr);
+UniValue ChannelRefund(const CPubKey& pk,uint64_t txfee,uint256 opentxid,uint256 closetxid,CWallet *pwallet=nullptr);
 UniValue ChannelsList(const CPubKey& pk);
 // CCcustom
 UniValue ChannelsInfo(const CPubKey& pk,uint256 opentxid);

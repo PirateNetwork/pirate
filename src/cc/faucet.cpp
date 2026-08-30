@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -178,7 +182,7 @@ int64_t AddFaucetInputs(struct CCcontract_info *cp,CMutableTransaction &mtx,CPub
     return(totalinputs);
 }
 
-UniValue FaucetGet(const CPubKey& pk, uint64_t txfee)
+UniValue FaucetGet(const CPubKey& pk, uint64_t txfee, CWallet *pwallet)
 {
     CMutableTransaction tmpmtx,mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey faucetpk; int64_t inputs,CCchange=0,nValue=FAUCETSIZE; struct CCcontract_info *cp,C; std::string rawhex; uint32_t j; int32_t i,len; uint8_t buf[32768]; bits256 hash;
@@ -199,7 +203,7 @@ UniValue FaucetGet(const CPubKey& pk, uint64_t txfee)
         for (i=0; i<1000000; i++,j++)
         {
             tmpmtx = mtx;
-            UniValue result = FinalizeCCTxExt(pk.IsValid (),-1LL,cp,tmpmtx,mypk,txfee,CScript() << OP_RETURN << E_MARSHAL(ss << (uint8_t)EVAL_FAUCET << (uint8_t)'G' << j));
+            UniValue result = FinalizeCCTxExt(pk.IsValid (),-1LL,cp,tmpmtx,mypk,txfee,CScript() << OP_RETURN << E_MARSHAL(ss << (uint8_t)EVAL_FAUCET << (uint8_t)'G' << j),NULL_pubkeys,pwallet);
             if ( (len= (int32_t)result[JSON_HEXTX].getValStr().size()) > 0 && len < 65536 )
             {
                 len >>= 1;
@@ -217,7 +221,7 @@ UniValue FaucetGet(const CPubKey& pk, uint64_t txfee)
     } else CCERR_RESULT("faucet",CCLOG_ERROR, stream << "can't find faucet inputs");
 }
 
-UniValue FaucetFund(const CPubKey& pk, uint64_t txfee,int64_t funds)
+UniValue FaucetFund(const CPubKey& pk, uint64_t txfee,int64_t funds,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey faucetpk; CScript opret; struct CCcontract_info *cp,C;
@@ -227,10 +231,10 @@ UniValue FaucetFund(const CPubKey& pk, uint64_t txfee,int64_t funds)
         txfee = 10000;
     CPubKey mypk = pk.IsValid()?pk:pubkey2pk(Mypubkey());
     faucetpk = GetUnspendable(cp,0);
-    if ( AddNormalinputs(mtx,mypk,funds+txfee,64,pk.IsValid()) > 0 )
+    if ( AddNormalinputs(mtx,mypk,funds+txfee,64,pk.IsValid(),pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(EVAL_FAUCET,funds,faucetpk));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,opret));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,opret,NULL_pubkeys,pwallet));
     }
     CCERR_RESULT("faucet",CCLOG_ERROR, stream << "can't find normal inputs");
 }

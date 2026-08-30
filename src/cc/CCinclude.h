@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -248,7 +252,8 @@ int32_t CCgetspenttxid(uint256 &spenttxid,int32_t &vini,int32_t &height,uint256 
 
 /// @private
 void CCclearvars(struct CCcontract_info *cp);
-UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr,CWallet *pwallet=nullptr);
 UniValue CClib_info(struct CCcontract_info *cp);
 
 static const uint256 zeroid;  //!< null uint256 constant
@@ -788,10 +793,12 @@ CPubKey check_signing_pubkey(CScript scriptSig);
 
 /// SignTx signs a transaction in normal vin scriptSig
 /// @param mtx transaction object of CMutableTransaction type
+/// @param txToDataIn precomputed transaction data for signature hashing
 /// @param vini order number of transaction input to sign (starting from 0)
 /// @param utxovalue amount of utxo spent by the input to sign (this amount will be added to the signature hash)
 /// @param scriptPubKey scriptPubKey of the utxo spent by the input to sign
-bool SignTx(CMutableTransaction &mtx,int32_t vini,int64_t utxovalue,const CScript scriptPubKey);
+/// @param pwallet wallet whose keystore signs this input; defaults to the process's default wallet (pwalletMain) when null
+bool SignTx(CMutableTransaction &mtx,const PrecomputedTransactionData& txToDataIn,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,CWallet *pwallet=nullptr);
 
 extern std::vector<CPubKey> NULL_pubkeys; //!< constant value for use in functions where such value might be passed @see FinalizeCCTx
 
@@ -803,8 +810,9 @@ extern std::vector<CPubKey> NULL_pubkeys; //!< constant value for use in functio
 /// @param txfee transaction fee
 /// @param opret opreturn vout which function will add if it is not empty 
 /// @param pubkeys array of pubkeys to make multiple probe 1of2 cc's with the call Make1of2cond(cp->evalcode, globalpk, pubkeys[i])
+/// @param pwallet wallet whose keys/UTXOs fund and sign this transaction; defaults to the process's default wallet (pwalletMain) when null
 /// @returns signed transaction in hex encoding
-std::string FinalizeCCTx(uint64_t skipmask,struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKey mypk,uint64_t txfee,CScript opret,std::vector<CPubKey> pubkeys = NULL_pubkeys);
+std::string FinalizeCCTx(uint64_t skipmask,struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKey mypk,uint64_t txfee,CScript opret,std::vector<CPubKey> pubkeys = NULL_pubkeys,CWallet *pwallet=nullptr);
 
 /// FinalizeCCTx is a very useful function that will properly sign both CC and normal inputs, adds normal change and might add an opreturn output.
 /// This allows for Antara module transaction creation rpc functions to create an CMutableTransaction object, add the appropriate vins and vouts to it and use FinalizeCCTx to properly sign the transaction.
@@ -823,8 +831,9 @@ std::string FinalizeCCTx(uint64_t skipmask,struct CCcontract_info *cp,CMutableTr
 /// @param txfee transaction fee
 /// @param opret opreturn vout which function will add if it is not empty 
 /// @param pubkeys array of pubkeys to make multiple probe 1of2 cc's with the call Make1of2cond(cp->evalcode, globalpk, pubkeys[i])
+/// @param pwallet wallet whose keys/UTXOs fund and sign this transaction (meaningless when remote=true); defaults to the process's default wallet (pwalletMain) when null
 /// @returns signed transaction in hex encoding
-UniValue FinalizeCCTxExt(bool remote, uint64_t skipmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys = NULL_pubkeys);
+UniValue FinalizeCCTxExt(bool remote, uint64_t skipmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys = NULL_pubkeys, CWallet *pwallet=nullptr);
 
 /// SetCCunspents returns a vector of unspent outputs on an address 
 /// @param[out] unspentOutputs vector of pairs of address key and amount
@@ -862,18 +871,20 @@ int64_t NSPV_AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total
 /// @param total amount of inputs to add. If total equals to 0 the function does not add inputs but returns amount of all available normal inputs in the wallet
 /// @param maxinputs maximum number of inputs to add
 /// @param remote true if running in remote nspv mode (default false)
+/// @param pwallet wallet whose UTXOs fund the transaction on the local (non-remote) path; defaults to the process's default wallet (pwalletMain) when null; meaningless when remote=true
 /// @returns amount of added normal inputs or amount of all normal inputs in the wallet
 /// @see AddNormalinputsLocal
 /// @see AddNormalinputsRemote
-int64_t AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs, bool remote=false);
+int64_t AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs, bool remote=false, CWallet *pwallet=nullptr);
 
 /// Local version for cc runnnig on the same node, adds normal (not cc) inputs to the transaction object vin array for the specified total amount using available utxos in the wallet, to fund the transaction
 /// @param mtx mutable transaction object
 /// @param mypk not used
 /// @param total amount of inputs to add. If total equals to 0 the function does not add inputs but returns amount of all available normal inputs in the wallet
 /// @param maxinputs maximum number of inputs to add
+/// @param pwallet wallet whose UTXOs fund the transaction; defaults to the process's default wallet (pwalletMain) when null
 /// @returns amount of added normal inputs or amount of all normal inputs in the wallet
-int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs);
+int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs,CWallet *pwallet=nullptr);
 
 /// AddNormalinputs2 adds normal (not cc) inputs to the transaction object vin array for the specified total amount using utxos on my pubkey's TX_PUBKEY address (my pubkey is set by -pubkey command line parameter), to fund the transaction.
 /// 'My pubkey' is the -pubkey parameter of komodod.

@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -462,7 +466,7 @@ int64_t AddChannelsInputs(struct CCcontract_info *cp,CMutableTransaction &mtx, C
     else return 0;
 }
 
-UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t numpayments,int64_t payment, uint256 tokenid)
+UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t numpayments,int64_t payment, uint256 tokenid,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     uint8_t hash[32],hashdest[32]; uint64_t amount,tokens=0,funds; int32_t i; uint256 hashchain,entropy,hentropy;
@@ -484,10 +488,10 @@ UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t n
     funds = numpayments * payment;
     if (tokenid!=zeroid)
     {
-        amount=AddNormalinputs(mtx,mypk,txfee+2*CC_MARKER_VALUE,5,pk.IsValid());
-        tokens=AddTokenCCInputs(cpTokens, mtx, mypk, tokenid, funds, 64);       
+        amount=AddNormalinputs(mtx,mypk,txfee+2*CC_MARKER_VALUE,5,pk.IsValid(),pwallet);
+        tokens=AddTokenCCInputs(cpTokens, mtx, mypk, tokenid, funds, 64);
     }
-    else amount=AddNormalinputs(mtx,mypk,funds+txfee+2*CC_MARKER_VALUE,64,pk.IsValid());
+    else amount=AddNormalinputs(mtx,mypk,funds+txfee+2*CC_MARKER_VALUE,64,pk.IsValid(),pwallet);
     if (amount+tokens >= funds+txfee+2*CC_MARKER_VALUE)
     {
         hentropy = DiceHashEntropy(entropy,mtx.vin[0].prevout.hash,mtx.vin[0].prevout.n,1);
@@ -503,12 +507,12 @@ UniValue ChannelOpen(const CPubKey& pk, uint64_t txfee,CPubKey destpub,int32_t n
         mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,mypk));
         mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
         if (tokenid!=zeroid && tokens>funds) mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS,tokens-funds,mypk));
-        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('O',tokenid,zeroid,mypk,destpub,numpayments,payment,hashchain)));
+        return(FinalizeCCTxExt(pk.IsValid(),0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('O',tokenid,zeroid,mypk,destpub,numpayments,payment,hashchain),NULL_pubkeys,pwallet));
     }
     CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding funds");
 }
 
-UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64_t amount, uint256 secret)
+UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64_t amount, uint256 secret,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,srcpub,destpub; uint256 txid,hashchain,gensecret,hashblock,entropy,hentropy,prevtxid,param3,tokenid;
@@ -536,7 +540,7 @@ UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64
     else 
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open tx");
     if (komodo_txnotarizedconfirmed(opentxid)==false) CCERR_RESULT("channelscc",CCLOG_INFO, stream << "channelsopen tx not yet confirmed/notarized");
-    if (AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) > 0)
+    if (AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid(),pwallet) > 0)
     {
         if ((funds=AddChannelsInputs(cp,mtx,channelOpenTx,prevtxid,mypk)) !=0 && (change=funds-amount)>=0)
         {            
@@ -584,15 +588,15 @@ UniValue ChannelPayment(const CPubKey& pk, uint64_t txfee,uint256 opentxid,int64
             mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
             if (tokenid!=zeroid) mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS, amount, destpub));
             else mtx.vout.push_back(CTxOut(amount, CScript() << ParseHex(HexStr(destpub)) << OP_CHECKSIG));
-            return (FinalizeCCTxExt(pk.IsValid(), 0, cp, mtx, mypk, txfee, EncodeChannelsOpRet('P', tokenid, opentxid, srcpub, destpub, prevdepth-numpayments, numpayments, secret)));
+            return (FinalizeCCTxExt(pk.IsValid(), 0, cp, mtx, mypk, txfee, EncodeChannelsOpRet('P', tokenid, opentxid, srcpub, destpub, prevdepth-numpayments, numpayments, secret), NULL_pubkeys, pwallet));
         }
-        else 
+        else
             CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding CC inputs");
     }
     CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding normal inputs");
 }
 
-UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid)
+UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,srcpub,destpub; struct CCcontract_info *cp,C;
@@ -614,7 +618,7 @@ UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream <<"channelsopen tx not yet confirmed/notarized");
     if (mypk != srcpub)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "cannot close, you are not channel owner");
-    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) > 0 )
+    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid(),pwallet) > 0 )
     {
         if ((funds=AddChannelsInputs(cp,mtx,channelOpenTx,prevtxid,mypk)) !=0 && funds>0)
         {
@@ -622,7 +626,7 @@ UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid)
             else mtx.vout.push_back(MakeCC1of2vout(EVAL_CHANNELS, funds, mypk, destpub));
             mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,mypk));
             mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
-            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('C',tokenid,opentxid,mypk,destpub,funds/payment,payment,zeroid)));
+            return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('C',tokenid,opentxid,mypk,destpub,funds/payment,payment,zeroid),NULL_pubkeys,pwallet));
         }
         else
             CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding CC inputs");
@@ -630,7 +634,7 @@ UniValue ChannelClose(const CPubKey& pk, uint64_t txfee,uint256 opentxid)
     CCERR_RESULT("channelscc",CCLOG_INFO, stream << "error adding normal inputs");
 }
 
-UniValue ChannelRefund(const CPubKey& pk, uint64_t txfee,uint256 opentxid,uint256 closetxid)
+UniValue ChannelRefund(const CPubKey& pk, uint64_t txfee,uint256 opentxid,uint256 closetxid,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; struct CCcontract_info *cp,C; int64_t funds,payment,param2;
@@ -660,7 +664,7 @@ UniValue ChannelRefund(const CPubKey& pk, uint64_t txfee,uint256 opentxid,uint25
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "invalid channel open tx");
     if (mypk != srcpub)
         CCERR_RESULT("channelscc",CCLOG_INFO, stream << "cannot refund, you are not the channel owner");
-    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid()) > 0 )
+    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,3,pk.IsValid(),pwallet) > 0 )
     {
         if ((funds=AddChannelsInputs(cp,mtx,channelOpenTx,prevtxid,mypk)) !=0 && funds>0)
         {
@@ -671,7 +675,7 @@ UniValue ChannelRefund(const CPubKey& pk, uint64_t txfee,uint256 opentxid,uint25
                 mtx.vout.push_back(MakeCC1vout(EVAL_CHANNELS,CC_MARKER_VALUE,destpub));
                 if (tokenid!=zeroid) mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS,funds,mypk));
                 else mtx.vout.push_back(CTxOut(funds,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-                return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('R',tokenid,opentxid,mypk,destpub,funds/payment,payment,closetxid)));
+                return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeChannelsOpRet('R',tokenid,opentxid,mypk,destpub,funds/payment,payment,closetxid),NULL_pubkeys,pwallet));
             }
             else
                 CCERR_RESULT("channelscc",CCLOG_INFO, stream << "previous tx is invalid");

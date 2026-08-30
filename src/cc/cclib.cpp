@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -92,7 +96,7 @@ CClib_methods[] =
 #endif
 };
 
-std::string CClib_rawtxgen(struct CCcontract_info *cp,uint8_t funcid,cJSON *params);
+std::string CClib_rawtxgen(struct CCcontract_info *cp,uint8_t funcid,cJSON *params,CWallet *pwallet=nullptr);
 
 #ifdef BUILD_ROGUE
 int32_t rogue_replay(uint64_t seed,int32_t sleepmillis);
@@ -114,8 +118,9 @@ UniValue rogue_extract(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 #else
 bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx);
 UniValue sudoku_txidinfo(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
-UniValue sudoku_generate(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
-UniValue sudoku_solution(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+UniValue sudoku_generate(uint64_t txfee,struct CCcontract_info *cp,cJSON *params,CWallet *pwallet=nullptr);
+UniValue sudoku_solution(uint64_t txfee,struct CCcontract_info *cp,cJSON *params,CWallet *pwallet=nullptr);
 UniValue sudoku_pending(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 
 #endif
@@ -154,7 +159,7 @@ cJSON *cclib_reparse(int32_t *nump,char *jsonstr) // assumes origparams will be 
     return(params);
 }
 
-UniValue CClib_method(struct CCcontract_info *cp,char *method,char *jsonstr)
+UniValue CClib_method(struct CCcontract_info *cp,char *method,char *jsonstr,CWallet *pwallet)
 {
     UniValue result(UniValue::VOBJ); uint64_t txfee = 10000; int32_t m; cJSON *params = cclib_reparse(&m,jsonstr);
     fprintf(stderr,"method.(%s) -> (%s)\n",jsonstr!=0?jsonstr:"",params!=0?jprint(params,0):"");
@@ -204,9 +209,9 @@ UniValue CClib_method(struct CCcontract_info *cp,char *method,char *jsonstr)
         if ( strcmp(method,"txidinfo") == 0 )
             return(sudoku_txidinfo(txfee,cp,params));
         else if ( strcmp(method,"gen") == 0 )
-            return(sudoku_generate(txfee,cp,params));
+            return(sudoku_generate(txfee,cp,params,pwallet));
         else if ( strcmp(method,"solution") == 0 )
-            return(sudoku_solution(txfee,cp,params));
+            return(sudoku_solution(txfee,cp,params,pwallet));
         else if ( strcmp(method,"pending") == 0 )
             return(sudoku_pending(txfee,cp,params));
         else
@@ -255,7 +260,7 @@ UniValue CClib_info(struct CCcontract_info *cp)
     return(result);
 }
 
-UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr)
+UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr,CWallet *pwallet)
 {
     UniValue result(UniValue::VOBJ); int32_t i; std::string rawtx; cJSON *params;
 //printf("CClib params.(%s)\n",jsonstr!=0?jsonstr:"");
@@ -268,11 +273,11 @@ UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr)
                 result.push_back(Pair("result","success"));
                 result.push_back(Pair("method",CClib_methods[i].method));
                 params = cJSON_Parse(jsonstr);
-                rawtx = CClib_rawtxgen(cp,CClib_methods[i].funcid,params);
+                rawtx = CClib_rawtxgen(cp,CClib_methods[i].funcid,params,pwallet);
                 free_json(params);
                 result.push_back(Pair("rawtx",rawtx));
                 return(result);
-            } else return(CClib_method(cp,method,jsonstr));
+            } else return(CClib_method(cp,method,jsonstr,pwallet));
         }
     }
     result.push_back(Pair("result","error"));
@@ -465,7 +470,7 @@ int64_t AddCClibtxfee(struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKe
     return(0);
 }
 
-std::string Faucet2Fund(struct CCcontract_info *cp,uint64_t txfee,int64_t funds)
+std::string Faucet2Fund(struct CCcontract_info *cp,uint64_t txfee,int64_t funds,CWallet *pwallet=nullptr)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,cclibpk; CScript opret;
@@ -476,12 +481,12 @@ std::string Faucet2Fund(struct CCcontract_info *cp,uint64_t txfee,int64_t funds)
     if ( AddNormalinputs2(mtx,funds+txfee,64) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,funds,cclibpk));
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,opret));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,opret,NULL_pubkeys,pwallet));
     }
     return("");
 }
 
-std::string CClib_rawtxgen(struct CCcontract_info *cp,uint8_t funcid,cJSON *params)
+std::string CClib_rawtxgen(struct CCcontract_info *cp,uint8_t funcid,cJSON *params,CWallet *pwallet)
 {
     CMutableTransaction tmpmtx,mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,cclibpk; int64_t funds,txfee=0,inputs,CCchange=0,nValue=FAUCET2SIZE; std::string rawhex; uint32_t j; int32_t i,len; uint8_t buf[32768]; bits256 hash;
@@ -492,7 +497,7 @@ std::string CClib_rawtxgen(struct CCcontract_info *cp,uint8_t funcid,cJSON *para
         if ( cJSON_GetArraySize(params) > 0 )
         {
             funds = (int64_t)jdouble(jitem(params,0),0)*COIN + 0.0000000049;
-            return(Faucet2Fund(cp,0,funds));
+            return(Faucet2Fund(cp,0,funds,pwallet));
         } else return("");
     }
     else if ( funcid != 'G' )
@@ -511,7 +516,7 @@ std::string CClib_rawtxgen(struct CCcontract_info *cp,uint8_t funcid,cJSON *para
         for (i=0; i<1000000; i++,j++)
         {
             tmpmtx = mtx;
-            rawhex = FinalizeCCTx(-1LL,cp,tmpmtx,mypk,txfee,CScript() << OP_RETURN << E_MARSHAL(ss << (uint8_t)EVAL_FAUCET2 << (uint8_t)'G' << j));
+            rawhex = FinalizeCCTx(-1LL,cp,tmpmtx,mypk,txfee,CScript() << OP_RETURN << E_MARSHAL(ss << (uint8_t)EVAL_FAUCET2 << (uint8_t)'G' << j),NULL_pubkeys,pwallet);
             if ( (len= (int32_t)rawhex.size()) > 0 && len < 65536 )
             {
                 len >>= 1;

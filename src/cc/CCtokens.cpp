@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -794,7 +798,7 @@ CPubKey GetTokenOriginatorPubKey(CScript scriptPubKey) {
 }
 
 // returns token creation signed raw tx
-std::string CreateToken(int64_t txfee, int64_t tokensupply, std::string name, std::string description, vscript_t nonfungibleData)
+std::string CreateToken(int64_t txfee, int64_t tokensupply, std::string name, std::string description, vscript_t nonfungibleData, CWallet *pwallet)
 {
 	CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
 	CPubKey mypk; struct CCcontract_info *cp, C;
@@ -839,7 +843,7 @@ std::string CreateToken(int64_t txfee, int64_t tokensupply, std::string name, st
 		//mtx.vout.push_back(CTxOut(txfee, CScript() << ParseHex(cp->CChexstr) << OP_CHECKSIG));  // old marker (non-burnable because spending could not be validated)
         //mtx.vout.push_back(MakeCC1vout(EVAL_TOKENS, txfee, GetUnspendable(cp, NULL)));          // ...moved to vout=0 for matching with rogue-game token
 
-		return(FinalizeCCTx(0, cp, mtx, mypk, txfee, EncodeTokenCreateOpRet('c', Mypubkey(), name, description, nonfungibleData)));
+		return(FinalizeCCTx(0, cp, mtx, mypk, txfee, EncodeTokenCreateOpRet('c', Mypubkey(), name, description, nonfungibleData), NULL_pubkeys, pwallet));
 	}
 
     CCerror = "cant find normal inputs";
@@ -849,7 +853,7 @@ std::string CreateToken(int64_t txfee, int64_t tokensupply, std::string name, st
 
 // transfer tokens to another pubkey
 // param additionalEvalCode allows transfer of dual-eval non-fungible tokens
-std::string TokenTransfer(int64_t txfee, uint256 tokenid, vscript_t destpubkey, int64_t total)
+std::string TokenTransfer(int64_t txfee, uint256 tokenid, vscript_t destpubkey, int64_t total, CWallet *pwallet)
 {
 	CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
 	CPubKey mypk; uint64_t mask; int64_t CCchange = 0, inputs = 0;  struct CCcontract_info *cp, C;
@@ -871,7 +875,7 @@ std::string TokenTransfer(int64_t txfee, uint256 tokenid, vscript_t destpubkey, 
         GetTokensCCaddress(cp, cp->tokens1of2addr, mypk);
         fprintf(stderr,"set tokens1of2addr <- %s\n",cp->tokens1of2addr);
     }*/
-    if (AddNormalinputs(mtx, mypk, txfee, 3) > 0)
+    if (AddNormalinputs(mtx, mypk, txfee, 3, false, pwallet) > 0)
 	{
 		mask = ~((1LL << mtx.vin.size()) - 1);  // seems, mask is not used anymore
         
@@ -896,7 +900,7 @@ std::string TokenTransfer(int64_t txfee, uint256 tokenid, vscript_t destpubkey, 
 			std::vector<CPubKey> voutTokenPubkeys;
 			voutTokenPubkeys.push_back(pubkey2pk(destpubkey));  // dest pubkey for validating vout
 
-			return FinalizeCCTx(mask, cp, mtx, mypk, txfee, EncodeTokenOpRet(tokenid, voutTokenPubkeys, std::make_pair((uint8_t)0, vopretEmpty))); 
+			return FinalizeCCTx(mask, cp, mtx, mypk, txfee, EncodeTokenOpRet(tokenid, voutTokenPubkeys, std::make_pair((uint8_t)0, vopretEmpty)), NULL_pubkeys, pwallet);
 		}
 		else {
             CCerror = strprintf("no token inputs");

@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -25,6 +29,7 @@ bool FSMValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, u
 
 std::string FSMList();
 std::string FSMInfo(uint256 fsmtxid);
-std::string FSMCreate(uint64_t txfee,std::string name,std::string states);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+std::string FSMCreate(uint64_t txfee,std::string name,std::string states,CWallet *pwallet=nullptr);
 
 #endif

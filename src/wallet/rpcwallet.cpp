@@ -238,23 +238,45 @@ void EnsureWalletIsUnlockedForReporting(CWallet* pwallet)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 }
 
-void Lock2NSPV(const CPubKey &pk)
+// Replaces the old Lock2NSPV(mypk)/Unlock2NSPV(mypk) manual pair (locked
+// cs_main+pwalletMain->cs_wallet only in local, non-NSPV mode, i.e. when
+// !pk.IsValid()). That pair required every early-return path in a handler to
+// remember to call Unlock2NSPV itself before returning, and at least one
+// (gatewayswithdraw, see below) got it wrong -- calling Lock2NSPV a second
+// time on its success path instead of Unlock2NSPV, permanently leaking both
+// locks (recursive CCriticalSections, so the leak is silent) on whichever
+// RPC worker thread served that call, for the rest of the process's life.
+// A stack-scoped guard makes that whole bug class structurally impossible:
+// it always unlocks on scope exit, including on an early return or a thrown
+// JSONRPCError. Also takes the resolved wallet directly, rather than always
+// pwalletMain, so gateways/oracles/channels RPCs can run against a
+// request-selected secondary wallet.
+class CNSPVWalletLockGuard
 {
-    if (!pk.IsValid())
+public:
+    CNSPVWalletLockGuard(const CPubKey &pk, CWallet *pwalletIn) : fLocked(false), pwallet(pwalletIn)
     {
-        ENTER_CRITICAL_SECTION(cs_main);
-        ENTER_CRITICAL_SECTION(pwalletMain->cs_wallet);
+        if (!pk.IsValid() && pwallet != nullptr)
+        {
+            ENTER_CRITICAL_SECTION(cs_main);
+            ENTER_CRITICAL_SECTION(pwallet->cs_wallet);
+            fLocked = true;
+        }
     }
-}
-
-void Unlock2NSPV(const CPubKey &pk)
-{
-    if (!pk.IsValid())
+    ~CNSPVWalletLockGuard()
     {
-        LEAVE_CRITICAL_SECTION(cs_main);
-        LEAVE_CRITICAL_SECTION(pwalletMain->cs_wallet);
+        if (fLocked)
+        {
+            LEAVE_CRITICAL_SECTION(pwallet->cs_wallet);
+            LEAVE_CRITICAL_SECTION(cs_main);
+        }
     }
-}
+    CNSPVWalletLockGuard(const CNSPVWalletLockGuard&) = delete;
+    CNSPVWalletLockGuard& operator=(const CNSPVWalletLockGuard&) = delete;
+private:
+    bool fLocked;
+    CWallet *pwallet;
+};
 
 void WalletTxToJSON(const CWalletTx& wtx, UniValue& entry)
 {
@@ -9009,8 +9031,10 @@ UniValue cclib(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("no -ac_cclib= specified\n");
     if ( ensure_CCrequirements(0) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     method = (char *)params[0].get_str().c_str();
     if ( params.size() >= 2 )
     {
@@ -9032,7 +9056,7 @@ UniValue cclib(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
     cp = CCinit(&C,evalcode);
-    return(CClib(cp,method,jsonstr));
+    return(CClib(cp,method,jsonstr,pwallet));
 }
 
 UniValue payments_release(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9042,10 +9066,12 @@ UniValue payments_release(const UniValue& params, bool fHelp, const CPubKey& myp
         throw runtime_error("paymentsrelease \"[%22createtxid%22,amount,(skipminimum)]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsRelease(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsRelease(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_fund(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9055,10 +9081,12 @@ UniValue payments_fund(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("paymentsfund \"[%22createtxid%22,amount(,useopret)]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsFund(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsFund(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_merge(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9068,10 +9096,12 @@ UniValue payments_merge(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("paymentsmerge \"[%22createtxid%22]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsMerge(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsMerge(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_txidopret(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9081,10 +9111,12 @@ UniValue payments_txidopret(const UniValue& params, bool fHelp, const CPubKey& m
         throw runtime_error("paymentstxidopret \"[allocation,%22scriptPubKey%22(,%22destopret%22)]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsTxidopret(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsTxidopret(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_create(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9094,10 +9126,12 @@ UniValue payments_create(const UniValue& params, bool fHelp, const CPubKey& mypk
         throw runtime_error("paymentscreate \"[lockedblocks,minamount,%22paytxid0%22,...,%22paytxidN%22]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsCreate(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsCreate(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_airdrop(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9107,10 +9141,12 @@ UniValue payments_airdrop(const UniValue& params, bool fHelp, const CPubKey& myp
         throw runtime_error("paymentsairdrop \"[lockedblocks,minamount,mintoaddress,top,bottom,fixedFlag,%22excludeAddress%22,...,%22excludeAddressN%22]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsAirdrop(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsAirdrop(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_airdroptokens(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9120,10 +9156,12 @@ UniValue payments_airdroptokens(const UniValue& params, bool fHelp, const CPubKe
         throw runtime_error("payments_airdroptokens \"[%22tokenid%22,lockedblocks,minamount,mintoaddress,top,bottom,fixedFlag,%22excludePubKey%22,...,%22excludePubKeyN%22]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
-    return(PaymentsAirdropTokens(cp,(char *)params[0].get_str().c_str()));
+    return(PaymentsAirdropTokens(cp,(char *)params[0].get_str().c_str(),pwallet));
 }
 
 UniValue payments_info(const UniValue& params, bool fHelp, const CPubKey& mypk)
@@ -9133,8 +9171,6 @@ UniValue payments_info(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("paymentsinfo \"[%22createtxid%22]\"\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
     return(PaymentsInfo(cp,(char *)params[0].get_str().c_str()));
 }
@@ -9146,8 +9182,6 @@ UniValue payments_list(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("paymentslist\n");
     if ( ensure_CCrequirements(EVAL_PAYMENTS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     cp = CCinit(&C,EVAL_PAYMENTS);
     return(PaymentsList(cp,(char *)""));
 }
@@ -9354,7 +9388,10 @@ UniValue channelsopen(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("channelsopen destpubkey numpayments payment [tokenid]\n");
     if ( ensure_CCrequirements(EVAL_CHANNELS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     destpub = ParseHex(params[0].get_str().c_str());
     numpayments = atoi(params[1].get_str().c_str());
     payment = atol(params[2].get_str().c_str());
@@ -9362,12 +9399,11 @@ UniValue channelsopen(const UniValue& params, bool fHelp, const CPubKey& mypk)
     {
         tokenid=Parseuint256((char *)params[3].get_str().c_str());
     }
-    result = ChannelOpen(mypk,0,pubkey2pk(destpub),numpayments,payment,tokenid);
+    result = ChannelOpen(mypk,0,pubkey2pk(destpub),numpayments,payment,tokenid,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9379,19 +9415,21 @@ UniValue channelspayment(const UniValue& params, bool fHelp, const CPubKey& mypk
         throw runtime_error("channelspayment opentxid amount [secret]\n");
     if ( ensure_CCrequirements(EVAL_CHANNELS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     opentxid = Parseuint256((char *)params[0].get_str().c_str());
     amount = atoi((char *)params[1].get_str().c_str());
     if (params.size() > 2 && !params[2].isNull() && !params[2].get_str().empty())
     {
         secret = Parseuint256((char *)params[2].get_str().c_str());
     }
-    result = ChannelPayment(mypk,0,opentxid,amount,secret);
+    result = ChannelPayment(mypk,0,opentxid,amount,secret,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9403,14 +9441,16 @@ UniValue channelsclose(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("channelsclose opentxid\n");
     if ( ensure_CCrequirements(EVAL_CHANNELS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     opentxid = Parseuint256((char *)params[0].get_str().c_str());
-    result = ChannelClose(mypk,0,opentxid);
+    result = ChannelClose(mypk,0,opentxid,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9422,15 +9462,17 @@ UniValue channelsrefund(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("channelsrefund opentxid closetxid\n");
     if ( ensure_CCrequirements(EVAL_CHANNELS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     opentxid = Parseuint256((char *)params[0].get_str().c_str());
     closetxid = Parseuint256((char *)params[1].get_str().c_str());
-    result = ChannelRefund(mypk,0,opentxid,closetxid);
+    result = ChannelRefund(mypk,0,opentxid,closetxid,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9441,8 +9483,10 @@ UniValue rewardscreatefunding(const UniValue& params, bool fHelp, const CPubKey&
         throw runtime_error("rewardscreatefunding name amount APR mindays maxdays mindeposit\n");
     if ( ensure_CCrequirements(EVAL_REWARDS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
    // default to OOT params
     APR = 5 * COIN;
     minseconds = maxseconds = 60 * 3600 * 24;
@@ -9494,7 +9538,7 @@ UniValue rewardscreatefunding(const UniValue& params, bool fHelp, const CPubKey&
             }
         }
     }
-    hex = RewardsCreateFunding(0,name,funds,APR,minseconds,maxseconds,mindeposit);
+    hex = RewardsCreateFunding(0,name,funds,APR,minseconds,maxseconds,mindeposit,pwallet);
     if ( hex.size() > 0 )
     {
         result.push_back(Pair("result", "success"));
@@ -9510,12 +9554,14 @@ UniValue rewardslock(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("rewardslock name fundingtxid amount\n");
     if ( ensure_CCrequirements(EVAL_REWARDS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     fundingtxid = Parseuint256((char *)params[1].get_str().c_str());
     amount = atof(params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    hex = RewardsLock(0,name,fundingtxid,amount);
+    hex = RewardsLock(0,name,fundingtxid,amount,pwallet);
 
     if (!VALID_PLAN_NAME(name)) {
             ERR_RESULT(strprintf("Plan name can be at most %d ASCII characters",PLAN_NAME_MAX));
@@ -9540,12 +9586,14 @@ UniValue rewardsaddfunding(const UniValue& params, bool fHelp, const CPubKey& my
         throw runtime_error("rewardsaddfunding name fundingtxid amount\n");
     if ( ensure_CCrequirements(EVAL_REWARDS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     fundingtxid = Parseuint256((char *)params[1].get_str().c_str());
     amount = atof(params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    hex = RewardsAddfunding(0,name,fundingtxid,amount);
+    hex = RewardsAddfunding(0,name,fundingtxid,amount,pwallet);
 
     if (!VALID_PLAN_NAME(name)) {
             ERR_RESULT(strprintf("Plan name can be at most %d ASCII characters",PLAN_NAME_MAX));
@@ -9575,8 +9623,10 @@ UniValue rewardsunlock(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("rewardsunlock name fundingtxid [txid]\n");
     if ( ensure_CCrequirements(EVAL_REWARDS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     fundingtxid = Parseuint256((char *)params[1].get_str().c_str());
 
@@ -9587,7 +9637,7 @@ UniValue rewardsunlock(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( params.size() > 2 )
         txid = Parseuint256((char *)params[2].get_str().c_str());
     else memset(&txid,0,sizeof(txid));
-    hex = RewardsUnlock(0,name,fundingtxid,txid);
+    hex = RewardsUnlock(0,name,fundingtxid,txid,pwallet);
     if (CCerror != "") {
         ERR_RESULT(CCerror);
     } else if ( hex.size() > 0 ) {
@@ -9603,8 +9653,6 @@ UniValue rewardslist(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("rewardslist\n");
     if ( ensure_CCrequirements(EVAL_REWARDS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     return(RewardsList());
 }
 
@@ -9615,8 +9663,6 @@ UniValue rewardsinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("rewardsinfo fundingtxid\n");
     if ( ensure_CCrequirements(EVAL_REWARDS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     fundingtxid = Parseuint256((char *)params[0].get_str().c_str());
     return(RewardsInfo(fundingtxid));
 }
@@ -9627,7 +9673,6 @@ UniValue gatewayslist(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("gatewayslist\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
     return(GatewaysList());
 }
 
@@ -9662,8 +9707,11 @@ UniValue gatewaysdumpprivkey(const UniValue& params, bool fHelp, const CPubKey& 
     if (!keyID) {
         throw JSONRPCError(RPC_TYPE_ERROR, "Address does not refer to a key");
     }
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     CKey vchSecret;
-    if (!pwalletMain->GetKey(*keyID, vchSecret)) {
+    if (!pwallet->GetKey(*keyID, vchSecret)) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Private key for address " + strAddress + " is not known");
     }
     return(GatewaysDumpPrivKey(bindtxid,vchSecret));
@@ -9689,7 +9737,10 @@ UniValue gatewaysbind(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("gatewaysbind tokenid oracletxid coin tokensupply M N pubkey(s) pubtype p2shtype wiftype [taddr]\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     tokenid = Parseuint256((char *)params[0].get_str().c_str());
     oracletxid = Parseuint256((char *)params[1].get_str().c_str());
     coin = params[2].get_str();
@@ -9698,12 +9749,10 @@ UniValue gatewaysbind(const UniValue& params, bool fHelp, const CPubKey& mypk)
     N = atoi((char *)params[5].get_str().c_str());
     if ( M > N || N == 0 || N > 15 || totalsupply < COIN/100 || tokenid == zeroid )
     {
-        Unlock2NSPV(mypk);
         throw runtime_error("illegal M or N > 15 or tokensupply or invalid tokenid\n");
     }
     if ( params.size() < 6+N+3 )
     {
-        Unlock2NSPV(mypk);
         throw runtime_error("not enough parameters for N pubkeys\n");
     }
     for (i=0; i<N; i++)
@@ -9711,7 +9760,6 @@ UniValue gatewaysbind(const UniValue& params, bool fHelp, const CPubKey& mypk)
         pubkey = ParseHex(params[6+i].get_str().c_str());
         if (pubkey.size()!= 33)
         {
-            Unlock2NSPV(mypk);
             throw runtime_error("invalid destination pubkey");
         }
         pubkeys.push_back(pubkey2pk(pubkey));
@@ -9720,12 +9768,11 @@ UniValue gatewaysbind(const UniValue& params, bool fHelp, const CPubKey& mypk)
     p2 = atoi((char *)params[6+N+1].get_str().c_str());
     p3 = atoi((char *)params[6+N+2].get_str().c_str());
     if (params.size() == 9+N+1) p4 = atoi((char *)params[9+N].get_str().c_str());
-    result = GatewaysBind(mypk,0,coin,tokenid,totalsupply,oracletxid,M,N,pubkeys,p1,p2,p3,p4);
+    result = GatewaysBind(mypk,0,coin,tokenid,totalsupply,oracletxid,M,N,pubkeys,p1,p2,p3,p4,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9736,7 +9783,10 @@ UniValue gatewaysdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk
         throw runtime_error("gatewaysdeposit bindtxid height coin cointxid claimvout deposithex proof destpub amount\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     bindtxid = Parseuint256((char *)params[0].get_str().c_str());
     height = atoi((char *)params[1].get_str().c_str());
     coin = params[2].get_str();
@@ -9748,20 +9798,17 @@ UniValue gatewaysdeposit(const UniValue& params, bool fHelp, const CPubKey& mypk
     amount = atof((char *)params[8].get_str().c_str()) * COIN + 0.00000000499999;
     if ( amount <= 0 || claimvout < 0 )
     {
-        Unlock2NSPV(mypk);
         throw runtime_error("invalid param: amount, numpks or claimvout\n");
     }
     if (destpub.size()!= 33)
     {
-        Unlock2NSPV(mypk);
         throw runtime_error("invalid destination pubkey");
     }
-    result = GatewaysDeposit(mypk,0,bindtxid,height,coin,cointxid,claimvout,deposithex,proof,pubkey2pk(destpub),amount);
+    result = GatewaysDeposit(mypk,0,bindtxid,height,coin,cointxid,claimvout,deposithex,proof,pubkey2pk(destpub),amount,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9772,7 +9819,10 @@ UniValue gatewaysclaim(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("gatewaysclaim bindtxid coin deposittxid destpub amount\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     bindtxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     deposittxid = Parseuint256((char *)params[2].get_str().c_str());
@@ -9780,15 +9830,13 @@ UniValue gatewaysclaim(const UniValue& params, bool fHelp, const CPubKey& mypk)
     amount = atof((char *)params[4].get_str().c_str()) * COIN + 0.00000000499999;
     if (destpub.size()!= 33)
     {
-        Unlock2NSPV(mypk);
         throw runtime_error("invalid destination pubkey");
     }
-    result = GatewaysClaim(mypk,0,bindtxid,coin,deposittxid,pubkey2pk(destpub),amount);
+    result = GatewaysClaim(mypk,0,bindtxid,coin,deposittxid,pubkey2pk(destpub),amount,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9799,22 +9847,29 @@ UniValue gatewayswithdraw(const UniValue& params, bool fHelp, const CPubKey& myp
         throw runtime_error("gatewayswithdraw bindtxid coin withdrawpub amount\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     bindtxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     withdrawpub = ParseHex(params[2].get_str());
     amount = atof((char *)params[3].get_str().c_str()) * COIN + 0.00000000499999;
     if (withdrawpub.size()!= 33)
     {
-        Unlock2NSPV(mypk);
         throw runtime_error("invalid destination pubkey");
     }
-    result = GatewaysWithdraw(mypk,0,bindtxid,coin,pubkey2pk(withdrawpub),amount);
+    // Was previously "Lock2NSPV(mypk);" here on the success path -- should
+    // have been Unlock2NSPV, permanently leaking cs_main+cs_wallet on this
+    // RPC worker thread every time this call succeeded (found during Phase 9
+    // of the multiwallet effort). The RAII guard above makes this whole bug
+    // class impossible: it always unlocks on scope exit, so nothing at all
+    // is needed here now.
+    result = GatewaysWithdraw(mypk,0,bindtxid,coin,pubkey2pk(withdrawpub),amount,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Lock2NSPV(mypk);
     return(result);
 }
 
@@ -9825,16 +9880,18 @@ UniValue gatewayspartialsign(const UniValue& params, bool fHelp, const CPubKey& 
         throw runtime_error("gatewayspartialsign txidaddr refcoin hex\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     txid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     parthex = params[2].get_str();
-    result = GatewaysPartialSign(mypk,0,txid,coin,parthex);
+    result = GatewaysPartialSign(mypk,0,txid,coin,parthex,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9845,16 +9902,18 @@ UniValue gatewayscompletesigning(const UniValue& params, bool fHelp, const CPubK
         throw runtime_error("gatewayscompletesigning withdrawtxid coin hex\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     withdrawtxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
     txhex = params[2].get_str();
-    result = GatewaysCompleteSigning(mypk,0,withdrawtxid,coin,txhex);
+    result = GatewaysCompleteSigning(mypk,0,withdrawtxid,coin,txhex,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9865,15 +9924,17 @@ UniValue gatewaysmarkdone(const UniValue& params, bool fHelp, const CPubKey& myp
         throw runtime_error("gatewaysmarkdone completesigningtx coin\n");
     if ( ensure_CCrequirements(EVAL_GATEWAYS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     completetxid = Parseuint256((char *)params[0].get_str().c_str());
     coin = params[1].get_str();
-    result = GatewaysMarkDone(mypk,0,completetxid,coin);
+    result = GatewaysMarkDone(mypk,0,completetxid,coin,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9940,14 +10001,16 @@ UniValue oraclesfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("oraclesfund oracletxid\n");
     if ( ensure_CCrequirements(EVAL_ORACLES) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     txid = Parseuint256((char *)params[0].get_str().c_str());
-    result = OracleFund(mypk,0,txid);
+    result = OracleFund(mypk,0,txid,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9958,16 +10021,18 @@ UniValue oraclesregister(const UniValue& params, bool fHelp, const CPubKey& mypk
         throw runtime_error("oraclesregister oracletxid datafee\n");
     if ( ensure_CCrequirements(EVAL_ORACLES) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     txid = Parseuint256((char *)params[0].get_str().c_str());
     if ( (datafee= atol((char *)params[1].get_str().c_str())) == 0 )
         datafee = atof((char *)params[1].get_str().c_str()) * COIN + 0.00000000499999;
-    result = OracleRegister(mypk,0,txid,datafee);
+    result = OracleRegister(mypk,0,txid,datafee,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -9978,16 +10043,18 @@ UniValue oraclessubscribe(const UniValue& params, bool fHelp, const CPubKey& myp
         throw runtime_error("oraclessubscribe oracletxid publisher amount\n");
     if ( ensure_CCrequirements(EVAL_ORACLES) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     txid = Parseuint256((char *)params[0].get_str().c_str());
     pubkey = ParseHex(params[1].get_str().c_str());
     amount = atof((char *)params[2].get_str().c_str()) * COIN + 0.00000000499999;
-    result = OracleSubscribe(mypk,0,txid,pubkey2pk(pubkey),amount);
+    result = OracleSubscribe(mypk,0,txid,pubkey2pk(pubkey),amount,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -10023,15 +10090,17 @@ UniValue oraclesdata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("oraclesdata oracletxid hexstr\n");
     if ( ensure_CCrequirements(EVAL_ORACLES) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     txid = Parseuint256((char *)params[0].get_str().c_str());
     data = ParseHex(params[1].get_str().c_str());
-    result = OracleData(mypk,0,txid,data);
+    result = OracleData(mypk,0,txid,data,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -10042,16 +10111,18 @@ UniValue oraclescreate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("oraclescreate name description format\n");
     if ( ensure_CCrequirements(EVAL_ORACLES) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    Lock2NSPV(mypk);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
     name = params[0].get_str();
     description = params[1].get_str();
     format = params[2].get_str();
-    result = OracleCreate(mypk,0,name,description,format);
+    result = OracleCreate(mypk,0,name,description,format,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
         result.push_back(Pair("result", "success"));
     }
-    Unlock2NSPV(mypk);
     return(result);
 }
 
@@ -10062,11 +10133,13 @@ UniValue FSMcreate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("FSMcreate name states\n");
     if ( ensure_CCrequirements(EVAL_FSM) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = params[0].get_str();
     states = params[1].get_str();
-    hex = FSMCreate(0,name,states);
+    hex = FSMCreate(0,name,states,pwallet);
     if ( hex.size() > 0 )
     {
         result.push_back(Pair("result", "success"));
@@ -10123,25 +10196,15 @@ UniValue faucetfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( ensure_CCrequirements(EVAL_FAUCET) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
 
-    //const CKeyStore& keystore = *pwalletMain;
-    //LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    bool lockWallet = false;
-    if (!mypk.IsValid())   // if mypk is not set then it is a local call, use local wallet in AddNormalInputs
-        lockWallet = true;
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
 
     if (funds > 0)
     {
-        if (lockWallet)
         {
-            ENTER_CRITICAL_SECTION(cs_main);
-            ENTER_CRITICAL_SECTION(pwalletMain->cs_wallet);
-        }
-        result = FaucetFund(mypk, 0,(uint64_t) funds);
-        if (lockWallet)
-        {
-            LEAVE_CRITICAL_SECTION(pwalletMain->cs_wallet);
-            LEAVE_CRITICAL_SECTION(cs_main);
+            CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
+            result = FaucetFund(mypk, 0,(uint64_t) funds, pwallet);
         }
 
         if ( result[JSON_HEXTX].getValStr().size() > 0 )
@@ -10161,24 +10224,12 @@ UniValue faucetget(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( ensure_CCrequirements(EVAL_FAUCET) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
 
-    bool lockWallet = false;
-    if (!mypk.IsValid())   // if mypk is not set then it is a local call, use wallet in AddNormalInputs (see check for this there)
-        lockWallet = true;
-
-    //const CKeyStore& keystore = *pwalletMain;
-    //LOCK2(cs_main, pwalletMain->cs_wallet);
-
-    if (lockWallet)
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
     {
-        // use this instead LOCK2 because we need conditional wallet lock
-        ENTER_CRITICAL_SECTION(cs_main);
-        ENTER_CRITICAL_SECTION(pwalletMain->cs_wallet);
-    }
-    result = FaucetGet(mypk, 0);
-    if (lockWallet)
-    {
-        LEAVE_CRITICAL_SECTION(pwalletMain->cs_wallet);
-        LEAVE_CRITICAL_SECTION(cs_main);
+        CNSPVWalletLockGuard nspvLockGuard(mypk, pwallet);
+        result = FaucetGet(mypk, 0, pwallet);
     }
 
     if (result[JSON_HEXTX].getValStr().size() > 0 ) {
@@ -10195,8 +10246,10 @@ UniValue dicefund(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("dicefund name funds minbet maxbet maxodds timeoutblocks\n");
     if ( ensure_CCrequirements(EVAL_DICE) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     funds = atof(params[1].get_str().c_str()) * COIN + 0.00000000499999;
     minbet = atof(params[2].get_str().c_str()) * COIN + 0.00000000499999;
@@ -10209,7 +10262,7 @@ UniValue dicefund(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return(result);
     }
 
-    hex = DiceCreateFunding(0,name,funds,minbet,maxbet,maxodds,timeoutblocks);
+    hex = DiceCreateFunding(0,name,funds,minbet,maxbet,maxodds,timeoutblocks,pwallet);
     if (CCerror != "") {
         ERR_RESULT(CCerror);
     } else if ( hex.size() > 0 ) {
@@ -10228,8 +10281,10 @@ UniValue diceaddfunds(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("diceaddfunds name fundingtxid amount\n");
     if ( ensure_CCrequirements(EVAL_DICE) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     fundingtxid = Parseuint256((char *)params[1].get_str().c_str());
     amount = atof(params[2].get_str().c_str()) * COIN + 0.00000000499999;
@@ -10238,7 +10293,7 @@ UniValue diceaddfunds(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return(result);
     }
     if ( amount > 0 ) {
-        hex = DiceAddfunding(0,name,fundingtxid,amount);
+        hex = DiceAddfunding(0,name,fundingtxid,amount,pwallet);
         if (CCerror != "") {
             ERR_RESULT(CCerror);
         } else if ( hex.size() > 0 ) {
@@ -10256,8 +10311,10 @@ UniValue dicebet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("dicebet name fundingtxid amount odds\n");
     if ( ensure_CCrequirements(EVAL_DICE) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     fundingtxid = Parseuint256((char *)params[1].get_str().c_str());
     amount = atof(params[2].get_str().c_str()) * COIN + 0.00000000499999;
@@ -10268,7 +10325,7 @@ UniValue dicebet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return(result);
     }
     if (amount > 0 && odds > 0) {
-        hex = DiceBet(0,name,fundingtxid,amount,odds);
+        hex = DiceBet(0,name,fundingtxid,amount,odds,pwallet);
         RETURN_IF_ERROR(CCerror);
         if ( hex.size() > 0 )
         {
@@ -10288,8 +10345,10 @@ UniValue dicefinish(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("dicefinish name fundingtxid bettxid\n");
     if ( ensure_CCrequirements(EVAL_DICE) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     if (!VALID_PLAN_NAME(name)) {
         ERR_RESULT(strprintf("Plan name can be at most %d ASCII characters",PLAN_NAME_MAX));
@@ -10297,7 +10356,7 @@ UniValue dicefinish(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
     fundingtxid = Parseuint256((char *)params[1].get_str().c_str());
     bettxid = Parseuint256((char *)params[2].get_str().c_str());
-    hex = DiceBetFinish(funcid,entropyused,entropyvout,&r,0,name,fundingtxid,bettxid,1,zeroid,-1);
+    hex = DiceBetFinish(funcid,entropyused,entropyvout,&r,0,name,fundingtxid,bettxid,1,zeroid,-1,pwallet);
     if ( CCerror != "" )
     {
         ERR_RESULT(CCerror);
@@ -10323,8 +10382,6 @@ UniValue dicestatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("dicestatus name fundingtxid bettxid\n");
     if ( ensure_CCrequirements(EVAL_DICE) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     name = (char *)params[0].get_str().c_str();
     if (!VALID_PLAN_NAME(name)) {
         ERR_RESULT(strprintf("Plan name can be at most %d ASCII characters",PLAN_NAME_MAX));
@@ -10496,8 +10553,10 @@ UniValue tokencreate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( ensure_CCrequirements(EVAL_TOKENS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
 
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     name = params[0].get_str();
     if (name.size() == 0 || name.size() > 32)   {
@@ -10532,7 +10591,7 @@ UniValue tokencreate(const UniValue& params, bool fHelp, const CPubKey& mypk)
         }
     }
 
-    hextx = CreateToken(0, supply, name, description, nonfungibleData);
+    hextx = CreateToken(0, supply, name, description, nonfungibleData, pwallet);
     if( hextx.size() > 0 )     {
         result.push_back(Pair("result", "success"));
         result.push_back(Pair("hex", hextx));
@@ -10556,8 +10615,10 @@ UniValue tokentransfer(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if ( ensure_CCrequirements(EVAL_TOKENS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
 
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     tokenid = Parseuint256((char *)params[0].get_str().c_str());
     std::vector<unsigned char> pubkey(ParseHex(params[1].get_str().c_str()));
@@ -10572,7 +10633,7 @@ UniValue tokentransfer(const UniValue& params, bool fHelp, const CPubKey& mypk)
         return(result);
     }
 
-    hex = TokenTransfer(0, tokenid, pubkey, amount);
+    hex = TokenTransfer(0, tokenid, pubkey, amount, pwallet);
 
     if( !CCerror.empty() )   {
         ERR_RESULT(CCerror);
@@ -10591,8 +10652,6 @@ UniValue tokenconvert(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokenconvert evalcode tokenid pubkey amount\n");
     if ( ensure_CCrequirements(EVAL_ASSETS) < 0 )
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
     evalcode = atoi(params[0].get_str().c_str());
     tokenid = Parseuint256((char *)params[1].get_str().c_str());
     std::vector<unsigned char> pubkey(ParseHex(params[2].get_str().c_str()));
@@ -10632,8 +10691,10 @@ UniValue tokenbid(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokenbid numtokens tokenid price\n");
     if (ensure_CCrequirements(EVAL_ASSETS) < 0 || ensure_CCrequirements(EVAL_TOKENS) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     //numtokens = atoi(params[0].get_str().c_str());
 	numtokens = atoll(params[0].get_str().c_str());  // dimxy changed to prevent loss of significance
     tokenid = Parseuint256((char *)params[1].get_str().c_str());
@@ -10654,7 +10715,7 @@ UniValue tokenbid(const UniValue& params, bool fHelp, const CPubKey& mypk)
         ERR_RESULT("bid amount must be positive");
         return(result);
     }
-    hex = CreateBuyOffer(0,bidamount,tokenid,numtokens);
+    hex = CreateBuyOffer(0,bidamount,tokenid,numtokens,pwallet);
     if (price > 0 && numtokens > 0) {
         if ( hex.size() > 0 )
         {
@@ -10674,8 +10735,10 @@ UniValue tokencancelbid(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokencancelbid tokenid bidtxid\n");
     if (ensure_CCrequirements(EVAL_ASSETS) < 0 || ensure_CCrequirements(EVAL_TOKENS) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     tokenid = Parseuint256((char *)params[0].get_str().c_str());
     bidtxid = Parseuint256((char *)params[1].get_str().c_str());
     if ( tokenid == zeroid || bidtxid == zeroid )
@@ -10683,7 +10746,7 @@ UniValue tokencancelbid(const UniValue& params, bool fHelp, const CPubKey& mypk)
         result.push_back(Pair("error", "invalid parameter"));
         return(result);
     }
-    hex = CancelBuyOffer(0,tokenid,bidtxid);
+    hex = CancelBuyOffer(0,tokenid,bidtxid,pwallet);
     if ( hex.size() > 0 )
     {
         result.push_back(Pair("result", "success"));
@@ -10699,8 +10762,10 @@ UniValue tokenfillbid(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokenfillbid tokenid bidtxid fillamount\n");
     if (ensure_CCrequirements(EVAL_ASSETS) < 0 || ensure_CCrequirements(EVAL_TOKENS) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     tokenid = Parseuint256((char *)params[0].get_str().c_str());
     bidtxid = Parseuint256((char *)params[1].get_str().c_str());
     // fillamount = atol(params[2].get_str().c_str());
@@ -10715,7 +10780,7 @@ UniValue tokenfillbid(const UniValue& params, bool fHelp, const CPubKey& mypk)
         ERR_RESULT("must provide tokenid and bidtxid");
         return(result);
     }
-    hex = FillBuyOffer(0,tokenid,bidtxid,fillamount);
+    hex = FillBuyOffer(0,tokenid,bidtxid,fillamount,pwallet);
     if ( hex.size() > 0 )
     {
         result.push_back(Pair("result", "success"));
@@ -10731,8 +10796,10 @@ UniValue tokenask(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokenask numtokens tokenid price\n");
     if (ensure_CCrequirements(EVAL_ASSETS) < 0 || ensure_CCrequirements(EVAL_TOKENS) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     //numtokens = atoi(params[0].get_str().c_str());
 	numtokens = atoll(params[0].get_str().c_str());			// dimxy changed to prevent loss of significance
     tokenid = Parseuint256((char *)params[1].get_str().c_str());
@@ -10744,7 +10811,7 @@ UniValue tokenask(const UniValue& params, bool fHelp, const CPubKey& mypk)
         ERR_RESULT("invalid parameter");
         return(result);
     }
-    hex = CreateSell(0,numtokens,tokenid,askamount);
+    hex = CreateSell(0,numtokens,tokenid,askamount,pwallet);
     if (price > 0 && numtokens > 0) {
         if ( hex.size() > 0 )
         {
@@ -10793,8 +10860,10 @@ UniValue tokencancelask(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokencancelask tokenid asktxid\n");
     if (ensure_CCrequirements(EVAL_ASSETS) < 0 || ensure_CCrequirements(EVAL_TOKENS) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     tokenid = Parseuint256((char *)params[0].get_str().c_str());
     asktxid = Parseuint256((char *)params[1].get_str().c_str());
     if ( tokenid == zeroid || asktxid == zeroid )
@@ -10802,7 +10871,7 @@ UniValue tokencancelask(const UniValue& params, bool fHelp, const CPubKey& mypk)
         result.push_back(Pair("error", "invalid parameter"));
         return(result);
     }
-    hex = CancelSell(0,tokenid,asktxid);
+    hex = CancelSell(0,tokenid,asktxid,pwallet);
     if ( hex.size() > 0 )
     {
         result.push_back(Pair("result", "success"));
@@ -10818,8 +10887,10 @@ UniValue tokenfillask(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error("tokenfillask tokenid asktxid fillunits\n");
     if (ensure_CCrequirements(EVAL_ASSETS) < 0 || ensure_CCrequirements(EVAL_TOKENS) < 0)
         throw runtime_error(CC_REQUIREMENTS_MSG);
-    const CKeyStore& keystore = *pwalletMain;
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+    LOCK2(cs_main, pwallet->cs_wallet);
     tokenid = Parseuint256((char *)params[0].get_str().c_str());
     asktxid = Parseuint256((char *)params[1].get_str().c_str());
     //fillunits = atol(params[2].get_str().c_str());
@@ -10834,7 +10905,7 @@ UniValue tokenfillask(const UniValue& params, bool fHelp, const CPubKey& mypk)
         result.push_back(Pair("error", "invalid parameter"));
         return(result);
     }
-    hex = FillSell(0,tokenid,zeroid,asktxid,fillunits);
+    hex = FillSell(0,tokenid,zeroid,asktxid,fillunits,pwallet);
     if (fillunits > 0) {
         if (CCerror != "") {
             ERR_RESULT(CCerror);
@@ -10931,7 +11002,8 @@ UniValue heirfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
 	std::vector<unsigned char> pubkey;
 	std::string name, memo;
 
-	if (!EnsureWalletIsAvailable(fHelp))
+	CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+	if (!EnsureWalletIsAvailable(pwallet, fHelp))
 	    return NullUniValue;
 
 	if (fHelp || params.size() != 5 && params.size() != 6)
@@ -10939,8 +11011,7 @@ UniValue heirfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
 	if (ensure_CCrequirements(EVAL_HEIR) < 0)
 		throw runtime_error(CC_REQUIREMENTS_MSG);
 
-	const CKeyStore& keystore = *pwalletMain;
-	LOCK2(cs_main, pwalletMain->cs_wallet);
+	LOCK2(cs_main, pwallet->cs_wallet);
 
 	if (params.size() == 6)	// tokens in satoshis:
 		amount = atoll(params[0].get_str().c_str());
@@ -10983,9 +11054,9 @@ UniValue heirfund(const UniValue& params, bool fHelp, const CPubKey& mypk)
 	}
 
 	if( tokenid == zeroid )
-		result = HeirFundCoinCaller(0, amount, name, pubkey2pk(pubkey), inactivitytime, memo);
+		result = HeirFundCoinCaller(0, amount, name, pubkey2pk(pubkey), inactivitytime, memo, pwallet);
 	else
-		result = HeirFundTokenCaller(0, amount, name, pubkey2pk(pubkey), inactivitytime, memo, tokenid);
+		result = HeirFundTokenCaller(0, amount, name, pubkey2pk(pubkey), inactivitytime, memo, tokenid, pwallet);
 
 	return result;
 }
@@ -11000,7 +11071,8 @@ UniValue heiradd(const UniValue& params, bool fHelp, const CPubKey& mypk)
 	std::vector<unsigned char> pubkey;
 	std::string name;
 
-	if (!EnsureWalletIsAvailable(fHelp))
+	CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+	if (!EnsureWalletIsAvailable(pwallet, fHelp))
 	    return NullUniValue;
 
 	if (fHelp || params.size() != 2)
@@ -11008,13 +11080,12 @@ UniValue heiradd(const UniValue& params, bool fHelp, const CPubKey& mypk)
 	if (ensure_CCrequirements(EVAL_HEIR) < 0)
 		throw runtime_error(CC_REQUIREMENTS_MSG);
 
-	const CKeyStore& keystore = *pwalletMain;
-	LOCK2(cs_main, pwalletMain->cs_wallet);
+	LOCK2(cs_main, pwallet->cs_wallet);
 
 	std::string strAmount = params[0].get_str();
 	fundingtxid = Parseuint256((char*)params[1].get_str().c_str());
 
-	result = HeirAddCaller(fundingtxid, 0, strAmount);
+	result = HeirAddCaller(fundingtxid, 0, strAmount, pwallet);
 	return result;
 }
 
@@ -11022,19 +11093,19 @@ UniValue heirclaim(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
 	UniValue result; uint256 fundingtxid;
 
-	if (!EnsureWalletIsAvailable(fHelp))
+	CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+	if (!EnsureWalletIsAvailable(pwallet, fHelp))
 	    return NullUniValue;
 	if (fHelp || params.size() != 2)
 		throw runtime_error("heirclaim funds fundingtxid\n");
 	if (ensure_CCrequirements(EVAL_HEIR) < 0)
 		throw runtime_error(CC_REQUIREMENTS_MSG);
 
-	const CKeyStore& keystore = *pwalletMain;
-	LOCK2(cs_main, pwalletMain->cs_wallet);
+	LOCK2(cs_main, pwallet->cs_wallet);
 
     	std::string strAmount = params[0].get_str();
 	fundingtxid = Parseuint256((char*)params[1].get_str().c_str());
-	result = HeirClaimCaller(fundingtxid, 0, strAmount);
+	result = HeirClaimCaller(fundingtxid, 0, strAmount, pwallet);
 	return result;
 }
 

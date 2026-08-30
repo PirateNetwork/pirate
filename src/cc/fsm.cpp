@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -156,7 +160,7 @@ std::string FSMList()
     return("");
 }
 
-std::string FSMCreate(uint64_t txfee,std::string name,std::string states)
+std::string FSMCreate(uint64_t txfee,std::string name,std::string states,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,fsmpk; CScript opret; int64_t inputs,CCchange=0,nValue=COIN; struct CCcontract_info *cp,C;
@@ -172,7 +176,7 @@ std::string FSMCreate(uint64_t txfee,std::string name,std::string states)
         if ( CCchange != 0 )
             mtx.vout.push_back(MakeCC1vout(EVAL_FSM,CCchange,fsmpk));
         mtx.vout.push_back(CTxOut(nValue,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
-        return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,opret));
+        return(FinalizeCCTx(-1LL,cp,mtx,mypk,txfee,opret,NULL_pubkeys,pwallet));
     } else fprintf(stderr,"cant find fsm inputs\n");
     return("");
 }

@@ -1,3 +1,7 @@
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -468,7 +472,7 @@ bool ImportGatewayValidate(struct CCcontract_info *cp,Eval *eval,const CTransact
 
 // helper functions for rpc calls in rpcwallet.cpp
 
-std::string ImportGatewayBind(uint64_t txfee,std::string coin,uint256 oracletxid,uint8_t M,uint8_t N,std::vector<CPubKey> pubkeys,uint8_t p1,uint8_t p2,uint8_t p3,uint8_t p4)
+std::string ImportGatewayBind(uint64_t txfee,std::string coin,uint256 oracletxid,uint8_t M,uint8_t N,std::vector<CPubKey> pubkeys,uint8_t p1,uint8_t p2,uint8_t p3,uint8_t p4,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction oracletx; uint8_t taddr,prefix,prefix2,wiftype; CPubKey mypk,importgatewaypk; CScript opret; uint256 hashBlock;
@@ -549,10 +553,10 @@ std::string ImportGatewayBind(uint64_t txfee,std::string coin,uint256 oracletxid
         LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);
         return("");
     }
-    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,2) > 0 )
+    if ( AddNormalinputs(mtx,mypk,txfee+CC_MARKER_VALUE,2,false,pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(cp->evalcode,CC_MARKER_VALUE,importgatewaypk));
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayBindOpRet('B',coin,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype)));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayBindOpRet('B',coin,oracletxid,M,N,pubkeys,taddr,prefix,prefix2,wiftype),NULL_pubkeys,pwallet));
     }
     CCerror = strprintf("cant find enough inputs");
     LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);
@@ -637,7 +641,7 @@ std::string ImportGatewayDeposit(uint64_t txfee,uint256 bindtxid,int32_t height,
     return  HexStr(E_MARSHAL(ss << MakeImportCoinTransaction(txProof, burntx, vouts)));
 }
 
-std::string ImportGatewayWithdraw(uint64_t txfee,uint256 bindtxid,std::string refcoin,CPubKey withdrawpub,int64_t amount)
+std::string ImportGatewayWithdraw(uint64_t txfee,uint256 bindtxid,std::string refcoin,CPubKey withdrawpub,int64_t amount,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CTransaction tx; CPubKey mypk,importgatewaypk,signerpk; uint256 txid,hashBlock,oracletxid,tmptokenid,tmpbindtxid,withdrawtxid; int32_t vout,numvouts;
@@ -704,18 +708,18 @@ std::string ImportGatewayWithdraw(uint64_t txfee,uint256 bindtxid,std::string re
             }
         }
     }
-    if( AddNormalinputs(mtx, mypk, txfee+CC_MARKER_VALUE+amount, 64) > 0 )
+    if( AddNormalinputs(mtx, mypk, txfee+CC_MARKER_VALUE+amount, 64, false, pwallet) > 0 )
     {
         mtx.vout.push_back(MakeCC1vout(EVAL_IMPORTGATEWAY,CC_MARKER_VALUE,importgatewaypk));
         mtx.vout.push_back(MakeCC1vout(EVAL_IMPORTGATEWAY,amount,CCtxidaddr(str,bindtxid)));                   
-        return(FinalizeCCTx(0, cp, mtx, mypk, txfee,EncodeImportGatewayWithdrawOpRet('W',bindtxid,refcoin,withdrawpub,amount)));
+        return(FinalizeCCTx(0, cp, mtx, mypk, txfee,EncodeImportGatewayWithdrawOpRet('W',bindtxid,refcoin,withdrawpub,amount),NULL_pubkeys,pwallet));
     }
     CCerror = strprintf("cant find enough normal inputs");
     LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);
     return("");
 }
 
-std::string ImportGatewayPartialSign(uint64_t txfee,uint256 lasttxid,std::string refcoin, std::string hex)
+std::string ImportGatewayPartialSign(uint64_t txfee,uint256 lasttxid,std::string refcoin, std::string hex,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,withdrawpub,signerpk,importgatewaypk; struct CCcontract_info *cp,C; CTransaction tx,tmptx;
@@ -817,18 +821,18 @@ std::string ImportGatewayPartialSign(uint64_t txfee,uint256 lasttxid,std::string
             return("");
         }
     }
-    if (AddNormalinputs(mtx,mypk,txfee,3)!=0)
+    if (AddNormalinputs(mtx,mypk,txfee,3,false,pwallet)!=0)
     {
         mtx.vin.push_back(CTxIn(tx.GetHash(),0,CScript()));
-        mtx.vout.push_back(MakeCC1vout(EVAL_IMPORTGATEWAY,CC_MARKER_VALUE,importgatewaypk));       
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayPartialOpRet('P',withdrawtxid,refcoin,K+1,mypk,hex)));
+        mtx.vout.push_back(MakeCC1vout(EVAL_IMPORTGATEWAY,CC_MARKER_VALUE,importgatewaypk));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayPartialOpRet('P',withdrawtxid,refcoin,K+1,mypk,hex),NULL_pubkeys,pwallet));
     }
     CCerror = strprintf("error adding funds for partialsign");    
     LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);
     return("");
 }
 
-std::string ImportGatewayCompleteSigning(uint64_t txfee,uint256 lasttxid,std::string refcoin,std::string hex)
+std::string ImportGatewayCompleteSigning(uint64_t txfee,uint256 lasttxid,std::string refcoin,std::string hex,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk,importgatewaypk,signerpk,withdrawpub; struct CCcontract_info *cp,C; char funcid,str[65],burnaddr[64]; int64_t amount;
@@ -934,18 +938,18 @@ std::string ImportGatewayCompleteSigning(uint64_t txfee,uint256 lasttxid,std::st
             return("");
         }
     }
-    if (AddNormalinputs(mtx,mypk,txfee,3)!=0) 
+    if (AddNormalinputs(mtx,mypk,txfee,3,false,pwallet)!=0)
     {
         mtx.vin.push_back(CTxIn(lasttxid,0,CScript()));
-        mtx.vout.push_back(MakeCC1vout(EVAL_IMPORTGATEWAY,CC_MARKER_VALUE,importgatewaypk));       
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayCompleteSigningOpRet('S',withdrawtxid,refcoin,K+1,hex)));
+        mtx.vout.push_back(MakeCC1vout(EVAL_IMPORTGATEWAY,CC_MARKER_VALUE,importgatewaypk));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayCompleteSigningOpRet('S',withdrawtxid,refcoin,K+1,hex),NULL_pubkeys,pwallet));
     }
     CCerror = strprintf("error adding funds for completesigning");
     LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);
     return("");
 }
 
-std::string ImportGatewayMarkDone(uint64_t txfee,uint256 completetxid,std::string refcoin)
+std::string ImportGatewayMarkDone(uint64_t txfee,uint256 completetxid,std::string refcoin,CWallet *pwallet)
 {
     CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), komodo_nextheight());
     CPubKey mypk; struct CCcontract_info *cp,C; char str[65],burnaddr[64]; CTransaction tx; int32_t numvouts;
@@ -1005,11 +1009,11 @@ std::string ImportGatewayMarkDone(uint64_t txfee,uint256 completetxid,std::strin
         LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);
         return("");
     }
-    if (AddNormalinputs(mtx,mypk,txfee,3)!=0) 
+    if (AddNormalinputs(mtx,mypk,txfee,3,false,pwallet)!=0)
     {
         mtx.vin.push_back(CTxIn(completetxid,0,CScript()));
-        mtx.vout.push_back(CTxOut(CC_MARKER_VALUE,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));        
-        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayMarkDoneOpRet('M',withdrawtxid,refcoin,completetxid)));
+        mtx.vout.push_back(CTxOut(CC_MARKER_VALUE,CScript() << ParseHex(HexStr(mypk)) << OP_CHECKSIG));
+        return(FinalizeCCTx(0,cp,mtx,mypk,txfee,EncodeImportGatewayMarkDoneOpRet('M',withdrawtxid,refcoin,completetxid),NULL_pubkeys,pwallet));
     }
     CCerror = strprintf("error adding funds for markdone");
     LOGSTREAM("importgateway",CCLOG_INFO, stream << CCerror << std::endl);

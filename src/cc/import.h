@@ -1,4 +1,8 @@
 #pragma once
+// Copyright (c) 2018-2026 The Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2021 Komodo Core developers                                    *
  *                                                                            *
@@ -18,6 +22,8 @@
 #include "script/standard.h" // CTxDestination
 #include "importcoin.h" // ImportProof
 #include <cstdint>
+
+class CWallet; // forward decl only: MakeSelfImportSourceTx's pwallet param is never dereferenced here
 
 /****
  * @brief make import tx with burntx and dual daemon
@@ -45,7 +51,8 @@ bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33
  * @param amount the amount
  * @returns a transaction based on the inputs
  */
-CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount);
+// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount, CWallet *pwallet=nullptr);
 
 /*****
  * @brief generate a self import proof
