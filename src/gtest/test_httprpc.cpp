@@ -875,4 +875,40 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesAWatchOnlyMatchWithNo
         EXPECT_NE(std::string::npos, message.find("default_test.dat"));
     }
 }
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesABlobContainingTransparentInputs)
+{
+    // Security fix alongside Phase 12: neither producer of this blob
+    // (z_createbuildinstructions/z_createbuildinstructionscoincontrol) ever adds a
+    // transparent input -- TransactionBuilder's own tIns bookkeeping for
+    // transparent inputs is never serialized (see transaction_builder.cpp's own
+    // consistency check in Build()), so a blob claiming one is corrupted or
+    // hand-crafted. Confirms the RPC refuses it outright with a clear error
+    // instead of reaching TransactionBuilder::Build() at all.
+    // A fresh random key rather than a fixed WIF constant -- this fixture runs
+    // under TESTNET (SetUp() above), and a WIF string's network version byte
+    // would need to match whatever SelectParams() this test happens to run
+    // under, which a hardcoded constant can't guarantee across fixtures.
+    CBasicKeyStore keystore;
+    CKey tsk;
+    tsk.MakeNewKey(true);
+    keystore.AddKey(tsk);
+    CScript scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    TransactionBuilder tb(Params().GetConsensus(), 300000, &keystore);
+    tb.AddTransparentInput(COutPoint(uint256S(std::string(64, '1')), 0), scriptPubKey, 50000);
+    tb.SetChecksum();
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << tb;
+
+    UniValue params(UniValue::VARR);
+    params.push_back(HexStr(ss.begin(), ss.end()));
+
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected a blob with a transparent input to be refused outright";
+    } catch (const UniValue& objError) {
+        EXPECT_NE(std::string::npos, find_value(objError, "message").get_str().find("transparent inputs"));
+    }
+}
 #endif // ENABLE_WALLET

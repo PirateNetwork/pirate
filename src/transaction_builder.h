@@ -370,6 +370,23 @@ public:
     void SetMinConfirmations(int iMinConf);
     void SetExpiryHeight(int expHeight);
     void SetLockTime(uint32_t time) { this->mtx.nLockTime = time; }
+    // Used by z_buildrawtransaction to reject a deserialized blob carrying
+    // transparent inputs up front, with a clear error, rather than letting a
+    // mismatched mtx.vin/tIns pair (tIns is never serialized -- see Build()'s own
+    // consistency check) reach Build() at all.
+    size_t GetNumTransparentInputs() const { return mtx.vin.size(); }
+    // Test-observability only: lets a gtest assert directly on the private
+    // keystore pointer's null-ness (e.g. that the default ctor's mem-initializer
+    // fix actually took effect) instead of only inferring it indirectly through
+    // AddTransparentInput()'s behavior.
+    bool HasKeystore() const { return keystore != nullptr; }
+    // Used by z_buildrawtransaction to reject a blob built for a different
+    // network than the one this node is actually running -- strNetworkID and
+    // consensusParams are both part of what this class serializes, so a blob
+    // built on (or hand-crafted for) mainnet processed on a testnet/regtest
+    // signer, or vice versa, would otherwise derive its consensus branch ID and
+    // upgrade-activation checks from the wrong network's rules.
+    const std::string& GetNetworkID() const { return strNetworkID; }
 
     // Validate datastream with crc16 Checksum
     uint16_t CalculateChecksum();

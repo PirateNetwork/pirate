@@ -18,6 +18,32 @@
 
 #include <librustzcash.h>
 
+// Every "serialize to a CDataStream, then std::move the bytes into a fixed-size
+// std::array to pass across the Rust FFI boundary" call site in this file used to
+// skip checking that the serialized form was actually exactly N bytes before the
+// std::move. For a fixed-layout type (a viewing key, address, or spending key)
+// that's always true by construction and this was harmless -- but
+// libzcash::MerklePath serializes a variable-length std::vector<std::vector<...>>
+// (zcash/IncrementalMerkleTree.hpp), and its deserializer places no bound on that
+// beyond ValidateChecksum()'s CRC-16 re-derivation -- which is unkeyed and
+// trivially recomputable by whoever crafted the blob. A merkle path decoded from
+// an untrusted offline-signing blob (z_buildrawtransaction, rpc/rawtransaction.cpp)
+// with more path bytes than N would have overrun this fixed stack array; fewer
+// would leave the tail uninitialized before handing it to Rust. Applied uniformly
+// to every site using this pattern, not just the two MerklePath ones, since a
+// future caller feeding attacker-controlled data through the others would hit the
+// exact same class of bug with no local signal that it needs the same guard.
+template <typename Array>
+static void CopyExactlySizedStream(const CDataStream& ss, Array& out, const char* what)
+{
+    if (ss.size() != out.size()) {
+        throw std::runtime_error(strprintf(
+            "TransactionBuilder: malformed %s (serialized to %d bytes, expected %d)",
+            what, ss.size(), out.size()));
+    }
+    std::copy(ss.begin(), ss.end(), out.begin());
+}
+
 uint256 ProduceShieldedSignatureHash(
     uint32_t consensusBranchId,
     const CTransaction& tx,
@@ -74,19 +100,21 @@ bool Builder::AddSpendFromParts(
     CDataStream ssfvk(SER_NETWORK, PROTOCOL_VERSION);
     ssfvk << fvk;
     std::array<unsigned char, 96> fvk_t;
-    std::move(ssfvk.begin(), ssfvk.end(), fvk_t.begin());
+    CopyExactlySizedStream(ssfvk, fvk_t, "full viewing key");
 
     // Serialize Payment address to pass to Rust
     CDataStream ssaddr(SER_NETWORK, PROTOCOL_VERSION);
     ssaddr << addr;
     std::array<unsigned char, 43> addr_t;
-    std::move(ssaddr.begin(), ssaddr.end(), addr_t.begin());
+    CopyExactlySizedStream(ssaddr, addr_t, "payment address");
 
-    // Serialize Merkle Path to pass to Rust
+    // Serialize Merkle Path to pass to Rust -- this one is reachable with
+    // attacker-controlled content (an offline-signing blob's spend descriptions
+    // carry their own MerklePath, see the comment on CopyExactlySizedStream above).
     CDataStream ssMerklePath(SER_NETWORK, PROTOCOL_VERSION);
     ssMerklePath << ironwoodMerklePath;
     std::array<unsigned char, 1065> merklepath_t;
-    std::move(ssMerklePath.begin(), ssMerklePath.end(), merklepath_t.begin());
+    CopyExactlySizedStream(ssMerklePath, merklepath_t, "Ironwood merkle path");
 
     if (ironwood_builder_add_spend_from_parts(
             inner.get(),
@@ -154,7 +182,7 @@ std::optional<IronwoodBundle> UnauthorizedBundle::ProveAndSign(
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << key.sk;
         uint256_t sk_t;
-        std::move(ss.begin(), ss.end(), sk_t.begin());
+        CopyExactlySizedStream(ss, sk_t, "Ironwood spending key");
         for (const auto& byte : sk_t) {
             sks.push_back(byte);
         }
@@ -208,8 +236,20 @@ std::string TransactionBuilderResult::GetError()
     }
 }
 
-TransactionBuilder::TransactionBuilder() 
+TransactionBuilder::TransactionBuilder() : keystore(nullptr)
 {
+    // keystore had no member initializer before this and no mem-initializer here
+    // either, so a bare TransactionBuilder() (the shape z_buildrawtransaction
+    // deserializes an untrusted blob into) left it holding whatever garbage was on
+    // the stack/heap at construction time. AddTransparentInput() compares it
+    // against nullptr to decide whether transparent inputs are allowed without one
+    // -- reading an indeterminate pointer for that comparison is undefined
+    // behavior, and could pass the check on garbage that happens to look non-null.
+    // Build()'s transparent-signing loop is worse: it doesn't compare keystore at
+    // all, it dereferences it unconditionally via TransactionSignatureCreator, so
+    // an indeterminate value there was a wild-pointer dereference, not merely a
+    // wrong branch. Explicitly nullptr here removes the ambiguity in both places.
+
     // Set the network the transactions will be submitted to, main, test or regtest
     strNetworkID = Params().NetworkIDString();
 }
@@ -311,8 +351,20 @@ uint16_t TransactionBuilder::GetChecksum()
 bool TransactionBuilder::ValidateChecksum()
 {
       //Check the checksum on the transaction builder
-      if (this->checksum == CalculateChecksum()) {
-          return true;
+      // CalculateChecksum() re-serializes and re-derives the CRC over
+      // attacker-controlled content (this is the first validity check
+      // z_buildrawtransaction runs on a deserialized blob) -- a malformed field
+      // deep in that content (e.g. a MerklePath with an out-of-range element
+      // count) can throw during re-serialization rather than just producing a
+      // mismatched checksum. Caught here so a validity *check* never itself
+      // throws; the caller sees the same "checksum is invalid" outcome either
+      // way instead of a generic, less specific internal error.
+      try {
+          if (this->checksum == CalculateChecksum()) {
+              return true;
+          }
+      } catch (const std::exception&) {
+          return false;
       }
       return false;
 }
@@ -404,10 +456,14 @@ bool TransactionBuilder::ConvertRawSaplingSpend(libzcash::SaplingExtendedSpendin
             return false;
         }
 
+        // Reachable with attacker-controlled content: this spend description comes
+        // straight from a deserialized (possibly offline-signing-blob) input, and
+        // runs before the FVK/address consistency check just below -- see the
+        // comment on CopyExactlySizedStream near the top of this file.
         CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
         ss << vSaplingSpends[i].saplingMerklePath;
         std::array<unsigned char, 1065> merkle_path;
-        std::move(ss.begin(), ss.end(), merkle_path.begin());
+        CopyExactlySizedStream(ss, merkle_path, "Sapling merkle path");
 
         // Check FVK is valid for Address — try external scope first, then internal (change).
         libzcash::SaplingPaymentAddress checkAddr;
@@ -828,6 +884,17 @@ TransactionBuilderResult TransactionBuilder::Build()
     // Consistency checks
     //
 
+    // Guard: mtx.vin and tIns must be 1:1 (AddTransparentInput() always pushes to
+    // both together) -- tIns is not part of TransactionBuilder's own serialization
+    // (SerializationOp only (de)serializes mtx, not tIns), so a hand-crafted or
+    // corrupted blob deserialized into a bare TransactionBuilder() can have a
+    // non-empty mtx.vin with an empty tIns. Without this check, the transparent-
+    // signing loop below indexes tIns[nIn] for nIn up to mtx.vin.size() -- an
+    // out-of-bounds read on a mismatched blob.
+    if (mtx.vin.size() != tIns.size()) {
+        return TransactionBuilderResult("Transparent input count does not match recorded input data; refusing to build");
+    }
+
     // Guard: staging vectors must have been flushed via Convert* before Build().
     if (!vSaplingSpends.empty() || !vSaplingOutputs.empty() ||
         !vIronwoodSpends.empty()  || !vIronwoodOutputs.empty()) {
@@ -867,7 +934,13 @@ TransactionBuilderResult TransactionBuilder::Build()
             AddSaplingOutputRaw(saplingChangeAddr->second, change, std::nullopt);
             ConvertRawSaplingOutput(saplingChangeAddr->first);
         } else if (tChangeAddr) {
-            assert(AddTransparentOutput(tChangeAddr.value(), change));
+            // Not assert(AddTransparentOutput(...)) -- the call is the side effect
+            // that actually adds the change output, so building with NDEBUG defined
+            // would silently compile it away and drop the change entirely instead
+            // of just skipping a check on it.
+            if (!AddTransparentOutput(tChangeAddr.value(), change)) {
+                return TransactionBuilderResult("Failed to add transparent change output");
+            }
 
         // If no change address was set, use the first Sapling or Ironwood address
         } else if (firstIronwoodChangeAddr) {

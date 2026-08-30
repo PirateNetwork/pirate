@@ -267,7 +267,7 @@ static bool SignStepCC(const BaseSignatureCreator& creator, const CScript& scrip
             // pay to cc address is a valid tx
             if (!is1of2)
             {
-                bool havePriv = creator.KeyStore().GetKey(p.vKeys[0].GetID(), privKey);
+                bool havePriv = creator.IsKeystoreValid() && creator.KeyStore().GetKey(p.vKeys[0].GetID(), privKey);
                 
                 // if we don't have the private key, it must be the unspendable address
                 if (!havePriv && (p.vKeys[0] == CPubKey(ParseHex(C.CChexstr))))

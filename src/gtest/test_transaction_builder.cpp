@@ -659,6 +659,69 @@ TEST(TransactionBuilder, ThrowsOnTransparentInputWithoutKeyStore)
     ASSERT_THROW(builder.AddTransparentInput(COutPoint(), CScript(), 1), std::runtime_error);
 }
 
+TEST(TransactionBuilder, DefaultConstructedBuilderHasNoKeystoreEvenWithoutExplicitInit)
+{
+    // Regression test: TransactionBuilder() (the bare ctor z_buildrawtransaction
+    // deserializes an untrusted blob into) used to leave the private `keystore`
+    // member with no member initializer at all -- reading that indeterminate
+    // pointer to decide whether transparent inputs are allowed (AddTransparentInput)
+    // or to sign with (Build(), an unconditional dereference, not just a compare)
+    // was undefined behavior, and on many platforms an indeterminate pointer that
+    // happens to read as zero would have made this test pass even on the bug --
+    // asserting on HasKeystore() directly, rather than only inferring it from
+    // AddTransparentInput()'s behavior, is what actually pins the fix.
+    TransactionBuilder builder;
+    EXPECT_FALSE(builder.HasKeystore());
+    EXPECT_THROW(builder.AddTransparentInput(COutPoint(), CScript(), 1), std::runtime_error);
+}
+
+TEST(TransactionBuilder, BuildRejectsATransparentInputWithNoMatchingRecordedInputData)
+{
+    // Regression test: TransactionBuilder's own SerializationOp only (de)serializes
+    // mtx (including mtx.vin), never tIns -- a private, non-serialized bookkeeping
+    // vector that AddTransparentInput() otherwise always keeps 1:1 with mtx.vin.
+    // Round-tripping a builder with a real transparent input through the exact
+    // serialization z_buildrawtransaction itself uses reproduces the shape a
+    // hand-crafted or corrupted offline-signing blob would have: a populated
+    // mtx.vin with an empty tIns. Before the fix, Build()'s transparent-signing
+    // loop indexed tIns[nIn] for nIn up to mtx.vin.size() with no bounds check --
+    // an out-of-bounds read. Now it must fail cleanly instead.
+    //
+    // Explicit here (unlike most other tests in this file, which inherit REGTEST
+    // from whatever ran before them in the same binary) since DecodeSecret(tSecretRegtest)
+    // below needs REGTEST's WIF version byte specifically, and this test must not
+    // depend on suite ordering to get it.
+    SelectParams(CBaseChainParams::REGTEST);
+    auto consensusParams = Params().GetConsensus();
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    TransactionBuilder tb(consensusParams, 1, &keystore);
+    tb.AddTransparentInput(COutPoint(uint256S(std::string(64, '1')), 0), scriptPubKey, 50000);
+    ASSERT_EQ(1u, tb.GetNumTransparentInputs());
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << tb;
+
+    TransactionBuilder tb2;
+    ss >> tb2;
+    ASSERT_EQ(1u, tb2.GetNumTransparentInputs());
+
+    // Asserting only IsError() here wouldn't actually pin this specific guard:
+    // this blob's default fee (10000) with no offsetting input value in tb2's own
+    // (empty) tIns/valueBalance would also fail Build()'s later, unrelated
+    // "Change cannot be negative" check -- so the test would pass even with the
+    // new guard removed. The exact error message is what proves this guard is
+    // the one that actually fired, since it runs before that later check.
+    auto result = tb2.Build();
+    ASSERT_TRUE(result.IsError());
+    EXPECT_NE(std::string::npos, result.GetError().find("does not match recorded input data"));
+}
+
 TEST(TransactionBuilder, RejectsInvalidTransparentOutput)
 {
     auto consensusParams = Params().GetConsensus();

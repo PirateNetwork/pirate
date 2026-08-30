@@ -1919,12 +1919,33 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       ssData >> tb;
   }
   catch (const std::exception&) {
-      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder datastrem decode failed.");
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder datastream decode failed.");
   }
 
   //Validity Checks
   if (!tb.ValidateChecksum()) {
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder checksum is invalid.");
+  }
+
+  // strNetworkID is part of what this blob serializes -- reject one built for a
+  // different network than this node is actually running (e.g. a mainnet blob
+  // processed on a testnet/regtest signer, or vice versa) up front, rather than
+  // deriving a consensus branch ID and upgrade-activation checks from rules that
+  // don't apply here.
+  if (tb.GetNetworkID() != Params().NetworkIDString()) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder was built for a different network than this node is running.");
+  }
+
+  // Neither z_createbuildinstructions nor z_createbuildinstructionscoincontrol
+  // (the only two producers of this blob) ever adds a transparent input -- this
+  // offline round trip is Sapling/Ironwood-only. A blob with one is either
+  // corrupted or hand-crafted, and TransactionBuilder's own tIns bookkeeping for
+  // transparent inputs is never part of what gets serialized (see Build()'s own
+  // consistency check in transaction_builder.cpp), so letting one through here
+  // would otherwise reach that check only after this function has already done
+  // a fair amount of Sapling/Ironwood-specific work.
+  if (tb.GetNumTransparentInputs() > 0) {
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Transaction builder contains transparent inputs, which are not supported by this RPC.");
   }
 
   if (tb.vSaplingSpends.size() > 0 && tb.vIronwoodSpends.size() > 0 ) {
@@ -2734,6 +2755,13 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
 
     if (total < 0)
       throw JSONRPCError(RPC_INVALID_PARAMETER, "Output values plus tx fee are greater than input values");
+
+    // Unlike z_createbuildinstructions just above, this never called SetChecksum()
+    // before returning -- the checksum member stayed at its unset default, and
+    // z_buildrawtransaction's ValidateChecksum() (a CRC-16 recomputed over the
+    // serialized bytes) would then only pass by a 1-in-65536 coincidence. This
+    // RPC's own offline round trip has been silently broken end-to-end.
+    tx.SetChecksum();
 
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
     ssTx << tx;
