@@ -250,7 +250,22 @@ std::shared_ptr<CBlock> generateBlock(CWallet* wallet, CValidationState* validat
 
     {   // Don't keep cs_main locked
         LOCK(cs_main);
-        nHeight = chainActive.Height();
+        // CreateNewBlockWithKey()'s nHeight parameter is the height of the block
+        // being *created* (it checks "nHeight == 1" internally to special-case the
+        // very first block), not the current tip's height -- every other call site
+        // in this codebase (miner.cpp's mining loop, rpc/mining.cpp's own
+        // generatetoaddress-style RPC path) passes pindexPrev->nHeight + 1. This one
+        // didn't, off by one, so it built a coinbase transaction (and everything
+        // downstream of it) using the previous block's own consensus/upgrade
+        // context instead of the new block's -- e.g. requesting a block for
+        // height 1 while a network upgrade forced active from height 0 produced a
+        // coinbase CreateNewContextualCMutableTransaction() built for height 0's
+        // context, which CTransaction::UpdateHash() (a Rust-side format validator)
+        // then rejected outright as malformed for the height the block was
+        // actually being mined at. This function has no other caller besides gtest's
+        // own TestChain::generateBlock(), so nothing depended on the wrong height
+        // parameter for correctness elsewhere.
+        nHeight = chainActive.Height() + 1;
     }
 
     std::unique_ptr<CBlockTemplate> pblocktemplate(CreateNewBlockWithKey(reservekey,nHeight,KOMODO_MAXGPUCOUNT));

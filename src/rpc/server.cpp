@@ -635,8 +635,6 @@ static const CRPCCommand vRPCCommands[] =
     { "wallet",             "z_mergetoaddress",       &z_mergetoaddress,       false },
     { "wallet",             "consolidateaddress",     &consolidateaddress,     false },
     { "wallet",             "z_sendmany",             &z_sendmany,             false },
-    { "wallet",             "z_sendmany_prepare_offline", &z_sendmany_prepare_offline,     false },
-    { "wallet",             "z_sign_offline",             &z_sign_offline,     false },
     { "wallet",             "z_shieldcoinbase",       &z_shieldcoinbase,       false },
     { "wallet",             "z_getoperationstatus",   &z_getoperationstatus,   true  },
     { "wallet",             "z_getoperationresult",   &z_getoperationresult,   true  },
@@ -832,52 +830,10 @@ std::string JSONRPCExecBatch(const UniValue& vReq)
     return ret.write() + "\n";
 }
 
-UniValue get_async_result(std::string sOpID)
-{
-    std::shared_ptr<AsyncRPCQueue> q = getAsyncRPCQueue();
-    std::shared_ptr<AsyncRPCOperation> operation = q->getOperationForId( sOpID );
-
-    UniValue oResult;
-    string sResult;
-    int iCounter=0;
-    while(1)
-    {
-      OperationStatus status;
-      status=operation->getState();
-      switch(status)
-      {
-        case OperationStatus::CANCELLED:
-          oResult.push_back(Pair("Result", "The background thread was cancelled"));
-          iCounter=11; //exit polling loop
-          break;
-        case OperationStatus::EXECUTING:
-          break;
-        case OperationStatus::READY:
-          break;
-        case OperationStatus::FAILED:
-          oResult.push_back(Pair("Result", "Background thread failed"));
-          iCounter=11; //exit polling loop
-          break;
-        case OperationStatus::SUCCESS:
-          oResult = operation->getResult();
-          iCounter=11; //exit polling loop
-          break;
-        default:
-          oResult.push_back(Pair("Result", "Error: Unknown execution state for the background thread"));
-          iCounter=11; //exit polling loop
-          break;
-      }
-
-      sleep(1);
-      //Wait 10 seconds for the result or report a timeout
-      if (iCounter>10)
-      {
-        break;
-      }
-      iCounter++;
-    }
-    return oResult;
-}
+// get_async_result() removed -- existed solely to support z_sendmany_prepare_offline's
+// bespoke synchronous-polling special case just below in execute() (also removed
+// alongside it). Both were dead code, superseded by the
+// z_createbuildinstructions/z_buildrawtransaction offline-signing pair.
 
 UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params) const
 {
@@ -930,9 +886,6 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
           if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
               throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
 
-          if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany_prepare_offline")
-              throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
-
           if (fBuilingWitnessCache)
               throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while builing witness cache. Check the debug.log for progress.");
 
@@ -945,20 +898,6 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     {
         // Execute
         UniValue oResult = pcmd->actor(params, false, CPubKey());
-
-        if (strMethod.find("z_sendmany_prepare_offline") != std::string::npos)
-        {
-          //Is the first parameter the 'opid'?
-          std::vector<std::string> keys = oResult.getKeys();
-
-          if ((keys.size()>0) && (keys[0].find("opid") != std::string::npos))
-          {
-            //Poll the async task to retrieve the prepared transaction and
-            //return the result to the console
-            oResult = get_async_result(oResult[0].get_str());
-          }
-        }
-
         return oResult;
     }
     catch (const std::exception& e)

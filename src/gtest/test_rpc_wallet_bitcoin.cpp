@@ -6,12 +6,15 @@
 #include "rpc/server.h"
 #include "rpc/client.h"
 
+#include "assetchain.h"
 #include "consensus/consensus.h"
 #include "key_io.h"
 #include "main.h"
 #include "script/standard.h"
+#include "komodo_globals.h"
 #include "transaction_builder.h"
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 
 #include "gtest/gtestutils.h"
 
@@ -1156,12 +1159,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
         EXPECT_TRUE( find_error(objError, "Invalid from address"));
     }
 
-    // A valid zaddr the wallet doesn't hold the spending key for no longer
-    // throws - this fork explicitly supports offline transaction preparation
-    // (hasOfflineSpendingKey), constructing successfully instead. The original
-    // literal here was a Sprout testnet address ("zt..."), which is always
-    // rejected by IsValidPaymentAddress() regardless of network - generate a
-    // real (never-imported) Sapling testnet address instead.
+    // A valid zaddr the wallet doesn't hold the spending key for throws again --
+    // the previous "constructs successfully instead" behavior (hasOfflineSpendingKey)
+    // existed solely to support z_sendmany_prepare_offline, which has been removed
+    // as dead code (it never had a working path to actually produce unsigned build
+    // data for external signing). The original literal here was a Sprout testnet
+    // address ("zt..."), which is always rejected by IsValidPaymentAddress()
+    // regardless of network - generate a real (never-imported) Sapling testnet
+    // address instead.
     {
         std::vector<unsigned char, secure_allocator<unsigned char>> notOwnedRawSeed(32);
         for (auto& b : notOwnedRawSeed) b = 0x42;
@@ -1169,7 +1174,12 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
         auto notOwnedKey = libzcash::SaplingExtendedSpendingKey::Master(notOwnedSeed).Derive(0 | HARDENED_KEY_LIMIT);
         std::string notOwnedAddr = EncodePaymentAddress(notOwnedKey.DefaultAddress());
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
-        EXPECT_NO_THROW(std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, notOwnedAddr, recipients, {}, 1) ));
+        try {
+            std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, notOwnedAddr, recipients, {}, 1) );
+            FAIL() << "expected construction to throw for an address with no spending key";
+        } catch (const UniValue& objError) {
+            EXPECT_TRUE(find_error(objError, "spending key not found"));
+        }
     }
 }
 
@@ -1691,6 +1701,230 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_sapling_builds_transaction
     CTransaction tx = proxy.getTx();
     EXPECT_EQ(tx.GetSaplingSpendsCount(), 0);
     EXPECT_GT(tx.GetSaplingOutputsCount(), 0u);
+}
+
+// Declared with external linkage in rpc/mining.cpp but only forward-declared
+// locally inside gtestutils.cpp itself (not exposed via gtestutils.h) -- redeclared
+// here the same way, rather than going through TestChain's own member wrapper
+// (which would need a whole separate TestChain instance just for this one call).
+extern std::shared_ptr<CBlock> generateBlock(CWallet* wallet, CValidationState* state = nullptr);
+
+// BitcoinTestingSetup::SetUp() calls InitBlockIndex() (activating a genesis
+// block for whatever SelectTestParams() chose) before any TEST_F body runs,
+// so switching network params *inside* the test body -- after that genesis
+// is already committed to the block index -- leaves the index holding one
+// network's genesis while Params() reports another, which CheckBlockIndex()
+// (fCheckBlockIndex is on for this whole fixture family) correctly rejects.
+// REGTEST must be selected by overriding SelectTestParams() instead, exactly
+// like miner_tests_bitcoin (test_miner_bitcoin.cpp) already does for the same
+// reason -- real mining needs REGTEST's difficulty, not mainnet's.
+class rpc_wallet_tests_bitcoin_regtest : public BitcoinTestingSetup {
+protected:
+    void SelectTestParams() override { SelectParams(CBaseChainParams::REGTEST); }
+};
+
+TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_selected_wallet_not_default)
+{
+    // Regression coverage for the multiwallet effort: z_createbuildinstructions
+    // must read notes from the *request-resolved* wallet (CWalletManager::
+    // GetWalletForRequest()), not silently fall through to pwalletMain. Unlike
+    // z_buildrawtransaction's own gtest coverage (test_httprpc.cpp), there's no
+    // shortcut via error messages here -- this RPC has no upfront "does this
+    // wallet own the from-address" check, so calling it against the wrong wallet
+    // and calling it against the right-but-empty wallet both silently return a
+    // builder with zero spends. The only way to actually distinguish them is a
+    // real, spendable, witnessed Sapling note -- which needs a real mined chain
+    // (BitcoinTestingSetup, REGTEST difficulty) combined with a CWalletManager
+    // secondary wallet, a combination no earlier test in this suite has needed.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            // Network params themselves are restored by BitcoinBasicTestingSetup::
+            // TearDown() (it snapshots previousNetwork before SelectTestParams()
+            // runs) -- unconditionally forcing MAIN here would fight that when
+            // previousNetwork was actually something else.
+        }
+    } upgradeReverter;
+
+    // Matching TestChain::TestChain()'s own setup (gtestutils.cpp) -- these
+    // globals aren't touched by BitcoinTestingSetup::SetUp() at all, and
+    // CreateNewBlockWithKey()'s coinbase-construction path (used by the
+    // CWallet*-taking generateBlock() overload below, unlike the plain
+    // generateBlock(CBlock*) used elsewhere in this file) may depend on them
+    // being in a known state rather than whatever an earlier test in this
+    // process left behind.
+    NOTARY_PUBKEY = notaryPubkey;
+    USE_EXTERNAL_PUBKEY = 0;
+
+    // BitcoinBasicTestingSetup::SetUp() explicitly forces chainName back to
+    // the KMD default (assetchain(), empty symbol) for every test using this
+    // fixture. That's the right default for this fixture in general, but it
+    // means GetBlockSubsidy() takes its `chainName.isKMD()` branch here --
+    // which returns a hardcoded 100,000,000 * COIN "ICO allocation" for
+    // height 1, a KMD-specific value, not Pirate's. That reward is large
+    // enough to overflow the vendored zcash_primitives crate's hardcoded
+    // MAX_MONEY (21,000,000 * COIN, upstream Zcash's cap, unrelated to
+    // Pirate's real 200,000,000 * COIN cap in komodo_globals.cpp), which
+    // makes zcash_transaction_digests() reject the coinbase transparent
+    // output as "value out of range" and CTransaction::UpdateHash() throw.
+    // The actual fix is here, not in the digest bridge: identify this chain
+    // as Pirate and give it Pirate's real subsidy parameters, matching the
+    // defaults komodo_args() sets for "-ac_name=PIRATE" on a real node
+    // (komodo_utils.cpp), so height 1 mines a normal ~256 PIRATE reward
+    // instead of a Komodo-sized one. Captured and restored below so this
+    // fixture's other tests keep seeing the KMD default they expect.
+    assetchain originalChainName = chainName;
+    uint64_t originalReward0 = ASSETCHAINS_REWARD[0];
+    uint64_t originalHalving0 = ASSETCHAINS_HALVING[0];
+    uint64_t originalSupply = ASSETCHAINS_SUPPLY;
+    uint8_t originalPrivate = ASSETCHAINS_PRIVATE;
+    chainName = assetchain("PIRATE");
+    ASSETCHAINS_REWARD[0] = 25600000000; // 256 PIRATE, matches komodo_args()'s -ac_reward default
+    ASSETCHAINS_HALVING[0] = 77777;      // matches komodo_args()'s -ac_halving default
+    ASSETCHAINS_SUPPLY = 0;              // matches komodo_args()'s -ac_supply default
+    ASSETCHAINS_PRIVATE = 1;             // matches komodo_args()'s -ac_private default
+    struct ChainIdentityReverter {
+        assetchain originalChainName;
+        uint64_t originalReward0;
+        uint64_t originalHalving0;
+        uint64_t originalSupply;
+        uint8_t originalPrivate;
+        ~ChainIdentityReverter() {
+            chainName = originalChainName;
+            ASSETCHAINS_REWARD[0] = originalReward0;
+            ASSETCHAINS_HALVING[0] = originalHalving0;
+            ASSETCHAINS_SUPPLY = originalSupply;
+            ASSETCHAINS_PRIVATE = originalPrivate;
+        }
+    } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
+
+    // BitcoinTestingSetup::SetUp() constructs pwalletMain directly and never
+    // registers it with CWalletManager (it predates the multiwallet effort) --
+    // register it now, and clean up the registry (not pwalletMain itself, which
+    // BitcoinTestingSetup::TearDown() still owns and deletes) before this test
+    // ends, so this process-wide singleton doesn't leak state into later tests.
+    CWalletManager::Get().RegisterDefaultWallet(pwalletMain->GetName(), pwalletMain);
+    struct WalletManagerCleanup {
+        ~WalletManagerCleanup() {
+            CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+            CWalletManager::Get().Reset();
+        }
+    } walletManagerCleanup;
+
+    std::string strError, seedPhrase;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_zcbi_test.dat", strError, seedPhrase)) << strError;
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondary_zcbi_test.dat");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    libzcash::SaplingPaymentAddress secondaryAddr;
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryAddr = secondaryWallet->GenerateNewSaplingZKey();
+    }
+
+    // Mine a coinbase into the secondary wallet's own transparent keypool, then
+    // 100 more blocks so it clears COINBASE_MATURITY and can actually be spent.
+    std::shared_ptr<CBlock> coinbaseBlock;
+    try {
+        coinbaseBlock = generateBlock(secondaryWallet);
+    } catch (const std::exception& e) {
+        FAIL() << "generateBlock(secondaryWallet) threw: " << e.what();
+    }
+    ASSERT_NE(nullptr, coinbaseBlock);
+    CTransaction coinbaseTx = coinbaseBlock->vtx[0];
+    for (int i = 0; i < 100; i++) {
+        ASSERT_NE(nullptr, generateBlock(pwalletMain)) << "block " << i;
+    }
+
+    // Shield the now-mature coinbase into the secondary wallet's own Sapling
+    // address -- testmode=true skips this operation's own sendrawtransaction
+    // call so the test controls exactly when it's broadcast and mined.
+    int shieldHeight;
+    {
+        LOCK(cs_main);
+        shieldHeight = chainActive.Height();
+    }
+    std::vector<ShieldCoinbaseUTXO> inputs = {
+        ShieldCoinbaseUTXO{coinbaseTx.GetHash(), 0, coinbaseTx.vout[0].scriptPubKey, coinbaseTx.vout[0].nValue}
+    };
+    auto shieldOp = std::make_shared<AsyncRPCOperation_shieldcoinbase>(
+        secondaryWallet, Params().GetConsensus(), shieldHeight, CMutableTransaction(), inputs,
+        EncodePaymentAddress(secondaryAddr), 10000);
+    shieldOp->testmode = true;
+    TEST_FRIEND_AsyncRPCOperation_shieldcoinbase shieldProxy(shieldOp);
+    bool shieldSuccess = false;
+    ASSERT_NO_THROW(shieldSuccess = shieldProxy.main_impl());
+    ASSERT_TRUE(shieldSuccess);
+    CTransaction shieldingTx = shieldProxy.getTx();
+
+    // Broadcast and mine the shielding tx for real, so the secondary wallet's
+    // own Sapling note tracking (merkle witness, mapSaplingNoteData) gets
+    // populated the normal way, via ConnectTip's wallet notification -- not
+    // hand-poked, since z_createbuildinstructions reads that same real state.
+    {
+        UniValue sendParams(UniValue::VARR);
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << shieldingTx;
+        sendParams.push_back(HexStr(ss.begin(), ss.end()));
+        ASSERT_NO_THROW(sendrawtransaction(sendParams, false, CPubKey()));
+    }
+    ASSERT_NE(nullptr, generateBlock(pwalletMain));
+
+    // The secondary wallet now holds a real, witnessed Sapling note pwalletMain
+    // has never seen. Build the same instructions request against each wallet in
+    // turn and confirm the builder blob's own spend list -- vSaplingSpends is
+    // public on TransactionBuilder specifically for tests like this -- actually
+    // differs: non-empty when resolved to the wallet that holds the note, empty
+    // when resolved to the one that doesn't.
+    UniValue outputs(UniValue::VARR);
+    UniValue outputObj(UniValue::VOBJ);
+    outputObj.push_back(Pair("address", EncodePaymentAddress(secondaryAddr)));
+    outputObj.push_back(Pair("amount", ValueFromAmount(1000)));
+    outputs.push_back(outputObj);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodePaymentAddress(secondaryAddr));
+    params.push_back(outputs);
+
+    // CRPCTable::execute() refuses everything with RPC_IN_WARMUP until this is
+    // called; it's a global, one-way (assert-guarded) switch, so only flip it
+    // if some earlier test in this binary hasn't already (test_httprpc.cpp
+    // establishes this same guard for the same reason).
+    if (RPCIsInWarmup(nullptr))
+        SetRPCWarmupFinished();
+
+    UniValue secondaryResult;
+    {
+        RPCWalletRequestGuard guard("secondary_zcbi_test.dat");
+        ASSERT_TRUE(guard.IsResolved());
+        try {
+            secondaryResult = tableRPC.execute("z_createbuildinstructions", params);
+        } catch (const UniValue& u) {
+            FAIL() << "z_createbuildinstructions threw UniValue: " << u.write();
+        } catch (const std::exception& e) {
+            FAIL() << "z_createbuildinstructions threw: " << e.what();
+        }
+    }
+    TransactionBuilder secondaryTb;
+    {
+        std::vector<unsigned char> raw = ParseHex(secondaryResult.get_str());
+        CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+        ss >> secondaryTb;
+    }
+    EXPECT_FALSE(secondaryTb.vSaplingSpends.empty());
+
+    UniValue defaultResult;
+    ASSERT_NO_THROW(defaultResult = tableRPC.execute("z_createbuildinstructions", params));
+    TransactionBuilder defaultTb;
+    {
+        std::vector<unsigned char> raw = ParseHex(defaultResult.get_str());
+        CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+        ss >> defaultTb;
+    }
+    EXPECT_TRUE(defaultTb.vSaplingSpends.empty());
 }
 
 

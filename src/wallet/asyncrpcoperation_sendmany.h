@@ -63,7 +63,7 @@ typedef std::tuple<std::string, CAmount, std::string> SendManyRecipient;
  *
  * Builds and broadcasts a shielded multi-recipient transaction. The source
  * address must be a Sapling or Ironwood payment address for which the wallet
- * holds the spending key (or a watch-only address for offline signing).
+ * holds the spending key.
  *
  * Note selection: notes are sorted largest-first. The minimum set that covers
  * (outputs + fee) is selected; if the wallet holds more than 100 notes an
@@ -80,9 +80,8 @@ public:
      * @brief Construct a z_sendmany operation
      *
      * Validates all parameters, decodes and classifies the from-address
-     * (Sapling or Ironwood only — transparent addresses are rejected),
-     * and loads the spending key or sets the offline flag if the key is
-     * not held locally.
+     * (Sapling or Ironwood only — transparent addresses are rejected), and
+     * loads its spending key -- throws if the wallet doesn't hold one.
      *
      * @param wallet           Wallet to spend from and build the transaction against --
      *                         resolved by the caller (CWalletManager::GetWalletForRequest())
@@ -148,8 +147,7 @@ private:
     bool isFromIronwoodAddress_ = false;    ///< True when the source is an Ironwood payment address
 
     PaymentAddress frompaymentaddress_;    ///< Decoded source payment address
-    SpendingKey spendingkey_;              ///< Spending key (empty when hasOfflineSpendingKey is true)
-    bool hasOfflineSpendingKey = false;    ///< True when the wallet does not hold the spending key locally
+    SpendingKey spendingkey_;              ///< Spending key for frompaymentaddress_
 
     // Output recipients
     std::vector<SendManyRecipient> saplingOutputs_;   ///< Sapling recipients supplied at construction

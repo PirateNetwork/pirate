@@ -791,13 +791,20 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionHonorsAnExplicitWalletSelect
     }
 }
 
-TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesAnAmbiguousMatchAcrossMultipleWallets)
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionSucceedsWhenMultipleWalletsHoldTheSameSpendingKey)
 {
-    // Audit finding: two loaded wallets can legitimately hold the same spending key
-    // (the same seed restored twice, or a key imported into a second wallet), and
-    // each may carry its own -changeaddress override -- silently picking whichever
-    // sorts first by name could route this send's change to an address the user
-    // wasn't thinking about. Confirms this is refused outright instead.
+    // Two loaded wallets can legitimately hold the same spending key (the same
+    // seed restored twice, or a key imported into a second wallet). This used to
+    // be refused as ambiguous, on the theory that each wallet might carry its own
+    // -changeaddress override and silently picking one could misroute change --
+    // that's no longer true: z_createbuildinstructions/z_createbuildinstructionscoincontrol
+    // now bake the change destination into the blob itself using the *source*
+    // wallet's own configuration (instructedSaplingChangeAddr, transaction_builder.h),
+    // so z_buildrawtransaction never reads a signing wallet's settings for this at
+    // all. Since both wallets hold materially identical key data for this address
+    // (ownership is a function of the actual key bytes), signing with either
+    // produces a bit-for-bit identical result -- confirms this now succeeds
+    // (picking one, deterministically) instead of refusing.
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
 
@@ -825,12 +832,13 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesAnAmbiguousMatchAcros
 
     try {
         tableRPC.execute("z_buildrawtransaction", params);
-        FAIL() << "expected an ambiguous match across two wallets to be refused";
+        FAIL() << "expected the degenerate null anchor to be rejected once a spending "
+                  "wallet is found -- not the (removed) ambiguity error";
     } catch (const UniValue& objError) {
         std::string message = find_value(objError, "message").get_str();
-        EXPECT_NE(std::string::npos, message.find("Multiple loaded wallets"));
-        EXPECT_NE(std::string::npos, message.find("default_test.dat"));
-        EXPECT_NE(std::string::npos, message.find("secondarytestwallet"));
+        EXPECT_EQ(std::string::npos, message.find("Multiple loaded wallets"));
+        EXPECT_EQ(std::string::npos, message.find("No loaded wallet recognizes"));
+        EXPECT_NE(std::string::npos, message.find("Anchor cannot be null"));
     }
 }
 

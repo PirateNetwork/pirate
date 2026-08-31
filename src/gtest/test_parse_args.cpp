@@ -160,6 +160,24 @@ namespace ParseArgumentsTests {
                 // breaking rpc_wallet_tests_bitcoin.rpc_wallet's getblocksubsidy checks).
                 chainName = assetchain();
 
+                // Third instance of the same lesson: TXX001's args also include
+                // -ac_perc=11111111 and -ac_script=<a hardcoded P2PKH script>, which
+                // set ASSETCHAINS_COMMISSION and ASSETCHAINS_SCRIPTPUB with no
+                // corresponding reset (ClearAssetchainGlobalParams() above only clears
+                // ASSETCHAINS_RPCPORT). Left uncleared, CreateNewBlockWithKey()'s own
+                // "if (nHeight == 1 && ASSETCHAINS_COMMISSION != 0 && ...)" special
+                // case (miner.cpp) takes priority over the normal wallet-reserve-key
+                // path and forces every later test's height-1 coinbase to pay
+                // ASSETCHAINS_SCRIPTPUB's hardcoded, wallet-foreign script -- which
+                // then fails to sign ("sign1 error") the moment anything tries to
+                // spend that coinbase from the mining wallet's own keystore (observed
+                // breaking rpc_wallet_tests_bitcoin_regtest's
+                // z_createbuildinstructions_operates_on_selected_wallet_not_default,
+                // whose whole point is mining into and then spending from a real
+                // wallet-owned key).
+                ASSETCHAINS_COMMISSION = 0;
+                ASSETCHAINS_SCRIPTPUB = "";
+
                 mempool.clear();
                 ClearKomodoGlobals();
             }

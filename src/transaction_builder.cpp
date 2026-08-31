@@ -895,6 +895,20 @@ TransactionBuilderResult TransactionBuilder::Build()
         return TransactionBuilderResult("Transparent input count does not match recorded input data; refusing to build");
     }
 
+    // Unlike tIns above, mtx.saplingBundle/mtx.ironwoodBundle ARE part of this
+    // class's own serialization (SerializationOp READWRITEs mtx directly), so a
+    // deserialized blob could carry a pre-populated bundle for a pool this build
+    // never actually adds anything to. Below, the Sapling bundle is always
+    // unconditionally overwritten a bit further down, but the Ironwood one is
+    // only written when this build actually produces Ironwood actions --
+    // clearing both here first means a stale/attacker-supplied bundle can never
+    // survive into the signed output, rather than relying on it failing
+    // downstream proof/binding-signature verification instead of never having
+    // been there. Move-assigning a fresh default-constructed bundle is how this
+    // class already represents "no bundle" (its own default ctor does the same).
+    mtx.saplingBundle = SaplingBundle();
+    mtx.ironwoodBundle = IronwoodBundle();
+
     // Guard: staging vectors must have been flushed via Convert* before Build().
     if (!vSaplingSpends.empty() || !vSaplingOutputs.empty() ||
         !vIronwoodSpends.empty()  || !vIronwoodOutputs.empty()) {

@@ -104,7 +104,6 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
       contextinfo_(contextInfo),
       isFromSaplingAddress_(false),
       isFromIronwoodAddress_(false),
-      hasOfflineSpendingKey(false),
       builder_(TransactionBuilder(consensusParams, blockHeight, wallet_))
 {
     assert(fee_ >= 0);
@@ -149,17 +148,22 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
 
         frompaymentaddress_ = decodedAddress;
 
-        // Check if we have the spending key for this address
+        // Check if we have the spending key for this address. Every current
+        // caller (z_sendmany, WalletModel::zsendCoins()) already validates this
+        // itself before ever reaching this constructor, so this can't actually
+        // fail in practice any more -- the one caller that deliberately allowed
+        // (and required) a viewing-key-only from-address, z_sendmany_prepare_offline,
+        // has been removed as dead code (its "offline" continuation here never
+        // had a path to produce unsigned build data; it just eventually needed
+        // the spending key it was constructed without). Kept as an explicit
+        // throw rather than an unchecked .value() on the optional, since this
+        // constructor is still reachable from RPC/GUI input.
         // Wallet spending key methods are thread-safe, so no locking needed
-        if (!std::visit(HaveSpendingKeyForPaymentAddress(wallet_), decodedAddress)) {
-            // Address is valid but we don't have the spending key
-            // This enables offline transaction preparation
-            hasOfflineSpendingKey = true;
-        } else {
-            // We have the spending key, retrieve it for transaction building
-            spendingkey_ = std::visit(GetSpendingKeyForPaymentAddress(wallet_), decodedAddress).value();
-            hasOfflineSpendingKey = false;
+        auto maybeSpendingKey = std::visit(GetSpendingKeyForPaymentAddress(wallet_), decodedAddress);
+        if (!maybeSpendingKey.has_value()) {
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "From address does not belong to this node, zaddr spending key not found.");
         }
+        spendingkey_ = maybeSpendingKey.value();
     } else {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid from address");
     }
@@ -681,11 +685,10 @@ bool AsyncRPCOperation_sendmany::main_impl()
  * @brief Find and lock unspent shielded notes for use as transaction inputs
  *
  * Queries the wallet for unspent Sapling and Ironwood notes belonging to
- * fromaddress_ that meet the minimum confirmation depth. In offline-key mode
- * unconfirmed notes are excluded. All discovered notes are immediately
- * wallet-locked (LockNote) so parallel async operations cannot select the
- * same inputs. Notes are sorted descending by value before returning so that
- * callers can greedily select the minimum-count set.
+ * fromaddress_ that meet the minimum confirmation depth. All discovered notes
+ * are immediately wallet-locked (LockNote) so parallel async operations cannot
+ * select the same inputs. Notes are sorted descending by value before
+ * returning so that callers can greedily select the minimum-count set.
  *
  * @return true if at least one spendable note was found, false otherwise
  */
@@ -693,18 +696,12 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes()
 {
     std::vector<SaplingNoteEntry> saplingNoteEntries;
     std::vector<IronwoodNoteEntry> ironwoodNoteEntries;
-    
-    // Retrieve filtered notes based on spending mode
+
+    // Retrieve filtered notes
     {
         LOCK2(cs_main, wallet_->cs_wallet);
-        
-        if (hasOfflineSpendingKey) {
-            wallet_->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
-                                          fromaddress_, mindepth_, true, false);
-        } else {
-            wallet_->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
-                                          fromaddress_, mindepth_, true, true);
-        }
+        wallet_->GetFilteredNotes(saplingNoteEntries, ironwoodNoteEntries,
+                                      fromaddress_, mindepth_, true, true);
         // Lock immediately so no other async operation can select the same notes.
         for (const auto& e : saplingNoteEntries)
             wallet_->LockNote(e.op);

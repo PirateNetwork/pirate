@@ -5411,6 +5411,27 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, bool fNotifyUI, 
             pindexNewTip = chainActive.Tip();
             fInitialDownload = IsInitialBlockDownload();
 
+            // Notify external listeners about the new tip -- deliberately still
+            // inside this cs_main hold, unlike the inventory-relay/UI notifications
+            // just below. Every other validation-interface signal (ChainTip,
+            // UpdatedTransaction, BlockChecked) is always emitted while cs_main is
+            // held; this one used to be the sole exception, emitted after this lock
+            // was released. CWalletManager::UnloadWallet() takes cs_main specifically
+            // so no validation-interface dispatch can be executing against a wallet
+            // concurrently with deleting it (see its own comment) -- with
+            // UpdatedBlockTip emitted outside cs_main, that protection didn't
+            // actually cover it, leaving a real (if narrow -- CWallet doesn't
+            // override UpdatedBlockTip, so the dispatch is a cheap vtable-only
+            // no-op today) use-after-free window between UnregisterValidationInterface
+            // and delete on another thread. The only other subscriber,
+            // CZMQNotificationInterface, does a non-blocking zmq_send-based publish
+            // here already (its BlockChecked handler already runs under cs_main
+            // elsewhere), so moving this inside the lock isn't a new class of
+            // blocking risk.
+            if (!fInitialDownload) {
+                GetMainSignals().UpdatedBlockTip(pindexNewTip);
+            }
+
             //Notify UI Startup screen
             if (pindexNewTip->nHeight % 100 == 0 && fNotifyUI)
             {
@@ -5440,8 +5461,6 @@ bool ActivateBestChain(bool fSkipdpow, CValidationState &state, bool fNotifyUI, 
                     if (ht > (pnode->nStartingHeight != -1 ? pnode->nStartingHeight - 2000 : nBlockEstimate))
                         pnode->PushInventory(CInv(MSG_BLOCK, hashNewTip));
             }
-            // Notify external listeners about the new tip.
-            GetMainSignals().UpdatedBlockTip(pindexNewTip);
 
             //Notify UI Startup screen
             if (pindexNewTip->nHeight % 100 == 0)

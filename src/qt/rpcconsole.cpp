@@ -46,11 +46,18 @@
 #include <QUrl>
 #endif
 
-// TODO: add a scrollback limit, as there is currently none
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
 // TODO: receive errors and debug messages through ClientModel
 
 const int CONSOLE_HISTORY = 50;
+// Scrollback limit for the console's own message log (not the up/down-arrow
+// command history above, CONSOLE_HISTORY) -- previously unbounded, so a long
+// session (or repeated heavy hex-transaction/createwallet replies) could grow
+// ui->messagesWidget's QTextDocument without limit. QTextDocument's own
+// setMaximumBlockCount() (set once, in RPCConsole's own ctor) discards the
+// oldest blocks automatically as new ones are appended past this count, so
+// no per-append bookkeeping is needed here.
+const int CONSOLE_SCROLLBACK_BLOCKS = 5000;
 const int INITIAL_TRAFFIC_GRAPH_MINS = 30;
 const QSize FONT_RANGE(4, 40);
 const char fontSizeSettingsKey[] = "consoleFontSize";
@@ -77,6 +84,18 @@ const QStringList historyFilter = QStringList()
     << "walletpassphrase"
     << "walletpassphrasechange"
     << "encryptwallet";
+
+// historyFilter above hides sensitive *arguments* (private keys, passphrases)
+// from up/down-arrow recall -- it says nothing about a command's own *reply*.
+// These commands' replies contain a seed phrase in cleartext with no separate
+// protection: unlike historyFilter's targets, the whole point is the operator
+// reads and backs it up, so it can't just be redacted outright. Appended as a
+// one-time warning on the reply itself (RPCExecutor::request() below) so it
+// doesn't linger in this console's scrollback unnoticed -- the operator still
+// has to explicitly use the Clear Console button (or the console's own scrollback
+// limit, see CONSOLE_SCROLLBACK_BLOCKS) to actually get rid of it.
+const QStringList replyContainsSeedPhraseFilter = QStringList()
+    << "createwallet";
 
 }
 
@@ -401,7 +420,24 @@ void RPCExecutor::request(const QString &command, const QString &walletName)
             Q_EMIT reply(RPCConsole::CMD_ERROR, QString("Parse error: unbalanced ' or \""));
             return;
         }
-        Q_EMIT reply(RPCConsole::CMD_REPLY, QString::fromStdString(result));
+        QString qResult = QString::fromStdString(result);
+        // See replyContainsSeedPhraseFilter's own comment above. Plain text, not
+        // HTML, deliberately -- message(CMD_REPLY, ...) below is called with its
+        // default html=false, so any markup here would just be escaped and shown
+        // as literal tag text instead of rendered.
+        QString trimmedCmd = command.trimmed();
+        int cmdNameEnd = 0;
+        while (cmdNameEnd < trimmedCmd.length() &&
+               !trimmedCmd.at(cmdNameEnd).isSpace() && trimmedCmd.at(cmdNameEnd) != '(') {
+            ++cmdNameEnd;
+        }
+        QString cmdName = trimmedCmd.left(cmdNameEnd);
+        if (replyContainsSeedPhraseFilter.contains(cmdName, Qt::CaseInsensitive)) {
+            qResult += "\n\n" + tr("WARNING: the reply above contains a wallet seed phrase in "
+                                   "cleartext. Back it up now -- it will remain visible in this "
+                                   "console's scrollback until you clear the console.");
+        }
+        Q_EMIT reply(RPCConsole::CMD_REPLY, qResult);
     }
     catch (UniValue& objError)
     {
@@ -451,6 +487,9 @@ RPCConsole::RPCConsole(const PlatformStyle *_platformStyle, QWidget *parent) :
     // Install event filter for up and down arrow
     ui->lineEdit->installEventFilter(this);
     ui->messagesWidget->installEventFilter(this);
+
+    // See CONSOLE_SCROLLBACK_BLOCKS above.
+    ui->messagesWidget->document()->setMaximumBlockCount(CONSOLE_SCROLLBACK_BLOCKS);
 
     // Extend maximum permitted length of the text for console line to 1 Mb (for long hex transactions)
     ui->lineEdit->setMaxLength(1024 * 1024);

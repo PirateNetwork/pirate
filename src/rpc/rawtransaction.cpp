@@ -2034,15 +2034,25 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   }
 
   std::string strFoundWalletName;
-  if (spendableMatches.size() == 1) {
+  if (!spendableMatches.empty()) {
+      // More than one match here means multiple loaded wallets hold materially
+      // identical key data for this address (two wallets independently "own" the
+      // same address, per the IVK check above, and also both hold its spending
+      // key -- ownership of a specific address is a function of specific key
+      // bytes, so this can't happen with merely similar-but-different keys).
+      // Signing produces a bit-for-bit identical result regardless of which one
+      // is used: change routing no longer depends on the signing wallet's own
+      // settings at all (z_createbuildinstructions/z_createbuildinstructionscoincontrol
+      // bake the change destination into the blob itself, using the *source*
+      // wallet's configuration -- see instructedSaplingChangeAddr's comment in
+      // transaction_builder.h), and nothing else in this function reads
+      // signing-wallet-specific state. So picking the first is a real choice
+      // with no observable consequence, not an arbitrary one masking a risk.
       strFoundWalletName = spendableMatches.front();
-  } else if (spendableMatches.size() > 1) {
-      std::string joined;
-      for (size_t i = 0; i < spendableMatches.size(); i++) {
-          if (i) joined += ", ";
-          joined += "\"" + spendableMatches[i] + "\"";
+      if (spendableMatches.size() > 1) {
+          LogPrintf("z_buildrawtransaction: %d loaded wallets hold this address's spending key; using \"%s\"\n",
+                    (int)spendableMatches.size(), strFoundWalletName);
       }
-      throw JSONRPCError(RPC_WALLET_ERROR, "Multiple loaded wallets (" + joined + ") hold the spending key for this address; unload all but the intended one before retrying.");
   } else if (!lockedMatches.empty()) {
       throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet \"" + lockedMatches.front() + "\" holds the spending key for this address but is locked; unlock it with walletpassphrase and try again.");
   } else if (!watchOnlyMatches.empty()) {
@@ -2226,30 +2236,33 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX converting raw Ironwood Outputs failed.");
   }
 
-  //Honor a configured change-address override (-changeaddress), if any, in place of the
-  //auto-derived ZIP-32 internal address. Applies regardless of which pool was spent from —
-  //see asyncrpcoperation_sendmany.cpp's identical override for the cross-pool rationale.
-  //Reuses this send's own ovk (already used for every output above) so the sending wallet can
-  //still recognize this change note as its own. Must run after the output-conversion calls
-  //above (not before): those are what would otherwise be the pool's only initializer, and
-  //initializing twice for the same pool would hit the same discard-the-builder bug just fixed.
-  //Reads pwallet's own override here, not pwalletMain's -- otherwise a default wallet with
-  //-changeaddress configured would silently redirect a *different* wallet's change output to
-  //an address that wallet never chose, purely because it happened to be the one processing
-  //this request.
-  if (pwallet->configuredChangeAddress.has_value()) {
-      const auto& changeAddress = pwallet->configuredChangeAddress.value();
-      if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
-          if (!saplingInitialized) {
-              tb.InitializeSapling(uint256());
-          }
-          tb.SendChangeTo(*saplingChangeAddr, ovk);
-      } else if (auto ironwoodChangeAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress)) {
-          if (!ironwoodInitialized) {
-              tb.InitializeIronwood(false, true, uint256());
-          }
-          tb.SendChangeTo(*ironwoodChangeAddr, ovk);
+  //Honor a change-address override, if any, in place of the auto-derived ZIP-32
+  //internal address. Applies regardless of which pool was spent from -- see
+  //asyncrpcoperation_sendmany.cpp's identical override for the cross-pool rationale.
+  //Reuses this send's own ovk (already used for every output above) so the sending
+  //wallet can still recognize this change note as its own. Must run after the
+  //output-conversion calls above (not before): those are what would otherwise be
+  //the pool's only initializer, and initializing twice for the same pool would hit
+  //the same discard-the-builder bug just fixed.
+  //
+  //Reads the override that z_createbuildinstructions/z_createbuildinstructionscoincontrol
+  //already baked into this blob (tb.GetInstructed*ChangeAddress()) -- NOT anything
+  //read from pwallet, the wallet resolved here to do the signing. Whether change
+  //routes to a non-default address is a property of the wallet that built these
+  //instructions, not whichever (possibly different, spending-key-only) wallet
+  //ends up signing them; pwallet may have its own -changeaddress setting entirely
+  //unrelated to this send, or none at all, and it has no way to know which is
+  //which here regardless.
+  if (const auto& saplingChangeAddr = tb.GetInstructedSaplingChangeAddress()) {
+      if (!saplingInitialized) {
+          tb.InitializeSapling(uint256());
       }
+      tb.SendChangeTo(*saplingChangeAddr, ovk);
+  } else if (const auto& ironwoodChangeAddr = tb.GetInstructedIronwoodChangeAddress()) {
+      if (!ironwoodInitialized) {
+          tb.InitializeIronwood(false, true, uint256());
+      }
+      tb.SendChangeTo(*ironwoodChangeAddr, ovk);
   }
 
   //Build and sign transaction
@@ -2531,6 +2544,55 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           }
       }
 
+      // Bake a change destination into the instructions now, while it's still this
+      // wallet's request -- z_buildrawtransaction must not decide this using
+      // whichever wallet ends up signing, since that may be a different, dedicated
+      // spending-key-only wallet with no opinion (and no business having one) on
+      // where THIS wallet wants its own change to land. Unlike the signing side
+      // (which derives the default internal address from the spending key, see
+      // ConvertRawSaplingSpend/ConvertRawIronwoodSpend in transaction_builder.cpp),
+      // this wallet may not hold a spending key at all -- but the same default
+      // internal address is also derivable from just the full viewing key
+      // (SaplingExtendedFullViewingKey::DefaultAddressInternal() /
+      // IronwoodFullViewingKey::DeriveDefaultAddressInternal(), both FVK-only
+      // operations), so there's no need to leave this to Build()'s own fallback:
+      // this wallet always has the exact same information the signing side would
+      // have used anyway, since a full viewing key -- not just an incoming one --
+      // is what z_importviewingkey actually stores.
+      if (pwallet->configuredChangeAddress.has_value()) {
+          const auto& changeAddress = pwallet->configuredChangeAddress.value();
+          if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
+              tb.SetInstructedSaplingChangeAddress(*saplingChangeAddr);
+          } else if (auto ironwoodChangeAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress)) {
+              tb.SetInstructedIronwoodChangeAddress(*ironwoodChangeAddr);
+          }
+      } else if (fromSapling) {
+          libzcash::SaplingIncomingViewingKey fromIvk;
+          libzcash::SaplingExtendedFullViewingKey fromExtfvk;
+          if (pwallet->GetSaplingIncomingViewingKey(*std::get_if<libzcash::SaplingPaymentAddress>(&res), fromIvk) &&
+              pwallet->GetSaplingFullViewingKey(fromIvk, fromExtfvk)) {
+              libzcash::SaplingPaymentAddress defaultChangeAddr;
+              if (fromExtfvk.DefaultAddressInternal(&defaultChangeAddr)) {
+                  tb.SetInstructedSaplingChangeAddress(defaultChangeAddr);
+              }
+          }
+      } else if (fromIronwood) {
+          libzcash::IronwoodIncomingViewingKey fromIvk;
+          libzcash::IronwoodExtendedFullViewingKeyPirate fromExtfvk;
+          if (pwallet->GetIronwoodIncomingViewingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&res), fromIvk) &&
+              pwallet->GetIronwoodFullViewingKey(fromIvk, fromExtfvk)) {
+              libzcash::IronwoodPaymentAddress defaultChangeAddr;
+              if (fromExtfvk.fvk.DeriveDefaultAddressInternal(&defaultChangeAddr)) {
+                  tb.SetInstructedIronwoodChangeAddress(defaultChangeAddr);
+              }
+          }
+      }
+      // If neither path above could resolve a default (e.g. this wallet somehow
+      // has an IVK but not the matching FVK on file), leave nothing instructed --
+      // z_buildrawtransaction's Build() call still has its own spending-key-derived
+      // fallback as the last resort, which happens to always agree with what this
+      // block would have computed anyway when it *can* run.
+
       tb.SetChecksum();
 
       CDataStream ssTb(SER_NETWORK, PROTOCOL_VERSION);
@@ -2621,6 +2683,11 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
       tx.SetExpiryHeight(nHeight + expHeight);
     }
 
+    // Captured from the first input below, for deriving a default change address
+    // once the loop finishes -- see the comment further down where it's used.
+    libzcash::SaplingPaymentAddress firstInputAddr;
+    bool haveFirstInputAddr = false;
+
     for (size_t idx = 0; idx < inputs.size(); idx++) {
         const UniValue& input = inputs[idx];
         const UniValue& o = input.get_obj();
@@ -2649,6 +2716,11 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
             auto note = pt.note(wtx->mapSaplingNoteData.at(op).ivk).value();
             CAmount value = note.value();
             total += value;
+
+            if (!haveFirstInputAddr) {
+                firstInputAddr = pa;
+                haveFirstInputAddr = true;
+            }
 
             libzcash::MerklePath saplingMerklePath;
             if (!pwallet->SaplingWalletGetMerklePathOfNote(op.hash, op.n, saplingMerklePath))
@@ -2755,6 +2827,32 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
 
     if (total < 0)
       throw JSONRPCError(RPC_INVALID_PARAMETER, "Output values plus tx fee are greater than input values");
+
+    // See the identical block (with full rationale) in z_createbuildinstructions
+    // just above -- this belongs here (create side), not in z_buildrawtransaction
+    // (sign side). This RPC is Sapling-only (no Ironwood spend/output support
+    // above), so only the Sapling half applies. haveFirstInputAddr can be false
+    // here only if `inputs` was empty, which the total<0 check above will already
+    // have rejected in the overwhelmingly common case (a positive fee with no
+    // inputs) -- if it somehow wasn't, there's nothing to derive a default from
+    // and this falls through to Build()'s own fallback, same as
+    // z_createbuildinstructions's failure path just above.
+    if (pwallet->configuredChangeAddress.has_value()) {
+        const auto& changeAddress = pwallet->configuredChangeAddress.value();
+        if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
+            tx.SetInstructedSaplingChangeAddress(*saplingChangeAddr);
+        }
+    } else if (haveFirstInputAddr) {
+        libzcash::SaplingIncomingViewingKey fromIvk;
+        libzcash::SaplingExtendedFullViewingKey fromExtfvk;
+        if (pwallet->GetSaplingIncomingViewingKey(firstInputAddr, fromIvk) &&
+            pwallet->GetSaplingFullViewingKey(fromIvk, fromExtfvk)) {
+            libzcash::SaplingPaymentAddress defaultChangeAddr;
+            if (fromExtfvk.DefaultAddressInternal(&defaultChangeAddr)) {
+                tx.SetInstructedSaplingChangeAddress(defaultChangeAddr);
+            }
+        }
+    }
 
     // Unlike z_createbuildinstructions just above, this never called SetChecksum()
     // before returning -- the checksum member stayed at its unset default, and
