@@ -1991,6 +1991,341 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
 }
 
 
+// z_createbuildinstructionscoincontrol regression coverage. This RPC used to
+// be Sapling-only (no Ironwood spend/output support at all) and, separately,
+// built its TransactionBuilder against nHeight + DEFAULT_TX_EXPIRY_DELTA -
+// a future height - instead of the current one, which both computes the
+// wrong consensus branch ID (whenever a network upgrade activates within
+// that window) and silently doubles the intended default expiry delta,
+// since CreateNewContextualCMutableTransaction() already adds its own
+// expiryDelta on top of whatever height it's given. These tests exercise
+// the fixed Ironwood-readiness logic through paths that don't require real
+// spendable notes in the wallet - see the identical trade-off noted for the
+// z_viewtransaction Ironwood test above.
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_rejects_bad_input_type)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // The "type" field is validated before the wallet is even asked whether
+    // it knows this txid, so a dummy all-zero txid is fine here.
+    std::string dummyTxid(64, '0');
+    try {
+        CallRPC("z_createbuildinstructionscoincontrol [{\"txid\":\"" + dummyTxid + "\",\"index\":0,\"type\":\"bogus\"}] []");
+        FAIL() << "expected type validation error";
+    } catch (const runtime_error& e) {
+        EXPECT_THAT(e.what(), testing::HasSubstr("type must be"));
+    }
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwood_output_gated_by_activation)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // UpdateNetworkUpgradeParameters() always mutates the REGTEST params
+    // singleton regardless of what's currently selected - switch there and
+    // force Ironwood explicitly inactive so this test doesn't depend on
+    // whatever an earlier test in the suite left the singleton set to.
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    struct Reverter {
+        ~Reverter() { SelectParams(CBaseChainParams::MAIN); }
+    } reverter;
+
+    // GenerateNewIronwoodZKey() only derives a key - it doesn't require
+    // Ironwood to be consensus-active, so this reproduces the real scenario
+    // of a wallet already holding a valid Ironwood address before the
+    // network upgrade activates.
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    std::string zoAddr = EncodePaymentAddress(pwalletMain->GenerateNewIronwoodZKey());
+
+    try {
+        CallRPC("z_createbuildinstructionscoincontrol [] [{\"address\":\"" + zoAddr + "\",\"amount\":0.0001}]");
+        FAIL() << "expected rejection before Ironwood activation";
+    } catch (const runtime_error& e) {
+        EXPECT_THAT(e.what(), testing::HasSubstr("Ironwood has not activated"));
+    }
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwood_output_allowed_after_activation)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct Reverter {
+        ~Reverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } reverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    std::string zoAddr = EncodePaymentAddress(pwalletMain->GenerateNewIronwoodZKey());
+
+    // No inputs are supplied, so this still throws - on insufficient funds,
+    // not on the Ironwood-not-activated check the previous test exercises.
+    // That distinction is exactly what proves the address was accepted and
+    // routed into the Ironwood output path.
+    try {
+        CallRPC("z_createbuildinstructionscoincontrol [] [{\"address\":\"" + zoAddr + "\",\"amount\":0.0001}]");
+        FAIL() << "expected rejection for insufficient funds";
+    } catch (const runtime_error& e) {
+        EXPECT_THAT(e.what(), testing::Not(testing::HasSubstr("not activated")));
+        EXPECT_THAT(e.what(), testing::HasSubstr("greater than input values"));
+    }
+}
+
+
+// Change-handling regression coverage, ported from dev-multiwallet: the
+// originating wallet (z_createbuildinstructions/z_createbuildinstructionscoincontrol)
+// must bake its own change destination into the instructions blob, since
+// whichever wallet later runs z_buildrawtransaction to finish/sign it may be a
+// different, dedicated spending-key-only wallet with no business deciding
+// where the originating wallet's change should land. These call the RPC
+// functions directly (bypassing CallRPC's whitespace-tokenized CLI-string
+// parsing) since z_createbuildinstructionscoincontrol's fee/expiryBlocks
+// params aren't in rpc/client.cpp's JSON-conversion table, so a plain "0"
+// token would arrive as a UniValue::VSTR and fail RPCTypeCheck's VNUM
+// requirement.
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_sets_checksum)
+{
+    // z_createbuildinstructionscoincontrol used to never call SetChecksum()
+    // before returning its hex blob, so z_buildrawtransaction's
+    // ValidateChecksum() (a CRC-16 recomputed over the serialized bytes) would
+    // only pass by a 1-in-65536 coincidence - the offline round trip was
+    // silently broken end-to-end. fee=0 with empty inputs/outputs keeps
+    // `total` at exactly 0 so the RPC's own balance check doesn't reject the
+    // call before reaching the code under test.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(UniValue(UniValue::VARR));  // inputs
+    params.push_back(UniValue(UniValue::VARR));  // outputs
+    params.push_back(UniValue(0.0));             // fee
+
+    UniValue result;
+    EXPECT_NO_THROW(result = z_createbuildinstructionscoincontrol(params, false, CPubKey()));
+
+    std::vector<unsigned char> raw(ParseHex(result.get_str()));
+    CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+    TransactionBuilder tb2;
+    ASSERT_NO_THROW(ss >> tb2);
+    EXPECT_TRUE(tb2.ValidateChecksum());
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_bakes_in_configured_change_address)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress overrideChangeAddr = pwalletMain->GenerateNewSaplingZKey();
+
+    struct Reverter {
+        std::optional<libzcash::PaymentAddress> saved;
+        ~Reverter() { pwalletMain->configuredChangeAddress = saved; }
+    } reverter{pwalletMain->configuredChangeAddress};
+    pwalletMain->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(UniValue(UniValue::VARR));  // inputs
+    params.push_back(UniValue(UniValue::VARR));  // outputs
+    params.push_back(UniValue(0.0));             // fee
+
+    UniValue result;
+    EXPECT_NO_THROW(result = z_createbuildinstructionscoincontrol(params, false, CPubKey()));
+
+    std::vector<unsigned char> raw(ParseHex(result.get_str()));
+    CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+    TransactionBuilder tb2;
+    ASSERT_NO_THROW(ss >> tb2);
+
+    auto instructed = tb2.GetInstructedSaplingChangeAddress();
+    ASSERT_TRUE(instructed.has_value());
+    EXPECT_EQ(*instructed, overrideChangeAddr);
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_configured_change_address)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct Reverter {
+        ~Reverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } reverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress toAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress overrideChangeAddr = pwalletMain->GenerateNewSaplingZKey();
+
+    struct ChangeAddrReverter {
+        std::optional<libzcash::PaymentAddress> saved;
+        ~ChangeAddrReverter() { pwalletMain->configuredChangeAddress = saved; }
+    } changeAddrReverter{pwalletMain->configuredChangeAddress};
+    pwalletMain->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
+
+    UniValue outputs(UniValue::VARR);
+    UniValue output(UniValue::VOBJ);
+    output.push_back(Pair("address", EncodePaymentAddress(toAddr)));
+    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    outputs.push_back(output);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodePaymentAddress(fromAddr));
+    params.push_back(outputs);
+
+    UniValue result;
+    EXPECT_NO_THROW(result = z_createbuildinstructions(params, false, CPubKey()));
+
+    std::vector<unsigned char> raw(ParseHex(result.get_str()));
+    CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+    TransactionBuilder tb2;
+    ASSERT_NO_THROW(ss >> tb2);
+
+    auto instructed = tb2.GetInstructedSaplingChangeAddress();
+    ASSERT_TRUE(instructed.has_value());
+    EXPECT_EQ(*instructed, overrideChangeAddr);
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_default_change_address)
+{
+    // Without a -changeaddress override, the create side must resolve and bake
+    // in the *source* wallet's own ZIP-32 default internal address - derivable
+    // from just the full viewing key, so this doesn't require a spending key
+    // or any real notes to already exist for fromAddr.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct Reverter {
+        ~Reverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } reverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress toAddr = pwalletMain->GenerateNewSaplingZKey();
+
+    libzcash::SaplingExtendedSpendingKey fromExtsk;
+    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(fromAddr, fromExtsk));
+    libzcash::SaplingPaymentAddress expectedChangeAddr;
+    ASSERT_TRUE(fromExtsk.ToXFVK().DefaultAddressInternal(&expectedChangeAddr));
+
+    UniValue outputs(UniValue::VARR);
+    UniValue output(UniValue::VOBJ);
+    output.push_back(Pair("address", EncodePaymentAddress(toAddr)));
+    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    outputs.push_back(output);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodePaymentAddress(fromAddr));
+    params.push_back(outputs);
+
+    UniValue result;
+    EXPECT_NO_THROW(result = z_createbuildinstructions(params, false, CPubKey()));
+
+    std::vector<unsigned char> raw(ParseHex(result.get_str()));
+    CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+    TransactionBuilder tb2;
+    ASSERT_NO_THROW(ss >> tb2);
+
+    auto instructed = tb2.GetInstructedSaplingChangeAddress();
+    ASSERT_TRUE(instructed.has_value());
+    EXPECT_EQ(*instructed, expectedChangeAddr);
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_transparent_output_address)
+{
+    // Outputs are shielded-only for this RPC — a transparent destination must
+    // be rejected outright, not silently accepted as a transparent output.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct Reverter {
+        ~Reverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } reverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
+    std::string tAddr = EncodeDestination(pwalletMain->GenerateNewKey().GetID());
+
+    UniValue outputs(UniValue::VARR);
+    UniValue output(UniValue::VOBJ);
+    output.push_back(Pair("address", tAddr));
+    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    outputs.push_back(output);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodePaymentAddress(fromAddr));
+    params.push_back(outputs);
+
+    try {
+        z_createbuildinstructions(params, false, CPubKey());
+        FAIL() << "expected rejection of a transparent output address";
+    } catch (const UniValue& objError) {
+        EXPECT_TRUE(find_error(objError, "sapling or ironwood"));
+    }
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_rejects_transparent_output_address)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    std::string tAddr = EncodeDestination(pwalletMain->GenerateNewKey().GetID());
+
+    UniValue outputs(UniValue::VARR);
+    UniValue output(UniValue::VOBJ);
+    output.push_back(Pair("address", tAddr));
+    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    outputs.push_back(output);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(UniValue(UniValue::VARR));  // inputs
+    params.push_back(outputs);
+
+    try {
+        z_createbuildinstructionscoincontrol(params, false, CPubKey());
+        FAIL() << "expected rejection of a transparent output address";
+    } catch (const UniValue& objError) {
+        EXPECT_TRUE(find_error(objError, "sapling or ironwood"));
+    }
+}
+
+
 // TODO: test private methods
 // rpc_z_mergetoaddress_internals - probes AsyncRPCOperation_mergetoaddress's
 // removed private-method test-friend surface (perform_joinsplit and friends),

@@ -337,6 +337,21 @@ private:
     std::optional<CTxDestination> tChangeAddr;
     std::optional<CScript> opReturn;
 
+    // Set by the wallet that builds these instructions (z_createbuildinstructions/
+    // z_createbuildinstructionscoincontrol), not by whichever wallet later signs
+    // them: the address a -changeaddress override should route change to is a
+    // property of the *source* wallet's own configuration, not the signing
+    // wallet's -- the signing wallet may be a different, dedicated
+    // spending-key-only wallet with no opinion (and no business having one) on
+    // where the source wallet wants its own change to land. Unlike
+    // saplingChangeAddr/ironwoodChangeAddr above (set via SendChangeTo(), paired
+    // with an OVK that can only be resolved once the spending key is found), this
+    // carries only the destination address across the serialization boundary --
+    // the OVK is still always resolved from whichever spending key ultimately
+    // signs, in Build() itself.
+    std::optional<libzcash::SaplingPaymentAddress> instructedSaplingChangeAddr;
+    std::optional<libzcash::IronwoodPaymentAddress> instructedIronwoodChangeAddr;
+
     bool AddOpRetLast(CScript& s);
 
 public:
@@ -370,6 +385,19 @@ public:
     void SetMinConfirmations(int iMinConf);
     void SetExpiryHeight(int expHeight);
     void SetLockTime(uint32_t time) { this->mtx.nLockTime = time; }
+
+    // Called by z_createbuildinstructions/z_createbuildinstructionscoincontrol,
+    // using their own calling wallet's -changeaddress override (or derived
+    // default internal address), if any -- see the instructedSaplingChangeAddr/
+    // instructedIronwoodChangeAddr member comment above for why this belongs on
+    // the create side, not the sign side.
+    void SetInstructedSaplingChangeAddress(const libzcash::SaplingPaymentAddress& addr) { instructedSaplingChangeAddr = addr; }
+    void SetInstructedIronwoodChangeAddress(const libzcash::IronwoodPaymentAddress& addr) { instructedIronwoodChangeAddr = addr; }
+    // Called by z_buildrawtransaction once it has deserialized the blob -- it
+    // must not consult its own (signing) wallet's -changeaddress setting, only
+    // whatever the create side already decided and serialized here.
+    const std::optional<libzcash::SaplingPaymentAddress>& GetInstructedSaplingChangeAddress() const { return instructedSaplingChangeAddr; }
+    const std::optional<libzcash::IronwoodPaymentAddress>& GetInstructedIronwoodChangeAddress() const { return instructedIronwoodChangeAddr; }
 
     // Validate datastream with crc16 Checksum
     uint16_t CalculateChecksum();
@@ -488,6 +516,8 @@ public:
         READWRITE(vIronwoodSpends);
         READWRITE(vIronwoodOutputs);
         READWRITE(fee);
+        READWRITE(instructedSaplingChangeAddr);
+        READWRITE(instructedIronwoodChangeAddr);
         READWRITE(checksum);
     }
 };
