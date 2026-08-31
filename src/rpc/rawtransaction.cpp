@@ -1346,7 +1346,8 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
 #ifdef ENABLE_WALLET
         RpcArcTransaction dtx;
         int nHeight = chainActive.Tip()->nHeight;
-        decrypttransaction(tx, dtx, nHeight);
+        CWallet* const pwalletForDecode = CWalletManager::GetWalletForRequest();
+        decrypttransaction(pwalletForDecode, tx, dtx, nHeight);
 
         UniValue spends(UniValue::VARR);
         getRpcArcTxJSONSpends(dtx, spends);

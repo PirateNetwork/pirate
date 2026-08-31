@@ -553,9 +553,9 @@ public:
                 std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(txid);
                 if (mi != wallet->mapWallet.end()) {
                     CWalletTx& wtx = mi->second;
-                    getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+                    getRpcArcTx(wallet, wtx, arcTx, fIncludeWatchonly, false);
                 } else {
-                    getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+                    getRpcArcTx(wallet, txid, arcTx, fIncludeWatchonly, false);
                 }
 
                 arcTxList.append(arcTx);
@@ -1038,11 +1038,11 @@ public:
                         continue;
                     }
 
-                    getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+                    getRpcArcTx(wallet, wtx, arcTx, fIncludeWatchonly, false);
 
                 } else {
                     //Archived Transactions
-                    getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+                    getRpcArcTx(wallet, txid, arcTx, fIncludeWatchonly, false);
 
                     if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0) {
                         skippedArcNoBlock++;
@@ -1203,7 +1203,7 @@ public:
                     if(mi != wallet->mapWallet.end()) {
                         isActiveTx = true;
                         CWalletTx& wtx = wallet->mapWallet[hash];
-                        getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+                        getRpcArcTx(wallet, wtx, arcTx, fIncludeWatchonly, false);
                     }
 
                     //Try ArcTx if not found in mapWallet
@@ -1211,7 +1211,7 @@ public:
                         std::map<uint256, ArchiveTxPoint>::iterator ami = wallet->mapArcTxs.find(hash);
                         if(ami != wallet->mapArcTxs.end()) {
                             uint256 txid = hash;
-                            getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+                            getRpcArcTx(wallet, txid, arcTx, fIncludeWatchonly, false);
                             // Check block index while we have cs_main
                             if (!arcTx.blockHash.IsNull() && mapBlockIndex.count(arcTx.blockHash) > 0) {
                                 isArchiveTx = true;

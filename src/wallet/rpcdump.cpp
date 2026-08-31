@@ -41,15 +41,17 @@
 
 using namespace std;
 
-void EnsureWalletIsUnlocked();
-void EnsureWalletIsUnlockedForReporting();
-bool EnsureWalletIsAvailable(bool avoidException);
+// Every RPC in this file now resolves its own wallet, so only the
+// wallet-taking overloads are declared. Keeping the pwalletMain ones visible
+// would let a future `EnsureWalletIsUnlocked()` compile and silently guard
+// the default wallet while the surrounding code writes to a secondary one;
+// without them, that mistake is a compile error.
 void EnsureWalletIsUnlocked(CWallet* pwallet);
 void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
 bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException);
 
-UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys);
-UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys);
+UniValue dumpwallet_impl(CWallet* pwallet, const UniValue& params, bool fHelp, bool fDumpZKeys);
+UniValue importwallet_impl(CWallet* pwallet, const UniValue& params, bool fHelp, bool fImportZKeys);
 
 
 std::string static EncodeDumpTime(int64_t nTime) {
@@ -252,39 +254,13 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 }
 
 
-void ImportAddress(const CTxDestination& dest, const string& strLabel);
-void ImportScript(const CScript& script, const string& strLabel, bool isRedeemScript)
-{
-    if (!isRedeemScript && ::IsMine(*pwalletMain, script) == ISMINE_SPENDABLE)
-        throw JSONRPCError(RPC_WALLET_ERROR, "The wallet already contains the private key for this address or script");
-
-    pwalletMain->MarkDirty();
-
-    if (!pwalletMain->HaveWatchOnly(script) && !pwalletMain->AddWatchOnly(script))
-        throw JSONRPCError(RPC_WALLET_ERROR, "Error adding address to wallet");
-
-    if (isRedeemScript) {
-        const CScriptID id(script);
-        if (!pwalletMain->HaveCScript(id) && !pwalletMain->AddCScript(script)) {
-            throw JSONRPCError(RPC_WALLET_ERROR, "Error adding p2sh redeemScript to wallet");
-        }
-        ImportAddress(id, strLabel);
-    } else {
-        CTxDestination destination;
-        if (ExtractDestination(script, destination)) {
-            pwalletMain->SetAddressBook(destination, strLabel, "receive");
-        }
-    }
-}
-
-void ImportAddress(const CTxDestination& dest, const string& strLabel)
-{
-    CScript script = GetScriptForDestination(dest);
-    ImportScript(script, strLabel, false);
-    // add to address book or update label
-    if (IsValidDestination(dest))
-        pwalletMain->SetAddressBook(dest, strLabel, "receive");
-}
+// ImportScript()/ImportAddress() were removed here (rpcpiratewallet/rpcdump
+// plumbing phase, 2026-08-31): a mutually-recursive pair, never called from
+// importaddress (which already reimplements the same logic inline against
+// the request-resolved pwallet, below) or from anywhere else in the
+// codebase -- confirmed genuinely dead, and would otherwise have kept
+// silently importing into pwalletMain regardless of which wallet a caller
+// selected, had anything actually called them.
 
 UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -364,7 +340,8 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue z_importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -382,12 +359,13 @@ UniValue z_importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("z_importwallet", "\"path/to/exportdir/nameofbackup\"")
         );
 
-	return importwallet_impl(params, fHelp, true);
+	return importwallet_impl(pwallet, params, fHelp, true);
 }
 
 UniValue importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -405,14 +383,14 @@ UniValue importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("importwallet", "\"path/to/exportdir/nameofbackup\"")
         );
 
-	return importwallet_impl(params, fHelp, false);
+	return importwallet_impl(pwallet, params, fHelp, false);
 }
 
-UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys)
+UniValue importwallet_impl(CWallet* pwallet, const UniValue& params, bool fHelp, bool fImportZKeys)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     ifstream file;
     file.open(params[0].get_str().c_str(), std::ios::in | std::ios::ate);
@@ -426,10 +404,10 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
     int64_t nFilesize = std::max((int64_t)1, (int64_t)file.tellg());
     file.seekg(0, file.beg);
 
-    pwalletMain->ShowProgress(_("Importing..."), 0); // show progress dialog in GUI
+    pwallet->ShowProgress(_("Importing..."), 0); // show progress dialog in GUI
     while (file.good()) {
         lineNumber++;
-        pwalletMain->ShowProgress("", std::max(1, std::min(99, (int)(((double)file.tellg() / (double)nFilesize) * 100))));
+        pwallet->ShowProgress("", std::max(1, std::min(99, (int)(((double)file.tellg() / (double)nFilesize) * 100))));
         std::string line;
         std::getline(file, line);
         if (line.empty() || line[0] == '#')
@@ -462,7 +440,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     std::optional<std::string> hdKeypath = (vstr.size() > 7) ? std::optional<std::string>(vstr[2]) : std::nullopt;
                     std::optional<std::string> seedFpStr = (vstr.size() > 7) ? std::optional<std::string>(vstr[3]) : std::nullopt;
                     auto addResult = std::visit(
-                        AddSpendingKeyToWallet(pwalletMain, Params().GetConsensus(), nTime, hdKeypath, seedFpStr, true), spendingKey);
+                        AddSpendingKeyToWallet(pwallet, Params().GetConsensus(), nTime, hdKeypath, seedFpStr, true), spendingKey);
                     if (addResult == KeyAlreadyExists){
                         LogPrint("zrpc", "Skipping import of zaddr (key already present)\n");
                     }
@@ -473,7 +451,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     } else {
                         auto decodedAddr = DecodePaymentAddress(addr);
                         if (IsValidPaymentAddress(decodedAddr)) {
-                            pwalletMain->SetZAddressBook(decodedAddr, addrName, "", false);
+                            pwallet->SetZAddressBook(decodedAddr, addrName, "", false);
                         } else {
                             //Use default address if the provided one is invalid
                             // Determine type if it's Sapling or Ironwood
@@ -481,13 +459,13 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                             auto ironwoodExtsk = std::get_if<libzcash::IronwoodExtendedSpendingKeyPirate>(&spendingKey);
                             if (saplingExtsk != nullptr) {
                                 auto defaultAddr = saplingExtsk->ToXFVK().DefaultAddress();
-                                pwalletMain->SetZAddressBook(defaultAddr, addrName, "", false);
+                                pwallet->SetZAddressBook(defaultAddr, addrName, "", false);
                             } else if (ironwoodExtsk != nullptr) {
                                 auto ironwoodfvkOpt = ironwoodExtsk->GetXFVK();
                                 if (ironwoodfvkOpt) {
                                     libzcash::IronwoodPaymentAddress ironwoodAddr;
                                     if (ironwoodfvkOpt.value().fvk.DeriveDefaultAddress(&ironwoodAddr)) {
-                                        pwalletMain->SetZAddressBook(ironwoodAddr, addrName, "", false);
+                                        pwallet->SetZAddressBook(ironwoodAddr, addrName, "", false);
                                     }
                                 }
                             }
@@ -507,7 +485,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     std::string addr = vstr[4];
                     std::string addrName = vstr[6];
                     LogPrint("zrpc", "Importing viewing key for zaddr %s\n", addr);
-                    auto addResult = std::visit(AddViewingKeyToWallet(pwalletMain), viewingKey);
+                    auto addResult = std::visit(AddViewingKeyToWallet(pwallet), viewingKey);
                     if (addResult == SpendingKeyExists) {
                         LogPrint("zrpc", "Skipping import of zaddr (spending key already present)\n");
                     } else if (addResult == KeyAlreadyExists) {
@@ -520,20 +498,20 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     } else {
                         auto decodedAddr = DecodePaymentAddress(addr);
                         if (IsValidPaymentAddress(decodedAddr)) {
-                            pwalletMain->SetZAddressBook(decodedAddr, addrName, "", false);
+                            pwallet->SetZAddressBook(decodedAddr, addrName, "", false);
                         } else {
                             //Use default address if the provided one is invalid
                             // Check if it's a Sapling viewing key
                             auto saplingExtfvk = std::get_if<libzcash::SaplingExtendedFullViewingKey>(&viewingKey);
                             if (saplingExtfvk != nullptr) {
-                                pwalletMain->SetZAddressBook(saplingExtfvk->DefaultAddress(), addrName, "", false);
+                                pwallet->SetZAddressBook(saplingExtfvk->DefaultAddress(), addrName, "", false);
                             } else {
                                 // Check if it's an Ironwood viewing key
                                 auto ironwoodExtfvk = std::get_if<libzcash::IronwoodExtendedFullViewingKeyPirate>(&viewingKey);
                                 if (ironwoodExtfvk != nullptr) {
                                     libzcash::IronwoodPaymentAddress ironwoodAddr;
                                     if (ironwoodExtfvk->fvk.DeriveDefaultAddress(&ironwoodAddr)) {
-                                        pwalletMain->SetZAddressBook(ironwoodAddr, addrName, "", false);
+                                        pwallet->SetZAddressBook(ironwoodAddr, addrName, "", false);
                                     }
                                 }
                             }
@@ -553,14 +531,14 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     std::string addr = vstr[4];
                     std::string addrName = vstr[6];
                     LogPrint("zrpc", "Importing diversified spending key for zaddr %s\n", addr);
-                    auto addResult = std::visit(AddDiversifiedSpendingKeyToWallet(pwalletMain), diversifiedSpendingKey);
+                    auto addResult = std::visit(AddDiversifiedSpendingKeyToWallet(pwallet), diversifiedSpendingKey);
                     if (addResult == KeyNotAdded || addResult == KeyAddedAddressNotAdded || addResult == KeyExistsAddressNotAdded) {
                         // Something went wrong
                         fGood = false;
                     } else {
                         auto decodedAddr = DecodePaymentAddress(addr);
                         if (IsValidPaymentAddress(decodedAddr)) {
-                            pwalletMain->SetZAddressBook(decodedAddr, addrName, "", false);
+                            pwallet->SetZAddressBook(decodedAddr, addrName, "", false);
                         } else {
                             //Use default address if the provided one is invalid
                             auto extdsk = std::get_if<libzcash::SaplingDiversifiedExtendedSpendingKey>(&diversifiedSpendingKey);
@@ -569,7 +547,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                                 libzcash::SaplingIncomingViewingKey ivk;
                                 extdsk->extsk.ToXFVK().fvk.DeriveIVK(&ivk);
                                 if (ivk.DeriveAddress(&pa, extdsk->d)) {
-                                    pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                    pwallet->SetZAddressBook(pa, addrName, "", false);
                                 }
                             } else {
                                 auto ironwoodExtdsk = std::get_if<libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate>(&diversifiedSpendingKey);
@@ -580,7 +558,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                                         libzcash::IronwoodIncomingViewingKey ivk;
                                         ironwoodfvkOpt.value().fvk.DeriveIVK(&ivk);
                                         if (ivk.DeriveAddress(&pa, ironwoodExtdsk->d)) {
-                                            pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                            pwallet->SetZAddressBook(pa, addrName, "", false);
                                         }
                                     }
                                 }
@@ -601,14 +579,14 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     std::string addr = vstr[4];
                     std::string addrName = vstr[6];
                     LogPrint("zrpc", "Importing diversified viewing key for zaddr %s\n", addr);
-                    auto addResult = std::visit(AddDiversifiedViewingKeyToWallet(pwalletMain), diversifiedViewingKey);
+                    auto addResult = std::visit(AddDiversifiedViewingKeyToWallet(pwallet), diversifiedViewingKey);
                     if (addResult == KeyNotAdded || addResult == KeyAddedAddressNotAdded || addResult == KeyExistsAddressNotAdded) {
                         // Something went wrong
                         fGood = false;
                     } else {
                         auto decodedAddr = DecodePaymentAddress(addr);
                         if (IsValidPaymentAddress(decodedAddr)) {
-                            pwalletMain->SetZAddressBook(decodedAddr, addrName, "", false);
+                            pwallet->SetZAddressBook(decodedAddr, addrName, "", false);
                         } else {
                             //Use default address if the provided one is invalid
                             auto extdfvk = std::get_if<libzcash::SaplingDiversifiedExtendedFullViewingKey>(&diversifiedViewingKey);
@@ -617,7 +595,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                                 libzcash::SaplingIncomingViewingKey ivk;
                                 extdfvk->extfvk.fvk.DeriveIVK(&ivk);
                                 if (ivk.DeriveAddress(&pa, extdfvk->d)) {
-                                    pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                    pwallet->SetZAddressBook(pa, addrName, "", false);
                                 }
                             } else {
                                 auto ironwoodExtdfvk = std::get_if<libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate>(&diversifiedViewingKey);
@@ -626,7 +604,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                                     libzcash::IronwoodIncomingViewingKey ivk;
                                     ironwoodExtdfvk->extfvk.fvk.DeriveIVK(&ivk);
                                     if (ivk.DeriveAddress(&pa, ironwoodExtdfvk->d)) {
-                                        pwalletMain->SetZAddressBook(pa, addrName, "", false);
+                                        pwallet->SetZAddressBook(pa, addrName, "", false);
                                     }
                                 }
                             }
@@ -648,7 +626,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
         CPubKey pubkey = key.GetPubKey();
         assert(key.VerifyPubKey(pubkey));
         CKeyID keyid = pubkey.GetID();
-        if (pwalletMain->HaveKey(keyid)) {
+        if (pwallet->HaveKey(keyid)) {
             LogPrintf("Skipping import of %s (key already present)\n", EncodeDestination(keyid));
             continue;
         }
@@ -668,29 +646,29 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
             }
         }
         LogPrintf("Importing %s...\n", EncodeDestination(keyid));
-        if (!pwalletMain->AddKeyPubKey(key, pubkey)) {
+        if (!pwallet->AddKeyPubKey(key, pubkey)) {
             fGood = false;
             continue;
         }
-        pwalletMain->mapKeyMetadata[keyid].nCreateTime = nTime;
+        pwallet->mapKeyMetadata[keyid].nCreateTime = nTime;
         if (fLabel)
-            pwalletMain->SetAddressBook(keyid, strLabel, "receive");
+            pwallet->SetAddressBook(keyid, strLabel, "receive");
         nTimeBegin = std::min(nTimeBegin, nTime);
     }
 
     file.close();
-    pwalletMain->ShowProgress("", 100); // hide progress dialog in GUI
+    pwallet->ShowProgress("", 100); // hide progress dialog in GUI
 
     CBlockIndex *pindex = chainActive.Tip();
     while (pindex && pindex->pprev && pindex->GetBlockTime() > nTimeBegin - 7200)
         pindex = pindex->pprev;
 
-    if (!pwalletMain->nTimeFirstKey || nTimeBegin < pwalletMain->nTimeFirstKey)
-        pwalletMain->nTimeFirstKey = nTimeBegin;
+    if (!pwallet->nTimeFirstKey || nTimeBegin < pwallet->nTimeFirstKey)
+        pwallet->nTimeFirstKey = nTimeBegin;
 
     LogPrintf("Rescanning last %i blocks\n", chainActive.Height() - pindex->nHeight + 1);
-    pwalletMain->ScanForWalletTransactions(pindex, true, true, true, true);
-    pwalletMain->MarkDirty();
+    pwallet->ScanForWalletTransactions(pindex, true, true, true, true);
+    pwallet->MarkDirty();
 
     if (!fGood)
         throw JSONRPCError(RPC_WALLET_ERROR, "Error adding some keys to wallet");
@@ -743,7 +721,8 @@ UniValue dumpprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue z_exportwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -759,12 +738,13 @@ UniValue z_exportwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("z_exportwallet", "\"test\"")
         );
 
-	return dumpwallet_impl(params, fHelp, true);
+	return dumpwallet_impl(pwallet, params, fHelp, true);
 }
 
 UniValue dumpwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -780,14 +760,14 @@ UniValue dumpwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("dumpwallet", "\"test\"")
         );
 
-	return dumpwallet_impl(params, fHelp, false);
+	return dumpwallet_impl(pwallet, params, fHelp, false);
 }
 
-UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
+UniValue dumpwallet_impl(CWallet* pwallet, const UniValue& params, bool fHelp, bool fDumpZKeys)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     boost::filesystem::path exportdir;
     try {
@@ -816,8 +796,8 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
 
     std::map<CKeyID, int64_t> mapKeyBirth;
     std::set<CKeyID> setKeyPool;
-    pwalletMain->GetKeyBirthTimes(mapKeyBirth);
-    pwalletMain->GetAllReserveKeys(setKeyPool);
+    pwallet->GetKeyBirthTimes(mapKeyBirth);
+    pwallet->GetAllReserveKeys(setKeyPool);
 
     // sort time/key pairs
     std::vector<std::pair<int64_t, CKeyID> > vKeyBirth;
@@ -835,7 +815,7 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
     file << strprintf("#   mined on %s\n", EncodeDumpTime(chainActive.Tip()->GetBlockTime()));
     {
         HDSeed hdSeed;
-        pwalletMain->GetHDSeed(hdSeed);
+        pwallet->GetHDSeed(hdSeed);
         auto rawSeed = hdSeed.RawSeed();
         file << strprintf("# HDSeed=%s fingerprint=%s", HexStr(rawSeed.begin(), rawSeed.end()), hdSeed.Fingerprint().GetHex());
         file << "\n";
@@ -844,8 +824,8 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
     //export Seed Phrase
     {
         std::string phrase;
-        if (pwalletMain->bip39Enabled) {
-            pwalletMain->GetSeedPhrase(phrase);
+        if (pwallet->bip39Enabled) {
+            pwallet->GetSeedPhrase(phrase);
         } else {
             phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
         }
@@ -859,9 +839,9 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         std::string strTime = EncodeDumpTime(it->first);
         std::string strAddr = EncodeDestination(keyid);
         CKey key;
-        if (pwalletMain->GetKey(keyid, key)) {
-            if (pwalletMain->mapAddressBook.count(keyid)) {
-                file << strprintf("%s %s label=%s # addr=%s\n", EncodeSecret(key), strTime, EncodeDumpString(pwalletMain->mapAddressBook[keyid].name), strAddr);
+        if (pwallet->GetKey(keyid, key)) {
+            if (pwallet->mapAddressBook.count(keyid)) {
+                file << strprintf("%s %s label=%s # addr=%s\n", EncodeSecret(key), strTime, EncodeDumpString(pwallet->mapAddressBook[keyid].name), strAddr);
             } else if (setKeyPool.count(keyid)) {
                 file << strprintf("%s %s reserve=1 # addr=%s\n", EncodeSecret(key), strTime, strAddr);
             } else {
@@ -874,26 +854,26 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
     LogPrintf("Starting Spending keys\n");
     if (fDumpZKeys) {
         std::set<libzcash::SaplingPaymentAddress> saplingAddresses;
-        pwalletMain->GetSaplingPaymentAddresses(saplingAddresses);
+        pwallet->GetSaplingPaymentAddresses(saplingAddresses);
 
         file << "\n";
         file << "# Sapling Extended Spending keys\n";
         file << "\n";
         for (auto addr : saplingAddresses) {
             libzcash::SaplingExtendedSpendingKey extsk;
-            if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            if (pwallet->GetSaplingExtendedSpendingKey(addr, extsk)) {
                 if (EncodePaymentAddress(addr) == EncodePaymentAddress(extsk.DefaultAddress())) {
                     libzcash::SaplingIncomingViewingKey ivk;
                     libzcash::SaplingFullViewingKey fvk;
                     extsk.expsk.DeriveFVK(&fvk);
                     fvk.DeriveIVK(&ivk);
-                    CKeyMetadata keyMeta = pwalletMain->mapSaplingSpendingKeyMetadata[ivk];
+                    CKeyMetadata keyMeta = pwallet->mapSaplingSpendingKeyMetadata[ivk];
                     std::string strTime = EncodeDumpTime(keyMeta.nCreateTime);
                     // Keys imported with z_importkey do not have zip32 metadata
                     if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {
-                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                     } else {
-                        file << strprintf("%s %s %s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                        file << strprintf("%s %s %s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                     }
                 }
             }
@@ -904,12 +884,12 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << "\n";
         for (auto addr : saplingAddresses) {
             libzcash::SaplingExtendedSpendingKey extsk;
-            if (pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            if (pwallet->GetSaplingExtendedSpendingKey(addr, extsk)) {
                 if (EncodePaymentAddress(addr) != EncodePaymentAddress(extsk.DefaultAddress())) {
                     libzcash::SaplingDiversifiedExtendedSpendingKey newKey;
                     newKey.extsk = extsk;
                     newKey.d = addr.d;
-                    file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedSpendingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                    file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedSpendingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                 }
             }
         }
@@ -919,13 +899,13 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << "\n";
         for (auto addr : saplingAddresses) {
             libzcash::SaplingExtendedSpendingKey extsk;
-            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            if (!pwallet->GetSaplingExtendedSpendingKey(addr, extsk)) {
                 libzcash::SaplingIncomingViewingKey ivk;
                 libzcash::SaplingExtendedFullViewingKey extfvk;
-                pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
-                pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
+                pwallet->GetSaplingIncomingViewingKey(addr, ivk);
+                pwallet->GetSaplingFullViewingKey(ivk,extfvk);
                 if (EncodePaymentAddress(addr) == EncodePaymentAddress(extfvk.DefaultAddress())) {
-                    file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeViewingKey(extfvk), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                    file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeViewingKey(extfvk), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                 }
             }
         }
@@ -935,44 +915,44 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << "\n";
         for (auto addr : saplingAddresses) {
             libzcash::SaplingExtendedSpendingKey extsk;
-            if (!pwalletMain->GetSaplingExtendedSpendingKey(addr, extsk)) {
+            if (!pwallet->GetSaplingExtendedSpendingKey(addr, extsk)) {
                 libzcash::SaplingIncomingViewingKey ivk;
                 libzcash::SaplingExtendedFullViewingKey extfvk;
-                pwalletMain->GetSaplingIncomingViewingKey(addr, ivk);
-                pwalletMain->GetSaplingFullViewingKey(ivk,extfvk);
+                pwallet->GetSaplingIncomingViewingKey(addr, ivk);
+                pwallet->GetSaplingFullViewingKey(ivk,extfvk);
                 if (EncodePaymentAddress(addr) != EncodePaymentAddress(extfvk.DefaultAddress())) {
                     libzcash::SaplingDiversifiedExtendedFullViewingKey newKey;
                     newKey.extfvk = extfvk;
                     newKey.d = addr.d;
-                    file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedViewingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                    file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedViewingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                 }
             }
         }
 
         // Ironwood Extended Spending Keys
         std::set<libzcash::IronwoodPaymentAddress> ironwoodAddresses;
-        pwalletMain->GetIronwoodPaymentAddresses(ironwoodAddresses);
+        pwallet->GetIronwoodPaymentAddresses(ironwoodAddresses);
 
         file << "\n";
         file << "# Ironwood Extended Spending keys\n";
         file << "\n";
         for (auto addr : ironwoodAddresses) {
             libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-            if (pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+            if (pwallet->GetIronwoodExtendedSpendingKey(addr, extsk)) {
                 libzcash::IronwoodIncomingViewingKey ivk;
                 libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
-                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                pwallet->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
                 libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) == EncodePaymentAddress(defaultAddress)) {
-                        CKeyMetadata keyMeta = pwalletMain->mapIronwoodSpendingKeyMetadata[ivk];
+                        CKeyMetadata keyMeta = pwallet->mapIronwoodSpendingKeyMetadata[ivk];
                         std::string strTime = EncodeDumpTime(keyMeta.nCreateTime);
                         // Keys imported with z_importkey do not have zip32 metadata
                         if (keyMeta.hdKeypath.empty() || keyMeta.seedFp.IsNull()) {
-                            file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                            file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                         } else {
-                            file << strprintf("%s %s %s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                            file << strprintf("%s %s %s %s # zaddr= %s label= %s\n", EncodeSpendingKey(extsk), strTime, keyMeta.hdKeypath, keyMeta.seedFp.GetHex(), EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                         }
                     }
                 }
@@ -984,18 +964,18 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << "\n";
         for (auto addr : ironwoodAddresses) {
             libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-            if (pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+            if (pwallet->GetIronwoodExtendedSpendingKey(addr, extsk)) {
                 libzcash::IronwoodIncomingViewingKey ivk;
                 libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
-                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                pwallet->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
                 libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) != EncodePaymentAddress(defaultAddress)) {
                         libzcash::IronwoodDiversifiedExtendedSpendingKeyPirate newKey;
                         newKey.extsk = extsk;
                         newKey.d = addr.d;
-                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedSpendingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedSpendingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                     }
                 }
             }
@@ -1006,15 +986,15 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << "\n";
         for (auto addr : ironwoodAddresses) {
             libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+            if (!pwallet->GetIronwoodExtendedSpendingKey(addr, extsk)) {
                 libzcash::IronwoodIncomingViewingKey ivk;
                 libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
-                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                pwallet->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
                 libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) == EncodePaymentAddress(defaultAddress)) {
-                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeViewingKey(extfvk), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeViewingKey(extfvk), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                     }
                 }
             }
@@ -1025,18 +1005,18 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
         file << "\n";
         for (auto addr : ironwoodAddresses) {
             libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-            if (!pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk)) {
+            if (!pwallet->GetIronwoodExtendedSpendingKey(addr, extsk)) {
                 libzcash::IronwoodIncomingViewingKey ivk;
                 libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetIronwoodIncomingViewingKey(addr, ivk);
-                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
+                pwallet->GetIronwoodIncomingViewingKey(addr, ivk);
+                pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
                 libzcash::IronwoodPaymentAddress defaultAddress;
                 if (extfvk.fvk.DeriveDefaultAddress(&defaultAddress)) {
                     if (EncodePaymentAddress(addr) != EncodePaymentAddress(defaultAddress)) {
                         libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate newKey;
                         newKey.extfvk = extfvk;
                         newKey.d = addr.d;
-                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedViewingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwalletMain->mapZAddressBook[addr].name));
+                        file << strprintf("%s %s # zaddr= %s label= %s\n", EncodeDiversifiedViewingKey(newKey), dumpTime, EncodePaymentAddress(addr), EncodeDumpString(pwallet->mapZAddressBook[addr].name));
                     }
                 }
             }
@@ -1052,7 +1032,8 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
 
 UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
-  if (!EnsureWalletIsAvailable(fHelp))
+  CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+  if (!EnsureWalletIsAvailable(pwallet, fHelp))
       return NullUniValue;
 
   if (fHelp || params.size() > 0)
@@ -1063,13 +1044,13 @@ UniValue z_exportseedphrase(const UniValue& params, bool fHelp, const CPubKey& m
         + HelpExampleRpc("z_exportseedphrase","")
     );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlocked();
+    EnsureWalletIsUnlocked(pwallet);
 
     std::string phrase;
-    if (pwalletMain->bip39Enabled) {
-        pwalletMain->GetSeedPhrase(phrase);
+    if (pwallet->bip39Enabled) {
+        pwallet->GetSeedPhrase(phrase);
     } else {
         phrase = "Bip39 is not enabled for this wallet. Bip39 can only be enabled by creating a new wallet.";
     }

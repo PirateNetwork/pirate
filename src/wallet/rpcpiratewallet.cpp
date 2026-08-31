@@ -1,5 +1,6 @@
 // Copyright (c) 2019 Cryptoforge
 // Copyright (c) 2019 The Zero developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,6 +8,7 @@
 #include "key_io.h"
 #include "rpc/server.h"
 #include "wallet.h"
+#include "wallet/walletmanager.h"
 #include "rpcpiratewallet.h"
 #include "utilmoneystr.h"
 
@@ -17,11 +19,16 @@
 using namespace std;
 using namespace libzcash;
 
-bool EnsureWalletIsAvailable(bool avoidException);
+// Only the wallet-taking overloads are declared here. Leaving the pwalletMain
+// ones visible would let a future `EnsureWalletIsAvailable(fHelp)` compile and
+// silently check the default wallet again in a file where every RPC now
+// resolves its own; without them, that mistake is a compile error.
+bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException);
+void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
 int32_t komodo_dpowconfs(int32_t height, int32_t numconfs);
 
 template <typename RpcTx>
-void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount& transparentValue, bool fIncludeWatchonly)
+void getTransparentSpends(CWallet* pwallet, RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount& transparentValue, bool fIncludeWatchonly)
 {
     // Transparent Inputs belonging to the wallet
     for (int i = 0; i < tx.vin.size(); i++) {
@@ -30,12 +37,12 @@ void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount&
 
         // Get Tx from files
         CTxOut parentOut = CTxOut();
-        const CWalletTx* parentwtx = pwalletMain->GetWalletTx(txin.prevout.hash);
+        const CWalletTx* parentwtx = pwallet->GetWalletTx(txin.prevout.hash);
         if (parentwtx != NULL) {
             parentOut = parentwtx->vout[txin.prevout.n];
         } else {
-            map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txin.prevout.hash);
-            if (it != pwalletMain->mapArcTxs.end()) {
+            map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.find(txin.prevout.hash);
+            if (it != pwallet->mapArcTxs.end()) {
                 CTransaction parentctx;
                 uint256 hashBlock;
 
@@ -74,20 +81,20 @@ void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount&
             spend.spendTxid = txin.prevout.hash.ToString();
             spend.spendVout = (int)txin.prevout.n;
 
-            if (IsMine(*pwalletMain, address) == ISMINE_SPENDABLE) {
+            if (IsMine(*pwallet, address) == ISMINE_SPENDABLE) {
                 spend.spendable = true;
             } else {
                 spend.spendable = false;
             }
 
-            if (IsMine(*pwalletMain, address) == ISMINE_SPENDABLE || (IsMine(*pwalletMain, address) == ISMINE_WATCH_ONLY && fIncludeWatchonly))
+            if (IsMine(*pwallet, address) == ISMINE_SPENDABLE || (IsMine(*pwallet, address) == ISMINE_WATCH_ONLY && fIncludeWatchonly))
                 vSpend.push_back(spend);
         }
     }
 }
 
 template <typename RpcTx>
-void getTransparentSends(RpcTx& tx, vector<TransactionSendT>& vSend, CAmount& transparentValue)
+void getTransparentSends(CWallet* pwallet, RpcTx& tx, vector<TransactionSendT>& vSend, CAmount& transparentValue)
 {
     // All Transparent Sends in the transaction
     for (int i = 0; i < tx.vout.size(); i++) {
@@ -101,13 +108,13 @@ void getTransparentSends(RpcTx& tx, vector<TransactionSendT>& vSend, CAmount& tr
         send.amount = txout.nValue;
         transparentValue += txout.nValue;
         send.vout = i;
-        send.mine = IsMine(*pwalletMain, address);
+        send.mine = IsMine(*pwallet, address);
         vSend.push_back(send);
     }
 }
 
 template <typename RpcTx>
-void getTransparentRecieves(RpcTx& tx, vector<TransactionReceivedT>& vReceived, bool fIncludeWatchonly)
+void getTransparentRecieves(CWallet* pwallet, RpcTx& tx, vector<TransactionReceivedT>& vReceived, bool fIncludeWatchonly)
 {
     // Transparent Received txos belonging to the wallet
     for (int i = 0; i < tx.vout.size(); i++) {
@@ -121,19 +128,19 @@ void getTransparentRecieves(RpcTx& tx, vector<TransactionReceivedT>& vReceived, 
         received.amount = txout.nValue;
         received.vout = i;
 
-        if (IsMine(*pwalletMain, address) == ISMINE_SPENDABLE) {
+        if (IsMine(*pwallet, address) == ISMINE_SPENDABLE) {
             received.spendable = true;
         } else {
             received.spendable = false;
         }
 
-        if (IsMine(*pwalletMain, address) == ISMINE_SPENDABLE || (IsMine(*pwalletMain, address) == ISMINE_WATCH_ONLY && fIncludeWatchonly))
+        if (IsMine(*pwallet, address) == ISMINE_SPENDABLE || (IsMine(*pwallet, address) == ISMINE_WATCH_ONLY && fIncludeWatchonly))
             vReceived.push_back(received);
     }
 }
 
 template <typename RpcTx>
-void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<SaplingIncomingViewingKey>& ivks, std::set<SaplingIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly)
+void getSaplingSpends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<SaplingIncomingViewingKey>& ivks, std::set<SaplingIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly)
 {
     // Sapling Inputs belonging to the wallet
     for (const auto& rustSpend : tx.GetSaplingSpends()) {
@@ -142,14 +149,14 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
         TransactionSpendZS spend;
 
         // Find the op of the nullifier
-        map<uint256, SaplingOutPoint>::iterator opit = pwalletMain->mapArcSaplingOutPoints.find(nullifier);
-        if (opit == pwalletMain->mapArcSaplingOutPoints.end()) {
+        map<uint256, SaplingOutPoint>::iterator opit = pwallet->mapArcSaplingOutPoints.find(nullifier);
+        if (opit == pwallet->mapArcSaplingOutPoints.end()) {
             continue;
         }
         SaplingOutPoint op = (*opit).second;
 
         // Get parent transaction and check output validity
-        const CWalletTx* parentwtx = pwalletMain->GetWalletTx(op.hash);
+        const CWalletTx* parentwtx = pwallet->GetWalletTx(op.hash);
         if (parentwtx != NULL) {
             auto vOutputs = parentwtx->GetSaplingOutputs();
             
@@ -178,8 +185,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                     spend.spendTxid = op.hash.ToString();
 
                     libzcash::SaplingExtendedFullViewingKey extfvk;
-                    pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
-                    spend.spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+                    pwallet->GetSaplingFullViewingKey(ivk, extfvk);
+                    spend.spendable = pwallet->HaveSaplingSpendingKey(extfvk);
 
                     if (spend.spendable || fIncludeWatchonly)
                         vSpend.push_back(spend);
@@ -188,8 +195,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 }
             }
         } else {
-            map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(op.hash);
-            if (it != pwalletMain->mapArcTxs.end()) {
+            map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.find(op.hash);
+            if (it != pwallet->mapArcTxs.end()) {
                 CTransaction parentctx;
                 uint256 hashBlock;
 
@@ -243,8 +250,8 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                         spend.spendTxid = op.hash.ToString();
 
                         libzcash::SaplingExtendedFullViewingKey extfvk;
-                        pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
-                        spend.spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+                        pwallet->GetSaplingFullViewingKey(ivk, extfvk);
+                        spend.spendable = pwallet->HaveSaplingSpendingKey(extfvk);
 
                         if (spend.spendable || fIncludeWatchonly)
                             vSpend.push_back(spend);
@@ -259,7 +266,7 @@ void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
 
 
 template <typename RpcTx>
-void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ovks, std::set<uint256>& ovksOut, vector<TransactionSendZS>& vSend)
+void getSaplingSends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ovks, std::set<uint256>& ovksOut, vector<TransactionSendZS>& vSend)
 {
     // Outgoing Sapling Spends
     int shieldedOutputIndex = 0;
@@ -284,7 +291,7 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
                 libzcash::SaplingPaymentAddress sentAddr(pt_unwrapped.d, pt_unwrapped.pk_d.value());
 
                 libzcash::SaplingExtendedSpendingKey extsk;
-                bool addrIsMine = pwalletMain->GetSaplingExtendedSpendingKey(sentAddr, extsk);
+                bool addrIsMine = pwallet->GetSaplingExtendedSpendingKey(sentAddr, extsk);
 
                 send.encodedAddress = EncodePaymentAddress(sentAddr);
                 send.amount = pt_unwrapped.value();
@@ -310,7 +317,7 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
                 // Mark as internal scope (ZIP-32 change address)
                 {
                     KeyScope scope;
-                    if (pwalletMain->GetSaplingKeyScope(sentAddr, scope) && scope == KeyScope::Internal)
+                    if (pwallet->GetSaplingKeyScope(sentAddr, scope) && scope == KeyScope::Internal)
                         send.isInternalScope = true;
                 }
 
@@ -324,7 +331,7 @@ void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, st
 }
 
 template <typename RpcTx>
-void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<SaplingIncomingViewingKey>& ivks, std::set<SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly)
+void getSaplingReceives(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<SaplingIncomingViewingKey>& ivks, std::set<SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly)
 {
     int shieldedOutputIndex = 0;
     for (const auto& rustOutput : tx.GetSaplingOutputs()) {
@@ -348,14 +355,14 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
                 received.memo = HexStr(memo);
 
                 libzcash::SaplingExtendedFullViewingKey extfvk;
-                pwalletMain->GetSaplingFullViewingKey(ivk, extfvk);
-                received.spendable = pwalletMain->HaveSaplingSpendingKey(extfvk);
+                pwallet->GetSaplingFullViewingKey(ivk, extfvk);
+                received.spendable = pwallet->HaveSaplingSpendingKey(extfvk);
 
                 // Mark as internal scope (ZIP-32 change address) so the UI always
                 // labels this output as "change" regardless of spending address.
                 {
                     KeyScope scope;
-                    if (pwalletMain->GetSaplingKeyScope(address, scope) && scope == KeyScope::Internal)
+                    if (pwallet->GetSaplingKeyScope(address, scope) && scope == KeyScope::Internal)
                         received.isInternalScope = true;
                 }
 
@@ -384,7 +391,7 @@ void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx,
 }
 
 template <typename RpcTx>
-void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, std::set<libzcash::IronwoodOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend)
+void getIronwoodSends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, std::set<libzcash::IronwoodOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend)
 {
     // Outgoing Sapling Spends
     int shieldedActionIndex = 0;
@@ -407,7 +414,7 @@ void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 send.memo = HexStr(memo);
 
                 libzcash::IronwoodExtendedSpendingKeyPirate extsk;
-                bool addrIsMine = pwalletMain->GetIronwoodExtendedSpendingKey(addr, extsk);
+                bool addrIsMine = pwallet->GetIronwoodExtendedSpendingKey(addr, extsk);
 
                 // If the leading byte is 0xF4 or lower, the memo field should be interpreted as a
                 // UTF-8-encoded text string.
@@ -428,7 +435,7 @@ void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
                 // Mark as internal scope (ZIP-32 change address)
                 {
                     KeyScope scope;
-                    if (pwalletMain->GetIronwoodKeyScope(addr, scope) && scope == KeyScope::Internal)
+                    if (pwallet->GetIronwoodKeyScope(addr, scope) && scope == KeyScope::Internal)
                         send.isInternalScope = true;
                 }
 
@@ -442,7 +449,7 @@ void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, s
 }
 
 template <typename RpcTx>
-void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
+void getIronwoodSpends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly)
 {
     // Sapling Inputs belonging to the wallet
     for (const auto& rustSpend : tx.GetIronwoodActions()) {
@@ -451,14 +458,14 @@ void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, 
         TransactionSpendZO spend;
 
         // Find the op of the nullifier
-        map<uint256, IronwoodOutPoint>::iterator opit = pwalletMain->mapArcIronwoodOutPoints.find(nullifier);
-        if (opit == pwalletMain->mapArcIronwoodOutPoints.end()) {
+        map<uint256, IronwoodOutPoint>::iterator opit = pwallet->mapArcIronwoodOutPoints.find(nullifier);
+        if (opit == pwallet->mapArcIronwoodOutPoints.end()) {
             continue;
         }
         IronwoodOutPoint op = (*opit).second;
 
         // Get parent transaction and check action validity
-        const CWalletTx* parentwtx = pwalletMain->GetWalletTx(op.hash);
+        const CWalletTx* parentwtx = pwallet->GetWalletTx(op.hash);
         if (parentwtx != NULL) {
             auto vActions = parentwtx->GetIronwoodActions();
             
@@ -485,8 +492,8 @@ void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, 
                     spend.spendTxid = op.hash.ToString();
 
                     libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                    pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
-                    spend.spendable = pwalletMain->HaveIronwoodSpendingKey(extfvk);
+                    pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
+                    spend.spendable = pwallet->HaveIronwoodSpendingKey(extfvk);
 
                     if (spend.spendable || fIncludeWatchonly)
                         vSpend.push_back(spend);
@@ -495,8 +502,8 @@ void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, 
                 }
             }
         } else {
-            map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(op.hash);
-            if (it != pwalletMain->mapArcTxs.end()) {
+            map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.find(op.hash);
+            if (it != pwallet->mapArcTxs.end()) {
                 CTransaction parentctx;
                 uint256 hashBlock;
 
@@ -548,8 +555,8 @@ void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, 
                         spend.spendTxid = op.hash.ToString();
 
                         libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                        pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
-                        spend.spendable = pwalletMain->HaveIronwoodSpendingKey(extfvk);
+                        pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
+                        spend.spendable = pwallet->HaveIronwoodSpendingKey(extfvk);
 
                         if (spend.spendable || fIncludeWatchonly)
                             vSpend.push_back(spend);
@@ -563,7 +570,7 @@ void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, 
 }
 
 template <typename RpcTx>
-void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
+void getIronwoodReceives(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly)
 {
     int shieldedActionIndex = 0;
     for (const auto& rustAction : tx.GetIronwoodActions()) {
@@ -584,14 +591,14 @@ void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx
                 received.memo = HexStr(memo);
 
                 libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-                pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk);
-                received.spendable = pwalletMain->HaveIronwoodSpendingKey(extfvk);
+                pwallet->GetIronwoodFullViewingKey(ivk, extfvk);
+                received.spendable = pwallet->HaveIronwoodSpendingKey(extfvk);
 
                 // Mark as internal scope (ZIP-32 change address)
                 {
                     auto ironAddr = note.GetAddress();
                     KeyScope scope;
-                    if (pwalletMain->GetIronwoodKeyScope(ironAddr, scope) && scope == KeyScope::Internal)
+                    if (pwallet->GetIronwoodKeyScope(ironAddr, scope) && scope == KeyScope::Internal)
                         received.isInternalScope = true;
                 }
 
@@ -619,24 +626,24 @@ void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx
     }
 }
 
-void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
+void getAllSaplingOVKs(CWallet* pwallet, std::set<uint256>& ovks, bool fIncludeWatchonly)
 {
-    // exit if pwalletMain is not set
-    if (pwalletMain == nullptr)
+    // exit if pwallet is not set
+    if (pwallet == nullptr)
         return;
 
     // get ovks for all sapling spending keys
     if (fIncludeWatchonly) {
-        pwalletMain->GetSaplingOutgoingViewingKeySet(ovks);
+        pwallet->GetSaplingOutgoingViewingKeySet(ovks);
     } else {
         SaplingIncomingViewingKeySet setIvks;
-        pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
+        pwallet->GetSaplingIncomingViewingKeySet(setIvks);
         for (const auto& ivkWithScope : setIvks) {
             const libzcash::SaplingIncomingViewingKey& ivk = ivkWithScope.first;
             libzcash::SaplingExtendedFullViewingKey extfvk;
 
-            if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+            if (pwallet->GetSaplingFullViewingKey(ivk, extfvk)) {
+                if (pwallet->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
                     ovks.insert(extfvk.fvk.ovk);
                 }
             }
@@ -647,20 +654,20 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
     std::set<libzcash::IronwoodOutgoingViewingKey> ovksIronwood;
     if (fIncludeWatchonly) {
         IronwoodOutgoingViewingKeySet ovksScoped;
-        pwalletMain->GetIronwoodOutgoingViewingKeySet(ovksScoped);
+        pwallet->GetIronwoodOutgoingViewingKeySet(ovksScoped);
         // Extract the actual OVKs from the scoped structures
         for (const auto& ovkWithScope : ovksScoped) {
             ovksIronwood.insert(ovkWithScope.ovk);
         }
     } else {
         IronwoodIncomingViewingKeySet setIvks;
-        pwalletMain->GetIronwoodIncomingViewingKeySet(setIvks);
+        pwallet->GetIronwoodIncomingViewingKeySet(setIvks);
         for (const auto& ivkWithScope : setIvks) {
             const auto& ivk = ivkWithScope.first;
             libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
-            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveIronwoodSpendingKey(extfvk) || fIncludeWatchonly) {
+            if (pwallet->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                if (pwallet->HaveIronwoodSpendingKey(extfvk) || fIncludeWatchonly) {
                     // External OVK
                     IronwoodOutgoingViewingKey ovk_e;
                     if (extfvk.fvk.DeriveOVK(&ovk_e)) {
@@ -682,19 +689,19 @@ void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly)
 
     // ovk used of t addresses
     HDSeed seed;
-    if (pwalletMain->GetHDSeed(seed)) {
+    if (pwallet->GetHDSeed(seed)) {
         ovks.insert(ovkForShieldingFromTaddr(seed));
     }
 }
 
-void getAllSaplingIVKs(std::set<SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly)
+void getAllSaplingIVKs(CWallet* pwallet, std::set<SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly)
 {
-    // exit if pwalletMain is not set
-    if (pwalletMain == nullptr)
+    // exit if pwallet is not set
+    if (pwallet == nullptr)
         return;
 
     SaplingIncomingViewingKeySet setIvks;
-    pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
+    pwallet->GetSaplingIncomingViewingKeySet(setIvks);
     // get ivks for all spending keys
     for (const auto& ivkWithScope : setIvks) {
         const libzcash::SaplingIncomingViewingKey& ivk = ivkWithScope.first;
@@ -703,8 +710,8 @@ void getAllSaplingIVKs(std::set<SaplingIncomingViewingKey>& ivks, bool fIncludeW
             ivks.insert(ivk);
         } else {
             libzcash::SaplingExtendedFullViewingKey extfvk;
-            if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveSaplingSpendingKey(extfvk)) {
+            if (pwallet->GetSaplingFullViewingKey(ivk, extfvk)) {
+                if (pwallet->HaveSaplingSpendingKey(extfvk)) {
                     ivks.insert(ivk);
                 }
             }
@@ -712,20 +719,20 @@ void getAllSaplingIVKs(std::set<SaplingIncomingViewingKey>& ivks, bool fIncludeW
     }
 }
 
-void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly)
+void getRpcArcTxSaplingKeys(CWallet* pwallet, const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly)
 {
-    AssertLockHeld(pwalletMain->cs_wallet);
+    AssertLockHeld(pwallet->cs_wallet);
 
     std::set<SaplingIncomingViewingKey> ivks;
     std::set<uint256> ovks;
 
-    getAllSaplingOVKs(ovks, fIncludeWatchonly);
-    getAllSaplingIVKs(ivks, fIncludeWatchonly);
+    getAllSaplingOVKs(pwallet, ovks, fIncludeWatchonly);
+    getAllSaplingIVKs(pwallet, ivks, fIncludeWatchonly);
 
     auto params = Params().GetConsensus();
-    getSaplingSpends(params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
-    getSaplingSends(params, txHeight, tx, ovks, arcTx.saplingOvks, arcTx.vZsSend);
-    getSaplingReceives(params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
+    getSaplingSpends(pwallet, params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
+    getSaplingSends(pwallet, params, txHeight, tx, ovks, arcTx.saplingOvks, arcTx.vZsSend);
+    getSaplingReceives(pwallet, params, txHeight, tx, ivks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
 
     // Create Set of wallet address the belong to the wallet for this tx and have been spent from
     for (int i = 0; i < arcTx.vZsSpend.size(); i++) {
@@ -744,29 +751,29 @@ void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction
     }
 }
 
-void getAllIronwoodOVKs(std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bool fIncludeWatchonly)
+void getAllIronwoodOVKs(CWallet* pwallet, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bool fIncludeWatchonly)
 {
-    // exit if pwalletMain is not set
-    if (pwalletMain == nullptr)
+    // exit if pwallet is not set
+    if (pwallet == nullptr)
         return;
 
     // get ovks for all spending keys
     if (fIncludeWatchonly) {
         IronwoodOutgoingViewingKeySet ovksScoped;
-        pwalletMain->GetIronwoodOutgoingViewingKeySet(ovksScoped);
+        pwallet->GetIronwoodOutgoingViewingKeySet(ovksScoped);
         // Extract the actual OVKs from the scoped structures
         for (const auto& ovkWithScope : ovksScoped) {
             ovks.insert(ovkWithScope.ovk);
         }
     } else {
         IronwoodIncomingViewingKeySet setIvks;
-        pwalletMain->GetIronwoodIncomingViewingKeySet(setIvks);
+        pwallet->GetIronwoodIncomingViewingKeySet(setIvks);
         for (const auto& ivkWithScope : setIvks) {
             const auto& ivk = ivkWithScope.first;
             libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
 
-            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveIronwoodSpendingKey(extfvk) || fIncludeWatchonly) {
+            if (pwallet->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                if (pwallet->HaveIronwoodSpendingKey(extfvk) || fIncludeWatchonly) {
                     // External OVK
                     IronwoodOutgoingViewingKey ovk_e;
                     if (extfvk.fvk.DeriveOVK(&ovk_e)) {
@@ -785,16 +792,16 @@ void getAllIronwoodOVKs(std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bo
     // get ovks for all sapling spending keys (Sapling OVKs can be used for Ironwood when the source is a Sapling note)
     std::set<uint256> ovksSapling;
     if (fIncludeWatchonly) {
-        pwalletMain->GetSaplingOutgoingViewingKeySet(ovksSapling);
+        pwallet->GetSaplingOutgoingViewingKeySet(ovksSapling);
     } else {
         SaplingIncomingViewingKeySet setIvks;
-        pwalletMain->GetSaplingIncomingViewingKeySet(setIvks);
+        pwallet->GetSaplingIncomingViewingKeySet(setIvks);
         for (const auto& ivkWithScope : setIvks) {
             const libzcash::SaplingIncomingViewingKey& ivk = ivkWithScope.first;
             libzcash::SaplingExtendedFullViewingKey extfvk;
 
-            if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
+            if (pwallet->GetSaplingFullViewingKey(ivk, extfvk)) {
+                if (pwallet->HaveSaplingSpendingKey(extfvk) || fIncludeWatchonly) {
                     ovksSapling.insert(extfvk.fvk.ovk);
                 }
             }
@@ -807,19 +814,19 @@ void getAllIronwoodOVKs(std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bo
 
     // ovk used of t addresses
     HDSeed seed;
-    if (pwalletMain->GetHDSeed(seed)) {
+    if (pwallet->GetHDSeed(seed)) {
         ovks.insert(libzcash::IronwoodOutgoingViewingKey(ovkForShieldingFromTaddr(seed)));
     }
 }
 
-void getAllIronwoodIVKs(std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bool fIncludeWatchonly)
+void getAllIronwoodIVKs(CWallet* pwallet, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bool fIncludeWatchonly)
 {
-    // exit if pwalletMain is not set
-    if (pwalletMain == nullptr)
+    // exit if pwallet is not set
+    if (pwallet == nullptr)
         return;
 
     IronwoodIncomingViewingKeySet setIvks;
-    pwalletMain->GetIronwoodIncomingViewingKeySet(setIvks);
+    pwallet->GetIronwoodIncomingViewingKeySet(setIvks);
     // get ivks for all spending keys (both external and internal)
     for (const auto& ivkPair : setIvks) {
         const auto& ivk = ivkPair.first;
@@ -828,8 +835,8 @@ void getAllIronwoodIVKs(std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bo
             ivks.insert(ivk);
         } else {
             libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
-                if (pwalletMain->HaveIronwoodSpendingKey(extfvk)) {
+            if (pwallet->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                if (pwallet->HaveIronwoodSpendingKey(extfvk)) {
                     ivks.insert(ivk);
                 }
             }
@@ -837,20 +844,20 @@ void getAllIronwoodIVKs(std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bo
     }
 }
 
-void getRpcArcTxIronwoodKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly)
+void getRpcArcTxIronwoodKeys(CWallet* pwallet, const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly)
 {
-    AssertLockHeld(pwalletMain->cs_wallet);
+    AssertLockHeld(pwallet->cs_wallet);
 
     std::set<libzcash::IronwoodIncomingViewingKey> ivks;
     std::set<libzcash::IronwoodOutgoingViewingKey> ovks;
 
-    getAllIronwoodOVKs(ovks, fIncludeWatchonly);
-    getAllIronwoodIVKs(ivks, fIncludeWatchonly);
+    getAllIronwoodOVKs(pwallet, ovks, fIncludeWatchonly);
+    getAllIronwoodIVKs(pwallet, ivks, fIncludeWatchonly);
 
     auto params = Params().GetConsensus();
-    getIronwoodSpends(params, txHeight, tx, ivks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
-    getIronwoodSends(params, txHeight, tx, ovks, arcTx.ironwoodOvks, arcTx.vZoSend);
-    getIronwoodReceives(params, txHeight, tx, ivks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
+    getIronwoodSpends(pwallet, params, txHeight, tx, ivks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
+    getIronwoodSends(pwallet, params, txHeight, tx, ovks, arcTx.ironwoodOvks, arcTx.vZoSend);
+    getIronwoodReceives(pwallet, params, txHeight, tx, ivks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     // Create Set of wallet address the belong to the wallet for this tx and have been spent from
     for (int i = 0; i < arcTx.vZoSpend.size(); i++) {
@@ -869,10 +876,10 @@ void getRpcArcTxIronwoodKeys(const CWalletTx& tx, int txHeight, RpcArcTransactio
     }
 }
 
-void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly, bool rescan)
+void getRpcArcTx(CWallet* pwallet, uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly, bool rescan)
 {
     AssertLockHeld(cs_main);
-    AssertLockHeld(pwalletMain->cs_wallet);
+    AssertLockHeld(pwallet->cs_wallet);
 
     // set defaults
     arcTx.archiveType = ARCHIVED;
@@ -896,8 +903,8 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
 
     // try to find the transaction to pull the hashblock
-    std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txid);
-    if (it != pwalletMain->mapArcTxs.end()) {
+    std::map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.find(txid);
+    if (it != pwallet->mapArcTxs.end()) {
         // Get Location of tx in blockchain
         arcTxPt = it->second;
         hashBlock = arcTxPt.hashBlock;
@@ -906,10 +913,10 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
         // Get Ivks and Ovks saved in ArchiveTxPoint
         bool usedCachedKeys = false;
         if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.ironwoodIvks.size() == 0 && arcTxPt.ironwoodOvks.size() == 0) || rescan) {
-            getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
-            getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-            getAllIronwoodOVKs(ironwoodOvks, fIncludeWatchonly);
-            getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
+            getAllSaplingOVKs(pwallet, saplingOvks, fIncludeWatchonly);
+            getAllSaplingIVKs(pwallet, saplingIvks, fIncludeWatchonly);
+            getAllIronwoodOVKs(pwallet, ironwoodOvks, fIncludeWatchonly);
+            getAllIronwoodIVKs(pwallet, ironwoodIvks, fIncludeWatchonly);
         } else {
             saplingIvks = arcTxPt.saplingIvks;
             saplingOvks = arcTxPt.saplingOvks;
@@ -948,10 +955,10 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
         // this tx was first processed (e.g. change-address spend support).
         if (usedCachedKeys) {
             if (!tx.GetSaplingSpends().empty()) {
-                getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+                getAllSaplingIVKs(pwallet, saplingIvks, fIncludeWatchonly);
             }
             if (tx.GetIronwoodActionsCount() > 0) {
-                getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
+                getAllIronwoodIVKs(pwallet, ironwoodIvks, fIncludeWatchonly);
             }
         }
     } else {
@@ -983,17 +990,17 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
 
     auto params = Params().GetConsensus();
     // Spends must be located to determine if outputs are change
-    getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
-    getSaplingSpends(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
-    getIronwoodSpends(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
+    getTransparentSpends(pwallet, tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
+    getSaplingSpends(pwallet, params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
+    getIronwoodSpends(pwallet, params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
 
-    getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
-    getIronwoodSends(params, txHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
+    getTransparentSends(pwallet, tx, arcTx.vTSend, arcTx.transparentValue);
+    getSaplingSends(pwallet, params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
+    getIronwoodSends(pwallet, params, txHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
 
-    getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
-    getSaplingReceives(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
-    getIronwoodReceives(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
+    getTransparentRecieves(pwallet, tx, arcTx.vTReceived, fIncludeWatchonly);
+    getSaplingReceives(pwallet, params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
+    getIronwoodReceives(pwallet, params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
     arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();
@@ -1041,25 +1048,25 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     }
 }
 
-void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly, bool rescan)
+void getRpcArcTx(CWallet* pwallet, CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly, bool rescan)
 {
     AssertLockHeld(cs_main);
-    AssertLockHeld(pwalletMain->cs_wallet);
+    AssertLockHeld(pwallet->cs_wallet);
 
     std::set<SaplingIncomingViewingKey> saplingIvks;
     std::set<uint256> saplingOvks;
     std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
     std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
     ArchiveTxPoint arcTxPt;
-    std::map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(tx.GetHash());
-    if (it != pwalletMain->mapArcTxs.end()) {
+    std::map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.find(tx.GetHash());
+    if (it != pwallet->mapArcTxs.end()) {
         arcTxPt = it->second;
         // Get Ivks and Ovks saved in ArchiveTxPoint
         if ((arcTxPt.saplingIvks.size() == 0 && arcTxPt.saplingOvks.size() == 0 && arcTxPt.ironwoodIvks.size() == 0 && arcTxPt.ironwoodOvks.size() == 0) || rescan) {
-            getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
-            getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-            getAllIronwoodOVKs(ironwoodOvks, fIncludeWatchonly);
-            getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
+            getAllSaplingOVKs(pwallet, saplingOvks, fIncludeWatchonly);
+            getAllSaplingIVKs(pwallet, saplingIvks, fIncludeWatchonly);
+            getAllIronwoodOVKs(pwallet, ironwoodOvks, fIncludeWatchonly);
+            getAllIronwoodIVKs(pwallet, ironwoodIvks, fIncludeWatchonly);
         } else {
             saplingIvks = arcTxPt.saplingIvks;
             saplingOvks = arcTxPt.saplingOvks;
@@ -1069,17 +1076,17 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
             // be incomplete if internal IVKs were added after this tx was first
             // processed (e.g. change-address spend support).
             if (!tx.GetSaplingSpends().empty()) {
-                getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
+                getAllSaplingIVKs(pwallet, saplingIvks, fIncludeWatchonly);
             }
             if (tx.GetIronwoodActionsCount() > 0) {
-                getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
+                getAllIronwoodIVKs(pwallet, ironwoodIvks, fIncludeWatchonly);
             }
         }
     } else {
-        getAllSaplingOVKs(saplingOvks, fIncludeWatchonly);
-        getAllSaplingIVKs(saplingIvks, fIncludeWatchonly);
-        getAllIronwoodOVKs(ironwoodOvks, fIncludeWatchonly);
-        getAllIronwoodIVKs(ironwoodIvks, fIncludeWatchonly);
+        getAllSaplingOVKs(pwallet, saplingOvks, fIncludeWatchonly);
+        getAllSaplingIVKs(pwallet, saplingIvks, fIncludeWatchonly);
+        getAllIronwoodOVKs(pwallet, ironwoodOvks, fIncludeWatchonly);
+        getAllIronwoodIVKs(pwallet, ironwoodIvks, fIncludeWatchonly);
     }
 
 
@@ -1128,17 +1135,17 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
 
     auto params = Params().GetConsensus();
     // Spends must be located to determine if outputs are change
-    getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
-    getSaplingSpends(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
-    getIronwoodSpends(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
+    getTransparentSpends(pwallet, tx, arcTx.vTSpend, arcTx.transparentValue, fIncludeWatchonly);
+    getSaplingSpends(pwallet, params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, fIncludeWatchonly);
+    getIronwoodSpends(pwallet, params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, fIncludeWatchonly);
 
-    getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
-    getIronwoodSends(params, txHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
+    getTransparentSends(pwallet, tx, arcTx.vTSend, arcTx.transparentValue);
+    getSaplingSends(pwallet, params, txHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
+    getIronwoodSends(pwallet, params, txHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
 
-    getTransparentRecieves(tx, arcTx.vTReceived, fIncludeWatchonly);
-    getSaplingReceives(params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
-    getIronwoodReceives(params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
+    getTransparentRecieves(pwallet, tx, arcTx.vTReceived, fIncludeWatchonly);
+    getSaplingReceives(pwallet, params, txHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, fIncludeWatchonly);
+    getIronwoodReceives(pwallet, params, txHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, fIncludeWatchonly);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
     arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();
@@ -1365,7 +1372,8 @@ void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool
 
 UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 5 || params.size() == 2)
@@ -1463,9 +1471,9 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
                             "\nExamples:\n" +
             HelpExampleCli("zs_listtransactions", "") + HelpExampleCli("zs_listtransactions", "1") + HelpExampleCli("zs_listtransactions", "1 1 30 200") + HelpExampleRpc("zs_listtransactions", "") + HelpExampleRpc("zs_listtransactions", "1") + HelpExampleRpc("zs_listtransactions", "1 1 30 200"));
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlockedForReporting();
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     UniValue ret(UniValue::VARR);
 
@@ -1503,7 +1511,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
 
     // get Sorted Archived Transactions
     std::map<std::pair<int, int>, uint256> sortedArchive;
-    for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it) {
+    for (map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.begin(); it != pwallet->mapArcTxs.end(); ++it) {
         uint256 txid = (*it).first;
         ArchiveTxPoint arcTxPt = (*it).second;
         std::pair<int, int> key;
@@ -1516,7 +1524,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
 
     // add any missing wallet transactions - unconfimred & conflicted
     int nPosUnconfirmed = 0;
-    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+    for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
         CWalletTx wtx = (*it).second;
         std::pair<int, int> key;
 
@@ -1545,8 +1553,8 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
         if (nFilterType == 3 && (*it).first.first < nFilter)
             continue;
 
-        if (pwalletMain->mapWallet.count(txid)) {
-            CWalletTx& wtx = pwalletMain->mapWallet[txid];
+        if (pwallet->mapWallet.count(txid)) {
+            CWalletTx& wtx = pwallet->mapWallet[txid];
 
             if (!CheckFinalTx(wtx))
                 continue;
@@ -1572,7 +1580,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
             if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
                 continue;
 
-            getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, wtx, arcTx, fIncludeWatchonly, false);
 
         } else {
             int confirms = chainHeight - (*it).first.first + 1;
@@ -1586,7 +1594,7 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
                 continue;
 
             // Archived Transactions
-            getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, txid, arcTx, fIncludeWatchonly, false);
 
             if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0)
                 continue;
@@ -1631,7 +1639,8 @@ UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& 
 
 UniValue zs_gettransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 1)
@@ -1703,21 +1712,21 @@ UniValue zs_gettransaction(const UniValue& params, bool fHelp, const CPubKey& my
                             "\nExamples:\n" +
             HelpExampleCli("zs_gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\"") + HelpExampleRpc("zs_gettransaction", "\"1075db55d416d3ca199f55b6084e2115b9345e16c5cf302fc80e9d5fbf5d48d\""));
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     uint256 hash;
     hash.SetHex(params[0].get_str());
 
-    if (!pwalletMain->mapWallet.count(hash) && !pwalletMain->mapArcTxs.count(hash))
+    if (!pwallet->mapWallet.count(hash) && !pwallet->mapArcTxs.count(hash))
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid or non-wallet transaction id");
 
     UniValue txObj(UniValue::VOBJ);
     RpcArcTransaction arcTx;
-    if (pwalletMain->mapWallet.count(hash)) {
-        CWalletTx& wtx = pwalletMain->mapWallet[hash];
-        getRpcArcTx(wtx, arcTx, true, false);
+    if (pwallet->mapWallet.count(hash)) {
+        CWalletTx& wtx = pwallet->mapWallet[hash];
+        getRpcArcTx(pwallet, wtx, arcTx, true, false);
     } else {
-        getRpcArcTx(hash, arcTx, true, false);
+        getRpcArcTx(pwallet, hash, arcTx, true, false);
         if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0) {
             return txObj;
         }
@@ -1743,7 +1752,8 @@ UniValue zs_gettransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
 UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 5 || params.size() == 3 || params.size() < 1)
@@ -1810,7 +1820,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
                             "\nExamples:\n" +
             HelpExampleCli("zs_listspentbyaddress", "t1KzZ5n2TPEGYXTZ3WYGL1AYEumEQaRoHaL") + HelpExampleRpc("zs_listspentbyaddress", "t1KzZ5n2TPEGYXTZ3WYGL1AYEumEQaRoHaL"));
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     UniValue ret(UniValue::VARR);
 
@@ -1873,16 +1883,16 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
 
     // Get set of txids that the encoded address was used in
     std::map<std::string, std::set<uint256>>::iterator ait;
-    ait = pwalletMain->mapAddressTxids.find(encodedAddress);
+    ait = pwallet->mapAddressTxids.find(encodedAddress);
     std::set<uint256> txids;
 
-    if (ait != pwalletMain->mapAddressTxids.end()) {
+    if (ait != pwallet->mapAddressTxids.end()) {
         txids = ait->second;
     }
 
     // get Sorted Archived Transactions
     std::map<std::pair<int, int>, uint256> sortedArchive;
-    for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it) {
+    for (map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.begin(); it != pwallet->mapArcTxs.end(); ++it) {
         uint256 txid = (*it).first;
         ArchiveTxPoint arcTxPt = (*it).second;
         std::pair<int, int> key;
@@ -1901,7 +1911,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
 
     // add any missing wallet transactions - unconfimred & conflicted
     int nPosUnconfirmed = 0;
-    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+    for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
         CWalletTx wtx = (*it).second;
         std::pair<int, int> key;
 
@@ -1930,8 +1940,8 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
         if (nFilterType == 3 && (*it).first.first < nFilter)
             continue;
 
-        if (pwalletMain->mapWallet.count(txid)) {
-            CWalletTx& wtx = pwalletMain->mapWallet[txid];
+        if (pwallet->mapWallet.count(txid)) {
+            CWalletTx& wtx = pwallet->mapWallet[txid];
 
             if (!CheckFinalTx(wtx))
                 continue;
@@ -1957,7 +1967,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
             if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
                 continue;
 
-            getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, wtx, arcTx, fIncludeWatchonly, false);
 
         } else {
             int confirms = chainHeight - (*it).first.first + 1;
@@ -1971,7 +1981,7 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
                 continue;
 
             // Archived Transactions
-            getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, txid, arcTx, fIncludeWatchonly, false);
 
             if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0)
                 continue;
@@ -2031,7 +2041,8 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
 
 UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 5 || params.size() == 3 || params.size() < 1)
@@ -2099,7 +2110,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
                             "\nExamples:\n" +
             HelpExampleCli("zs_listreceivedbyaddress", "t1KzZ5n2TPEGYXTZ3WYGL1AYEumEQaRoHaL") + HelpExampleRpc("zs_listreceivedbyaddress", "t1KzZ5n2TPEGYXTZ3WYGL1AYEumEQaRoHaL"));
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     UniValue ret(UniValue::VARR);
 
@@ -2162,15 +2173,15 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
 
     // Get set of txids that the encoded address was used in
     std::map<std::string, std::set<uint256>>::iterator ait;
-    ait = pwalletMain->mapAddressTxids.find(encodedAddress);
+    ait = pwallet->mapAddressTxids.find(encodedAddress);
     std::set<uint256> txids;
-    if (ait != pwalletMain->mapAddressTxids.end()) {
+    if (ait != pwallet->mapAddressTxids.end()) {
         txids = ait->second;
     }
 
     // get Sorted Archived Transactions
     std::map<std::pair<int, int>, uint256> sortedArchive;
-    for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it) {
+    for (map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.begin(); it != pwallet->mapArcTxs.end(); ++it) {
         uint256 txid = (*it).first;
         ArchiveTxPoint arcTxPt = (*it).second;
         std::pair<int, int> key;
@@ -2189,7 +2200,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
 
     // add any missing wallet transactions - unconfimred & conflicted
     int nPosUnconfirmed = 0;
-    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+    for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
         CWalletTx wtx = (*it).second;
         std::pair<int, int> key;
 
@@ -2218,8 +2229,8 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
         if (nFilterType == 3 && (*it).first.first < nFilter)
             continue;
 
-        if (pwalletMain->mapWallet.count(txid)) {
-            CWalletTx& wtx = pwalletMain->mapWallet[txid];
+        if (pwallet->mapWallet.count(txid)) {
+            CWalletTx& wtx = pwallet->mapWallet[txid];
 
             if (!CheckFinalTx(wtx))
                 continue;
@@ -2245,7 +2256,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
             if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
                 continue;
 
-            getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, wtx, arcTx, fIncludeWatchonly, false);
 
         } else {
             int confirms = chainHeight - (*it).first.first + 1;
@@ -2259,7 +2270,7 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
                 continue;
 
             // Archived Transactions
-            getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, txid, arcTx, fIncludeWatchonly, false);
 
             if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0)
                 continue;
@@ -2319,7 +2330,8 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
 
 UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 5 || params.size() == 3 || params.size() < 1)
@@ -2386,7 +2398,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
                             "\nExamples:\n" +
             HelpExampleCli("zs_listsentbyaddress", "t1KzZ5n2TPEGYXTZ3WYGL1AYEumEQaRoHaL") + HelpExampleRpc("zs_listsentbyaddress", "t1KzZ5n2TPEGYXTZ3WYGL1AYEumEQaRoHaL"));
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     UniValue ret(UniValue::VARR);
 
@@ -2450,16 +2462,16 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
 
     // Get set of txids that the encoded address was used in
     std::map<std::string, std::set<uint256>>::iterator ait;
-    ait = pwalletMain->mapAddressTxids.find(encodedAddress);
+    ait = pwallet->mapAddressTxids.find(encodedAddress);
     std::set<uint256> txids;
 
-    if (ait != pwalletMain->mapAddressTxids.end()) {
+    if (ait != pwallet->mapAddressTxids.end()) {
         txids = ait->second;
     }
 
     // get Sorted Archived Transactions
     std::map<std::pair<int, int>, uint256> sortedArchive;
-    for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it) {
+    for (map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.begin(); it != pwallet->mapArcTxs.end(); ++it) {
         uint256 txid = (*it).first;
         ArchiveTxPoint arcTxPt = (*it).second;
         std::pair<int, int> key;
@@ -2478,7 +2490,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
 
     // add any missing wallet transactions - unconfimred & conflicted
     int nPosUnconfirmed = 0;
-    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+    for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
         CWalletTx wtx = (*it).second;
         std::pair<int, int> key;
 
@@ -2507,8 +2519,8 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
         if (nFilterType == 3 && (*it).first.first < nFilter)
             continue;
 
-        if (pwalletMain->mapWallet.count(txid)) {
-            CWalletTx& wtx = pwalletMain->mapWallet[txid];
+        if (pwallet->mapWallet.count(txid)) {
+            CWalletTx& wtx = pwallet->mapWallet[txid];
 
             if (!CheckFinalTx(wtx))
                 continue;
@@ -2534,7 +2546,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
             if (nFilterType == 2 && wtx.GetDepthInMainChain() > nFilter)
                 continue;
 
-            getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, wtx, arcTx, fIncludeWatchonly, false);
 
         } else {
             int confirms = chainHeight - (*it).first.first + 1;
@@ -2548,7 +2560,7 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
                 continue;
 
             // Archived Transactions
-            getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+            getRpcArcTx(pwallet, txid, arcTx, fIncludeWatchonly, false);
 
             if (arcTx.blockHash.IsNull() || mapBlockIndex.count(arcTx.blockHash) == 0)
                 continue;
@@ -2614,6 +2626,10 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
  **/
 UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
     if (fHelp || params.size() > 4)
         throw runtime_error(
             "getalldata \"datatype transactiontype \"\n"
@@ -2653,9 +2669,9 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         connectionCount = (int)vNodes.size();
     }
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    EnsureWalletIsUnlockedForReporting();
+    EnsureWalletIsUnlockedForReporting(pwallet);
 
     int nMinDepth = 1;
 
@@ -2677,19 +2693,19 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // //get Ovks for sapling decryption
     // std::set<uint256> ovks;
-    // getAllSaplingOVKs(ovks, fIncludeWatchonly);
+    // getAllSaplingOVKs(pwallet, ovks, fIncludeWatchonly);
     //
     // //get Ivks for sapling decryption
     // std::set<uint256> ivks;
-    // getAllSaplingIVKs(ivks, fIncludeWatchonly);
+    // getAllSaplingIVKs(pwallet, ivks, fIncludeWatchonly);
 
 
     // Create map of addresses
     // Add all Transaparent addresses to list
     map<string, balancestruct> addressBalances;
-    BOOST_FOREACH (const PAIRTYPE(CTxDestination, CAddressBookData) & item, pwalletMain->mapAddressBook) {
+    BOOST_FOREACH (const PAIRTYPE(CTxDestination, CAddressBookData) & item, pwallet->mapAddressBook) {
         string addressString = EncodeDestination(item.first);
-        isminetype mine = IsMine(*pwalletMain, item.first);
+        isminetype mine = IsMine(*pwallet, item.first);
 
         if (mine == ISMINE_SPENDABLE || (mine == ISMINE_WATCH_ONLY && fIncludeWatchonly)) {
             if (addressBalances.count(addressString) == 0)
@@ -2705,7 +2721,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Create Ordered List
     map<int64_t, CWalletTx> orderedTxs;
-    for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it) {
+    for (map<uint256, CWalletTx>::iterator it = pwallet->mapWallet.begin(); it != pwallet->mapWallet.end(); ++it) {
         const uint256& wtxid = it->first;
         const CWalletTx& wtx = (*it).second;
         orderedTxs.insert(std::pair<int64_t, CWalletTx>(wtx.nOrderPos, wtx));
@@ -2745,16 +2761,16 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
                 continue;
 
             // excluded coins that we dont have the spending or watchonly keys for
-            isminetype mine = IsMine(*pwalletMain, address);
+            isminetype mine = IsMine(*pwallet, address);
             if (mine != ISMINE_SPENDABLE && !(mine == ISMINE_WATCH_ONLY && fIncludeWatchonly))
                 continue;
 
             // Exclude spent coins
-            if (pwalletMain->IsSpent(wtxid, i))
+            if (pwallet->IsSpent(wtxid, i))
                 continue;
 
             // Assign locked
-            if (txType == 0 && pwalletMain->IsLockedCoin((*it).first, i))
+            if (txType == 0 && pwallet->IsLockedCoin((*it).first, i))
                 txType = 3;
 
             string addressString = EncodeDestination(address);
@@ -2789,19 +2805,19 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             SaplingNoteData nd = pair.second;
 
             // Skip Spent
-            if (nd.nullifier && pwalletMain->IsSaplingSpent(*nd.nullifier))
+            if (nd.nullifier && pwallet->IsSaplingSpent(*nd.nullifier))
                 continue;
 
             // Decrypt sapling incoming commitments using IVK
             auto ivk = nd.ivk;
             libzcash::SaplingExtendedFullViewingKey extfvk;
-            if (pwalletMain->GetSaplingFullViewingKey(ivk, extfvk)) {
-                bool haveSpendingKey = pwalletMain->HaveSaplingSpendingKey(extfvk);
+            if (pwallet->GetSaplingFullViewingKey(ivk, extfvk)) {
+                bool haveSpendingKey = pwallet->HaveSaplingSpendingKey(extfvk);
                 if (haveSpendingKey || fIncludeWatchonly) {
                     // Use Rust decryption
                     auto pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], ivk);
 
-                    if (txType == 0 && pwalletMain->IsLockedNote(op))
+                    if (txType == 0 && pwallet->IsLockedNote(op))
                         txType = 3;
 
                     if (pt) {
@@ -2839,18 +2855,18 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             IronwoodNoteData nd = pair.second;
 
             // Skip Spent
-            if (nd.nullifier && pwalletMain->IsIronwoodSpent(*nd.nullifier))
+            if (nd.nullifier && pwallet->IsIronwoodSpent(*nd.nullifier))
                 continue;
 
             // Decrypt ironwood action
             auto ivk = nd.ivk;
             libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-            if (pwalletMain->GetIronwoodFullViewingKey(ivk, extfvk)) {
-                bool haveSpendingKey = pwalletMain->HaveIronwoodSpendingKey(extfvk);
+            if (pwallet->GetIronwoodFullViewingKey(ivk, extfvk)) {
+                bool haveSpendingKey = pwallet->HaveIronwoodSpendingKey(extfvk);
                 if (haveSpendingKey || fIncludeWatchonly) {
                     auto pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], ivk);
 
-                    if (txType == 0 && pwalletMain->IsLockedNote(op))
+                    if (txType == 0 && pwallet->IsLockedNote(op))
                         txType = 3;
 
                     if (pt) {
@@ -2949,7 +2965,7 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
         uint256 ut;
         // get Sorted Archived Transactions
         std::map<std::pair<int, int>, uint256> sortedArchive;
-        for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it) {
+        for (map<uint256, ArchiveTxPoint>::iterator it = pwallet->mapArcTxs.begin(); it != pwallet->mapArcTxs.end(); ++it) {
             uint256 txid = (*it).first;
             ArchiveTxPoint arcTxPt = (*it).second;
             std::pair<int, int> key;
@@ -3007,14 +3023,14 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
             uint256 txid = (*it).second;
             RpcArcTransaction arcTx;
 
-            if (pwalletMain->mapWallet.count(txid)) {
-                CWalletTx& wtx = pwalletMain->mapWallet[txid];
+            if (pwallet->mapWallet.count(txid)) {
+                CWalletTx& wtx = pwallet->mapWallet[txid];
 
-                getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+                getRpcArcTx(pwallet, wtx, arcTx, fIncludeWatchonly, false);
 
             } else {
                 // Archived Transactions
-                getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+                getRpcArcTx(pwallet, txid, arcTx, fIncludeWatchonly, false);
             }
 
             UniValue txObj(UniValue::VOBJ);
@@ -3050,37 +3066,58 @@ UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return returnObj;
 }
 
-void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight)
+void decrypttransaction(CWallet* pwallet, CTransaction& tx, RpcArcTransaction& arcTx, int nHeight)
 {
+    // Only the getAll*VKs() helpers below tolerate a null wallet; every other
+    // helper dereferences pwallet unconditionally (GetWalletTx(), mapArcTxs,
+    // mapArcSaplingOutPoints, IsMine(*pwallet, ...)). decoderawtransaction is
+    // registered even when no wallet exists at all (-disablewallet, or NSPV
+    // superlite mode), so reaching those helpers with a null wallet would
+    // crash the node on any transaction that has an input or an output.
+    // Leave arcTx with no spends/sends/receives instead, so the RPC still
+    // returns the decoded transaction with empty decrypted* arrays.
+    if (pwallet == nullptr) {
+        arcTx.saplingValue = -tx.GetValueBalanceSapling();
+        arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();
+        return;
+    }
+
+    // Everything below walks the wallet's transaction and note maps, so it
+    // needs cs_wallet for the whole traversal, not just per-lookup. The one
+    // caller already holds cs_main, keeping the cs_main -> cs_wallet order
+    // (some of these helpers call GetTransaction(), which takes cs_main).
+    AssertLockHeld(cs_main);
+    LOCK(pwallet->cs_wallet);
+
     // get Ovks for sapling decryption
     std::set<uint256> saplingOvks;
-    getAllSaplingOVKs(saplingOvks, true);
+    getAllSaplingOVKs(pwallet, saplingOvks, true);
 
     // get Ivks for sapling decryption
     std::set<SaplingIncomingViewingKey> saplingIvks;
-    getAllSaplingIVKs(saplingIvks, true);
+    getAllSaplingIVKs(pwallet, saplingIvks, true);
 
     // get Ovks for sapling decryption
     std::set<libzcash::IronwoodOutgoingViewingKey> ironwoodOvks;
-    getAllIronwoodOVKs(ironwoodOvks, true);
+    getAllIronwoodOVKs(pwallet, ironwoodOvks, true);
 
     // get Ivks for sapling decryption
     std::set<libzcash::IronwoodIncomingViewingKey> ironwoodIvks;
-    getAllIronwoodIVKs(ironwoodIvks, true);
+    getAllIronwoodIVKs(pwallet, ironwoodIvks, true);
 
     auto params = Params().GetConsensus();
     // Spends must be located to determine if outputs are change
-    getTransparentSpends(tx, arcTx.vTSpend, arcTx.transparentValue, true);
-    getSaplingSpends(params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, true);
-    getIronwoodSpends(params, nHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, true);
+    getTransparentSpends(pwallet, tx, arcTx.vTSpend, arcTx.transparentValue, true);
+    getSaplingSpends(pwallet, params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsSpend, true);
+    getIronwoodSpends(pwallet, params, nHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoSpend, true);
 
-    getTransparentSends(tx, arcTx.vTSend, arcTx.transparentValue);
-    getSaplingSends(params, nHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
-    getIronwoodSends(params, nHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
+    getTransparentSends(pwallet, tx, arcTx.vTSend, arcTx.transparentValue);
+    getSaplingSends(pwallet, params, nHeight, tx, saplingOvks, arcTx.saplingOvks, arcTx.vZsSend);
+    getIronwoodSends(pwallet, params, nHeight, tx, ironwoodOvks, arcTx.ironwoodOvks, arcTx.vZoSend);
 
-    getTransparentRecieves(tx, arcTx.vTReceived, true);
-    getSaplingReceives(params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, true);
-    getIronwoodReceives(params, nHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, true);
+    getTransparentRecieves(pwallet, tx, arcTx.vTReceived, true);
+    getSaplingReceives(pwallet, params, nHeight, tx, saplingIvks, arcTx.saplingIvks, arcTx.vZsReceived, true);
+    getIronwoodReceives(pwallet, params, nHeight, tx, ironwoodIvks, arcTx.ironwoodIvks, arcTx.vZoReceived, true);
 
     arcTx.saplingValue = -tx.GetValueBalanceSapling();
     arcTx.ironwoodValue = -tx.GetValueBalanceIronwood();

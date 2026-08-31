@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -73,9 +74,9 @@ QString TransactionDesc::toHTML(CWallet *wallet, TransactionRecord *rec, int uni
 
     if (wallet->mapWallet.count(txid)) {
         CWalletTx& wtx = wallet->mapWallet[txid];
-        getRpcArcTx(wtx, arcTx, fIncludeWatchonly, false);
+        getRpcArcTx(wallet, wtx, arcTx, fIncludeWatchonly, false);
     } else {
-        getRpcArcTx(txid, arcTx, fIncludeWatchonly, false);
+        getRpcArcTx(wallet, txid, arcTx, fIncludeWatchonly, false);
     }
 
     if (arcTx.category == "not found") {

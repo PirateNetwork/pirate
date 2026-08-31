@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -171,55 +172,58 @@ public:
     std::map<std::pair<int, int>, RpcArcTransaction> mapArcTx;
 };
 
-void getRpcArcTransactions(RpcArcTransactions& arcTxs);
-
 // Transparent
 template <typename RpcTx>
-void getTransparentSends(RpcTx& tx, vector<TransactionSendT>& vSend, CAmount& transparentValue);
+void getTransparentSends(CWallet* pwallet, RpcTx& tx, vector<TransactionSendT>& vSend, CAmount& transparentValue);
 
 template <typename RpcTx>
-void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount& transparentValue, bool fIncludeWatchonly = false);
+void getTransparentSpends(CWallet* pwallet, RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount& transparentValue, bool fIncludeWatchonly = false);
 
 template <typename RpcTx>
-void getTransparentRecieves(RpcTx& tx, vector<TransactionReceivedT>& vReceived, bool fIncludeWatchonly = false);
+void getTransparentRecieves(CWallet* pwallet, RpcTx& tx, vector<TransactionReceivedT>& vReceived, bool fIncludeWatchonly = false);
 
 // Sapling
 template <typename RpcTx>
-void getSaplingSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ovks, std::set<uint256>& ovksOut, vector<TransactionSendZS>& vSend);
+void getSaplingSends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<uint256>& ovks, std::set<uint256>& ovksOut, vector<TransactionSendZS>& vSend);
 
 template <typename RpcTx>
-void getSaplingSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
+void getSaplingSpends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
 
 template <typename RpcTx>
-void getSaplingReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly = false);
+void getSaplingReceives(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::SaplingIncomingViewingKey>& ivks, std::set<libzcash::SaplingIncomingViewingKey>& ivksOut, vector<TransactionReceivedZS>& vReceived, bool fIncludeWatchonly = false);
 
 // Ironwood
 template <typename RpcTx>
-void getIronwoodSends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, std::set<libzcash::IronwoodOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend);
+void getIronwoodSends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, std::set<libzcash::IronwoodOutgoingViewingKey>& ovksOut, vector<TransactionSendZO>& vSend);
 
 template <typename RpcTx>
-void getIronwoodSpends(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionSpendZS>& vSpend, bool fIncludeWatchonly = false);
+void getIronwoodSpends(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionSpendZO>& vSpend, bool fIncludeWatchonly = false);
 
 template <typename RpcTx>
-void getIronwoodReceives(const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
+void getIronwoodReceives(CWallet* pwallet, const Consensus::Params& params, int nHeight, RpcTx& tx, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, std::set<libzcash::IronwoodIncomingViewingKey>& ivksOut, vector<TransactionReceivedZO>& vReceived, bool fIncludeWatchonly = false);
 
 
-void getAllSaplingOVKs(std::set<uint256>& ovks, bool fIncludeWatchonly = false);
-void getAllSaplingIVKs(std::set<libzcash::SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
-void getAllIronwoodOVKs(std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bool fIncludeWatchonly = false);
-void getAllIronwoodIVKs(std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
+void getAllSaplingOVKs(CWallet* pwallet, std::set<uint256>& ovks, bool fIncludeWatchonly = false);
+void getAllSaplingIVKs(CWallet* pwallet, std::set<libzcash::SaplingIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
+void getAllIronwoodOVKs(CWallet* pwallet, std::set<libzcash::IronwoodOutgoingViewingKey>& ovks, bool fIncludeWatchonly = false);
+void getAllIronwoodIVKs(CWallet* pwallet, std::set<libzcash::IronwoodIncomingViewingKey>& ivks, bool fIncludeWatchonly = false);
 
-void getRpcArcTxSaplingKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
-void getRpcArcTxIronwoodKeys(const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
-void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
-void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
+void getRpcArcTxSaplingKeys(CWallet* pwallet, const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
+void getRpcArcTxIronwoodKeys(CWallet* pwallet, const CWalletTx& tx, int txHeight, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false);
+void getRpcArcTx(CWallet* pwallet, CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
+void getRpcArcTx(CWallet* pwallet, uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly = false, bool rescan = false);
 
 void getRpcArcTxJSONHeader(RpcArcTransaction& arcTx, UniValue& ArcTxJSON);
 void getRpcArcTxJSONSpends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
 void getRpcArcTxJSONSends(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
 void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool filterAddress = false, string addressString = "");
 
-void decrypttransaction(CTransaction& tx, RpcArcTransaction& arcTx, int nHeight);
+// Used by decoderawtransaction (rpc/rawtransaction.cpp) to annotate a raw,
+// not-yet-broadcast transaction's inputs/outputs with whatever the given
+// wallet can decrypt. pwallet may be null (-disablewallet, NSPV superlite):
+// that yields an arcTx with no spends/sends/receives rather than walking the
+// wallet. Requires cs_main; takes cs_wallet itself when pwallet is non-null.
+void decrypttransaction(CWallet* pwallet, CTransaction& tx, RpcArcTransaction& arcTx, int nHeight);
 
 class CRPCTable;
 

@@ -306,6 +306,21 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "z_exportkey", "z_exportviewingkey", "z_setaddressbook",
         "getinfo", "validateaddress", "z_validateaddress", "nn_getwalletinfo",
         "getwalletburntransactions", "signrawtransaction",
+        // rpcpiratewallet/rpcdump plumbing phase: the 6 zs_*/getalldata RPCs
+        // (wallet/rpcpiratewallet.cpp) whose shared getRpcArcTx()/getAll*VKs()
+        // helper layer previously hardcoded pwalletMain, and the 5
+        // wallet/rpcdump.cpp RPCs blocked on importwallet_impl()/
+        // dumpwallet_impl() (shared by the t-only and z-inclusive variants of
+        // each) plus z_exportseedphrase, which was simply missed by Phase 10.
+        "zs_listtransactions", "zs_gettransaction", "zs_listspentbyaddress",
+        "zs_listreceivedbyaddress", "zs_listsentbyaddress", "getalldata",
+        "importwallet", "z_importwallet", "dumpwallet", "z_exportwallet",
+        "z_exportseedphrase",
+        // decoderawtransaction (rpc/rawtransaction.cpp) optionally annotates a
+        // raw transaction with whatever the resolved wallet can decrypt --
+        // was unconditionally pwalletMain via decrypttransaction() until this
+        // phase resolved it per-request too, for the same reason.
+        "decoderawtransaction",
         // Phase 12: the offline-signing trio (rpc/rawtransaction.cpp).
         // z_createbuildinstructions/z_createbuildinstructionscoincontrol are
         // rewired the standard way (GetWalletForRequest()). z_buildrawtransaction

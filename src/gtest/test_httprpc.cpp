@@ -17,6 +17,8 @@
 #include "transaction_builder.h"
 #include "wallet/rpcwallet.h"
 #include "wallet/wallet.h"
+// After wallet.h: rpcpiratewallet.h names CWalletTx without declaring it.
+#include "wallet/rpcpiratewallet.h"
 #include "wallet/walletmanager.h"
 #include "zcash/Address.hpp"
 
@@ -347,6 +349,89 @@ TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsThePhase10RewiredSubs
     EXPECT_NO_THROW(tableRPC.execute("resendwallettransactions", UniValue(UniValue::VARR)));
     EXPECT_NO_THROW(tableRPC.execute("z_listaddresses", UniValue(UniValue::VARR)));
     EXPECT_NO_THROW(tableRPC.execute("z_listunspent", UniValue(UniValue::VARR)));
+}
+
+TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRpcPirateWalletAndRpcDumpSubset)
+{
+    // The rpcpiratewallet/rpcdump plumbing phase's additions. Each name has to
+    // match its CRPCCommand registration string exactly -- a typo in the
+    // allowlist fails silently (the RPC just keeps being refused against a
+    // secondary wallet), so assert registration and allowlisting separately
+    // rather than only observing the combined behaviour.
+    static const char* const kNames[] = {
+        "zs_listtransactions", "zs_gettransaction", "zs_listspentbyaddress",
+        "zs_listreceivedbyaddress", "zs_listsentbyaddress", "getalldata",
+        "importwallet", "z_importwallet", "dumpwallet", "z_exportwallet",
+        "z_exportseedphrase", "decoderawtransaction",
+    };
+    // Together these two are exactly what CRPCTable::execute()'s gate checks
+    // (IsMultiWalletAwareRPC(tableRPC[name]->name)), so asserting both proves
+    // the gate lets each name through without having to run the handler
+    // against an empty test chain.
+    for (const char* name : kNames) {
+        const CRPCCommand* pcmd = tableRPC[name];
+        ASSERT_NE(nullptr, pcmd)
+            << name << " is allowlisted but is not a registered RPC method name";
+        EXPECT_TRUE(IsMultiWalletAwareRPC(pcmd->name))
+            << name << " was rewired but is missing from IsMultiWalletAwareRPC()";
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, ZExportSeedPhraseReadsTheSelectedWalletNotTheDefault)
+{
+    // z_exportseedphrase was missed by Phase 10 and read pwalletMain outright,
+    // so selecting a secondary wallet used to hand back the DEFAULT wallet's
+    // seed phrase -- a cross-wallet key disclosure, not just a wrong answer.
+    // Both test wallets are non-bip39, so the observable difference is which
+    // wallet's bip39Enabled flag is consulted; flip it on the default only.
+    CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
+    ASSERT_NE(nullptr, defaultWallet);
+    CWallet* secondary = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondary);
+    ASSERT_NE(defaultWallet, secondary);
+
+    const bool previousBip39 = defaultWallet->bip39Enabled;
+    defaultWallet->bip39Enabled = true;
+    secondary->bip39Enabled = false;
+
+    UniValue result;
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        ASSERT_NO_THROW(result = tableRPC.execute("z_exportseedphrase", UniValue(UniValue::VARR)));
+    }
+    defaultWallet->bip39Enabled = previousBip39;
+
+    // The secondary wallet has bip39 off, so it must report exactly that. If
+    // the RPC were still reading pwalletMain it would have taken the enabled
+    // branch and returned the default wallet's phrase instead.
+    EXPECT_NE(std::string::npos, result.get_str().find("Bip39 is not enabled"));
+}
+
+TEST(RpcPirateWallet, DecryptTransactionWithNoWalletDoesNotCrash)
+{
+    // decoderawtransaction stays registered when there is no wallet at all
+    // (-disablewallet, NSPV superlite), and only the getAll*VKs() helpers
+    // tolerate a null wallet -- everything below them dereferences it, so this
+    // used to segfault on any transaction carrying an input or an output.
+    CMutableTransaction mtx;
+    mtx.vin.resize(1);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1000;
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+    CTransaction tx(mtx);
+
+    RpcArcTransaction arcTx;
+    LOCK(cs_main);
+    decrypttransaction(nullptr, tx, arcTx, 1);
+
+    EXPECT_TRUE(arcTx.vTSpend.empty());
+    EXPECT_TRUE(arcTx.vTSend.empty());
+    EXPECT_TRUE(arcTx.vTReceived.empty());
+    EXPECT_TRUE(arcTx.vZsSpend.empty());
+    EXPECT_TRUE(arcTx.vZsSend.empty());
+    EXPECT_TRUE(arcTx.vZoSpend.empty());
+    EXPECT_TRUE(arcTx.vZoSend.empty());
+    EXPECT_TRUE(arcTx.spentFrom.empty());
 }
 
 TEST_F(MultiWalletDispatchTest, GetNewAddressOperatesOnTheSelectedWalletNotTheDefault)

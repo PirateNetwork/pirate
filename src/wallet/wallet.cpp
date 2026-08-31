@@ -4567,7 +4567,7 @@ void CWallet::AddToArcTxs(const uint256& wtxid, ArchiveTxPoint& arcTxPt)
     uint256 txid = wtxid;
     RpcArcTransaction arcTx;
 
-    getRpcArcTx(txid, arcTx, true, true);
+    getRpcArcTx(this, txid, arcTx, true, true);
 
     arcTxPt.saplingIvks = arcTx.saplingIvks;
     arcTxPt.saplingOvks = arcTx.saplingOvks;
@@ -4618,8 +4618,8 @@ void CWallet::AddToArcTxs(const CWalletTx& wtx, int txHeight, ArchiveTxPoint& ar
     CWalletTx tx = wtx;
     RpcArcTransaction arcTx;
 
-    getRpcArcTxSaplingKeys(wtx, txHeight, arcTx, true);
-    getRpcArcTxIronwoodKeys(wtx, txHeight, arcTx, true);
+    getRpcArcTxSaplingKeys(this, wtx, txHeight, arcTx, true);
+    getRpcArcTxIronwoodKeys(this, wtx, txHeight, arcTx, true);
 
     arcTxPt.saplingIvks = arcTx.saplingIvks;
     arcTxPt.saplingOvks = arcTx.saplingOvks;
