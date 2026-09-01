@@ -37,6 +37,7 @@
 #include "script/sign.h"
 #include "script/standard.h"
 #include "uint256.h"
+#include "utilmoneystr.h"
 #include "importcoin.h"
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
@@ -1868,6 +1869,11 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           "\nBuild and finalize a shielded transaction from transaction builder data.\n"
           "Processes hex-encoded transaction builder instructions to create a complete\n"
           "shielded transaction for Sapling or Ironwood pools.\n"
+          "Change is routed to whatever destination the originating wallet already baked\n"
+          "into the instructions (see z_createbuildinstructions/z_createbuildinstructionscoincontrol) —\n"
+          "this wallet's own -changeaddress setting, if any, is not consulted, since it may\n"
+          "be a different, dedicated spending-key-only wallet with no say in where the\n"
+          "originating wallet's change should land.\n"
 
           "\nArguments:\n"
           "1. \"hex\"      (string, required) The transaction builder hex string\n"
@@ -2127,9 +2133,13 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "\nCreate transaction builder instructions for offline shielded transaction construction.\n"
           "Generates hex-encoded builder data that can be used to create shielded transactions\n"
           "from a Sapling or Ironwood address to shielded (Sapling/Ironwood) addresses.\n"
-          "Change returns to the wallet's internal (ZIP-32) change address derived from the\n"
-          "spending key, unless the -changeaddress config option is set, in which case it is\n"
-          "routed there instead (applies to both Sapling and Ironwood sources).\n"
+          "This wallet resolves and bakes a change destination into the instructions at\n"
+          "creation time, so whichever wallet later signs them (z_buildrawtransaction) does\n"
+          "not need this wallet's spending key, and honors this choice rather than its own.\n"
+          "Change returns to this wallet's internal (ZIP-32) change address, derived from\n"
+          "the full viewing key of fromaddress, unless the -changeaddress config option is\n"
+          "set, in which case it is routed there instead (applies to both Sapling and\n"
+          "Ironwood sources).\n"
 
           + HelpRequiringPassphrase() + "\n"
           "\nArguments:\n"
@@ -2377,6 +2387,19 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           }
       }
 
+      // Unlike z_createbuildinstructionscoincontrol, this had no check that the
+      // notes actually found cover totalOut before returning "success" - the
+      // note-selection loops above only ever *stop early* once they have enough,
+      // they never *fail* when they run out of notes without reaching it (e.g.
+      // funds moved/got locked between whatever the caller last checked and this
+      // call actually running). Without this, a shortfall here silently produces
+      // a checksum-valid but unspendable blob whose failure only surfaces much
+      // later, as a confusing "Change cannot be negative" from z_buildrawtransaction.
+      if (totalIn < totalOut) {
+          throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, strprintf(
+              "Insufficient funds, have %s, need %s", FormatMoney(totalIn), FormatMoney(totalOut)));
+      }
+
       // Bake a change destination into the instructions now, while it's still this
       // wallet's request — z_buildrawtransaction must not decide this using
       // whichever wallet ends up signing, since that may be a different, dedicated
@@ -2454,9 +2477,13 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
           "\nCreate transaction builder instructions with manual coin control for shielded transactions.\n"
           "Allows precise control over which shielded notes to spend and where to send outputs.\n"
           "Provides fine-grained control over transaction construction for advanced users.\n"
-          "Change returns to the wallet's internal (ZIP-32) change address derived from the first\n"
-          "input's address, unless the -changeaddress config option is set, in which case it is\n"
-          "routed there instead (applies to both Sapling and Ironwood sources).\n"
+          "This wallet resolves and bakes a change destination into the instructions at\n"
+          "creation time, so whichever wallet later signs them (z_buildrawtransaction) does\n"
+          "not need this wallet's spending key, and honors this choice rather than its own.\n"
+          "Change returns to this wallet's internal (ZIP-32) change address, derived from\n"
+          "the full viewing key of the first input's address, unless the -changeaddress\n"
+          "config option is set, in which case it is routed there instead (applies to both\n"
+          "Sapling and Ironwood sources).\n"
 
           "\nArguments:\n"
           "1. \"inputs\"                (array, required) Array of shielded inputs to spend\n"

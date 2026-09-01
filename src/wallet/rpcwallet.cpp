@@ -3758,15 +3758,31 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "z_listaddresses ( includeWatchonly )\n"
-            "\nReturns the list of Sprout and Sapling shielded addresses belonging to the wallet.\n"
+            "z_listaddresses ( includeWatchonly verbose )\n"
+            "\nReturns the list of Sprout, Sapling, and Ironwood shielded addresses belonging to the wallet.\n"
+            "\nSapling and Ironwood accounts each have an auto-derived internal (ZIP-32) change\n"
+            "address alongside their normal external one - both appear here since the wallet\n"
+            "owns and can spend from either, but the internal one exists purely to receive this\n"
+            "wallet's own change and should not be given out or used as a \"from\" address for\n"
+            "new sends. Pass verbose=true to see which is which via the \"source\" field.\n"
             "\nArguments:\n"
             "1. includeWatchonly (bool, optional, default=false) Also include watchonly addresses (see 'z_importviewingkey')\n"
-            "\nResult:\n"
+            "2. verbose           (bool, optional, default=false) Return objects with \"type\" and \"source\" instead of plain strings\n"
+            "\nResult (verbose=false):\n"
             "[                     (json array of string)\n"
             "  \"zaddr\"           (string) a zaddr belonging to the wallet\n"
+            "  ,...\n"
+            "]\n"
+            "\nResult (verbose=true):\n"
+            "[                     (json array of object)\n"
+            "  {\n"
+            "    \"address\":address    (string) the zaddr\n"
+            "    \"type\":type          (string) \"sprout\", \"sapling\", or \"ironwood\"\n"
+            "    \"source\":source      (string) \"normal\" (external, safe to receive/send from) or\n"
+            "                                    \"change\" (this account's internal address - do not use as a \"from\" address)\n"
+            "  }\n"
             "  ,...\n"
             "]\n"
             "\nExamples:\n"
@@ -3782,25 +3798,56 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
     if (params.size() > 0) {
         fIncludeWatchonly = params[0].get_bool();
     }
+    bool fVerbose = false;
+    if (params.size() > 1) {
+        fVerbose = params[1].get_bool();
+    }
 
     UniValue ret(UniValue::VARR);
+    auto pushAddr = [&](const std::string& addr, const char* type, const char* source) {
+        if (!fVerbose) {
+            ret.push_back(addr);
+            return;
+        }
+        UniValue obj(UniValue::VOBJ);
+        obj.push_back(Pair("address", addr));
+        obj.push_back(Pair("type", type));
+        obj.push_back(Pair("source", source));
+        ret.push_back(obj);
+    };
+
     {
         std::set<libzcash::SproutPaymentAddress> addresses;
         pwalletMain->GetSproutPaymentAddresses(addresses);
         for (auto addr : addresses) {
             if (fIncludeWatchonly || pwalletMain->HaveSproutSpendingKey(addr)) {
-                ret.push_back(EncodePaymentAddress(addr));
+                // Sprout predates the external/internal (ZIP-32) split - every
+                // address is a normal, user-facing one.
+                pushAddr(EncodePaymentAddress(addr), "sprout", "normal");
             }
         }
     }
     {
         std::set<libzcash::SaplingPaymentAddress> addresses;
         pwalletMain->GetSaplingPaymentAddresses(addresses);
-        libzcash::SaplingIncomingViewingKey ivk;
-        libzcash::SaplingFullViewingKey fvk;
         for (auto addr : addresses) {
             if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) {
-                ret.push_back(EncodePaymentAddress(addr));
+                KeyScope scope;
+                const char* source = (pwalletMain->GetSaplingKeyScope(addr, scope) && scope == KeyScope::Internal)
+                    ? "change" : "normal";
+                pushAddr(EncodePaymentAddress(addr), "sapling", source);
+            }
+        }
+    }
+    {
+        std::set<libzcash::IronwoodPaymentAddress> addresses;
+        pwalletMain->GetIronwoodPaymentAddresses(addresses);
+        for (auto addr : addresses) {
+            if (fIncludeWatchonly || HaveSpendingKeyForPaymentAddress(pwalletMain)(addr)) {
+                KeyScope scope;
+                const char* source = (pwalletMain->GetIronwoodKeyScope(addr, scope) && scope == KeyScope::Internal)
+                    ? "change" : "normal";
+                pushAddr(EncodePaymentAddress(addr), "ironwood", source);
             }
         }
     }
@@ -5512,7 +5559,9 @@ UniValue z_sendmany(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error(
             "z_sendmany \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
             "\nSend multiple times from a shielded (Sapling or Ironwood) address. Amounts are decimal numbers with at most 8 digits of precision."
-            "\nChange generated from a zaddr returns to itself."
+            "\nChange returns to the wallet's auto-derived internal (ZIP-32) change address for"
+            "\nfromaddress, unless the -changeaddress config option is set, in which case it is"
+            "\nrouted there instead."
             "\nTo send from a transparent address, use z_shieldcoinbase instead.\n"
             + HelpRequiringPassphrase() + "\n"
             "\nArguments:\n"
@@ -5743,7 +5792,9 @@ UniValue z_sendmany_prepare_offline(const UniValue& params, bool fHelp, const CP
             "\nto the network from this on-line client."
             "\nAmounts are decimal numbers with at most 8 digits of precision."
             "\ntaddr are not allowed"
-            "\nChange generated from a zaddr returns to itself."
+            "\nChange returns to the wallet's auto-derived internal (ZIP-32) change address for"
+            "\nfromaddress, unless the -changeaddress config option is set, in which case it is"
+            "\nrouted there instead."
 
             + strprintf("\nBefore Sapling activates, the maximum number of zaddr outputs is %d due to transaction size limits.\n", Z_SENDMANY_MAX_ZADDR_OUTPUTS_BEFORE_SAPLING)
             + HelpRequiringPassphrase() + "\n"

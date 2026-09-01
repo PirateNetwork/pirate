@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -147,6 +148,7 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "zcbenchmark", 2 },
     { "getblocksubsidy", 0},
     { "z_listaddresses", 0},
+    { "z_listaddresses", 1},
     { "z_listreceivedbyaddress", 1},
     { "z_listunspent", 0 },
     { "z_listunspent", 1 },

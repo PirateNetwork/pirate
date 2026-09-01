@@ -737,6 +737,62 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
     EXPECT_THROW(CallRPC("z_getnewaddress toomanyargs"), runtime_error);
 }
 
+// Every z_getnewaddress call also silently registers this account's internal
+// (ZIP-32) change address in the wallet (see GenerateNewSaplingZKey/
+// GenerateNewIronwoodZKey), and z_listaddresses lists both with no way to
+// tell them apart - a user picking the wrong one as a "from" address ends up
+// unable to distinguish it from a normal address, and change sent while
+// spending from it has nowhere to go but back to itself. verbose=true must
+// let a caller filter these out or at least identify them.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_listaddresses_verbose_reports_change_vs_normal)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+
+    libzcash::SaplingPaymentAddress externalAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingExtendedSpendingKey extsk;
+    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(externalAddr, extsk));
+    libzcash::SaplingPaymentAddress internalAddr;
+    ASSERT_TRUE(extsk.ToXFVK().DefaultAddressInternal(&internalAddr));
+
+    UniValue retValue;
+    EXPECT_NO_THROW(retValue = CallRPC("z_listaddresses true true"));
+    UniValue arr = retValue.get_array();
+
+    std::string externalStr = EncodePaymentAddress(externalAddr);
+    std::string internalStr = EncodePaymentAddress(internalAddr);
+    bool foundExternalAsNormal = false;
+    bool foundInternalAsChange = false;
+    for (const UniValue& entry : arr.getValues()) {
+        ASSERT_TRUE(entry.isObject());
+        std::string addr = find_value(entry, "address").get_str();
+        std::string type = find_value(entry, "type").get_str();
+        std::string source = find_value(entry, "source").get_str();
+        if (addr == externalStr) {
+            EXPECT_EQ(type, "sapling");
+            EXPECT_EQ(source, "normal");
+            foundExternalAsNormal = true;
+        } else if (addr == internalStr) {
+            EXPECT_EQ(type, "sapling");
+            EXPECT_EQ(source, "change");
+            foundInternalAsChange = true;
+        }
+    }
+    EXPECT_TRUE(foundExternalAsNormal);
+    EXPECT_TRUE(foundInternalAsChange);
+
+    // Non-verbose (default) output must remain a plain array of strings,
+    // unchanged from before verbose existed - existing callers/scripts
+    // parsing z_listaddresses must not break.
+    EXPECT_NO_THROW(retValue = CallRPC("z_listaddresses"));
+    arr = retValue.get_array();
+    ASSERT_GT(arr.size(), 0u);
+    EXPECT_TRUE(arr[0].isStr());
+}
+
 
 
 /**
@@ -2184,15 +2240,20 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_configur
     } changeAddrReverter{pwalletMain->configuredChangeAddress};
     pwalletMain->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
 
+    // amount=0 and fee=0 keeps totalOut at exactly 0, so the RPC's insufficient-
+    // funds check (totalIn < totalOut) doesn't reject this dry run before
+    // reaching the change-baking code under test - fromAddr holds no real notes.
     UniValue outputs(UniValue::VARR);
     UniValue output(UniValue::VOBJ);
     output.push_back(Pair("address", EncodePaymentAddress(toAddr)));
-    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    output.push_back(Pair("amount", ValueFromAmount(0)));
     outputs.push_back(output);
 
     UniValue params(UniValue::VARR);
     params.push_back(EncodePaymentAddress(fromAddr));
     params.push_back(outputs);
+    params.push_back(UniValue(1));    // minconf
+    params.push_back(UniValue(0.0)); // fee
 
     UniValue result;
     EXPECT_NO_THROW(result = z_createbuildinstructions(params, false, CPubKey()));
@@ -2237,15 +2298,20 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_default_
     libzcash::SaplingPaymentAddress expectedChangeAddr;
     ASSERT_TRUE(fromExtsk.ToXFVK().DefaultAddressInternal(&expectedChangeAddr));
 
+    // amount=0 and fee=0 keeps totalOut at exactly 0, so the RPC's insufficient-
+    // funds check (totalIn < totalOut) doesn't reject this dry run before
+    // reaching the change-baking code under test - fromAddr holds no real notes.
     UniValue outputs(UniValue::VARR);
     UniValue output(UniValue::VOBJ);
     output.push_back(Pair("address", EncodePaymentAddress(toAddr)));
-    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    output.push_back(Pair("amount", ValueFromAmount(0)));
     outputs.push_back(output);
 
     UniValue params(UniValue::VARR);
     params.push_back(EncodePaymentAddress(fromAddr));
     params.push_back(outputs);
+    params.push_back(UniValue(1));    // minconf
+    params.push_back(UniValue(0.0)); // fee
 
     UniValue result;
     EXPECT_NO_THROW(result = z_createbuildinstructions(params, false, CPubKey()));
@@ -2258,6 +2324,52 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_default_
     auto instructed = tb2.GetInstructedSaplingChangeAddress();
     ASSERT_TRUE(instructed.has_value());
     EXPECT_EQ(*instructed, expectedChangeAddr);
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_insufficient_funds)
+{
+    // Regression test: z_createbuildinstructions used to have no check that the
+    // notes it actually found cover the requested output + fee before returning
+    // "success" - unlike z_createbuildinstructionscoincontrol, which already
+    // rejects this case. A shortfall (fromAddr holds no notes here, the simplest
+    // case) used to silently produce a checksum-valid but unbuildable blob whose
+    // failure only surfaced much later, as a confusing "Change cannot be
+    // negative" out of z_buildrawtransaction instead of a clear error here.
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct Reverter {
+        ~Reverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } reverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress toAddr = pwalletMain->GenerateNewSaplingZKey();
+
+    UniValue outputs(UniValue::VARR);
+    UniValue output(UniValue::VOBJ);
+    output.push_back(Pair("address", EncodePaymentAddress(toAddr)));
+    output.push_back(Pair("amount", ValueFromAmount(10000)));
+    outputs.push_back(output);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(EncodePaymentAddress(fromAddr));
+    params.push_back(outputs);
+
+    try {
+        z_createbuildinstructions(params, false, CPubKey());
+        FAIL() << "expected rejection for insufficient funds (fromAddr has no notes)";
+    } catch (const UniValue& objError) {
+        EXPECT_TRUE(find_error(objError, "Insufficient funds"));
+    }
 }
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_transparent_output_address)
@@ -2324,6 +2436,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_reject
         EXPECT_TRUE(find_error(objError, "sapling or ironwood"));
     }
 }
+
 
 
 // TODO: test private methods

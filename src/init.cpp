@@ -548,7 +548,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-consolidatesaplingaddress=<zaddr>", _("Specify Sapling address to consolidate (default: all). Must match sweep address when sweep is enabled."));
     strUsage += HelpMessageOpt("-consolidateironwoodaddress=<zaddr>", _("Specify Ironwood address to consolidate (default: all). Must match sweep address when sweep is enabled."));
     strUsage += HelpMessageOpt("-consolidationtargetqty=<n>", strprintf(_("Minimum number of notes an address must have before auto-consolidation processes it (default: %i, minimum: 2)"), 100));
-    strUsage += HelpMessageOpt("-changeaddress=<zaddr>", _("Route all z_sendmany change (from either a Sapling or Ironwood source address) to this Sapling or Ironwood address instead of the auto-derived internal address. Wallet must hold the spending key for it."));
+    strUsage += HelpMessageOpt("-changeaddress=<zaddr>", _("Route all shielded change (from either a Sapling or Ironwood source address) to this Sapling or Ironwood address instead of the auto-derived internal address, for z_sendmany, z_createbuildinstructions, and z_createbuildinstructionscoincontrol. Wallet must hold the spending key for it."));
 
     // Deprecated consolidation commands
     strUsage += HelpMessageOpt("-consolidation", _("(DEPRECATED) Use -saplingconsolidation instead"));
