@@ -137,18 +137,18 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
 // secondary wallet's own chain-tip notifications now drive its own funds and
 // its own configuration, not the default wallet's.
 //
-// What's still genuinely unaddressed (see [[project_multiwallet_effort]]
-// backlog items 5/6/8 for the durable tracking):
-//   - fBuilingWitnessCache (wallet.cpp) is still a single process-global
-//     flag, checked by CRPCTable::execute() (rpc/server.cpp) for every RPC
-//     on the node -- a secondary wallet's own witness-cache rebuild still
-//     stalls the whole RPC interface for its duration, the same blast radius
-//     the default wallet's own startup already has, just reachable a second
-//     way (load a stale wallet, wait one block).
-//   - A secondary wallet still receives no notification for a *transaction*
-//     it didn't cause itself, beyond what ChainTip()'s own block-level scan
-//     surfaces -- see backlog item 8 for the retry/double-spend implications
-//     this leaves open.
+// Two gaps this left, both since closed: fBuilingWitnessCache (wallet.cpp)
+// used to be a single process-global flag checked by CRPCTable::execute()
+// (rpc/server.cpp) for every RPC on the node, so a secondary wallet's own
+// witness-cache rebuild stalled the whole RPC interface for its duration --
+// it's now a per-CWallet member, checked against whichever wallet a request
+// actually resolves to. And a secondary wallet used to receive no
+// notification for a *transaction* it didn't cause itself beyond what
+// ChainTip()'s own block-level scan surfaces, which risked a retried send
+// double-spending by reselecting an already-broadcast note -- confirmed (via
+// a real gtest, not just re-derived) that validation-interface registration
+// already covers this correctly, once a real, unrelated CTxMemPool::clear()
+// use-after-free that the investigation surfaced was fixed (txmempool.cpp).
 bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                                  bool fRescan, int nRescanHeight, bool fSalvage, bool fZapWalletTxes,
                                  bool fAllowCreate)

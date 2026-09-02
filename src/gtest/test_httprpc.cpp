@@ -320,6 +320,104 @@ TEST_F(MultiWalletDispatchTest, ThreadLocalDoesNotLeakIntoTheNextRequestOnTheSam
     EXPECT_NO_THROW(tableRPC.execute("listwallets", UniValue(UniValue::VARR)));
 }
 
+TEST_F(MultiWalletDispatchTest, WitnessCacheRebuildOnOneWalletDoesNotBlockRpcsAgainstAnotherWallet)
+{
+    // Regression coverage for backlog item 6: fBuilingWitnessCache used to be
+    // a single process-global flag, so ANY wallet's own witness-cache rebuild
+    // (CWallet::IncrementSaplingWallet/IncrementIronwoodWallet, wallet.cpp)
+    // blocked every RPC on the node, including calls explicitly scoped to a
+    // different, perfectly idle wallet. It's now a per-CWallet member,
+    // checked (CRPCTable::execute(), rpc/server.cpp) against whichever
+    // wallet GetWalletForRequest() resolves to -- i.e. exactly the one this
+    // call is actually going to touch.
+    //
+    // "listwallets" alone would only prove the registry-management path, so
+    // both directions are also checked against "getwalletinfo" -- an ordinary
+    // wallet-touching RPC, which has to observe the same gate. getwalletinfo
+    // is only exercised against the secondary wallet: this fixture's default
+    // wallet is a bare `new CWallet` that was never CWallet::LoadWallet()ed,
+    // so any RPC that actually opens its database fails for reasons that have
+    // nothing to do with the flag under test (see the existing
+    // DefaultWalletUriRunsWalletRPCsNormally, which sticks to listwallets for
+    // the same reason). The secondary-scoped pair covers both the blocked and
+    // the unblocked direction for a real wallet RPC regardless.
+    static const char* const kMethods[] = { "listwallets", "getwalletinfo" };
+
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_NE(nullptr, pwalletMain);
+
+    // Reset via RAII rather than a trailing assignment: FAIL()/ASSERT_* below
+    // expand to a bare `return`, so a mid-test failure would otherwise skip
+    // the reset. The fixture happens to delete and recreate both CWallet
+    // objects in SetUp()/TearDown(), so a leaked flag can't reach a later
+    // test either way -- but that's an accident of the fixture, not something
+    // this test should depend on.
+    struct ScopedRebuildFlag {
+        CWallet* pwallet;
+        explicit ScopedRebuildFlag(CWallet* p) : pwallet(p) { pwallet->fBuildingWitnessCache = true; }
+        ~ScopedRebuildFlag() { pwallet->fBuildingWitnessCache = false; }
+    };
+
+    {
+        ScopedRebuildFlag rebuilding(secondaryWallet);
+
+        for (const char* method : kMethods) {
+            // A request scoped to the wallet that's mid-rebuild is still
+            // refused -- this isn't a "make the flag inert" fix, only a
+            // "scope it correctly" one.
+            {
+                RPCWalletRequestGuard guard("secondarytestwallet");
+                try {
+                    tableRPC.execute(method, UniValue(UniValue::VARR));
+                    ADD_FAILURE() << method << " should be refused while its own wallet rebuilds";
+                } catch (const UniValue& objError) {
+                    EXPECT_EQ((int)RPC_BUILDING_WITNESS_CACHE, find_value(objError, "code").get_int()) << method;
+                }
+            }
+        }
+
+        // A request scoped to the OTHER (default) wallet, which isn't
+        // rebuilding anything, must go through unaffected -- this is the
+        // actual fix.
+        {
+            RPCWalletRequestGuard guard("default_test.dat");
+            EXPECT_NO_THROW(tableRPC.execute("listwallets", UniValue(UniValue::VARR)));
+        }
+        {
+            RPCWalletRequestGuard guard(""); // no selection -> resolves to pwalletMain
+            EXPECT_NO_THROW(tableRPC.execute("listwallets", UniValue(UniValue::VARR)));
+        }
+    }
+
+    // Symmetric check: flagging the DEFAULT wallet must not block a request
+    // explicitly scoped to the secondary.
+    {
+        ScopedRebuildFlag rebuilding(pwalletMain);
+
+        for (const char* method : kMethods) {
+            RPCWalletRequestGuard guard("secondarytestwallet");
+            EXPECT_NO_THROW(tableRPC.execute(method, UniValue(UniValue::VARR))) << method;
+        }
+        {
+            RPCWalletRequestGuard guard(""); // resolves to pwalletMain, which is flagged
+            try {
+                tableRPC.execute("listwallets", UniValue(UniValue::VARR));
+                ADD_FAILURE() << "listwallets should be refused while the default wallet rebuilds";
+            } catch (const UniValue& objError) {
+                EXPECT_EQ((int)RPC_BUILDING_WITNESS_CACHE, find_value(objError, "code").get_int());
+            }
+        }
+    }
+
+    // Both flags are back to false here (ScopedRebuildFlag's destructor), so
+    // an ordinary request is unaffected again.
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        EXPECT_NO_THROW(tableRPC.execute("getwalletinfo", UniValue(UniValue::VARR)));
+    }
+}
+
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRewiredCoreSubset)
 {
     // Phase 1 could only prove these were REFUSED against a non-default

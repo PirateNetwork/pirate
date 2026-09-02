@@ -37,7 +37,10 @@
 #include <univalue.h>
 #include <pubkey.h>
 
-extern bool fBuilingWitnessCache;
+// fBuilingWitnessCache used to live here as a single process-global flag --
+// it's now a per-CWallet member (wallet.h), checked against the specific
+// wallet a request resolves to (rpc/server.cpp's CRPCTable::execute()), not
+// declared here.
 extern bool fInitWitnessesBuilt;
 
 class AsyncRPCQueue;

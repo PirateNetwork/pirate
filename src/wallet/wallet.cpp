@@ -5228,7 +5228,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
         //Rebuild
         if (rebuildWallet) {
             //Disable the RPC z_sendmany RPC while rebuilding
-            fBuilingWitnessCache = true;
+            fBuildingWitnessCache = true;
 
             //Don't recheck after a rebuild
             saplingWalletValidated = true;
@@ -5253,6 +5253,14 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
             if (nMinimumHeight > pindex->nHeight) {
                 LogPrint("\n\nsaplingwallet", "Sapling Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
                 SaplingWalletReset();
+                // Only early exit between setting fBuildingWitnessCache above
+                // and clearing it at the bottom of this function. Currently
+                // unreachable (nMinimumHeight starts at pindex->nHeight and the
+                // loop above only ever std::min()s it downwards), but leaving
+                // the flag set on the way out would permanently refuse every
+                // RPC routed to this wallet (rpc/server.cpp), so clear it here
+                // rather than depend on that invariant holding forever.
+                fBuildingWitnessCache = false;
                 return;
             }
 
@@ -5330,7 +5338,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
     }
 
     fInitWitnessesBuilt = true;
-    fBuilingWitnessCache = false;
+    fBuildingWitnessCache = false;
 
     // This assertion slows scanning for blocks with few shielded transactions by an
     // order of magnitude. It is only intended as a consistency check between the node
@@ -5410,7 +5418,7 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
         //Rebuild
         if (rebuildWallet) {
             //Disable the RPC z_sendmany RPC while rebuilding
-            fBuilingWitnessCache = true;
+            fBuildingWitnessCache = true;
 
             //Don't recheck after a rebuild
             ironwoodWalletValidated = true;
@@ -5435,6 +5443,11 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
             if (nMinimumHeight > pindex->nHeight) {
                 LogPrint("\n\nironwoodwallet", "Ironwood Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
                 IronwoodWalletReset();
+                // Same reasoning as the matching early exit in
+                // IncrementSaplingWallet(): currently unreachable, but leaving
+                // fBuildingWitnessCache set on the way out would permanently
+                // refuse every RPC routed to this wallet.
+                fBuildingWitnessCache = false;
                 return;
             }
 
@@ -5512,7 +5525,7 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
     }
 
     fInitWitnessesBuilt = true;
-    fBuilingWitnessCache = false;
+    fBuildingWitnessCache = false;
 
     // This assertion slows scanning for blocks with few shielded transactions by an
     // order of magnitude. It is only intended as a consistency check between the node

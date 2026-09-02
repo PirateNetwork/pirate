@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -31,6 +32,10 @@
 #include "assetchain.h"
 #ifdef ENABLE_WALLET
 #include "wallet/walletmanager.h"
+// walletmanager.h only forward-declares CWallet; the full definition (for
+// GetWalletForRequest()'s return type's fBuildingWitnessCache member, in the
+// witness-cache-rebuild check below) needs the real header.
+#include "wallet/wallet.h"
 #endif
 
 #include <memory>
@@ -53,7 +58,6 @@ using namespace std;
 using namespace boost::placeholders;
 extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 
-bool fBuilingWitnessCache = false;
 bool fInitWitnessesBuilt = false;
 static bool fRPCRunning = false;
 static bool fRPCInWarmup = true;
@@ -883,11 +887,52 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
           if (!pcmd)
               throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Method not found");
 
+          // Deliberately still process-global, unlike fBuildingWitnessCache
+          // below: this is a one-way "has any witness build ever finished on
+          // this node" latch (set, never cleared, at the end of both
+          // CWallet::IncrementSaplingWallet/IncrementIronwoodWallet), not a
+          // "this wallet is currently unusable" flag. Making it per-wallet
+          // would gate nothing extra, because a secondary wallet is never
+          // reachable by an RPC before its own witnesses are built:
+          // CWalletManager::LoadWallet() runs the whole ScanForWalletTransactions
+          // + ValidateSapling/IronwoodWalletTrackedPositions + Increment*Wallet
+          // catch-up synchronously *before* it commits the entry to mapWallets,
+          // so RPCWalletRequestGuard can't resolve the name until that has
+          // finished, and any later rebuild sets fBuildingWitnessCache on that
+          // specific wallet and is caught below.
           if (!fInitWitnessesBuilt && pcmd->name == "z_sendmany")
               throw JSONRPCError(RPC_DISABLED_BEFORE_WITNESSES, "RPC Command disabled until witnesses are built.");
 
-          if (fBuilingWitnessCache)
-              throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while builing witness cache. Check the debug.log for progress.");
+#ifdef ENABLE_WALLET
+          // fBuilingWitnessCache used to be a single process-global flag here,
+          // so one wallet's own witness-cache rebuild (CWallet::
+          // IncrementSaplingWallet/IncrementIronwoodWallet, wallet.cpp) blocked
+          // every RPC on the node -- including ones explicitly scoped to a
+          // different, perfectly idle wallet. It's now a per-CWallet member;
+          // GetWalletForRequest() resolves to exactly the wallet this call is
+          // actually going to touch (the requested one if the earlier gate
+          // above let a non-default selection through, pwalletMain otherwise --
+          // the same wallet an un-rewired RPC would implicitly use anyway), so
+          // only requests against a wallet that's actually mid-rebuild are
+          // refused. Safe to read here without cs_wallet, exactly as the old
+          // global was: the write side (Increment*Wallet, under cs_main +
+          // cs_wallet on the block-connection thread) and this read side were
+          // already unsynchronized before this change, and the worst outcome
+          // is one RPC observing the flag a moment early or late.
+          //
+          // The null check is load-bearing, not defensive padding: with
+          // -disablewallet the node is built with ENABLE_WALLET but runs with
+          // pwalletMain == nullptr, and every non-wallet RPC still reaches
+          // here, so dereferencing unconditionally would be a remotely
+          // triggerable null deref. Skipping the check is also the correct
+          // answer in that case -- with no wallet loaded there is nothing that
+          // can be rebuilding a witness cache.
+          {
+              CWallet* pRequestWallet = CWalletManager::GetWalletForRequest();
+              if (pRequestWallet && pRequestWallet->fBuildingWitnessCache)
+                  throw JSONRPCError(RPC_BUILDING_WITNESS_CACHE, "RPC Interface disabled while builing witness cache. Check the debug.log for progress.");
+          }
+#endif
 
     }
 

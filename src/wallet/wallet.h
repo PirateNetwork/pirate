@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1090,7 +1091,17 @@ public:
     int walletHeight = 0;
 
     bool needsRescan = false;
-    
+
+    // Set by IncrementSaplingWallet()/IncrementIronwoodWallet() (wallet.cpp)
+    // while this wallet is rebuilding its own Sapling/Ironwood note-witness
+    // cache -- a bounded, synchronous-from-ChainTip()'s-perspective operation
+    // that can take a while for a wallet with many notes. Used by
+    // CRPCTable::execute() (rpc/server.cpp) to refuse RPC calls against this
+    // specific wallet while it's happening, matching what used to be a single
+    // process-global flag blocking every RPC on the node regardless of which
+    // wallet a call was actually scoped to.
+    bool fBuildingWitnessCache = false;
+
     // Sapling consolidation settings
     bool fSaplingConsolidationEnabled = false;
     bool fSaplingConsolidationRunning = false;
