@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -661,6 +662,24 @@ void CTxMemPool::clear()
     mapIronwoodNullifiers.clear();
     mapZkSpendProofHash.clear();
     mapZkOutputProofHash.clear();
+    // mapRecentlyAddedTx holds the exact same kind of raw, non-owning
+    // const CTransaction* into mapTx entries (see addUnchecked()) as the
+    // maps above -- it needs the identical treatment for the identical
+    // reason. remove() drops individual entries as transactions leave the
+    // pool the normal way, but nothing did so here: left uncleared, the
+    // next NotifyRecentlyAdded() copy-constructs a CTransaction out of a
+    // pointer into memory mapTx.clear() just freed, a real use-after-free.
+    mapRecentlyAddedTx.clear();
+    // The address and spent indexes are keyed by, and only ever pruned per
+    // transaction hash (removeAddressIndex()/removeSpentIndex(), called from
+    // remove()). They hold no pointers, so leaving them is not a memory-safety
+    // problem, but it does leave getAddressIndex()/getSpentIndex() -- and the
+    // getaddressmempool/getspentinfo RPCs over them -- reporting unconfirmed
+    // deltas for transactions the pool no longer holds.
+    mapAddress.clear();
+    mapAddressInserted.clear();
+    mapSpent.clear();
+    mapSpentInserted.clear();
     totalTxSize = 0;
     cachedInnerUsage = 0;
     ++nTransactionsUpdated;
@@ -986,8 +1005,25 @@ void CTxMemPool::NotifyRecentlyAdded()
 {
     uint64_t recentlyAddedSequence;
     std::vector<CTransaction> txs;
+    int nNotifyHeight;
     {
-        LOCK(cs);
+        // cs_main guards chainActive: this runs on its own thread (txnotify),
+        // so reading the tip unlocked races with whoever is advancing or
+        // tearing down the chain, and the tip can legitimately be null (no
+        // chain loaded yet, or UnloadBlockIndex() in progress) -- dereferencing
+        // it unconditionally, as this used to, is a null deref. Taken before
+        // cs, which is this codebase's established order (AcceptToMemoryPool()
+        // holds cs_main across addUnchecked()); both are released before
+        // SyncWithWallets() runs below.
+        LOCK2(cs_main, cs);
+        const CBlockIndex* tip = chainActive.Tip();
+        if (tip == nullptr) {
+            // Leave mapRecentlyAddedTx intact -- its entries are still valid
+            // pointers into mapTx, and the next tick can deliver them once
+            // there is a chain to report a height against.
+            return;
+        }
+        nNotifyHeight = tip->nHeight + 1;
         recentlyAddedSequence = nRecentlyAddedSequence;
         for (const auto& kv : mapRecentlyAddedTx) {
             txs.push_back(*(kv.second));
@@ -1003,7 +1039,7 @@ void CTxMemPool::NotifyRecentlyAdded()
         try {
             std::vector<CTransaction> vtx;
             vtx.emplace_back(tx);
-            SyncWithWallets(vtx, NULL, chainActive.Tip()->nHeight + 1);
+            SyncWithWallets(vtx, NULL, nNotifyHeight);
         } catch (const boost::thread_interrupted&) {
             throw;
         } catch (const std::exception& e) {

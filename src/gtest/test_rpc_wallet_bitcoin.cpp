@@ -1779,6 +1779,103 @@ protected:
     void SelectTestParams() override { SelectParams(CBaseChainParams::REGTEST); }
 };
 
+// Shared by every test in this fixture that needs a secondary wallet holding
+// a real, witnessed Sapling note -- mines a coinbase into the wallet's own
+// transparent keypool, matures it, shields it into a freshly-generated
+// Sapling address on that same wallet (testmode=true so the test controls
+// exactly when the shielding tx is broadcast/mined), then broadcasts and
+// mines it for real so the wallet's own note tracking (merkle witness,
+// mapSaplingNoteData) gets populated the normal way via ConnectTip's wallet
+// notification, not hand-poked. Caller owns the wallet's lifetime via
+// CWalletManager (register/create it before calling, tear it down after --
+// this helper does neither).
+//
+// This returns a value, so it can't use ASSERT_*/FAIL() (they expand to a bare
+// `return;`); every failure path is ADD_FAILURE() + an early return instead,
+// which records a *non-fatal* failure. Callers must therefore bail out on
+// ASSERT_FALSE(HasFailure()) -- HasFatalFailure() does not see ADD_FAILURE()
+// and would let the test run on with a half-initialized wallet.
+static libzcash::SaplingPaymentAddress SetupSecondaryWalletWithShieldedSaplingNote(CWallet* secondaryWallet)
+{
+    libzcash::SaplingPaymentAddress secondaryAddr;
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryAddr = secondaryWallet->GenerateNewSaplingZKey();
+    }
+
+    // Mine a coinbase into the secondary wallet's own transparent keypool, then
+    // 100 more blocks so it clears COINBASE_MATURITY and can actually be spent.
+    std::shared_ptr<CBlock> coinbaseBlock;
+    try {
+        coinbaseBlock = generateBlock(secondaryWallet);
+    } catch (const std::exception& e) {
+        ADD_FAILURE() << "generateBlock(secondaryWallet) threw: " << e.what();
+        return secondaryAddr;
+    }
+    if (coinbaseBlock == nullptr) {
+        ADD_FAILURE() << "generateBlock(secondaryWallet) returned null";
+        return secondaryAddr;
+    }
+    CTransaction coinbaseTx = coinbaseBlock->vtx[0];
+    for (int i = 0; i < 100; i++) {
+        if (generateBlock(pwalletMain) == nullptr) {
+            ADD_FAILURE() << "generateBlock(pwalletMain) returned null at maturity block " << i;
+            return secondaryAddr;
+        }
+    }
+
+    // Shield the now-mature coinbase into the secondary wallet's own Sapling
+    // address -- testmode=true skips this operation's own sendrawtransaction
+    // call so the test controls exactly when it's broadcast and mined.
+    int shieldHeight;
+    {
+        LOCK(cs_main);
+        shieldHeight = chainActive.Height();
+    }
+    std::vector<ShieldCoinbaseUTXO> inputs = {
+        ShieldCoinbaseUTXO{coinbaseTx.GetHash(), 0, coinbaseTx.vout[0].scriptPubKey, coinbaseTx.vout[0].nValue}
+    };
+    auto shieldOp = std::make_shared<AsyncRPCOperation_shieldcoinbase>(
+        secondaryWallet, Params().GetConsensus(), shieldHeight, CMutableTransaction(), inputs,
+        EncodePaymentAddress(secondaryAddr), 10000);
+    shieldOp->testmode = true;
+    TEST_FRIEND_AsyncRPCOperation_shieldcoinbase shieldProxy(shieldOp);
+    bool shieldSuccess = false;
+    try {
+        shieldSuccess = shieldProxy.main_impl();
+    } catch (const std::exception& e) {
+        ADD_FAILURE() << "shieldProxy.main_impl() threw: " << e.what();
+        return secondaryAddr;
+    }
+    if (!shieldSuccess) {
+        ADD_FAILURE() << "shieldProxy.main_impl() returned false";
+        return secondaryAddr;
+    }
+    CTransaction shieldingTx = shieldProxy.getTx();
+
+    // Broadcast and mine the shielding tx for real, so the secondary wallet's
+    // own Sapling note tracking (merkle witness, mapSaplingNoteData) gets
+    // populated the normal way, via ConnectTip's wallet notification -- not
+    // hand-poked, since callers of this helper read that same real state.
+    {
+        UniValue sendParams(UniValue::VARR);
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << shieldingTx;
+        sendParams.push_back(HexStr(ss.begin(), ss.end()));
+        try {
+            sendrawtransaction(sendParams, false, CPubKey());
+        } catch (const std::exception& e) {
+            ADD_FAILURE() << "sendrawtransaction(shieldingTx) threw: " << e.what();
+            return secondaryAddr;
+        }
+    }
+    if (generateBlock(pwalletMain) == nullptr) {
+        ADD_FAILURE() << "generateBlock(pwalletMain) returned null mining the shielding tx";
+    }
+
+    return secondaryAddr;
+}
+
 TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_selected_wallet_not_default)
 {
     // Regression coverage for the multiwallet effort: z_createbuildinstructions
@@ -1875,59 +1972,10 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondary_zcbi_test.dat");
     ASSERT_NE(nullptr, secondaryWallet);
 
-    libzcash::SaplingPaymentAddress secondaryAddr;
-    {
-        LOCK(secondaryWallet->cs_wallet);
-        secondaryAddr = secondaryWallet->GenerateNewSaplingZKey();
-    }
-
-    // Mine a coinbase into the secondary wallet's own transparent keypool, then
-    // 100 more blocks so it clears COINBASE_MATURITY and can actually be spent.
-    std::shared_ptr<CBlock> coinbaseBlock;
-    try {
-        coinbaseBlock = generateBlock(secondaryWallet);
-    } catch (const std::exception& e) {
-        FAIL() << "generateBlock(secondaryWallet) threw: " << e.what();
-    }
-    ASSERT_NE(nullptr, coinbaseBlock);
-    CTransaction coinbaseTx = coinbaseBlock->vtx[0];
-    for (int i = 0; i < 100; i++) {
-        ASSERT_NE(nullptr, generateBlock(pwalletMain)) << "block " << i;
-    }
-
-    // Shield the now-mature coinbase into the secondary wallet's own Sapling
-    // address -- testmode=true skips this operation's own sendrawtransaction
-    // call so the test controls exactly when it's broadcast and mined.
-    int shieldHeight;
-    {
-        LOCK(cs_main);
-        shieldHeight = chainActive.Height();
-    }
-    std::vector<ShieldCoinbaseUTXO> inputs = {
-        ShieldCoinbaseUTXO{coinbaseTx.GetHash(), 0, coinbaseTx.vout[0].scriptPubKey, coinbaseTx.vout[0].nValue}
-    };
-    auto shieldOp = std::make_shared<AsyncRPCOperation_shieldcoinbase>(
-        secondaryWallet, Params().GetConsensus(), shieldHeight, CMutableTransaction(), inputs,
-        EncodePaymentAddress(secondaryAddr), 10000);
-    shieldOp->testmode = true;
-    TEST_FRIEND_AsyncRPCOperation_shieldcoinbase shieldProxy(shieldOp);
-    bool shieldSuccess = false;
-    ASSERT_NO_THROW(shieldSuccess = shieldProxy.main_impl());
-    ASSERT_TRUE(shieldSuccess);
-    CTransaction shieldingTx = shieldProxy.getTx();
-
-    // Broadcast and mine the shielding tx for real, so the secondary wallet's
-    // own Sapling note tracking (merkle witness, mapSaplingNoteData) gets
-    // populated the normal way, via ConnectTip's wallet notification -- not
-    // hand-poked, since z_createbuildinstructions reads that same real state.
-    {
-        UniValue sendParams(UniValue::VARR);
-        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-        ss << shieldingTx;
-        sendParams.push_back(HexStr(ss.begin(), ss.end()));
-        ASSERT_NO_THROW(sendrawtransaction(sendParams, false, CPubKey()));
-    }
-    ASSERT_NE(nullptr, generateBlock(pwalletMain));
+    libzcash::SaplingPaymentAddress secondaryAddr = SetupSecondaryWalletWithShieldedSaplingNote(secondaryWallet);
+    // HasFailure(), not HasFatalFailure(): the helper reports through
+    // ADD_FAILURE(), which is non-fatal and invisible to the latter.
+    ASSERT_FALSE(HasFailure());
 
     // The secondary wallet now holds a real, witnessed Sapling note pwalletMain
     // has never seen. Build the same instructions request against each wallet in
@@ -1987,6 +2035,219 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
         EXPECT_TRUE(find_error(u, "Insufficient funds")) << "unexpected error: " << u.write();
     } catch (const std::exception& e) {
         FAIL() << "z_createbuildinstructions threw a non-UniValue exception: " << e.what();
+    }
+}
+
+TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItselfBeforeConfirmation)
+{
+    // Backlog item 8 ("stale-secondary-wallet fund safety"): before this test
+    // existed, the claim that a secondary wallet "receives no block/mempool
+    // notifications for transactions it didn't cause itself" and that "a
+    // shielded spend from a secondary wallet never gets its own change note
+    // recorded back into that wallet's file in a way distinguishable from an
+    // unrelated incoming tx" had never been checked against the real code --
+    // only re-derived from Phase 4's own description of what it fixed
+    // (registering secondary wallets for ChainTip() specifically).
+    //
+    // Reading CWalletManager::LoadWallet()/RegisterDefaultWallet() and
+    // RegisterValidationInterface() (validationinterface.cpp) directly shows
+    // registration is actually all-or-nothing -- one call wires a CWallet*
+    // into every CValidationInterface signal (SyncTransactions/ChainTip/
+    // UpdatedTransaction/EraseTransaction/Inventory/BlockChecked/Broadcast),
+    // not just ChainTip -- and CWallet::SyncTransactions()/
+    // AddToWalletIfInvolvingMe()/IsSaplingSpent() are all `this`-based with
+    // zero remaining pwalletMain references, so a secondary wallet is exactly
+    // as capable of tracking its own spend as pwalletMain is. This first
+    // version of this test (built on that reading alone) failed empirically,
+    // for a reason that has nothing to do with which wallet is involved: the
+    // wallet-facing SyncWithWallets() call for a mempool-accepted (not yet
+    // mined) tx isn't made synchronously by AcceptToMemoryPool() -- it's made
+    // by CTxMemPool::NotifyRecentlyAdded(), which production only calls from
+    // a dedicated once-a-second background thread (ThreadNotifyRecentlyAdded(),
+    // init.cpp) that gtest's BitcoinTestingSetup never starts. This is a
+    // pre-existing, single-wallet-and-all mempool-sync latency characteristic,
+    // not a multiwallet-specific gap -- the test below drives
+    // mempool.NotifyRecentlyAdded() directly to stand in for that thread.
+    //
+    // With that accounted for, this test proves the actual item-8 question:
+    // a secondary wallet spending its own note to itself must (a) mark that
+    // note's nullifier spent, and (b) record the resulting change tx, using
+    // its own state -- both before any block confirms it -- and pwalletMain
+    // must see neither, proving no cross-wallet leakage either direction.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+
+    NOTARY_PUBKEY = notaryPubkey;
+    USE_EXTERNAL_PUBKEY = 0;
+
+    // Same chain-identity fix as the test above -- see its own comment for the
+    // full rationale (a KMD-identified height-1 coinbase overflows the
+    // vendored zcash_primitives crate's MAX_MONEY).
+    assetchain originalChainName = chainName;
+    uint64_t originalReward0 = ASSETCHAINS_REWARD[0];
+    uint64_t originalHalving0 = ASSETCHAINS_HALVING[0];
+    uint64_t originalSupply = ASSETCHAINS_SUPPLY;
+    uint8_t originalPrivate = ASSETCHAINS_PRIVATE;
+    chainName = assetchain("PIRATE");
+    ASSETCHAINS_REWARD[0] = 25600000000;
+    ASSETCHAINS_HALVING[0] = 77777;
+    ASSETCHAINS_SUPPLY = 0;
+    ASSETCHAINS_PRIVATE = 1;
+    struct ChainIdentityReverter {
+        assetchain originalChainName;
+        uint64_t originalReward0;
+        uint64_t originalHalving0;
+        uint64_t originalSupply;
+        uint8_t originalPrivate;
+        ~ChainIdentityReverter() {
+            chainName = originalChainName;
+            ASSETCHAINS_REWARD[0] = originalReward0;
+            ASSETCHAINS_HALVING[0] = originalHalving0;
+            ASSETCHAINS_SUPPLY = originalSupply;
+            ASSETCHAINS_PRIVATE = originalPrivate;
+        }
+    } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
+
+    CWalletManager::Get().RegisterDefaultWallet(pwalletMain->GetName(), pwalletMain);
+    struct WalletManagerCleanup {
+        ~WalletManagerCleanup() {
+            CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+            CWalletManager::Get().Reset();
+        }
+    } walletManagerCleanup;
+
+    std::string strError, seedPhrase;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_selfspend_test.dat", strError, seedPhrase)) << strError;
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondary_selfspend_test.dat");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    libzcash::SaplingPaymentAddress secondaryAddr = SetupSecondaryWalletWithShieldedSaplingNote(secondaryWallet);
+    // HasFailure(), not HasFatalFailure(): the helper reports through
+    // ADD_FAILURE(), which is non-fatal and invisible to the latter.
+    ASSERT_FALSE(HasFailure());
+
+    // Capture the funding note's own nullifier before spending it, straight
+    // off the wallet's own note data -- this is what IsSaplingSpent() below
+    // checks against.
+    uint256 fundingNullifier;
+    {
+        // cs_main first: GetFilteredNotes() itself takes LOCK2(cs_main,
+        // cs_wallet), so entering it holding only cs_wallet would acquire the
+        // two in the reverse of this codebase's cs_main -> cs_wallet order.
+        LOCK2(cs_main, secondaryWallet->cs_wallet);
+        std::vector<SaplingNoteEntry> saplingEntries;
+        std::vector<IronwoodNoteEntry> ironwoodEntries;
+        std::set<libzcash::PaymentAddress> filterAddresses = {secondaryAddr};
+        secondaryWallet->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, 1);
+        ASSERT_EQ(1u, saplingEntries.size());
+        const SaplingOutPoint& op = saplingEntries[0].op;
+        auto wtx_it = secondaryWallet->mapWallet.find(op.hash);
+        ASSERT_NE(secondaryWallet->mapWallet.end(), wtx_it);
+        auto nd_it = wtx_it->second.mapSaplingNoteData.find(op);
+        ASSERT_NE(wtx_it->second.mapSaplingNoteData.end(), nd_it);
+        ASSERT_TRUE(nd_it->second.nullifier.has_value());
+        fundingNullifier = nd_it->second.nullifier.value();
+    }
+    // IsSaplingSpent() walks mapWallet and calls GetDepthInMainChain(), which
+    // asserts cs_main -- so every call below is made under cs_main plus that
+    // wallet's own cs_wallet, in that order, exactly as the production callers
+    // in wallet.cpp/rpcpiratewallet.cpp do. One wallet at a time: nothing in
+    // this codebase holds two wallets' cs_wallet simultaneously.
+    {
+        LOCK2(cs_main, secondaryWallet->cs_wallet);
+        ASSERT_FALSE(secondaryWallet->IsSaplingSpent(fundingNullifier));
+    }
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        ASSERT_FALSE(pwalletMain->IsSaplingSpent(fundingNullifier));
+    }
+
+    // Send part of the note back to the same address (self-spend, produces a
+    // real change output) -- testmode=true so the test controls broadcast.
+    int sendHeight;
+    {
+        LOCK(cs_main);
+        sendHeight = chainActive.Height() + 1;
+    }
+    std::vector<SendManyRecipient> saplingRecipients = {
+        SendManyRecipient(EncodePaymentAddress(secondaryAddr), CAmount(100000000), "")
+    };
+    std::vector<SendManyRecipient> ironwoodRecipients;
+    auto sendOp = std::make_shared<AsyncRPCOperation_sendmany>(
+        secondaryWallet, Params().GetConsensus(), sendHeight,
+        EncodePaymentAddress(secondaryAddr), saplingRecipients, ironwoodRecipients, 1);
+    sendOp->testmode = true;
+    TEST_FRIEND_AsyncRPCOperation_sendmany sendProxy(sendOp);
+    bool sendSuccess = false;
+    ASSERT_NO_THROW(sendSuccess = sendProxy.main_impl());
+    ASSERT_TRUE(sendSuccess);
+    CTransaction selfSpendTx = sendProxy.getTx();
+
+    // Broadcast to the mempool ONLY -- no block is mined. AcceptToMemoryPool()
+    // itself doesn't call SyncWithWallets() synchronously -- it only records
+    // the tx into CTxMemPool::mapRecentlyAddedTx; the actual wallet-facing
+    // SyncWithWallets() call is made by CTxMemPool::NotifyRecentlyAdded(),
+    // driven in production by a dedicated background thread
+    // (ThreadNotifyRecentlyAdded(), init.cpp) ticking once a second. gtest's
+    // BitcoinTestingSetup never runs AppInit2()'s thread group, so nothing
+    // drives that thread here -- call NotifyRecentlyAdded() directly to
+    // simulate what it would otherwise do within ~1 second on a real node.
+    {
+        UniValue sendParams(UniValue::VARR);
+        CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << selfSpendTx;
+        sendParams.push_back(HexStr(ss.begin(), ss.end()));
+        ASSERT_NO_THROW(sendrawtransaction(sendParams, false, CPubKey()));
+    }
+    mempool.NotifyRecentlyAdded();
+
+    // (a) The secondary wallet must recognize the funding note as spent from
+    // its own mempool-only view -- this is what makes a retried send safe
+    // from reselecting the same note (GetFilteredNotes()'s ignoreSpent=true
+    // default reads exactly this).
+    //
+    // (b) The resulting tx (carrying the change note) must also be recorded in
+    // the secondary wallet's own mapWallet -- proves the change is attributed
+    // to the wallet that actually made the spend, not silently dropped or
+    // requiring a block confirmation to show up at all.
+    {
+        LOCK2(cs_main, secondaryWallet->cs_wallet);
+        EXPECT_TRUE(secondaryWallet->IsSaplingSpent(fundingNullifier))
+            << "secondary wallet did not notice its own spend was in the mempool";
+        EXPECT_EQ(1u, secondaryWallet->mapWallet.count(selfSpendTx.GetHash()))
+            << "secondary wallet never recorded its own self-spend/change tx from the mempool";
+    }
+
+    // pwalletMain was never involved and must see neither the spend nor the
+    // new change tx -- proves the mempool notification isn't leaking into,
+    // or being satisfied by, the default wallet instead.
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        EXPECT_FALSE(pwalletMain->IsSaplingSpent(fundingNullifier));
+        EXPECT_EQ(0u, pwalletMain->mapWallet.count(selfSpendTx.GetHash()))
+            << "the self-spend tx was recorded in pwalletMain, not just the secondary wallet";
+    }
+
+    // Confirm it for real and re-check both facts still hold post-confirmation
+    // (the mempool-only checks above are the interesting, previously-unverified
+    // part, but a regression that only breaks the unconfirmed path and not the
+    // confirmed one is still worth catching).
+    ASSERT_NE(nullptr, generateBlock(pwalletMain));
+    {
+        LOCK2(cs_main, secondaryWallet->cs_wallet);
+        EXPECT_TRUE(secondaryWallet->IsSaplingSpent(fundingNullifier));
+        EXPECT_EQ(1u, secondaryWallet->mapWallet.count(selfSpendTx.GetHash()));
+    }
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        EXPECT_FALSE(pwalletMain->IsSaplingSpent(fundingNullifier));
+        EXPECT_EQ(0u, pwalletMain->mapWallet.count(selfSpendTx.GetHash()));
     }
 }
 
