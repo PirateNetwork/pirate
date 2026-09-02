@@ -37,6 +37,7 @@
 #include "script/sign.h"
 #include "script/standard.h"
 #include "uint256.h"
+#include "utilmoneystr.h"
 #include "importcoin.h"
 #include "komodo_notary.h"
 #include "komodo_bitcoind.h"
@@ -1877,6 +1878,11 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           "different loaded wallet. If called with no wallet selected, every loaded\n"
           "wallet is searched for whichever one holds the needed key, since the builder\n"
           "data itself carries no record of which wallet originally created it.\n"
+          "Change is routed to whatever destination the originating wallet already baked\n"
+          "into the instructions (see z_createbuildinstructions/z_createbuildinstructionscoincontrol) —\n"
+          "this wallet's own -changeaddress setting, if any, is not consulted, since it may\n"
+          "be a different, dedicated spending-key-only wallet with no say in where the\n"
+          "originating wallet's change should land.\n"
 
           "\nArguments:\n"
           "1. \"hex\"      (string, required) The transaction builder hex string\n"
@@ -2300,9 +2306,13 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           "\nCreate transaction builder instructions for offline shielded transaction construction.\n"
           "Generates hex-encoded builder data that can be used to create shielded transactions\n"
           "from a Sapling or Ironwood address to shielded (Sapling/Ironwood) addresses.\n"
-          "Change returns to the wallet's internal (ZIP-32) change address derived from the\n"
-          "spending key, unless the -changeaddress config option is set, in which case it is\n"
-          "routed there instead (applies to both Sapling and Ironwood sources).\n"
+          "This wallet resolves and bakes a change destination into the instructions at\n"
+          "creation time, so whichever wallet later signs them (z_buildrawtransaction) does\n"
+          "not need this wallet's spending key, and honors this choice rather than its own.\n"
+          "Change returns to this wallet's internal (ZIP-32) change address, derived from\n"
+          "the full viewing key of fromaddress, unless the -changeaddress config option is\n"
+          "set, in which case it is routed there instead (applies to both Sapling and\n"
+          "Ironwood sources).\n"
 
           + HelpRequiringPassphrase() + "\n"
           "\nArguments:\n"
@@ -2330,8 +2340,16 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
       //Initalize Transaction Builder
       CAmount totalOut = 0;
-      int nHeight = chainActive.Tip()->nHeight;
-      TransactionBuilder tb = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwallet);
+      // Build for the next block's height, matching every other TransactionBuilder
+      // call site in this codebase (e.g. AsyncRPCOperation_sendmany). Passing a
+      // future height here (as this used to do, via nHeight + DEFAULT_TX_EXPIRY_DELTA)
+      // computes the wrong consensus branch ID whenever a network upgrade activates
+      // within that window, and silently doubles the default expiry delta besides -
+      // CreateNewContextualCMutableTransaction() already adds its own expiryDelta on
+      // top of whatever height it's given. See the identical fix and explanation in
+      // z_createbuildinstructionscoincontrol below.
+      int nHeight = chainActive.Tip()->nHeight + 1;
+      TransactionBuilder tb = TransactionBuilder(Params().GetConsensus(), nHeight, pwallet);
 
       CAmount nFee = 10000;
       if (!params[3].isNull()) {
@@ -2389,6 +2407,9 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
 
               if (!(toSapling || toIronwood))
                   throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
+
+              if (toIronwood && !NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD))
+                  throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Ironwood has not activated");
 
           } else {
               throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown address format: ")+address );
@@ -2545,6 +2566,19 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
           }
       }
 
+      // Unlike z_createbuildinstructionscoincontrol, this had no check that the
+      // notes actually found cover totalOut before returning "success" - the
+      // note-selection loops above only ever *stop early* once they have enough,
+      // they never *fail* when they run out of notes without reaching it (e.g.
+      // funds moved/got locked between whatever the caller last checked and this
+      // call actually running). Without this, a shortfall here silently produces
+      // a checksum-valid but unspendable blob whose failure only surfaces much
+      // later, as a confusing "Change cannot be negative" from z_buildrawtransaction.
+      if (totalIn < totalOut) {
+          throw JSONRPCError(RPC_WALLET_INSUFFICIENT_FUNDS, strprintf(
+              "Insufficient funds, have %s, need %s", FormatMoney(totalIn), FormatMoney(totalOut)));
+      }
+
       // Bake a change destination into the instructions now, while it's still this
       // wallet's request -- z_buildrawtransaction must not decide this using
       // whichever wallet ends up signing, since that may be a different, dedicated
@@ -2626,22 +2660,30 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
           "\nCreate transaction builder instructions with manual coin control for shielded transactions.\n"
           "Allows precise control over which shielded notes to spend and where to send outputs.\n"
           "Provides fine-grained control over transaction construction for advanced users.\n"
+          "This wallet resolves and bakes a change destination into the instructions at\n"
+          "creation time, so whichever wallet later signs them (z_buildrawtransaction) does\n"
+          "not need this wallet's spending key, and honors this choice rather than its own.\n"
+          "Change returns to this wallet's internal (ZIP-32) change address, derived from\n"
+          "the full viewing key of the first input's address, unless the -changeaddress\n"
+          "config option is set, in which case it is routed there instead (applies to both\n"
+          "Sapling and Ironwood sources).\n"
 
           "\nArguments:\n"
           "1. \"inputs\"                (array, required) Array of shielded inputs to spend\n"
           "     [\n"
           "       {\n"
           "         \"txid\":\"id\",          (string, required) The transaction id\n"
-          "         \"index\":n,          (numeric, required) Shielded output index of input transaction\n"
+          "         \"index\":n,          (numeric, required) Shielded output/action index of input transaction\n"
+          "         \"type\":\"sapling\"    (string, optional, default=\"sapling\") \"sapling\" or \"ironwood\"\n"
           "       } \n"
           "       ,...\n"
           "     ]\n"
           "2. \"outputs\"               (array, required) Array of shielded outputs to create\n"
           "     [\n"
           "       {\n"
-          "         \"address\":address     (string, required) Pirate shielded address\n"
+          "         \"address\":address     (string, required) Pirate Sapling or Ironwood address\n"
           "         \"amount\":amount       (numeric, required) The amount in " + CURRENCY_UNIT + "\n"
-          "         \"memo\": \"string\"    (string, optional) Memo in UTF-8 or hexadecimal format\n"
+          "         \"memo\": \"string\"    (string, optional) Memo in UTF-8 or hexadecimal format (Sapling/Ironwood only)\n"
           "         ,...\n"
           "       }\n"
           "     ]\n"
@@ -2663,8 +2705,15 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
     UniValue outputs = params[1].get_array();
 
     CAmount total = 0;
-    int nHeight = chainActive.Tip()->nHeight;
-    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight + DEFAULT_TX_EXPIRY_DELTA, pwallet);
+    // Build for the next block's height, matching every other TransactionBuilder
+    // call site in this codebase (e.g. AsyncRPCOperation_sendmany). Passing a
+    // future height here (as this used to do, via nHeight + DEFAULT_TX_EXPIRY_DELTA)
+    // computes the wrong consensus branch ID whenever a network upgrade activates
+    // within that window, and silently doubles the default expiry delta besides -
+    // CreateNewContextualCMutableTransaction() already adds its own expiryDelta on
+    // top of whatever height it's given.
+    int nHeight = chainActive.Tip()->nHeight + 1;
+    TransactionBuilder tx = TransactionBuilder(Params().GetConsensus(), nHeight, pwallet);
 
     CAmount nFee = 10000;
     if (!params[2].isNull()) {
@@ -2686,8 +2735,10 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
 
     // Captured from the first input below, for deriving a default change address
     // once the loop finishes -- see the comment further down where it's used.
-    libzcash::SaplingPaymentAddress firstInputAddr;
     bool haveFirstInputAddr = false;
+    bool firstInputIronwood = false;
+    libzcash::SaplingPaymentAddress firstSaplingInputAddr;
+    libzcash::IronwoodPaymentAddress firstIronwoodInputAddr;
 
     for (size_t idx = 0; idx < inputs.size(); idx++) {
         const UniValue& input = inputs[idx];
@@ -2702,8 +2753,57 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
         if (nOutput < 0)
             throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, index must be positive");
 
+        // Which shielded pool this input's index refers to. Defaults to
+        // sapling so existing callers built before Ironwood support keep
+        // working unchanged.
+        bool inputIronwood = false;
+        UniValue inputTypeValue = find_value(o, "type");
+        if (!inputTypeValue.isNull()) {
+            std::string inputType = inputTypeValue.get_str();
+            if (inputType == "ironwood") {
+                inputIronwood = true;
+            } else if (inputType != "sapling") {
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, type must be \"sapling\" or \"ironwood\"");
+            }
+        }
+
         const CWalletTx* wtx = pwallet->GetWalletTx(txid);
-        if (wtx != NULL) {
+        if (wtx == NULL)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, "Wallet transaction does not exist");
+
+        if (inputIronwood) {
+            if (!NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Ironwood has not activated");
+
+            IronwoodOutPoint op = IronwoodOutPoint(txid, nOutput);
+
+            auto maybe_decrypted = wtx->DecryptIronwoodNote(op);
+            if (maybe_decrypted == std::nullopt)
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Note decryption failed.");
+
+            auto decrypted = maybe_decrypted.value();
+            libzcash::IronwoodNotePlaintext pt = decrypted.first;
+            libzcash::IronwoodPaymentAddress pa = decrypted.second;
+            auto note = pt.note().value();
+            total += note.value();
+
+            if (!haveFirstInputAddr) {
+                firstIronwoodInputAddr = pa;
+                firstInputIronwood = true;
+                haveFirstInputAddr = true;
+            }
+
+            libzcash::MerklePath ironwoodMerklePath;
+            if (!pwallet->IronwoodWalletGetMerklePathOfNote(op.hash, op.n, ironwoodMerklePath))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "Getting Ironwood Merkle Path failed");
+
+            uint256 anchor;
+            if (!pwallet->IronwoodWalletGetPathRootWithCMU(ironwoodMerklePath, note.cmx(), anchor))
+                throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Getting Ironwood Anchor failed.");
+
+            if (!tx.AddIronwoodSpendRaw(op, pa, note.value(), note.rho(), note.rseed(), ironwoodMerklePath, anchor))
+                throw JSONRPCError(RPC_INVALID_PARAMETER, "All inputs must be from the same address");
+        } else {
             SaplingOutPoint op = SaplingOutPoint(txid, nOutput);
 
             int txHeight = chainActive.Tip()->nHeight - wtx->GetDepthInMainChain();
@@ -2719,7 +2819,7 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
             total += value;
 
             if (!haveFirstInputAddr) {
-                firstInputAddr = pa;
+                firstSaplingInputAddr = pa;
                 haveFirstInputAddr = true;
             }
 
@@ -2733,9 +2833,6 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
 
            if (!tx.AddSaplingSpendRaw(op, pa, note.value(), note.rcm(), saplingMerklePath, anchor))
                 throw JSONRPCError(RPC_INVALID_PARAMETER, "All inputs must be from the same address");
-
-        } else {
-            throw JSONRPCError(RPC_INVALID_PARAMETER, "Wallet transaction does not exist");
         }
     }
 
@@ -2750,26 +2847,33 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
               throw JSONRPCError(RPC_INVALID_PARAMETER, string("Invalid parameter, unknown key: ")+s);
       }
 
-      //Check address
-      bool isTAddr = false;
-      CTxDestination tAddress;
+      //Check address — outputs are shielded-only (Sapling or Ironwood); a
+      //transparent destination is rejected outright, matching
+      //z_createbuildinstructions just above.
       bool isZsAddr = false;
       libzcash::SaplingPaymentAddress zsAddress;
+      bool isZoAddr = false;
+      libzcash::IronwoodPaymentAddress zoAddress;
 
       UniValue addrValue = find_value(o, "address");
       if (!addrValue.isNull()) {
           string encodedAddress = addrValue.get_str();
-          tAddress = DecodeDestination(encodedAddress);
+          CTxDestination tAddress = DecodeDestination(encodedAddress);
           if (IsValidDestination(tAddress)) {
-              isTAddr = true;
+              throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, output address should be a sapling or ironwood address.");
+          }
+
+          libzcash::PaymentAddress zAddress = DecodePaymentAddress(encodedAddress);
+          if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
+              zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
+              isZsAddr = true;
+          } else if (std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress) != nullptr) {
+              if (!NetworkUpgradeActive(nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD))
+                  throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid parameter, Ironwood has not activated");
+              zoAddress = *(std::get_if<libzcash::IronwoodPaymentAddress>(&zAddress));
+              isZoAddr = true;
           } else {
-              libzcash::PaymentAddress zAddress = DecodePaymentAddress(encodedAddress);
-              if (std::get_if<libzcash::SaplingPaymentAddress>(&zAddress) != nullptr) {
-                  zsAddress = *(std::get_if<libzcash::SaplingPaymentAddress>(&zAddress));
-                  isZsAddr = true;
-              } else {
-                  throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address.");
-              }
+              throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid address.");
           }
       } else {
           throw JSONRPCError(RPC_INVALID_PARAMETER, "Address not found.");
@@ -2788,9 +2892,9 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
       if (!memoValue.isNull()) {
           memo = memoValue.get_str();
 
-          if (!isZsAddr) {
-              throw JSONRPCError(RPC_INVALID_PARAMETER, "Memo cannot be used with a taddr.  It can only be used with a zaddr.");
-          }
+          // No taddr guard needed here: the address-parsing block above already
+          // rejects a transparent output address outright, so isZsAddr/isZoAddr
+          // are the only two possibilities by this point.
           if (!IsHex(memo)) {
               memo = HexStr(memo);
           }
@@ -2818,48 +2922,62 @@ UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp
       }
 
 
+      // isZsAddr/isZoAddr are exhaustive by this point — the address-parsing
+      // block above already rejected anything else (transparent explicitly,
+      // anything undecodable via the final "Invalid address." throw).
       if (isZsAddr) {
           tx.AddSaplingOutputRaw(zsAddress, nAmount, hexMemo);
-          total -= nAmount;
       } else {
-          tx.AddTransparentOutput(tAddress,nAmount);
+          tx.AddIronwoodOutputRaw(zoAddress, nAmount, hexMemo);
       }
+      total -= nAmount;
     }
 
     if (total < 0)
       throw JSONRPCError(RPC_INVALID_PARAMETER, "Output values plus tx fee are greater than input values");
 
     // See the identical block (with full rationale) in z_createbuildinstructions
-    // just above -- this belongs here (create side), not in z_buildrawtransaction
-    // (sign side). This RPC is Sapling-only (no Ironwood spend/output support
-    // above), so only the Sapling half applies. haveFirstInputAddr can be false
-    // here only if `inputs` was empty, which the total<0 check above will already
-    // have rejected in the overwhelmingly common case (a positive fee with no
-    // inputs) -- if it somehow wasn't, there's nothing to derive a default from
-    // and this falls through to Build()'s own fallback, same as
-    // z_createbuildinstructions's failure path just above.
+    // above -- this belongs here (create side), not in z_buildrawtransaction (sign
+    // side). haveFirstInputAddr can be false here only if `inputs` was empty,
+    // which the total<0 check above will already have rejected in the
+    // overwhelmingly common case (a positive fee with no inputs) -- if it somehow
+    // wasn't, there's nothing to derive a default from and this falls through to
+    // Build()'s own fallback, same as z_createbuildinstructions's failure path
+    // above.
     if (pwallet->configuredChangeAddress.has_value()) {
         const auto& changeAddress = pwallet->configuredChangeAddress.value();
         if (auto saplingChangeAddr = std::get_if<libzcash::SaplingPaymentAddress>(&changeAddress)) {
             tx.SetInstructedSaplingChangeAddress(*saplingChangeAddr);
+        } else if (auto ironwoodChangeAddr = std::get_if<libzcash::IronwoodPaymentAddress>(&changeAddress)) {
+            tx.SetInstructedIronwoodChangeAddress(*ironwoodChangeAddr);
         }
-    } else if (haveFirstInputAddr) {
+    } else if (haveFirstInputAddr && !firstInputIronwood) {
         libzcash::SaplingIncomingViewingKey fromIvk;
         libzcash::SaplingExtendedFullViewingKey fromExtfvk;
-        if (pwallet->GetSaplingIncomingViewingKey(firstInputAddr, fromIvk) &&
+        if (pwallet->GetSaplingIncomingViewingKey(firstSaplingInputAddr, fromIvk) &&
             pwallet->GetSaplingFullViewingKey(fromIvk, fromExtfvk)) {
             libzcash::SaplingPaymentAddress defaultChangeAddr;
             if (fromExtfvk.DefaultAddressInternal(&defaultChangeAddr)) {
                 tx.SetInstructedSaplingChangeAddress(defaultChangeAddr);
             }
         }
+    } else if (haveFirstInputAddr && firstInputIronwood) {
+        libzcash::IronwoodIncomingViewingKey fromIvk;
+        libzcash::IronwoodExtendedFullViewingKeyPirate fromExtfvk;
+        if (pwallet->GetIronwoodIncomingViewingKey(firstIronwoodInputAddr, fromIvk) &&
+            pwallet->GetIronwoodFullViewingKey(fromIvk, fromExtfvk)) {
+            libzcash::IronwoodPaymentAddress defaultChangeAddr;
+            if (fromExtfvk.fvk.DeriveDefaultAddressInternal(&defaultChangeAddr)) {
+                tx.SetInstructedIronwoodChangeAddress(defaultChangeAddr);
+            }
+        }
     }
 
-    // Unlike z_createbuildinstructions just above, this never called SetChecksum()
-    // before returning -- the checksum member stayed at its unset default, and
-    // z_buildrawtransaction's ValidateChecksum() (a CRC-16 recomputed over the
-    // serialized bytes) would then only pass by a 1-in-65536 coincidence. This
-    // RPC's own offline round trip has been silently broken end-to-end.
+    // This used to never call SetChecksum() before returning -- the checksum
+    // member stayed at its unset default, and z_buildrawtransaction's
+    // ValidateChecksum() (a CRC-16 recomputed over the serialized bytes) would
+    // then only pass by a 1-in-65536 coincidence. This RPC's own offline round
+    // trip was silently broken end-to-end.
     tx.SetChecksum();
 
     CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
