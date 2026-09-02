@@ -122,6 +122,8 @@ TEST(HTTPRPC, FailsWithBadAuth)
 // CRPCTable::execute() and RPCWalletRequestGuard, the same production code
 // HTTPReq_JSONRPC drives; that needs no HTTP mocking at all.
 
+extern std::atomic<bool> fRequestShutdown; // init.cpp; ShutdownRequested()'s backing flag
+
 namespace {
 struct ScopedRPCAuth {
     std::string prev;
@@ -129,6 +131,45 @@ struct ScopedRPCAuth {
         strRPCUserColonPass = userpass;
     }
     ~ScopedRPCAuth() { strRPCUserColonPass = prev; }
+};
+
+// Saves, clears and restores the process-wide shutdown-request flag. Needed
+// in both directions by anything that asserts on ShutdownRequested(): an
+// earlier test in this binary can legitimately have left it set (
+// test_deprecation.cpp sets it on purpose and only clears it in its own
+// TearDown, and gtest's cross-translation-unit ordering is link-order
+// dependent), and a test that drives StartShutdown() -- deliberately, or
+// because its subject regressed into calling it -- must not leak that into
+// every test that runs afterwards.
+struct ScopedShutdownFlag {
+    bool previous;
+    ScopedShutdownFlag() : previous(fRequestShutdown.load()) { fRequestShutdown = false; }
+    ~ScopedShutdownFlag() { fRequestShutdown = previous; }
+};
+
+// encryptwallet is gated behind `fExperimentalMode && -developerencryptwallet`,
+// whose default is chain-identity-dependent (komodo_acpublic()/chainName).
+// Force both on for the duration of a test rather than depend on which chain
+// the fixture happens to have selected.
+struct ScopedWalletEncryptionEnabled {
+    bool fHadArg;
+    std::string previousArg;
+    bool previousExperimental;
+    ScopedWalletEncryptionEnabled()
+        : fHadArg(mapArgs.count("-developerencryptwallet") != 0),
+          previousArg(fHadArg ? mapArgs["-developerencryptwallet"] : std::string()),
+          previousExperimental(fExperimentalMode)
+    {
+        mapArgs["-developerencryptwallet"] = "1";
+        fExperimentalMode = true;
+    }
+    ~ScopedWalletEncryptionEnabled() {
+        fExperimentalMode = previousExperimental;
+        if (fHadArg)
+            mapArgs["-developerencryptwallet"] = previousArg;
+        else
+            mapArgs.erase("-developerencryptwallet");
+    }
 };
 }
 
@@ -245,19 +286,151 @@ TEST_F(MultiWalletDispatchTest, RootUriWithNoWalletSegmentAlsoRunsWalletRPCsNorm
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksOrdinaryWalletRPCs)
 {
-    // encryptwallet is deliberately NOT in IsMultiWalletAwareRPC(): it
-    // unconditionally calls StartShutdown() on success (rpcmultiwallet.cpp),
-    // so encrypting one secondary wallet would restart the whole node -- it
-    // needs its own design, not a mechanical pwalletMain->pwallet
-    // substitution. Good stand-in for "an ordinary, still-gated 'wallet'-
-    // category RPC" now that settxfee (Phase 5) and getbalance are rewired.
+    // addmultisigaddress is still plain pwalletMain-only, no
+    // GetWalletForRequest() resolution -- a mechanical rewiring nobody has
+    // had reason to do yet. Good stand-in for "an ordinary, still-gated
+    // 'wallet'-category RPC" now that settxfee/getbalance/encryptwallet
+    // (backlog item 9) are all rewired.
     RPCWalletRequestGuard guard("secondarytestwallet");
     try {
-        tableRPC.execute("encryptwallet", UniValue(UniValue::VARR));
-        FAIL() << "expected encryptwallet to be refused against a non-default wallet";
+        tableRPC.execute("addmultisigaddress", UniValue(UniValue::VARR));
+        FAIL() << "expected addmultisigaddress to be refused against a non-default wallet";
     } catch (const UniValue& objError) {
         EXPECT_EQ((int)RPC_WALLET_NOT_SPECIFIED, find_value(objError, "code").get_int());
     }
+}
+
+TEST_F(MultiWalletDispatchTest, EncryptWalletSucceedsOnASecondaryWalletAndCanBeReloadedWithItsPassphrase)
+{
+    // Backlog item 9's actual, completed capability: a secondary wallet can
+    // be encrypted via the encryptwallet RPC, unloaded, and reloaded again
+    // with its own passphrase -- via CWalletManager::LoadWallet()'s new
+    // per-wallet-unlock support (InitalizeCryptedLoad()/SetDBCrypted()/
+    // LoadCryptedSeedFromDB()/OpenWallet()/seedEncyptionFP, run synchronously
+    // against whatever passphrase the caller already supplied, instead of
+    // the default wallet's own blocking wait for one to arrive out-of-band).
+    // Before this existed, a *successful* encryption of a secondary wallet
+    // permanently bricked it (nothing could ever open it again) -- that was
+    // the actual danger this whole design was built to close, not the
+    // failure path.
+    ScopedWalletEncryptionEnabled encryptionEnabled;
+
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_FALSE(secondaryWallet->IsCrypted());
+    {
+        // This fixture's secondary wallet is loaded via plain LoadWallet(),
+        // not CreateWallet(), so it has no HD seed yet -- EncryptWallet()
+        // requires one (matches init.cpp's own "a crypted wallet must have
+        // an HD seed" invariant).
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryWallet->GenerateNewSeed();
+    }
+
+    UniValue encryptParams(UniValue::VARR);
+    encryptParams.push_back("correct horse battery staple");
+    {
+        RPCWalletRequestGuard guard("secondarytestwallet");
+        UniValue result;
+        ASSERT_NO_THROW(result = tableRPC.execute("encryptwallet", encryptParams));
+        EXPECT_NE(std::string::npos, result.get_str().find("encrypted")) << result.write();
+    }
+    EXPECT_TRUE(secondaryWallet->IsCrypted());
+    // CWallet::EncryptWallet() deliberately ends with Lock() (after an
+    // internal Unlock()-to-build-a-fresh-keypool-then-Lock() sequence) --
+    // matches the default wallet's own encryptwallet behavior, which also
+    // requires a walletpassphrase call afterward to actually use it.
+    EXPECT_TRUE(secondaryWallet->IsLocked());
+
+    // Capture the registry entry's generation before unloading -- the
+    // allocator can and does reuse a just-freed CWallet's address for the
+    // next one constructed, so comparing pointer identity after the
+    // unload+reload below wouldn't actually prove a new object exists (see
+    // ReleaseRefIfCurrent()'s own doc comment for why generation, not the
+    // raw pointer, is this registry's real identity for an entry instance).
+    auto originalResolved = CWalletManager::Get().ResolveAndHoldForRequest("secondarytestwallet");
+    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, originalResolved.outcome);
+    CWalletManager::Get().ReleaseRefIfCurrent("secondarytestwallet", originalResolved.generation);
+
+    std::string strUnloadError;
+    ASSERT_TRUE(CWalletManager::Get().UnloadWallet("secondarytestwallet", strUnloadError)) << strUnloadError;
+    ASSERT_EQ(nullptr, CWalletManager::Get().GetWallet("secondarytestwallet"));
+
+    // Wrong passphrase: must fail cleanly (no crash, no partial state) and
+    // leave the wallet unloaded -- not silently proceed locked.
+    SecureString wrongPass;
+    wrongPass.reserve(100);
+    wrongPass = "not the passphrase";
+    std::string strWrongError;
+    bool fPassphraseRequired = false;
+    EXPECT_FALSE(CWalletManager::Get().LoadWallet("secondarytestwallet", strWrongError,
+        /*fRescan=*/false, /*nRescanHeight=*/0, /*fSalvage=*/false, /*fZapWalletTxes=*/false,
+        /*fAllowCreate=*/false, wrongPass, &fPassphraseRequired));
+    EXPECT_TRUE(fPassphraseRequired) << strWrongError;
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("secondarytestwallet"));
+
+    // Correct passphrase: must succeed, and the reloaded wallet must be a
+    // genuinely fresh, usable (unlocked) object.
+    SecureString rightPass;
+    rightPass.reserve(100);
+    rightPass = "correct horse battery staple";
+    std::string strReloadError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondarytestwallet", strReloadError,
+        /*fRescan=*/false, /*nRescanHeight=*/0, /*fSalvage=*/false, /*fZapWalletTxes=*/false,
+        /*fAllowCreate=*/false, rightPass)) << strReloadError;
+    CWallet* reloadedWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, reloadedWallet);
+    EXPECT_TRUE(reloadedWallet->IsCrypted());
+    EXPECT_FALSE(reloadedWallet->IsLocked())
+        << "loadwallet's own unlock path should leave it usable immediately, unlike encryptwallet's";
+
+    auto reloadedResolved = CWalletManager::Get().ResolveAndHoldForRequest("secondarytestwallet");
+    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, reloadedResolved.outcome);
+    CWalletManager::Get().ReleaseRefIfCurrent("secondarytestwallet", reloadedResolved.generation);
+    EXPECT_NE(originalResolved.generation, reloadedResolved.generation)
+        << "should be a genuinely new registry entry, not the pre-unload one still alive";
+}
+
+TEST_F(MultiWalletDispatchTest, EncryptWalletFailureOnTheDefaultWalletStillRestartsTheNode)
+{
+    // The other half of backlog item 9's contract: only *secondary* wallets
+    // gained in-process recovery. The default wallet has no unload/reload
+    // route at all, so its failure path must still restart the node exactly
+    // as it always did -- a regression here would leave a node running
+    // against a wallet whose in-memory crypto state EncryptWallet() left
+    // half-transitioned, with no test noticing.
+    ScopedShutdownFlag shutdownFlag;
+    ScopedWalletEncryptionEnabled encryptionEnabled;
+
+    // The fixture registers "default_test.dat" but never opens its file (it
+    // only ever resolves the pointer); materialize it so BackupWallet() has
+    // something to copy, the same way the fixture does for the secondary.
+    {
+        bool fFirstRun;
+        CWallet scratch("default_test.dat");
+        ASSERT_EQ(DB_LOAD_OK, scratch.LoadWallet(fFirstRun));
+    }
+
+    CWallet* defaultWallet = CWalletManager::Get().GetWallet("default_test.dat");
+    ASSERT_NE(nullptr, defaultWallet);
+    HDSeed seedProbe;
+    ASSERT_FALSE(defaultWallet->GetHDSeed(seedProbe)); // same deterministic failure trigger
+
+    UniValue params(UniValue::VARR);
+    params.push_back("some passphrase");
+
+    UniValue result;
+    {
+        RPCWalletRequestGuard guard(""); // "/" -- no wallet segment, i.e. the default wallet
+        ASSERT_NO_THROW(result = tableRPC.execute("encryptwallet", params));
+    }
+
+    EXPECT_NE(std::string::npos, result.get_str().find("Pirate server stopping"))
+        << "unexpected result: " << result.write();
+    EXPECT_TRUE(ShutdownRequested())
+        << "the default wallet's encryption-failure path no longer restarts the node";
+    // Never discarded: the registry entry and the object itself are untouched.
+    EXPECT_EQ(defaultWallet, CWalletManager::Get().GetWallet("default_test.dat"));
 }
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksNonWalletCategoryRPCsToo)

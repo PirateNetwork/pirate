@@ -118,6 +118,16 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "importprivkey", 2 },
     { "importprivkey", 3 },
     { "importprivkey", 4 },
+    // loadwallet "filename" ( passphrase rescan rescanheight zapwallettxes salvage )
+    // -- only the two leading string arguments are left unconverted. Without
+    // these, `pirate-cli loadwallet "second" "" true` (the RPC's own help
+    // example) sends the string "true" and the handler's get_bool()/get_int()
+    // throws a type error instead of running. listwallets/createwallet/
+    // unloadwallet take string arguments only, so they need no entry.
+    { "loadwallet", 2 },
+    { "loadwallet", 3 },
+    { "loadwallet", 4 },
+    { "loadwallet", 5 },
     { "importaddress", 2 },
     { "verifychain", 0 },
     { "verifychain", 1 },

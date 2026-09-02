@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -101,17 +102,29 @@ class WalletLoadWorker : public QObject
     Q_OBJECT
 
 public Q_SLOTS:
-    void run(const QString &name, bool fCreate)
+    void run(const QString &name, bool fCreate, const QString &strPassphrase)
     {
         std::string strError, seedPhrase;
+        bool fNeedsPassphrase = false;
+        // Not mlock()'d -- QString's own storage isn't secure-heap backed
+        // either way, same caveat every other passphrase-taking entry point
+        // in this codebase already carries.
+        SecureString securePassphrase;
+        if (!strPassphrase.isEmpty()) {
+            securePassphrase.reserve(100);
+            securePassphrase = strPassphrase.toStdString().c_str();
+        }
         bool ok = fCreate
             ? CWalletManager::Get().CreateWallet(name.toStdString(), strError, seedPhrase)
-            : CWalletManager::Get().LoadWallet(name.toStdString(), strError);
-        Q_EMIT finished(ok, QString::fromStdString(strError), QString::fromStdString(seedPhrase));
+            : CWalletManager::Get().LoadWallet(name.toStdString(), strError,
+                                                /*fRescan=*/false, /*nRescanHeight=*/0,
+                                                /*fSalvage=*/false, /*fZapWalletTxes=*/false,
+                                                /*fAllowCreate=*/false, securePassphrase, &fNeedsPassphrase);
+        Q_EMIT finished(ok, fNeedsPassphrase, QString::fromStdString(strError), QString::fromStdString(seedPhrase));
     }
 
 Q_SIGNALS:
-    void finished(bool ok, const QString &strError, const QString &seedPhrase);
+    void finished(bool ok, bool fNeedsPassphrase, const QString &strError, const QString &seedPhrase);
 };
 
 #include "pirateoceangui.moc"
@@ -1250,7 +1263,7 @@ void PirateOceanGUI::newWalletClicked()
     startWalletLoadOrCreate(name, /*fCreate=*/true);
 }
 
-void PirateOceanGUI::startWalletLoadOrCreate(const QString& name, bool fCreate)
+void PirateOceanGUI::startWalletLoadOrCreate(const QString& name, bool fCreate, const QString& strPassphrase)
 {
     if (pendingWalletThread) {
         // The progress dialog below is only *window*-modal, and neither
@@ -1296,11 +1309,11 @@ void PirateOceanGUI::startWalletLoadOrCreate(const QString& name, bool fCreate)
     // pumped, and the worker leaks every time this runs.
     connect(thread, &QThread::finished, worker, &QObject::deleteLater);
 
-    connect(thread, &QThread::started, worker, [worker, name, fCreate]() {
-        worker->run(name, fCreate);
+    connect(thread, &QThread::started, worker, [worker, name, fCreate, strPassphrase]() {
+        worker->run(name, fCreate, strPassphrase);
     });
     pendingWalletFinishedConnection = connect(worker, &WalletLoadWorker::finished, this,
-        [this, progress, thread, name, fCreate](bool ok, const QString &strError, const QString &seedPhrase) {
+        [this, progress, thread, name, fCreate](bool ok, bool fNeedsPassphrase, const QString &strError, const QString &seedPhrase) {
             pendingWalletThread = nullptr;
             progress->close();
             progress->deleteLater();
@@ -1311,7 +1324,7 @@ void PirateOceanGUI::startWalletLoadOrCreate(const QString& name, bool fCreate)
             thread->quit();
             thread->wait();
             thread->deleteLater();
-            handleWalletLoadOrCreateResult(name, fCreate, ok, strError, seedPhrase);
+            handleWalletLoadOrCreateResult(name, fCreate, ok, fNeedsPassphrase, strError, seedPhrase);
         });
 
     pendingWalletThread = thread;
@@ -1328,10 +1341,32 @@ void PirateOceanGUI::abortPendingWalletLoad()
     pendingWalletThread = nullptr;
 }
 
-void PirateOceanGUI::handleWalletLoadOrCreateResult(const QString& name, bool fCreate, bool ok,
+void PirateOceanGUI::handleWalletLoadOrCreateResult(const QString& name, bool fCreate, bool ok, bool fNeedsPassphrase,
                                                      const QString& strError, const QString& seedPhrase)
 {
     const QString title = fCreate ? tr("New Wallet") : tr("Load Wallet");
+
+    if (!ok && fNeedsPassphrase) {
+        // The file is encrypted -- CWalletManager::LoadWallet() never blocks
+        // waiting for one (see its own doc comment), so prompt here and
+        // retry immediately with it instead of surfacing the raw "requires
+        // its passphrase"/"passphrase was incorrect" result as a dead-end
+        // failure. A wrong passphrase comes back through this exact same
+        // path again (also fNeedsPassphrase=true, with strError now saying
+        // so) -- shown right in the next prompt, so this loop doubles as
+        // "incorrect, try again" with no separate state to track. The user
+        // cancels out of the dialog at any point to abandon the load
+        // instead (fCreate is never true here: a freshly created wallet is
+        // never encrypted).
+        bool fGotPassphrase = false;
+        QString strPassphrase = QInputDialog::getText(this, title,
+            tr("%1\n\nEnter the passphrase for wallet \"%2\":").arg(strError, name),
+            QLineEdit::Password, QString(), &fGotPassphrase);
+        if (!fGotPassphrase || strPassphrase.isEmpty())
+            return;
+        startWalletLoadOrCreate(name, fCreate, strPassphrase);
+        return;
+    }
 
     // CreateWallet() deliberately leaves the wallet registered and loaded
     // even when it returns false for a seeding failure specifically (see its

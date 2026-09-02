@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -402,6 +403,14 @@ void SplashScreen::on_btnOpen_clicked()
   openWallet->ui->passPhraseEdit->clear();
 
   if (pwalletMain->OpenWallet(passPhrase)) {
+      // OpenWallet() no longer captures this itself (see its own comment,
+      // wallet/wallet.cpp) -- init.cpp's automatic KDF-upgrade check and its
+      // -zapwallettxes reopen both still need it for pwalletMain specifically,
+      // which this startup dialog always operates on. Released before being
+      // replaced so a previously captured passphrase isn't left behind,
+      // unreachable and never freed, in mlock()'d memory.
+      delete strOpeningWalletPassphrase;
+      strOpeningWalletPassphrase = new SecureString(passPhrase);
       seed->setVisible(false);
       openWallet->setVisible(false);
       return;

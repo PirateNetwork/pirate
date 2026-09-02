@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -157,8 +158,8 @@ private:
     // does everything that used to run immediately after the (formerly
     // synchronous) call: registering the WalletModel, attaching to
     // WalletFrame, and reporting success/failure to the user.
-    void startWalletLoadOrCreate(const QString& name, bool fCreate);
-    void handleWalletLoadOrCreateResult(const QString& name, bool fCreate, bool ok,
+    void startWalletLoadOrCreate(const QString& name, bool fCreate, const QString& strPassphrase = QString());
+    void handleWalletLoadOrCreateResult(const QString& name, bool fCreate, bool ok, bool fNeedsPassphrase,
                                          const QString& strError, const QString& seedPhrase);
     // Non-null exactly while a startWalletLoadOrCreate() worker thread is
     // in flight -- guards against starting a second load/create concurrently

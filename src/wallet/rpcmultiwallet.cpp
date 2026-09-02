@@ -41,9 +41,9 @@ UniValue listwallets(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue loadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (fHelp || params.size() < 1 || params.size() > 5)
+    if (fHelp || params.size() < 1 || params.size() > 6)
         throw runtime_error(
-            "loadwallet \"filename\" ( rescan rescanheight salvage zapwallettxes )\n"
+            "loadwallet \"filename\" ( passphrase rescan rescanheight zapwallettxes salvage )\n"
             "\nLoads a wallet file that already exists in the data directory.\n"
             "Once loaded, a core subset of wallet RPCs (getbalance, getnewaddress,\n"
             "sendtoaddress, listtransactions, listunspent, gettransaction, getwalletinfo,\n"
@@ -70,33 +70,51 @@ UniValue loadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "while one of its own is still queued or unpolled.\n"
             "\nArguments:\n"
             "1. \"filename\"      (string, required) the wallet file name, in the data directory\n"
-            "2. rescan          (boolean or numeric, optional, default=false) if true, rescan from\n"
+            "2. passphrase      (string, optional) required if this wallet's file is encrypted --\n"
+            "                   unlocks it as part of this call, synchronously (either succeeds\n"
+            "                   immediately or this call fails immediately; there is no waiting\n"
+            "                   for it to be supplied some other way). Omit or pass \"\" for an\n"
+            "                   unencrypted wallet. The wallet remains unlocked afterward, exactly\n"
+            "                   as if walletpassphrase had also been called with no timeout.\n"
+            "3. rescan          (boolean or numeric, optional, default=false) if true, rescan from\n"
             "                   genesis (or from rescanheight if given) instead of this wallet's own\n"
             "                   persisted checkpoint\n"
-            "3. rescanheight    (numeric, optional, default=0) block height to rescan from when\n"
+            "4. rescanheight    (numeric, optional, default=0) block height to rescan from when\n"
             "                   rescan is set; 0 or omitted means genesis\n"
-            "4. salvage         (boolean, optional, default=false) attempt salvage/recovery on this\n"
-            "                   wallet's file specifically before loading it, if it appears corrupt\n"
             "5. zapwallettxes   (boolean, optional, default=false) wipe this wallet's transaction\n"
             "                   history and rebuild it from a full rescan; implies rescan\n"
+            "6. salvage         (boolean, optional, default=false) attempt salvage/recovery on this\n"
+            "                   wallet's file specifically before loading it, if it appears corrupt\n"
             "\nResult:\n"
             "{\n"
             "  \"name\" : \"filename\"    (string) the wallet name\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("loadwallet", "\"second\"")
-            + HelpExampleCli("loadwallet", "\"second\" true")
+            + HelpExampleCli("loadwallet", "\"second\" \"\" true")
             + HelpExampleRpc("loadwallet", "\"second\"")
         );
 
     std::string name = params[0].get_str();
-    bool fRescan = params.size() > 1 ? params[1].get_bool() : false;
-    int nRescanHeight = params.size() > 2 ? params[2].get_int() : 0;
-    bool fSalvage = params.size() > 3 ? params[3].get_bool() : false;
+
+    // Not mlock()'d, same caveat every other passphrase-taking RPC parameter
+    // in this codebase already carries (see e.g. encryptwallet/
+    // walletpassphrase) -- UniValue's own string storage isn't secure-heap
+    // backed either way.
+    SecureString strPassphrase;
+    if (params.size() > 1 && !params[1].get_str().empty()) {
+        strPassphrase.reserve(100);
+        strPassphrase = params[1].get_str().c_str();
+    }
+
+    bool fRescan = params.size() > 2 ? params[2].get_bool() : false;
+    int nRescanHeight = params.size() > 3 ? params[3].get_int() : 0;
     bool fZapWalletTxes = params.size() > 4 ? params[4].get_bool() : false;
+    bool fSalvage = params.size() > 5 ? params[5].get_bool() : false;
 
     std::string strError;
-    if (!CWalletManager::Get().LoadWallet(name, strError, fRescan, nRescanHeight, fSalvage, fZapWalletTxes))
+    if (!CWalletManager::Get().LoadWallet(name, strError, fRescan, nRescanHeight, fSalvage, fZapWalletTxes,
+                                           /*fAllowCreate=*/false, strPassphrase))
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
     UniValue result(UniValue::VOBJ);
@@ -192,10 +210,11 @@ bool IsMultiWalletAwareRPC(const std::string& name)
     // CWalletManager::GetWalletForRequest(), exactly which names need adding
     // here too -- this set and the actual rewiring must move together.
     //
-    // encryptwallet unconditionally calls StartShutdown() on success --
-    // encrypting one secondary wallet would restart the whole node. Needs its
-    // own design before it can be exposed here, not a mechanical
-    // pwalletMain->pwallet substitution.
+    // (An earlier note here claimed encryptwallet calls StartShutdown() on
+    // success. Reading it shows that was wrong: only its *failure* path ever
+    // restarted the node, to safely restore the pre-encryption backup. The
+    // real blocker turned out to be the other end -- see its entry in the set
+    // below and the refusal in the handler itself.)
     //
     // settxfee (and the whole consolidation/sweep/fee/pruning settings
     // family) was in the original phase-2 scope but got dropped once its code
@@ -239,6 +258,22 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "setdeletetx", "setdeleteconflicttx", "setdeleteinterval",
         "setkeeptxnum", "setkeeptxfornblocks",
         "setchangeaddress", "upgradewallet",
+        // Backlog item 9: encryptwallet now resolves GetWalletForRequest()
+        // instead of always pwalletMain, and a failed attempt against a
+        // secondary wallet recovers in-process (CWalletManager::
+        // DiscardWalletAfterFailedEncryption() + LoadWallet(), rpcwallet.cpp)
+        // instead of restarting the whole node -- only the default wallet's
+        // own failure path still does that, since it has no unload/reload
+        // route at all (see the "no-default-wallet redesign" backlog item).
+        // Encrypting a secondary wallet is now fully supported end to end:
+        // the resulting file can be loaded again with its own passphrase,
+        // via loadwallet's passphrase argument, -secondarywalletpassphrase=
+        // at startup, or the GUI's open-wallet prompt (CWalletManager::
+        // LoadWallet()'s per-wallet unlock path). The temporary refusal that
+        // used to live in the handler -- added while that reload path did
+        // not yet exist, so that a successful encryption could not brick the
+        // wallet -- has been removed.
+        "encryptwallet",
         // Phase 9: the Crypto-Conditions (CC) smart-contract RPCs. These now
         // resolve CWalletManager::GetWalletForRequest() instead of always
         // pwalletMain (see CCtx.cpp/CCutils.cpp for the choke-point threading,

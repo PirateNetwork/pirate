@@ -151,7 +151,8 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
 // use-after-free that the investigation surfaced was fixed (txmempool.cpp).
 bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                                  bool fRescan, int nRescanHeight, bool fSalvage, bool fZapWalletTxes,
-                                 bool fAllowCreate)
+                                 bool fAllowCreate, const SecureString& strPassphrase,
+                                 bool* pfPassphraseRequired)
 {
     if (!IsValidWalletName(name, strError))
         return false;
@@ -241,36 +242,50 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
         // now that cs_wallets itself isn't held here: no other loadwallet call
         // for this exact name can be in progress concurrently to falsify it
         // between the check and CWallet::Verify() actually running.
-        // KNOWN GAP: this only detects "currently open right now", not "ever
-        // touched by this process" -- CloseWalletDbFile()/CDB::Rewrite() both
-        // erase() the mapFileUseCount entry entirely once a file's refcount
-        // reaches 0 (deliberately, so a *different*, never-before-seen file
-        // that happens to reuse the name can still pass CDBEnv::Verify()'s
-        // assert later). That means a straightforward unload-then-reload of
-        // the exact same name also reaches this as fAlreadyTouched == false,
-        // running Verify() again on a file this process has definitely
-        // touched before. That's harmless after a plain load+unload (covered
-        // by test_walletmanager.cpp's
-        // ReleaseAfterUnloadAndReloadUnderSameNameDoesNotUnderflowTheNewEntry),
-        // but reproducibly turns into a spurious DB_CORRUPT from
-        // CWallet::LoadWallet() on reload if the file was put through
-        // CWallet::EncryptWallet()'s CDB::Rewrite() (physical delete+rename
-        // via detached Db handles outside bitdb's own bookkeeping) at any
-        // point in between -- observed manually while writing this comment,
-        // not yet turned into a regression test given how narrow the
-        // trigger is. Not reachable via any RPC this phase exposes: the only
-        // thing that calls EncryptWallet() is `encryptwallet`, which is
-        // excluded from Phase 2's rewired set specifically because it
-        // unconditionally restarts the node on success (rpcmultiwallet.cpp),
-        // and a restart gives every wallet a fresh CDBEnv where this doesn't
-        // apply. Would need addressing before any future phase lets a live
-        // secondary wallet be encrypted without a restart.
+        // bitdb's mapFileUseCount alone only answers "currently open right
+        // now", not "ever touched by this process" --
+        // CloseWalletDbFile()/CDBEnv::Flush()/CDB::Rewrite() all erase() a
+        // file's entry once its use count reaches 0 (deliberately, so a
+        // *different*, never-before-seen file that happens to reuse the name
+        // can still pass CDBEnv::Verify()'s assert later). A plain
+        // unload-then-reload of the same name therefore looks like a
+        // first-ever open, and re-runs Verify() on a file this process has
+        // definitely touched. That is harmless after a plain load+unload,
+        // but reproducibly reports spurious corruption if the file was put
+        // through CWallet::EncryptWallet()'s CDB::Rewrite() (physical
+        // delete+rename via detached Db handles outside bitdb's own
+        // bookkeeping) in between -- and CWallet::Verify() responds to that
+        // by handing the file to CWalletDB::Recover(), which renames the
+        // original aside as wallet.{timestamp}.bak and rewrites it from
+        // whatever it could salvage -- destructive, on a healthy file.
+        // CDB::Rewrite() is not only EncryptWallet()'s: CWallet::LoadWallet()
+        // and ZapWalletTx() both call it on a DB_NEED_REWRITE result too, so
+        // this is not tied to encryption alone. everLoadedNames closes it:
+        // it records every name this process has opened and is never erased
+        // short of Reset(), so a reload takes the skip-Verify branch the
+        // same way an already-open file does.
+        bool fEverLoadedInThisProcess;
+        {
+            LOCK(cs_wallets);
+            fEverLoadedInThisProcess = everLoadedNames.count(name) != 0;
+        }
         bool fAlreadyTouched;
         {
+            // Sequential, not nested: the established order is
+            // cs_wallets -> bitdb->cs_db (UnloadWallet holds cs_wallets
+            // across CloseWalletDbFile), so cs_wallets must never be taken
+            // while cs_db is held.
             LOCK(bitdb->cs_db);
             fAlreadyTouched = bitdb->mapFileUseCount.count(name) != 0;
         }
-        if (!fAlreadyTouched) {
+        if (fSalvage && (fAlreadyTouched || fEverLoadedInThisProcess)) {
+            // Pre-existing behavior, now logged rather than silent: an
+            // explicit salvage request only ever runs through
+            // CWallet::Verify(), so it is a no-op on a file this process has
+            // already opened. Salvaging such a wallet needs a restart.
+            LogPrintf("loadwallet \"%s\": salvage requested but skipped -- this process has already opened this file; restart the node to salvage it\n", name);
+        }
+        if (!fAlreadyTouched && !fEverLoadedInThisProcess) {
             std::string warningString, errorString;
             if (!CWallet::Verify(name, warningString, errorString, fSalvage) || !errorString.empty()) {
                 strError = !errorString.empty() ? errorString : "Wallet verification failed";
@@ -285,10 +300,100 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                 LogPrintf("loadwallet \"%s\": %s\n", name, warningString);
         }
 
+        // Recorded here, before the open rather than after a successful one:
+        // "this process has touched the file" becomes true the moment a CDB
+        // is constructed against it, including on the failure paths below.
+        {
+            LOCK(cs_wallets);
+            everLoadedNames.insert(name);
+        }
+
         CWallet* wallet = nullptr;
         bool fFirstRun = false;
         try {
             wallet = new CWallet(name);
+            // An encrypted wallet cannot simply be opened -- init.cpp runs a
+            // whole handshake before the default wallet's own LoadWallet()
+            // call: InitalizeCryptedLoad(), SetDBCrypted(),
+            // LoadCryptedSeedFromDB(), OpenWallet(passphrase) and, only once
+            // the seed is decrypted, seedEncyptionFP -- the salt every
+            // encrypted record's key and integrity tag is derived from.
+            // Skipping straight to LoadWallet() below on a crypted file
+            // leaves every encrypted record undecryptable and returns
+            // DB_CORRUPT on a perfectly intact file.
+            //
+            // Unlike init.cpp's own startup version of this handshake (which
+            // blocks the whole process in a busy-wait for an out-of-band
+            // unlock -- a GUI dialog, or the special openwallet RPC -- since
+            // no passphrase is available yet at that point), this runs the
+            // whole thing synchronously against whatever strPassphrase the
+            // caller already supplied: it either succeeds immediately or
+            // fails immediately, and never blocks. That shape only works
+            // because every caller of this function already has the
+            // passphrase in hand before calling (an RPC parameter, a CLI
+            // flag, or a GUI dialog shown first) -- there is no equivalent
+            // here of "wait for someone else to supply it later".
+            DBErrors nInitalizeCryptedLoad = wallet->InitalizeCryptedLoad();
+            if (nInitalizeCryptedLoad == DB_LOAD_CRYPTED) {
+                wallet->SetDBCrypted();
+                DBErrors nLoadCryptedSeed = wallet->LoadCryptedSeedFromDB();
+                if (nLoadCryptedSeed != DB_LOAD_OK) {
+                    delete wallet;
+                    CloseWalletDbFile(name);
+                    strError = strprintf("Wallet %s: encrypted seed record is corrupted (error code %d)", name, (int)nLoadCryptedSeed);
+                    return false;
+                }
+                if (strPassphrase.empty()) {
+                    delete wallet;
+                    CloseWalletDbFile(name);
+                    strError = strprintf("Wallet %s is encrypted and requires its passphrase to load -- "
+                                         "retry with the passphrase argument. The file itself is intact -- "
+                                         "do not salvage it.", name);
+                    if (pfPassphraseRequired)
+                        *pfPassphraseRequired = true;
+                    return false;
+                }
+                if (!wallet->OpenWallet(strPassphrase)) {
+                    delete wallet;
+                    CloseWalletDbFile(name);
+                    strError = strprintf("Wallet %s: the passphrase given was incorrect", name);
+                    if (pfPassphraseRequired)
+                        *pfPassphraseRequired = true;
+                    return false;
+                }
+                // A crypted wallet must have an HD seed, same check init.cpp
+                // makes for the default wallet immediately after unlocking.
+                HDSeed seed;
+                if (!wallet->GetHDSeed(seed)) {
+                    delete wallet;
+                    CloseWalletDbFile(name);
+                    strError = strprintf("Wallet %s: HD seed not found after unlocking", name);
+                    return false;
+                }
+                // DO NOT SAVE THIS TO THE WALLET -- matches init.cpp's own
+                // handling of the exact same value for the default wallet.
+                // Used to salt hashes of known values such as transaction
+                // ids and public addresses; the LoadWallet() call just below
+                // depends on it already being set to read those back
+                // correctly. Not taken under any lock, matching init.cpp's
+                // own assignment of the same member for the default wallet:
+                // this object is not in mapWallets yet and not registered
+                // with the validation interface, so nothing else in the
+                // process can reach it.
+                wallet->seedEncyptionFP = seed.EncryptionFingerprint();
+
+                // DELIBERATE GAP: init.cpp additionally runs
+                // NeedsKDFUpgrade()/ChangeWalletPassphrase() for the default
+                // wallet here, transparently re-wrapping a legacy-SHA512
+                // master key with the memory-hard KDF. Not done for secondary
+                // wallets: ChangeWalletPassphrase() begins by Lock()ing and
+                // only re-unlocks on the success path, so a failed upgrade
+                // would silently leave this wallet locked -- contradicting
+                // loadwallet's documented "remains unlocked afterward"
+                // contract, on a wallet the caller has no way to notice went
+                // locked. Wants its own explicit per-wallet step rather than
+                // a side effect of loading.
+            }
             DBErrors loadResult = wallet->LoadWallet(fFirstRun);
             if (loadResult != DB_LOAD_OK) {
                 delete wallet;
@@ -309,14 +414,20 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
             return false;
         }
 
-        // Migrate plaintext records that have an encrypted-on-disk form, same as
-        // init.cpp does for the default wallet at startup -- previously only ever
-        // run there, so a secondary wallet loaded here never got this at all. In
-        // practice this is a no-op for a wallet that's encrypted (a freshly loaded
-        // CWallet object starts locked until a passphrase is supplied, and these
-        // migrations require the master key), same dormant situation the default
-        // wallet's own startup hook already has; included for parity regardless.
+        // Migrate plaintext records that have an encrypted-on-disk form, same
+        // as init.cpp does for the default wallet at startup. This used to be
+        // unreachable for a secondary wallet -- there was no way to supply a
+        // passphrase here, so an encrypted wallet was always still locked at
+        // this point and every migration below (all of which need the master
+        // key) short-circuited. With the per-wallet unlock above it is now
+        // genuinely live, so it has to carry the *same* set of records
+        // init.cpp migrates, not a subset: the HD chain was missing here,
+        // which would have left an encrypted secondary wallet's `hdchain`
+        // record -- seed fingerprint and account/key counters -- readable in
+        // plaintext in a file whose whole point is that it isn't.
         if (wallet->IsCrypted() && !wallet->IsLocked()) {
+            if (!wallet->WriteHDChainToDisk(wallet->GetHDChain()))
+                LogPrintf("Warning: could not migrate HD chain to encrypted storage for wallet %s.\n", name);
             if (!wallet->MigrateDestDataToEncrypted())
                 LogPrintf("Warning: could not migrate destination data to encrypted storage for wallet %s.\n", name);
             if (!wallet->MigrateSettingsToEncrypted())
@@ -679,6 +790,51 @@ bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError
     return true;
 }
 
+bool CWalletManager::DiscardWalletAfterFailedEncryption(const std::string& name, std::string& strError)
+{
+    // Same cs_main -> cs_wallets order as UnloadWallet(), for the same
+    // reason: no in-flight ChainTip() dispatch can be executing against
+    // `wallet` while this holds cs_main, and none can start until this
+    // function returns.
+    LOCK2(cs_main, cs_wallets);
+
+    if (defaultWalletName == name) {
+        strError = "The default wallet cannot be discarded this way";
+        return false;
+    }
+
+    auto it = mapWallets.find(name);
+    if (it == mapWallets.end()) {
+        strError = strprintf("Wallet not found: %s", name);
+        return false;
+    }
+
+    // refcount <= 1, not == 0: the calling request's own
+    // RPCWalletRequestGuard holds exactly one ref on this wallet for the
+    // whole encryptwallet call, so requiring 0 would make this unreachable.
+    // Anything above that means a *second* holder -- a concurrent RPC
+    // request (whose guard is constructed in the dispatch layer under
+    // cs_wallets alone, so this function's cs_main hold does not keep it
+    // out), a running or unpolled AsyncRPCOperation on its own thread, or a
+    // wallet open in the Qt GUI -- and deleting the object under any of
+    // those is a use-after-free. Refuse and let the caller fall back to its
+    // restart path instead. See the full reasoning on the declaration
+    // (walletmanager.h). The load is stable rather than racy: refs are only
+    // ever taken and dropped under cs_wallets, which this holds.
+    if (it->second.refcount.load() > 1) {
+        strError = strprintf("Wallet %s is in use by another request or operation and cannot be discarded", name);
+        return false;
+    }
+
+    CWallet* wallet = it->second.wallet;
+    CancelWalletAutoLockTimer(wallet);
+    UnregisterValidationInterface(wallet);
+    delete wallet;
+    CloseWalletDbFile(name);
+    mapWallets.erase(it);
+    return true;
+}
+
 void CWalletManager::CheckpointAllWallets(const CBlockLocator& locator, int height)
 {
     // Snapshot under cs_wallets, then release it before taking any wallet's
@@ -855,6 +1011,11 @@ void CWalletManager::Reset()
     // defensively rather than leave a stale reservation across, e.g., gtest
     // fixture boundaries.
     loadingNames.clear();
+    // Same reasoning, and load-bearing for gtest specifically: each fixture
+    // installs a fresh datadir and a fresh CDBEnv, so a name carried over
+    // from a previous fixture would wrongly suppress CWallet::Verify() for a
+    // completely different file that happens to reuse it.
+    everLoadedNames.clear();
 }
 
 std::string CWalletManager::GetRequestedWalletName()

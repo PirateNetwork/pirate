@@ -2606,6 +2606,21 @@ UniValue openwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     {
         if (!pwalletMain->OpenWallet(strWalletPass))
             throw JSONRPCError(RPC_WALLET_PASSPHRASE_INCORRECT, "Error: The wallet passphrase entered was incorrect.");
+        // OpenWallet() no longer captures this itself (see its own comment) --
+        // init.cpp's automatic KDF-upgrade check and its -zapwallettxes
+        // reopen both still need it for pwalletMain specifically, which this
+        // RPC (unlike CWalletManager::LoadWallet()'s per-wallet unlock path)
+        // always operates on.
+        //
+        // Released before being replaced: this RPC stays callable for the
+        // life of the node, and a plain overwrite left every previous
+        // passphrase behind as an unreachable, never-freed SecureString --
+        // i.e. an unbounded pile of plaintext passphrases pinned in mlock()'d
+        // memory, one per call. (Safe against init.cpp's own delete of this
+        // global on the -zapwallettxes/arc-tx recovery path: that clears it
+        // to NULL rather than leaving it dangling.)
+        delete strOpeningWalletPassphrase;
+        strOpeningWalletPassphrase = new SecureString(strWalletPass);
     }
     else
         throw runtime_error(
@@ -2816,7 +2831,8 @@ int32_t komodo_acpublic(uint32_t tiptime);
 
 UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     string enableArg = "developerencryptwallet";
@@ -2828,7 +2844,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         strWalletEncryptionDisabledMsg = experimentalDisabledHelpMsg("encryptwallet", enableArg);
     }
 
-    if (!pwalletMain->IsCrypted() && (fHelp || params.size() != 1))
+    if (!pwallet->IsCrypted() && (fHelp || params.size() != 1))
         throw runtime_error(
             "encryptwallet \"passphrase\"\n"
             + strWalletEncryptionDisabledMsg +
@@ -2837,7 +2853,13 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "will require the passphrase to be set prior the making these calls.\n"
             "Use the walletpassphrase call for this, and then walletlock call.\n"
             "If the wallet is already encrypted, use the walletpassphrasechange call.\n"
-            "Note that this will shutdown the server.\n"
+            "A secondary wallet, once encrypted, needs its passphrase to be loaded again --\n"
+            "give it via loadwallet's own passphrase argument (or -secondarywalletpassphrase=\n"
+            "at startup, or the GUI's open-wallet prompt), the same as any other encrypted\n"
+            "secondary wallet. Note that if encryption fails, the default wallet's node\n"
+            "restarts to restore its pre-encryption backup; a secondary wallet's failure\n"
+            "instead recovers in-process (discarded and reloaded from that backup), with no\n"
+            "restart and no effect on any other loaded wallet.\n"
             "\nArguments:\n"
             "1. \"passphrase\"    (string) The pass phrase to encrypt the wallet with. It must be at least 1 character, but should be long.\n"
             "\nExamples:\n"
@@ -2853,21 +2875,41 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("encryptwallet", "\"my pass phrase\"")
         );
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK(cs_main);
 
     if (fHelp)
         return true;
     if (!fEnableWalletEncryption) {
         throw JSONRPCError(RPC_WALLET_ENCRYPTION_FAILED, "Error: wallet encryption is disabled.");
     }
-    if (pwalletMain->IsCrypted())
-        throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
 
-    // TODO: get rid of this .c_str() by implementing SecureString::operator=(std::string)
-    // Alternately, find a way to make params[0] mlock()'d to begin with.
+    // Captured before anything below can possibly delete `pwallet` (the
+    // failure-recovery path further down does exactly that, for a secondary
+    // wallet) -- nothing after this point may dereference `pwallet` once its
+    // own cs_wallet lock (taken just below, in its own nested scope) is
+    // released.
+    std::string walletName = pwallet->strWalletFile;
+    // An empty request selection means "the default wallet", the pre-
+    // multiwallet path -- GetWalletForRequest() returned pwalletMain for it
+    // without consulting the registry at all, so decide default-ness from
+    // the selection first and only fall back to matching the registry's
+    // default name. (GetWalletForRequest() also falls back to pwalletMain
+    // for a selected-but-unresolvable name, which this catches too: that
+    // object must never be run through the secondary discard path.)
+    bool fIsDefaultWallet = CWalletManager::GetRequestedWalletName().empty() ||
+                            CWalletManager::Get().IsDefaultWallet(walletName);
+
     SecureString strWalletPass;
-    strWalletPass.reserve(100);
-    strWalletPass = params[0].get_str().c_str();
+    {
+        LOCK(pwallet->cs_wallet);
+        if (pwallet->IsCrypted())
+            throw JSONRPCError(RPC_WALLET_WRONG_ENC_STATE, "Error: running with an encrypted wallet, but encryptwallet was called.");
+
+        // TODO: get rid of this .c_str() by implementing SecureString::operator=(std::string)
+        // Alternately, find a way to make params[0] mlock()'d to begin with.
+        strWalletPass.reserve(100);
+        strWalletPass = params[0].get_str().c_str();
+    }
 
     if (strWalletPass.length() < 1)
         throw runtime_error(
@@ -2875,29 +2917,123 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "Encrypts the wallet with <passphrase>.");
 
     auto nTime = GetTime();
-    std::string walletFile = pwalletMain->strWalletFile;
-    std::string fileBackup = "unencrypted_walletbackup" + std::to_string(nTime) + ".dat";
+    std::string walletFile = walletName;
+    // Scoped by wallet name as well as timestamp. The timestamp alone was
+    // unambiguous while only ever one wallet (pwalletMain) could reach this
+    // code; with secondary wallets it names nothing in particular, so a
+    // leftover backup from a failed attempt couldn't be matched back to the
+    // wallet it belongs to. walletName is already used unescaped as a
+    // filename just below (and is charset-restricted by
+    // CWalletManager::IsValidWalletName() for every secondary wallet), so it
+    // introduces no new path exposure.
+    std::string fileBackup = "unencrypted_walletbackup_" + walletFile + "_" + std::to_string(nTime) + ".dat";
     boost::filesystem::path pathBackup = GetDataDir() / fileBackup;
     boost::filesystem::path pathWallet = GetDataDir() / walletFile;
 
     bitdb->Flush(false);
-    if (!BackupWallet(*pwalletMain, pathBackup.string()))
+    if (!BackupWallet(*pwallet, pathBackup.string()))
         throw JSONRPCError(RPC_WALLET_ERROR, "Error: Wallet backup failed!");
 
-    if (!pwalletMain->EncryptWallet(strWalletPass)) {
+    bool fEncryptSuccess;
+    {
+        // Scoped tightly around the actual attempt: on failure, the object
+        // this lock guards gets deleted below (secondary-wallet recovery
+        // path) or the whole process restarts (default-wallet path) -- the
+        // lock must not still be held (by this frame or any RAII guard) when
+        // either happens. CWallet::EncryptWallet() takes its own LOCK2(
+        // cs_wallet, cs_KeyStore) internally regardless (recursive mutex),
+        // so this isn't load-bearing for the call itself, only for pairing
+        // with the IsCrypted() check above under one critical section.
+        LOCK(pwallet->cs_wallet);
+        fEncryptSuccess = pwallet->EncryptWallet(strWalletPass);
+    }
+
+    if (!fEncryptSuccess) {
         bitdb->Flush(false);
 
-        // Flush log data to the dat file
-        bitdb->CloseDb(walletFile);
-        bitdb->CheckpointLSN(walletFile);
-        bitdb->mapFileUseCount.erase(walletFile);
+        // Discard the half-encrypted CWallet *before* the file is detached
+        // from the shared BerkeleyDB environment below, not after. A
+        // CWallet::EncryptWallet() that fails partway through can leave its
+        // own pwalletdbEncryption handle open (wallet.cpp allocates it and
+        // then returns false from a dozen places without freeing it), and
+        // ~CWallet deletes that handle, whose ~CDB decrements
+        // bitdb->mapFileUseCount[walletFile]. Doing that after the erase
+        // below would default-construct the entry at 0 and take it to -1,
+        // leaving this file's use count permanently one short for the rest
+        // of the process -- which later lets CDBEnv::Flush()/CDB::Rewrite()
+        // close and delete a Db* that live CWalletDB handles still point at.
+        // Deleting first also means every pending write is flushed and
+        // checkpointed before the file is replaced, rather than after.
+        //
+        // `pwallet` must never be touched again past this point (the object
+        // is deleted here); its own cs_wallet lock was already released when
+        // the scope above ended. Everything below uses the plain std::string
+        // and path copies captured earlier.
+        std::string strDiscardError;
+        bool fDiscarded = false;
+        if (!fIsDefaultWallet) {
+            // The default wallet is deliberately not discarded:
+            // CWalletManager refuses it unconditionally (there is no reload
+            // path for it -- see the "no-default-wallet redesign" backlog
+            // item), so a full restart stays the only way to drop whatever
+            // in-memory crypto state EncryptWallet() left behind.
+            fDiscarded = CWalletManager::Get().DiscardWalletAfterFailedEncryption(walletName, strDiscardError);
+        }
 
-        //replace the file with the previous backup
-        boost::filesystem::remove(pathWallet);
-        copy_file(pathBackup, pathWallet, boost::filesystem::copy_options::overwrite_existing);
-        boost::filesystem::remove(pathBackup);
+        // Restore the pre-encryption file unconditionally -- on every branch
+        // below, including the ones that go on to restart. Skipping it when
+        // the discard is refused would leave a half-encrypted file on disk
+        // that fails to open on the next startup.
+        try {
+            // Flush log data to the dat file
+            bitdb->CloseDb(walletFile);
+            bitdb->CheckpointLSN(walletFile);
+            {
+                LOCK(bitdb->cs_db);
+                bitdb->mapFileUseCount.erase(walletFile);
+            }
 
-        //shutdown
+            //replace the file with the previous backup
+            boost::filesystem::remove(pathWallet);
+            copy_file(pathBackup, pathWallet, boost::filesystem::copy_options::overwrite_existing);
+            boost::filesystem::remove(pathBackup);
+        } catch (const boost::filesystem::filesystem_error& e) {
+            // Previously this propagated out of the RPC, leaving the node up
+            // with a half-encrypted wallet file. Now that the CWallet object
+            // may already be gone, that would additionally leave the wallet
+            // missing from the registry -- report it and restart instead.
+            LogPrintf("encryptwallet: failed to restore wallet \"%s\" from \"%s\": %s\n",
+                walletName, pathBackup.string(), e.what());
+            StartShutdown();
+            throw JSONRPCError(RPC_WALLET_ERROR, strprintf(
+                "Error: wallet encryption failed and the pre-encryption backup could not be restored "
+                "automatically. Pirate server stopping; restore \"%s\" over \"%s\" manually before "
+                "restarting.", pathBackup.string(), pathWallet.string()));
+        }
+
+        if (fDiscarded) {
+            // Secondary wallet: reconstruct it from the file just restored,
+            // so the node and every other loaded wallet keep running instead
+            // of the whole process restarting over one wallet's failure. No
+            // rescan/salvage/zap and no fAllowCreate: this is an intact file
+            // that was loaded moments ago, and LoadWallet() still catches it
+            // up from its own persisted best-block locator.
+            std::string strReloadError;
+            if (CWalletManager::Get().LoadWallet(walletName, strReloadError))
+                return "wallet encryption failed; the wallet was restored from its pre-encryption backup and reloaded -- no restart needed. You need to make a new backup.";
+            strDiscardError = strReloadError;
+        }
+
+        if (!fIsDefaultWallet) {
+            // Either the discard was refused (the wallet is still in use by
+            // a concurrent request, an async operation or the GUI, so it
+            // isn't ours to delete) or the reload failed. Fall back to the
+            // same safe default a single-wallet node always had rather than
+            // keep running against a wallet whose in-memory crypto state is
+            // inconsistent, or leave it missing from the registry.
+            LogPrintf("encryptwallet: failed to recover wallet \"%s\" in-process (%s) -- restarting instead\n",
+                walletName, strDiscardError);
+        }
         StartShutdown();
         return "wallet encryption failed; Pirate server stopping, restart to restore unencrypted wallet.";
     } else {

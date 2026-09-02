@@ -697,6 +697,11 @@ TEST_F(WalletManagerTest, PerWalletSettingsSurviveUnloadAndReload)
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("persistwallet.dat", strError)) << strError;
     CWallet* wallet = CWalletManager::Get().GetWallet("persistwallet.dat");
     ASSERT_NE(nullptr, wallet);
+    CWalletManager::ResolvedWallet originalEntry =
+        CWalletManager::Get().ResolveAndHoldForRequest("persistwallet.dat");
+    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, originalEntry.outcome);
+    // Released straight away: a ref held past here would block the unload below.
+    CWalletManager::Get().ReleaseRefIfCurrent("persistwallet.dat", originalEntry.generation);
 
     // One setting from each of the three groups the plan calls out:
     // consolidation/sweep, fee/behavior, and pruning.
@@ -710,7 +715,18 @@ TEST_F(WalletManagerTest, PerWalletSettingsSurviveUnloadAndReload)
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("persistwallet.dat", strError)) << strError;
     CWallet* reloaded = CWalletManager::Get().GetWallet("persistwallet.dat");
     ASSERT_NE(nullptr, reloaded);
-    ASSERT_NE(wallet, reloaded); // genuinely a fresh CWallet object, not the same pointer
+    // Deliberately not ASSERT_NE(wallet, reloaded): the allocator is free to
+    // hand the reload the exact address the unload just freed, and does in
+    // practice, so pointer identity is a coin flip rather than a test. The
+    // registry generation is what actually identifies an entry instance (see
+    // ReleaseRefIfCurrent), and the assertions below -- reading back values
+    // that only ever existed on the deleted object's file -- are the real
+    // proof this is a fresh load either way.
+    CWalletManager::ResolvedWallet reloadedEntry =
+        CWalletManager::Get().ResolveAndHoldForRequest("persistwallet.dat");
+    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, reloadedEntry.outcome);
+    CWalletManager::Get().ReleaseRefIfCurrent("persistwallet.dat", reloadedEntry.generation);
+    EXPECT_NE(originalEntry.generation, reloadedEntry.generation);
 
     // Proves the CWalletDB::ReadKeyValue() round-trip actually persisted these
     // to the file, not just held them in the now-deleted in-memory object.
@@ -802,4 +818,182 @@ TEST_F(WalletManagerTest, CreateWalletProducesAWalletWithASaplingAddress)
     CWallet* wallet = CWalletManager::Get().GetWallet("seededwallet.dat");
     ASSERT_NE(nullptr, wallet);
     EXPECT_GE(wallet->mapZAddressBook.size(), 1u);
+}
+
+TEST_F(WalletManagerTest, LoadWalletRefusesAnEncryptedWalletWithAnHonestErrorInsteadOfCallingItCorrupt)
+{
+    // Every non-default wallet in the process is loaded through this one
+    // function -- the loadwallet RPC, `-wallet=` at startup (init.cpp), and
+    // the GUI's open-wallet action. All three can now supply a passphrase,
+    // which drives the InitalizeCryptedLoad()/LoadCryptedSeedFromDB()/
+    // OpenWallet()/seedEncyptionFP handshake init.cpp performs for the
+    // default wallet before its own CWallet::LoadWallet() call. This test
+    // covers the case where one is *not* supplied.
+    //
+    // It must fail -- skipping straight to CWallet::LoadWallet() on a crypted
+    // file leaves every encrypted record undecryptable -- but *how* it fails
+    // matters a great deal: reporting DB_CORRUPT, as it did before this
+    // handshake existed here, is what sends an operator hunting for a salvage
+    // tool to point at a healthy wallet holding real funds. It must say the
+    // wallet is encrypted, must never say "corrupt", must set the
+    // passphrase-required out-param so a caller (the GUI) can prompt instead
+    // of dead-ending, and must not have salvaged anything on the way out.
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+
+    std::string strError, seedPhrase;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("encryptedreload.dat", strError, seedPhrase)) << strError;
+    CWallet* wallet = CWalletManager::Get().GetWallet("encryptedreload.dat");
+    ASSERT_NE(nullptr, wallet);
+
+    // CreateWallet() gives it a real HD seed, so this genuinely succeeds
+    // (unlike the seedless wallets gtest/test_httprpc.cpp's encryptwallet
+    // tests use). Done directly rather than through the encryptwallet RPC
+    // purely to keep this test at the CWalletManager layer; the RPC route is
+    // covered end to end by test_httprpc.cpp's
+    // EncryptWalletSucceedsOnASecondaryWalletAndCanBeReloadedWithItsPassphrase.
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "a test passphrase";
+    ASSERT_TRUE(wallet->EncryptWallet(passphrase));
+    ASSERT_TRUE(wallet->IsCrypted());
+
+    ASSERT_TRUE(CWalletManager::Get().UnloadWallet("encryptedreload.dat", strError)) << strError;
+
+    std::string strReloadError;
+    bool fPassphraseRequired = false;
+    EXPECT_FALSE(CWalletManager::Get().LoadWallet("encryptedreload.dat", strReloadError,
+        /*fRescan=*/false, /*nRescanHeight=*/0, /*fSalvage=*/false, /*fZapWalletTxes=*/false,
+        /*fAllowCreate=*/false, SecureString(), &fPassphraseRequired));
+    EXPECT_NE(std::string::npos, strReloadError.find("encrypted")) << strReloadError;
+    EXPECT_EQ(std::string::npos, strReloadError.find("corrupt")) << strReloadError;
+    // The out-param, not the error text, is what the GUI keys its
+    // prompt-and-retry branch off -- so it has to be set here too, not only
+    // on the wrong-passphrase path.
+    EXPECT_TRUE(fPassphraseRequired) << strReloadError;
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("encryptedreload.dat"));
+
+    // And it must not have salvaged anything on the way out: a salvage leaves
+    // the pre-salvage file behind under a .{timestamp}.bak name
+    // (CWalletDB::Recover, wallet/walletdb.cpp).
+    for (boost::filesystem::directory_iterator it(GetDataDir()), end; it != end; ++it) {
+        EXPECT_EQ(std::string::npos, it->path().filename().string().find(".bak"))
+            << "a healthy wallet file was salvaged: " << it->path().string();
+    }
+}
+
+TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesWhileASecondCallerHoldsARef)
+{
+    // DiscardWalletAfterFailedEncryption() exists to delete a CWallet that
+    // CWallet::EncryptWallet() left half-transitioned, and it is called from
+    // inside a request that is itself holding one ref on that wallet -- so it
+    // tolerates refcount == 1 where UnloadWallet() demands 0. It must not
+    // tolerate more. A second concurrent RPC request (whose
+    // RPCWalletRequestGuard is constructed in the dispatch layer under
+    // cs_wallets alone, so the caller's cs_main hold does not keep it out), a
+    // running or unpolled AsyncRPCOperation on its own thread, or a wallet
+    // open in the Qt GUI each hold a ref of their own; deleting the object
+    // under any of them is a use-after-free.
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("discardrefwallet.dat");
+
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("discardrefwallet.dat", strError)) << strError;
+
+    CWalletManager::ResolvedWallet callerRef =
+        CWalletManager::Get().ResolveAndHoldForRequest("discardrefwallet.dat");  // "this request"
+    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, callerRef.outcome);
+    CWalletManager::ResolvedWallet otherRef =
+        CWalletManager::Get().ResolveAndHoldForRequest("discardrefwallet.dat");  // somebody else
+    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, otherRef.outcome);
+
+    EXPECT_FALSE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("discardrefwallet.dat", strError));
+    EXPECT_NE(std::string::npos, strError.find("in use")) << strError;
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("discardrefwallet.dat"));
+
+    // Down to just the calling request's own ref: now it may proceed.
+    CWalletManager::Get().ReleaseRefIfCurrent("discardrefwallet.dat", otherRef.generation);
+    EXPECT_TRUE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("discardrefwallet.dat", strError)) << strError;
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("discardrefwallet.dat"));
+
+    // The caller's own outstanding ref releases harmlessly against a name
+    // that no longer exists (ReleaseRefIfCurrent's own contract).
+    CWalletManager::Get().ReleaseRefIfCurrent("discardrefwallet.dat", callerRef.generation);
+}
+
+TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesTheDefaultWalletAndUnknownNames)
+{
+    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+
+    std::string strError;
+    EXPECT_FALSE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("default_test.dat", strError));
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("default_test.dat"));
+
+    EXPECT_FALSE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("nosuchwallet.dat", strError));
+    EXPECT_NE(std::string::npos, strError.find("not found")) << strError;
+}
+
+// -secondarywalletpassphrase=<name>:<passphrase> parsing (init.cpp). Uses the
+// plain TEST form, not WalletManagerTest: this is pure string handling with no
+// datadir, CDBEnv or registry involvement, so the fixture would only add
+// teardown risk. The real startup loop that consumes this is buried inside
+// AppInit2() and isn't reachable from a unit test; the split itself is, which
+// is where the sharp edges are (a passphrase containing the separator, and a
+// malformed entry whose contents must never reach debug.log).
+TEST(SecondaryWalletPassphraseArg, SplitsOnTheFirstColonOnly)
+{
+    std::string strName;
+    SecureString strPass;
+    ASSERT_TRUE(ParseSecondaryWalletPassphraseEntry("second.dat:hunter2", strName, strPass));
+    EXPECT_EQ("second.dat", strName);
+    EXPECT_EQ("hunter2", std::string(strPass.begin(), strPass.end()));
+}
+
+TEST(SecondaryWalletPassphraseArg, KeepsEveryColonInsideThePassphrase)
+{
+    // The whole reason the split is "first colon" rather than "only colon":
+    // a wallet name can never contain ':' (CWalletManager::IsValidWalletName()
+    // allows letters, digits, '.', '_' and '-' only), so everything after the
+    // first one is unambiguously passphrase and must survive verbatim --
+    // truncating at a later colon would silently turn a correct passphrase
+    // into a wrong one and look like operator error.
+    std::string strName;
+    SecureString strPass;
+    ASSERT_TRUE(ParseSecondaryWalletPassphraseEntry("second.dat:a:b::c:", strName, strPass));
+    EXPECT_EQ("second.dat", strName);
+    EXPECT_EQ("a:b::c:", std::string(strPass.begin(), strPass.end()));
+}
+
+TEST(SecondaryWalletPassphraseArg, RejectsMalformedEntriesWithoutTouchingTheOutputs)
+{
+    // Every rejected shape leaves both out-params exactly as the caller had
+    // them, so a caller looping over several entries can't accidentally apply
+    // a previous entry's passphrase to a later, malformed one.
+    const char* rejected[] = {
+        "",                        // empty
+        "second.dat",              // no separator at all
+        "second.dat=hunter2",      // mistyped separator -- carries the passphrase
+        "second.dat hunter2",      // ditto
+        ":hunter2",                // empty wallet name
+    };
+    for (const char* entry : rejected) {
+        std::string strName = "untouched";
+        SecureString strPass;
+        strPass = "untouched";
+        EXPECT_FALSE(ParseSecondaryWalletPassphraseEntry(entry, strName, strPass)) << entry;
+        EXPECT_EQ("untouched", strName) << entry;
+        EXPECT_EQ("untouched", std::string(strPass.begin(), strPass.end())) << entry;
+    }
+}
+
+TEST(SecondaryWalletPassphraseArg, AcceptsAnEmptyPassphraseAsMeaningNoneGiven)
+{
+    // "name:" parses, and yields the same empty SecureString as omitting the
+    // flag entirely -- CWalletManager::LoadWallet() then fails that wallet
+    // with its explicit "requires its passphrase" error rather than anything
+    // more confusing.
+    std::string strName;
+    SecureString strPass;
+    ASSERT_TRUE(ParseSecondaryWalletPassphraseEntry("second.dat:", strName, strPass));
+    EXPECT_EQ("second.dat", strName);
+    EXPECT_TRUE(strPass.empty());
 }

@@ -2835,9 +2835,11 @@ bool CWallet::LoadIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingK
  * @return true if wallet was successfully unlocked
  * 
  * Attempts to unlock an encrypted wallet by trying the passphrase against
- * all stored master keys. When successful, decrypts the master key and
- * stores the passphrase for session use. This function tries each master
- * key until one succeeds or all fail.
+ * all stored master keys, until one succeeds or all fail. On success the
+ * master key is decrypted and held in memory (the wallet stays unlocked
+ * until it is locked again); the passphrase itself is NOT retained anywhere
+ * by this function -- see the comment on strOpeningWalletPassphrase below
+ * for the two callers that deliberately keep their own copy.
  */
 bool CWallet::OpenWallet(const SecureString& strWalletPassphrase)
 {
@@ -2853,7 +2855,26 @@ bool CWallet::OpenWallet(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
             if (CCryptoKeyStore::OpenWallet(vMasterKey)) {
-                strOpeningWalletPassphrase = new SecureString(strWalletPassphrase);
+                // strOpeningWalletPassphrase is deliberately NOT captured here
+                // anymore -- it's a single, process-global scratch slot
+                // (wallet.h) that only ever meant "the passphrase that just
+                // opened pwalletMain at startup", read back by exactly two
+                // pwalletMain-specific startup steps in init.cpp (the
+                // automatic KDF-upgrade check, and the -zapwallettxes
+                // reopen). This function is called on any CWallet now, not
+                // just pwalletMain (CWalletManager::LoadWallet()'s per-wallet
+                // unlock path); capturing every caller's passphrase into that
+                // one global here would let a secondary wallet's passphrase
+                // silently clobber it and get reused against pwalletMain by
+                // those two init.cpp steps. The two call sites that actually
+                // need the old behavior (both because they operate on
+                // pwalletMain specifically) set it themselves right after
+                // calling this: wallet/rpcwallet.cpp's openwallet RPC and
+                // qt/splashscreen.cpp's startup passphrase dialog. Every
+                // other caller -- CWalletManager::LoadWallet()'s per-wallet
+                // unlock, init.cpp's own -zapwallettxes reopen (which only
+                // reads the global), and the gtests -- correctly leaves it
+                // alone.
                 return true;
             }
         }

@@ -6,6 +6,7 @@
 #define BITCOIN_WALLET_WALLETMANAGER_H
 
 #include "sync.h"
+#include "support/allocators/secure.h"
 
 #include <atomic>
 #include <cstdint>
@@ -52,10 +53,32 @@ public:
     // happens to share the name) the same way it already does for a
     // legitimately missing file; every check afterwards (alias detection,
     // concurrent-load reservation, etc.) still runs unchanged either way.
+    //
+    // strPassphrase: per-wallet-unlock support. If the file turns out to be
+    // encrypted (CWallet::InitalizeCryptedLoad() returns DB_LOAD_CRYPTED),
+    // this is fed synchronously into the same
+    // InitalizeCryptedLoad()/SetDBCrypted()/LoadCryptedSeedFromDB()/
+    // OpenWallet() handshake init.cpp runs for the default wallet at startup
+    // -- but without that startup path's blocking wait for an out-of-band
+    // unlock (a GUI dialog, or the special openwallet RPC): either the
+    // passphrase given here works immediately, or the load fails immediately
+    // with a clear error. Leave empty for an unencrypted wallet, or to
+    // deliberately fail closed with a clear "needs its passphrase" error
+    // instead of silently proceeding unlocked against an encrypted one.
+    //
+    // pfPassphraseRequired, if given, is set to true on a false return
+    // specifically when the reason was "the file is encrypted and
+    // strPassphrase was empty or wrong" -- distinct from every other failure
+    // reason (bad name, missing file, corrupt DB, etc.), which leave it
+    // untouched. Lets a caller like the GUI's open-wallet flow decide to
+    // prompt for a passphrase and retry without parsing strError's text to
+    // guess why this failed.
     bool LoadWallet(const std::string& name, std::string& strError,
                      bool fRescan = false, int nRescanHeight = 0,
                      bool fSalvage = false, bool fZapWalletTxes = false,
-                     bool fAllowCreate = false);
+                     bool fAllowCreate = false,
+                     const SecureString& strPassphrase = SecureString(),
+                     bool* pfPassphraseRequired = nullptr);
 
     // Phase 6: LoadWallet() above only ever loads a file that already
     // exists by default (see fAllowCreate just above) -- CreateWallet() is
@@ -78,6 +101,56 @@ public:
     bool CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut);
 
     bool UnloadWallet(const std::string& name, std::string& strError);
+
+    // Used only by encryptwallet()'s failed-encryption recovery path
+    // (wallet/rpcwallet.cpp): a CWallet::EncryptWallet() call that fails
+    // partway through can leave the in-memory object's crypto state (keys,
+    // vMasterKey, seedEncyptionFP, etc.) in an inconsistent condition that
+    // isn't safe to keep using, even though the caller has already restored
+    // the on-disk file from its pre-attempt backup. Discards that object and
+    // its registry entry.
+    //
+    // Unlike UnloadWallet(), this tolerates refcount == 1 rather than
+    // requiring 0: the calling request's own RPCWalletRequestGuard is
+    // holding exactly one ref on this wallet for the whole duration of the
+    // encryptwallet call, so demanding 0 would make the recovery path
+    // unreachable by construction. It deliberately does NOT tolerate
+    // anything above that. An earlier revision skipped the check entirely on
+    // the theory that the calling request is the only possible ref holder;
+    // that is false. Refs are also taken by (a) any second, concurrent RPC
+    // request selecting the same wallet -- RPCWalletRequestGuard's
+    // constructor runs in the dispatch layer and only needs cs_wallets, so
+    // it is not blocked by this request's cs_main hold, and plenty of
+    // rewired wallet RPCs (walletlock, the settings setters, ...) never take
+    // cs_main in their bodies at all; (b) a still-running or unpolled
+    // AsyncRPCOperation (asyncrpcoperation.cpp), which executes on its own
+    // thread; and (c) the Qt GUI, which holds a ref for as long as a wallet
+    // is open in a tab (qt/pirateoceangui.cpp). Deleting the CWallet* out
+    // from under any of those is a use-after-free, and the gap between the
+    // delete and the caller's follow-up LoadWallet() is worse still --
+    // GetWalletForRequest() falls back to pwalletMain for an unresolvable
+    // name, so a concurrent request scoped to this secondary wallet would
+    // silently run against the *default* wallet instead. Refusing here
+    // leaves the caller on its pre-existing StartShutdown() path, which is
+    // safe.
+    //
+    // Bumps this name's generation implicitly (via the subsequent
+    // LoadWallet() call the caller is expected to make), so any other
+    // request's already-outstanding ref against the old generation safely
+    // no-ops on release instead of corrupting the new entry's refcount (see
+    // ReleaseRefIfCurrent()). Never valid against the default wallet --
+    // refuses, matching UnloadWallet() (there is no reload path for it; see
+    // the "no-default-wallet redesign" backlog item). The caller must not
+    // dereference the CWallet* it resolved before calling this again --
+    // notably, it must release any lock it holds on that object's own
+    // cs_wallet first, since the object is deleted here. The caller must
+    // also make this call *before* detaching the wallet's file from the
+    // shared BerkeleyDB environment (CloseDb/CheckpointLSN/mapFileUseCount
+    // erase): a failed EncryptWallet() can leave the wallet's own
+    // pwalletdbEncryption handle open, and ~CWallet deleting it after that
+    // erase would decrement an already-removed mapFileUseCount entry to -1,
+    // permanently skewing that file's use count for the rest of the process.
+    bool DiscardWalletAfterFailedEncryption(const std::string& name, std::string& strError);
 
     // Writes a best-chain checkpoint to every currently loaded wallet
     // (including the default one). Called from StartShutdown() (init.cpp) so
@@ -178,6 +251,19 @@ private:
     // caller (RPCWalletRequestGuard, listwallets, unloadwallet) -- behind
     // however long one large wallet's LoadWallet() call takes.
     std::set<std::string> loadingNames;
+    // Every name this process has ever opened a CWallet against, never
+    // erased for the life of the process (only Reset(), i.e. shutdown and
+    // gtest fixture teardown, clears it). LoadWallet()'s pre-open
+    // CWallet::Verify() step is designed to run once, before any CDB for
+    // that file has ever existed here, and bitdb's own mapFileUseCount is
+    // not a usable record of that: CloseWalletDbFile(), CDBEnv::Flush() and
+    // CDB::Rewrite() all erase a file's entry once its count reaches zero,
+    // so a plain unload+reload of the same name would otherwise look like a
+    // first-ever open and re-run Verify() -- which, after an
+    // encryptwallet-driven CDB::Rewrite(), reports spurious corruption and
+    // triggers CWalletDB::Recover()'s destructive auto-salvage on a
+    // perfectly good file.
+    std::set<std::string> everLoadedNames;
 };
 
 /**

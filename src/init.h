@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -23,6 +24,7 @@
 
 #include <string>
 
+#include "support/allocators/secure.h"
 #include "zcash/JoinSplit.hpp"
 
 class CScheduler;
@@ -53,6 +55,27 @@ bool DeleteStateFiles();
  * @returns true on success
  */
 bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler);
+
+/**
+ * Splits one -secondarywalletpassphrase=<name>:<passphrase> entry.
+ *
+ * The split point is the FIRST ':' in the entry, so a passphrase may itself
+ * contain any number of ':' characters and is taken verbatim to the end of
+ * the entry -- never truncated at a later colon. This is unambiguous rather
+ * than merely convenient: CWalletManager::IsValidWalletName() restricts a
+ * wallet name to letters, digits, '.', '_' and '-' (walletmanager.cpp), so
+ * ':' can never legitimately appear on the left of the separator.
+ *
+ * Returns false for a malformed entry (no ':' at all, or an empty name), in
+ * which case neither out-parameter is touched. The caller must not log the
+ * entry it was given on that path -- a mistyped separator ("name=pass",
+ * "name pass") lands here with the plaintext passphrase still inside it.
+ *
+ * Broken out of AppInit2() purely so it is reachable from gtest; nothing
+ * else in the startup path is.
+ */
+bool ParseSecondaryWalletPassphraseEntry(const std::string& strEntry, std::string& strName,
+                                          SecureString& strPassphrase);
 
 /** The help message mode determines what help message to show */
 enum HelpMessageMode {

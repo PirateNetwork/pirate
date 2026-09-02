@@ -69,6 +69,7 @@
 #endif
 #include "ui_interface.h"
 #include "util.h"
+#include "util/strencodings.h"
 #include "utilmoneystr.h"
 #include "validationinterface.h"
 #ifdef ENABLE_WALLET
@@ -581,7 +582,8 @@ std::string HelpMessage(HelpMessageMode mode)
         CURRENCY_UNIT, FormatMoney(maxTxFee)));
     strUsage += HelpMessageOpt("-upgradewallet", _("Upgrade wallet to latest format") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-unlockforreporting", _("Allow reporting of transactional and metadata on an encrypted wallet while locked.") + " " + strprintf(_("(default: %u)"), false));
-    strUsage += HelpMessageOpt("-wallet=<file>", _("Specify wallet file (within data directory)") + " " + strprintf(_("(default: %s)"), "wallet.dat"));
+    strUsage += HelpMessageOpt("-wallet=<file>", _("Specify wallet file (within data directory)") + " " + strprintf(_("(default: %s)"), "wallet.dat") + " " + _("This option can be specified multiple times to load multiple wallets"));
+    strUsage += HelpMessageOpt("-secondarywalletpassphrase=<name>:<passphrase>", _("Unlock an encrypted secondary wallet (given via -wallet=<name>) with <passphrase> at startup, synchronously -- fails startup for that wallet immediately if wrong, never blocks waiting for it. Can be specified multiple times, once per encrypted secondary wallet; the default wallet's own passphrase is never given this way (it still prompts, same as always). Only the first ':' separates the two, so the passphrase itself may contain ':'. Set this in the config file rather than on the command line where possible: a command-line passphrase is readable by any local user via `ps` or /proc, and is kept in shell history."));
     strUsage += HelpMessageOpt("-walletbroadcast", _("Make the wallet broadcast transactions") + " " + strprintf(_("(default: %u)"), true));
     strUsage += HelpMessageOpt("-whitelistaddress=<Raddress>", _("Enable the wallet filter for notary nodes and add one Raddress to the whitelist of the wallet filter. If -whitelistaddress= is used, then the wallet filter is automatically activated. Several Raddresses can be defined using several -whitelistaddress= (similar to -addnode). The wallet filter will filter the utxo to only ones coming from my own Raddress (derived from pubkey) and each Raddress defined using -whitelistaddress= this option is mostly for Notary Nodes)."));
     strUsage += HelpMessageOpt("-zapwallettxes=1", _("Delete all wallet transactions and rescan the blockchain to rebuild them on startup"));
@@ -1124,6 +1126,27 @@ static bool PromptBootstrapChoice(const std::string& message)
         "\n\n" + _(message.c_str()),
         "", CClientUIInterface::ICON_INFORMATION | CClientUIInterface::MSG_INFORMATION | CClientUIInterface::MODAL | CClientUIInterface::BTN_OK | CClientUIInterface::BTN_CANCEL);
     return result == CClientUIInterface::BTN_OK;
+}
+
+// See init.h for the full contract. Split on the *first* ':' only, so a
+// passphrase containing ':' is taken verbatim to the end of the entry
+// (IsValidWalletName() forbids ':' in a wallet name, so the left-hand side is
+// never ambiguous). Assigned straight from the entry's own iterators rather
+// than via an intermediate std::string/.c_str(): that avoids both a second,
+// non-secure-heap copy of the plaintext and .c_str()'s silent truncation at
+// the first embedded NUL.
+bool ParseSecondaryWalletPassphraseEntry(const std::string& strEntry, std::string& strName,
+                                          SecureString& strPassphrase)
+{
+    size_t nColon = strEntry.find(':');
+    if (nColon == std::string::npos)
+        return false;
+    if (nColon == 0)
+        return false; // empty wallet name; can never match a -wallet= entry
+    strName.assign(strEntry, 0, nColon);
+    strPassphrase.reserve(100);
+    strPassphrase.assign(strEntry.begin() + nColon + 1, strEntry.end());
+    return true;
 }
 
 /***
@@ -2306,6 +2329,46 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         const bool fSecondarySalvage = GetBoolArg("-salvagewallet", false);
         const bool fSecondaryZapWalletTxes = GetBoolArg("-zapwallettxes", false);
 
+        // -secondarywalletpassphrase=<name>:<passphrase>, one per encrypted
+        // secondary wallet named in -wallet= -- unlike the flags just above,
+        // this can't be a single shared value (each wallet has its own
+        // passphrase), so it's a repeatable "name:passphrase" pair instead,
+        // parsed once here and looked up by name in the loading loop below.
+        // A wallet that isn't actually encrypted ignores whatever, if
+        // anything, is given for it. This is the startup equivalent of
+        // loadwallet's own passphrase parameter (rpcmultiwallet.cpp) --
+        // see CWalletManager::LoadWallet()'s own doc comment for why this is
+        // synchronous (succeeds or fails immediately) rather than the
+        // blocking wait the *default* wallet's own encrypted-load path
+        // above uses: at this point in startup there's no operator-facing
+        // prompt this loop could reasonably show per secondary wallet
+        // in a batch, and a CLI flag is expected to be non-interactive.
+        //
+        // Prefer putting these in the config file rather than on the command
+        // line: an argv entry is readable by every local user through `ps`,
+        // /proc/<pid>/cmdline and the shell's own history.
+        std::map<std::string, SecureString> mapSecondaryWalletPassphrases;
+        size_t nPassphraseEntry = 0;
+        for (const std::string& strEntry : mapMultiArgs["-secondarywalletpassphrase"]) {
+            ++nPassphraseEntry;
+            std::string strName;
+            SecureString strPass;
+            if (!ParseSecondaryWalletPassphraseEntry(strEntry, strName, strPass)) {
+                // Deliberately logs nothing from the entry itself, not even
+                // sanitized. "No ':' separator" is only one of the shapes
+                // that reaches here, and the likely ones -- a mistyped
+                // separator such as "mywallet=hunter2" or "mywallet hunter2"
+                // -- carry the plaintext passphrase in the very string it
+                // would be tempting to echo back for the operator's benefit.
+                // debug.log is not the place for that, so the entry is
+                // identified by its position in the argument list instead.
+                LogPrintf("Warning: -secondarywalletpassphrase entry #%u is not in <name>:<passphrase> form, ignoring it "
+                          "(its contents are not logged -- they may contain a passphrase)\n", (unsigned)nPassphraseEntry);
+                continue;
+            }
+            mapSecondaryWalletPassphrases[strName] = strPass;
+        }
+
         // needed to restore wallet transaction meta data after -zapwallettxes
         std::vector<CWalletTx> vWtx;
 
@@ -2498,10 +2561,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                   }
               }
 
-              //Reopen the wallet
-              pwalletMain->OpenWallet(*strOpeningWalletPassphrase);
+              //Reopen the wallet. Guarded: strOpeningWalletPassphrase is only
+              //ever set by an unlock that actually happened (the openwallet
+              //RPC or the Qt startup dialog), so it is still NULL here for an
+              //unencrypted wallet -- and this recovery path is reached
+              //whenever initalizeArcTx() fails, encrypted or not. Dereferencing
+              //it unconditionally segfaulted the node on that combination.
+              //Cleared after the delete rather than left dangling: this global
+              //outlives startup (the openwallet RPC assigns it at runtime too).
+              if (strOpeningWalletPassphrase != NULL) {
+                  pwalletMain->OpenWallet(*strOpeningWalletPassphrase);
 
-              delete strOpeningWalletPassphrase;
+                  delete strOpeningWalletPassphrase;
+                  strOpeningWalletPassphrase = NULL;
+              }
 
               SetRPCNeedsUnlocked(false);
 
@@ -2792,9 +2865,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             if (strSecondaryWallet == strWalletFile)
                 continue;
             std::string strWalletLoadError;
+            auto itPassphrase = mapSecondaryWalletPassphrases.find(strSecondaryWallet);
+            SecureString strEmptyPassphrase;
+            const SecureString& strThisPassphrase =
+                (itPassphrase != mapSecondaryWalletPassphrases.end()) ? itPassphrase->second : strEmptyPassphrase;
             if (CWalletManager::Get().LoadWallet(strSecondaryWallet, strWalletLoadError,
                                                   fSecondaryRescan, nSecondaryRescanHeight,
-                                                  fSecondarySalvage, fSecondaryZapWalletTxes))
+                                                  fSecondarySalvage, fSecondaryZapWalletTxes,
+                                                  /*fAllowCreate=*/false, strThisPassphrase))
                 LogPrintf("Loaded secondary wallet \"%s\"\n", strSecondaryWallet);
             else
                 LogPrintf("Warning: failed to load secondary wallet \"%s\": %s\n", strSecondaryWallet, strWalletLoadError);
