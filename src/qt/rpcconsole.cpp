@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -19,6 +20,11 @@
 #include "rpc/client.h"
 #include "util.h"
 
+// For KOMODO_NSPV_SUPERLITE, which decides whether getnewaddress' reply
+// carries a private key of its own -- see sensitiveReplyWarnings below.
+#include "komodo_defs.h"
+#include "komodo_globals.h"
+
 #include <openssl/crypto.h>
 
 #include <univalue.h>
@@ -31,6 +37,7 @@
 
 #include <QDesktopWidget>
 #include <QKeyEvent>
+#include <QMap>
 #include <QMenu>
 #include <QMessageBox>
 #include <QScrollBar>
@@ -75,7 +82,12 @@ const struct {
 
 namespace {
 
-// don't add private key handling cmd's to the history
+// Commands at least one of whose *arguments* is itself a secret -- a private,
+// spending or viewing key, a seed phrase, or a passphrase. RPCParseCommandLine()
+// rewrites those arguments to "(???)" before the command line is either echoed
+// into this console's scrollback or stored for up/down-arrow recall, so neither
+// keeps the secret around. Matched case-insensitively (QStringList::contains
+// below), so the casing used here is cosmetic.
 const QStringList historyFilter = QStringList()
     << "importprivkey"
     << "importmulti"
@@ -83,19 +95,118 @@ const QStringList historyFilter = QStringList()
     << "signrawtransaction"
     << "walletpassphrase"
     << "walletpassphrasechange"
-    << "encryptwallet";
+    << "encryptwallet"
+    // z_setprimaryspendingkey takes a raw extended spending key as its one
+    // argument (wallet/rpcwallet.cpp) -- always belonged here, just never
+    // added.
+    << "z_setprimaryspendingkey"
+    // loadwallet gained a passphrase argument (backlog item 9's per-wallet-
+    // unlock design, wallet/rpcmultiwallet.cpp) -- needs the exact same
+    // recall protection walletpassphrase/walletpassphrasechange already get.
+    << "loadwallet"
+    // openwallet's one argument is the passphrase itself (wallet/rpcwallet.cpp,
+    // the special RPC allowed during the default wallet's own encrypted-load
+    // startup window) -- same shape as walletpassphrase, never added.
+    << "openwallet"
+    // z_importkey/z_importviewingkey each take a raw shielded spending/viewing
+    // key as their one argument (wallet/rpcdump.cpp), the exact same shape as
+    // importprivkey above.
+    << "z_importkey"
+    << "z_importviewingkey"
+    // convertpassphrase's one argument is an Agama-wallet passphrase, from
+    // which it derives (and, per sensitiveReplyWarnings below, echoes back)
+    // a real private key.
+    << "convertpassphrase"
+    // nspv_login's one argument is a WIF private key (wallet/rpcdump.cpp,
+    // registered as an "nSPV" command in rpc/server.cpp) -- the superlite
+    // equivalent of handing the node a spending key, same shape as
+    // importprivkey above.
+    << "nspv_login";
 
 // historyFilter above hides sensitive *arguments* (private keys, passphrases)
-// from up/down-arrow recall -- it says nothing about a command's own *reply*.
-// These commands' replies contain a seed phrase in cleartext with no separate
-// protection: unlike historyFilter's targets, the whole point is the operator
-// reads and backs it up, so it can't just be redacted outright. Appended as a
-// one-time warning on the reply itself (RPCExecutor::request() below) so it
-// doesn't linger in this console's scrollback unnoticed -- the operator still
-// has to explicitly use the Clear Console button (or the console's own scrollback
-// limit, see CONSOLE_SCROLLBACK_BLOCKS) to actually get rid of it.
-const QStringList replyContainsSeedPhraseFilter = QStringList()
-    << "createwallet";
+// from the scrollback and from up/down-arrow recall -- it says nothing about a
+// command's own *reply*.
+// The RPCs below each return a secret -- a seed phrase or a spending/viewing
+// key -- directly in cleartext, with no separate protection: unlike
+// historyFilter's targets, the whole point of calling one is that the
+// operator reads the secret and backs it up, so it can't just be redacted
+// outright the way a password would be. Each gets its own warning, appended
+// once to the reply itself (RPCExecutor::request() below) naming what was
+// actually disclosed, so it doesn't linger in this console's scrollback
+// unnoticed -- the operator still has to explicitly use the Clear Console
+// button (or the console's own scrollback limit, see
+// CONSOLE_SCROLLBACK_BLOCKS) to actually get rid of it.
+//
+// Deliberately NOT here: dumpwallet/z_exportwallet (every path through
+// dumpwallet_impl() in wallet/rpcdump.cpp either throws or returns the bare
+// destination file path -- the secret goes to disk, never into this console's
+// scrollback, though the file itself still needs securing) and
+// z_getnewaddress/z_getnewaddresskey (return only the new address, never the
+// key that can spend from it). getnewaddress is the one command whose reply
+// is a secret only sometimes, so it is handled by mode below rather than by
+// name here.
+//
+// Keyed on command name alone, so a command whose reply shape varies gets the
+// warning on all of them: z_exportseedphrase on a non-BIP39 wallet, and
+// gatewaysdumpprivkey's {"result":"error"} shape, are both warned about even
+// though those particular replies hold nothing. Over-warning on a command
+// that usually does disclose a key is the safe direction here.
+//
+// Source strings only, marked for extraction but not translated here: this map
+// is a namespace-scope global, so it is built before main() installs any
+// QTranslator and an eager QObject::tr() would freeze every warning at its
+// English source text. Translation happens at the point of use instead
+// (RPCExecutor::request() below).
+const QMap<QString, const char *> sensitiveReplyWarnings = {
+    { "createwallet", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a wallet seed phrase in cleartext. "
+        "Back it up now -- it will remain visible in this console's scrollback "
+        "until you clear the console.") },
+    { "dumpprivkey", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a transparent private key in "
+        "cleartext. Anyone who reads it can spend from that address -- it "
+        "will remain visible in this console's scrollback until you clear "
+        "the console.") },
+    { "z_exportkey", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a shielded spending key in "
+        "cleartext. Anyone who reads it can spend from that address -- it "
+        "will remain visible in this console's scrollback until you clear "
+        "the console.") },
+    { "z_exportviewingkey", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a shielded viewing key in "
+        "cleartext. Anyone who reads it can see every transaction to and "
+        "from that address -- it will remain visible in this console's "
+        "scrollback until you clear the console.") },
+    { "z_exportseedphrase", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a wallet seed phrase in cleartext. "
+        "Back it up now -- it will remain visible in this console's scrollback "
+        "until you clear the console.") },
+    { "convertpassphrase", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a transparent private key and WIF "
+        "derived from the passphrase you gave it, plus that passphrase itself. "
+        "Anyone who reads it can spend from the corresponding address -- it "
+        "will remain visible in this console's scrollback until you clear "
+        "the console.") },
+    { "gatewaysdumpprivkey", QT_TRANSLATE_NOOP("QObject",
+        "WARNING: the reply above contains a transparent private key in "
+        "cleartext. Anyone who reads it can spend from that gateway address "
+        "-- it will remain visible in this console's scrollback until you "
+        "clear the console.") },
+};
+
+// getnewaddress is the only command whose reply is a secret in one node mode
+// and not the other, so it can't be a plain map entry: in nSPV superlite mode
+// (-nSPV=1) there is no wallet to put a key in, so it generates one locally
+// and hands back the raw WIF next to the address (wallet/rpcwallet.cpp) --
+// the createwallet situation exactly, in that the key exists nowhere else. A
+// full node returns only the address, and warning every time there would just
+// train the operator to ignore these.
+const char *const superliteGetNewAddressWarning = QT_TRANSLATE_NOOP("QObject",
+    "WARNING: this node is running in nSPV superlite mode, so the reply above "
+    "contains the new address's own private key (wif) in cleartext. Back it up "
+    "now -- it is held nowhere else, and anyone who reads it can spend from "
+    "that address. It will remain visible in this console's scrollback until "
+    "you clear the console.");
 
 }
 
@@ -421,7 +532,7 @@ void RPCExecutor::request(const QString &command, const QString &walletName)
             return;
         }
         QString qResult = QString::fromStdString(result);
-        // See replyContainsSeedPhraseFilter's own comment above. Plain text, not
+        // See sensitiveReplyWarnings' own comment above. Plain text, not
         // HTML, deliberately -- message(CMD_REPLY, ...) below is called with its
         // default html=false, so any markup here would just be escaped and shown
         // as literal tag text instead of rendered.
@@ -431,11 +542,23 @@ void RPCExecutor::request(const QString &command, const QString &walletName)
                !trimmedCmd.at(cmdNameEnd).isSpace() && trimmedCmd.at(cmdNameEnd) != '(') {
             ++cmdNameEnd;
         }
-        QString cmdName = trimmedCmd.left(cmdNameEnd);
-        if (replyContainsSeedPhraseFilter.contains(cmdName, Qt::CaseInsensitive)) {
-            qResult += "\n\n" + tr("WARNING: the reply above contains a wallet seed phrase in "
-                                   "cleartext. Back it up now -- it will remain visible in this "
-                                   "console's scrollback until you clear the console.");
+        // Map keys are lowercase (matching every RPC name's own registration);
+        // normalize here rather than build the map both ways, since QMap's
+        // own lookup has no case-insensitive mode the way QStringList::contains
+        // does.
+        QString cmdName = trimmedCmd.left(cmdNameEnd).toLower();
+        const char *warning = nullptr;
+        auto itWarning = sensitiveReplyWarnings.constFind(cmdName);
+        if (itWarning != sensitiveReplyWarnings.constEnd()) {
+            warning = itWarning.value();
+        } else if (cmdName == "getnewaddress" && KOMODO_NSPV_SUPERLITE) {
+            // See superliteGetNewAddressWarning's own comment above.
+            warning = superliteGetNewAddressWarning;
+        }
+        if (warning) {
+            // Translated here, not where the source strings are declared -- see
+            // sensitiveReplyWarnings' own comment above for why.
+            qResult += "\n\n" + QObject::tr(warning);
         }
         Q_EMIT reply(RPCConsole::CMD_REPLY, qResult);
     }
