@@ -75,8 +75,6 @@ extern CAmount maxTxFee;
 extern bool fSendFreeTransactions;
 extern bool fPayAtLeastCustomFee;
 extern bool fWalletRbf;
-extern std::string recoverySeedPhrase;
-extern uint32_t recoverySeedLangCode;
 extern bool usingGUI;
 extern int recoveryHeight;
 extern int maxProcessingThreads;
@@ -1185,6 +1183,20 @@ public:
     uint256 seedEncyptionFP;
 
     WalletCreateType createType = UNSET;
+    // Cross-thread hand-off for the in-startup interactive create/restore
+    // flow only (init.cpp's !HaveHDSeed() busy-wait: the GUI thread sets
+    // createType and, for a restore, these two, then the blocked init thread
+    // polls createType and consumes them once it changes). Moved here from a
+    // pair of process globals (recoverySeedPhrase/recoverySeedLangCode) as
+    // part of the no-default-wallet redesign, matching createType's own
+    // existing per-instance-not-process-global shape -- there is now more
+    // than one CWallet that could plausibly be mid-creation (though in
+    // practice only ever pwalletMain reaches this specific flow; the new
+    // createwallet RPC and Qt's post-startup first-run flow, see
+    // CWalletManager::CreateWallet(), pass a recovery phrase as an ordinary
+    // parameter instead and never touch these).
+    std::string recoverySeedPhrase;
+    uint32_t recoverySeedLangCode = 0;
 
     //Tracks if ValidateSaplingWalletTrackedPositions has been run
     bool saplingWalletPositionsValidated = false;
@@ -2572,6 +2584,12 @@ public:
         ReturnKey();
     }
 
+    // No locking, same accepted-risk class as reading pwalletMain itself --
+    // used by miner.cpp to tell "this reserve key was constructed against a
+    // real wallet" apart from "constructed against a null one" without
+    // needing to separately track which wallet CreateNewBlockWithKey() was
+    // given.
+    const CWallet* GetWallet() const { return pwallet; }
     void ReturnKey();
     virtual bool GetReservedKey(CPubKey &pubkey);
     void KeepKey();

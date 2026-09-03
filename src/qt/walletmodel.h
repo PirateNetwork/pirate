@@ -263,10 +263,10 @@ public:
     int getDefaultConfirmTarget() const;
 
     // The wallet's own on-disk file name (CWallet::GetName(), i.e. the real
-    // CWalletManager registry name -- not the GUI-internal "~Default" map
-    // key PirateOceanGUI uses for the default wallet). Used to attribute
-    // GUI dialogs (e.g. the passphrase prompt) to a specific wallet once
-    // more than one can be loaded at a time.
+    // CWalletManager registry name -- also what PirateOceanGUI now keys its
+    // own wallet tabs by directly, no GUI-internal alias in between. Used to
+    // attribute GUI dialogs (e.g. the passphrase prompt) to a specific
+    // wallet once more than one can be loaded at a time.
     QString getWalletName() const;
 
     // Per-wallet consolidation/sweep/fee/behavior/pruning settings -- thin,

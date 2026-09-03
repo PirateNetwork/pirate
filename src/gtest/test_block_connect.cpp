@@ -1975,14 +1975,42 @@ TEST(test_block, SecondaryWalletReceivesChainTipNotificationsAfterLoad)
     // runs next.
     struct GlobalStateCleanup {
         std::shared_ptr<CDBEnv> previousBitdb;
+        // No-default-wallet redesign: this test now registers a
+        // RegisterInitialWallet()-based "default_test.dat" (see below) so
+        // "secondarytestwallet" is a genuine secondary rather than the
+        // first-loaded-into-empty-registry wallet that would otherwise become
+        // active. RegisterInitialWallet() never calls
+        // RegisterValidationInterface() (production's equivalent, init.cpp,
+        // does so separately, itself), so Reset() alone is safe for it --
+        // unlike UnloadWallet()/FlushAndUnloadAllExceptActiveWallet(), it
+        // doesn't need an UnregisterValidationInterface() call first, only
+        // needs deleting directly (matching test_walletmanager.cpp's own
+        // fixture, which owns the identical object lifetime).
+        CWallet* defaultWallet = nullptr;
         ~GlobalStateCleanup() {
+            // Opus-audit-caught: on the happy path the in-test UnloadWallet()
+            // call below already removes "secondarytestwallet" (a
+            // LoadWallet()-registered, and therefore validation-interface-
+            // registered, wallet) before this destructor runs -- but on an
+            // earlier ASSERT_* failure it wouldn't have, and Reset() alone
+            // (unlike UnloadWallet()/FlushAndUnloadAllExceptActiveWallet())
+            // does not call UnregisterValidationInterface() first. Matches
+            // the other three CWalletManager-using gtest fixtures in this
+            // tree (test_walletmanager.cpp, test_httprpc.cpp,
+            // test_rpc_wallet_bitcoin.cpp), all of which call this before
+            // Reset() for the same reason.
+            CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
+            delete defaultWallet;
             bitdb->Flush(true);
             bitdb->Reset();
             bitdb = previousBitdb;
         }
     } cleanup{bitdb};
     bitdb = std::shared_ptr<CDBEnv>(new CDBEnv{});
+
+    cleanup.defaultWallet = new CWallet("default_test.dat");
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", cleanup.defaultWallet);
 
     TestChain chain;
     // Must be set after TestChain's constructor, not before: it resets

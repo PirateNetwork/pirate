@@ -48,7 +48,6 @@ class PirateOceanGUI : public QMainWindow
     Q_OBJECT
 
 public:
-    static const QString DEFAULT_WALLET;
     static const std::string DEFAULT_UIPLATFORM;
 
     explicit PirateOceanGUI(const PlatformStyle *platformStyle, const NetworkStyle *networkStyle, QWidget *parent = 0);
@@ -138,19 +137,22 @@ private:
     QAction *closeWalletAction;
     QMenu *walletsMenu;
     // Per-wallet WalletModel instances for every wallet currently shown in
-    // this window, keyed the same way WalletFrame's own mapWalletViews is
-    // (DEFAULT_WALLET for the default wallet, the real CWalletManager name
-    // for every other wallet). Owned here since this window already owns
-    // the WalletFrame lifecycle these models are paired with.
+    // this window, keyed by its real CWalletManager registry name -- same
+    // key WalletFrame's own mapWalletViews uses. No-default-wallet redesign:
+    // this used to key whichever wallet was active under a fixed
+    // "~Default" GUI-internal alias instead of its real name, which caused a
+    // real, Opus-audit-caught bug once "active" became reassignable outside
+    // this window's own control (via setactivewallet, RPC/CLI): a tab's
+    // fixed alias and "whichever wallet is active" could diverge after the
+    // tab was opened, producing duplicate-labeled menu entries or spurious
+    // "already loaded" refusals. Every tab is now keyed by, and always
+    // displays, its own real, stable name; "is this tab the active wallet"
+    // is answered fresh each time it's asked (CWalletManager::
+    // GetActiveWalletName()), never baked into a map key.
     QMap<QString, WalletModel*> mapWalletModels;
-    // GUI-internal map key (DEFAULT_WALLET or a real CWalletManager name) of
-    // whichever wallet is currently shown; kept in sync by setCurrentWallet().
+    // The real CWalletManager registry name of whichever wallet is currently
+    // shown; kept in sync by setCurrentWallet().
     QString currentWalletName;
-    // Translates a CWalletManager wallet name to the GUI-internal map key
-    // used by WalletFrame/mapWalletModels above: identical for every wallet
-    // except the default one, which those maps key on DEFAULT_WALLET
-    // ("~Default") instead of its real on-disk name.
-    QString guiKeyForWalletName(const std::string& walletManagerName) const;
     // Runs CWalletManager::LoadWallet()/CreateWallet() on a dedicated worker
     // thread with a modal progress dialog, rather than blocking the GUI
     // thread for the duration of a rescan (see the comment at its call sites
@@ -179,7 +181,7 @@ public:
     // (ScanForWalletTransactions et al.) let it unwind promptly instead of
     // running a full rescan to completion first. Whatever it already
     // committed to CWalletManager's registry is left for the normal
-    // shutdown sweep (FlushAndUnloadAllSecondaryWallets(), init.cpp) to
+    // shutdown sweep (FlushAndUnloadAllExceptActiveWallet(), init.cpp) to
     // flush and unload like any other loaded wallet.
     void abortPendingWalletLoad();
 private:

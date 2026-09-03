@@ -199,7 +199,7 @@ void StartShutdown()
         CBlockLocator currentBlock = chainActive.GetLocator();
         int chainHeight = chainActive.Tip()->nHeight;
         // Checkpoints every loaded wallet, not just pwalletMain -- a
-        // secondary wallet unloaded via FlushAndUnloadAllSecondaryWallets()
+        // secondary wallet unloaded via FlushAndUnloadAllExceptActiveWallet()
         // during the rest of shutdown otherwise never gets a final
         // SetBestChain() write, leaving its on-disk checkpoint stale by
         // however many blocks passed since its last periodic flush.
@@ -270,32 +270,43 @@ void Shutdown()
     StopREST();
     StopRPC();
     StopHTTPServer();
+#ifdef ENABLE_MINING
+    // Moved ahead of FlushAndUnloadAllExceptActiveWallet() below (Opus-audit
+    // finding, no-default-wallet redesign): that call deletes every loaded
+    // wallet except whichever is active, with no check against
+    // GetMiningWallet() (miner.h) -- only UnloadWallet() got that check. A
+    // still-running miner thread holds the CWallet* it was started with
+    // (BitcoinMiner(pwallet), and CReserveKey reservekey(pwallet) alongside
+    // it) for its entire lifetime and never re-reads pwalletMain, so joining
+    // every miner thread here, before any wallet this shutdown path deletes
+    // could possibly be one they're using, closes that use-after-free at the
+    // one call site that matters instead of teaching the flush sweep about
+    // mining at all.
+ #ifdef ENABLE_WALLET
+    GenerateBitcoins(false, NULL, 0);
+ #else
+    GenerateBitcoins(false, 0);
+ #endif
+#endif
 #ifdef ENABLE_WALLET
     // StopRPC()'s closeAndWait() joined the async worker thread but never
     // clears AsyncRPCQueue's own operation map (only an explicit
     // z_getoperationresult, or the queue's own eventual destruction, does
     // that) -- so a finished-but-never-polled AsyncRPCOperation built
     // against a wallet can still be sitting here holding that wallet's ref.
-    // Drop them now, before FlushAndUnloadAllSecondaryWallets()/Reset()
+    // Drop them now, before FlushAndUnloadAllExceptActiveWallet()/Reset()
     // below: left to plain process-exit static destruction, the queue's
     // static shared_ptr (constructed by StartRPC()) outlives
-    // CWalletManager's (constructed later, by RegisterDefaultWallet()), so
+    // CWalletManager's (constructed later, by RegisterInitialWallet()), so
     // reverse-order teardown would run these operations' destructors --
     // and their CWalletManager::Get().ReleaseRefIfCurrent() calls -- after
     // CWalletManager's own static instance no longer exists.
     getAsyncRPCQueue()->clearOperationMap();
     // Secondary wallets first: nothing routes a request to one after this point,
     // and they must be gone before Reset() clears the registry at the end of Shutdown().
-    CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+    CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
     if (pwalletMain)
         pwalletMain->Flush(false);
-#endif
-#ifdef ENABLE_MINING
- #ifdef ENABLE_WALLET
-    GenerateBitcoins(false, NULL, 0);
- #else
-    GenerateBitcoins(false, 0);
- #endif
 #endif
     StopNode();
 #if ENABLE_EMBEDDED_I2PD
@@ -557,7 +568,14 @@ std::string HelpMessage(HelpMessageMode mode)
 
 #ifdef ENABLE_WALLET
     strUsage += HelpMessageGroup(_("Wallet options:"));
-    strUsage += HelpMessageOpt("-seedphrase=<phrase>", _("Recover wallet from seed phrase if a wallet file does not exist."));
+    // -seedphrase=<phrase> was removed as a startup flag (no-default-wallet
+    // redesign, Opus-audit-caught: this help text was left advertising a flag
+    // whose reader had already been deleted, which would have silently
+    // generated a brand-new random seed instead of restoring the named
+    // phrase -- exactly backwards from what an operator relying on it would
+    // expect). Restoring from a known phrase is now always an explicit
+    // createwallet RPC call ("recoveryphrase" parameter) against an
+    // already-running node.
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     // Consolidation, sweep, fee/behavior, and transaction-deletion/pruning
     // settings used to be configurable here as CLI/pirate.conf flags. Phase 5
@@ -1604,6 +1622,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             {"-spendzeroconfchange", "setspendzeroconfchange"},
             {"-keypool", "setkeypoolsize"},
             {"-walletnotify", "setwalletnotify"},
+            // No-default-wallet redesign: -seedphrase= used to recover a
+            // wallet from a known phrase at startup when the default wallet's
+            // file didn't exist yet. Silently ignoring it now (rather than
+            // rejecting it here) would generate a brand-new random seed
+            // instead -- exactly backwards from what an operator relying on
+            // it would expect (Opus-audit-caught).
+            {"-seedphrase", "createwallet ... \"recoveryphrase\""},
         };
         for (const auto& flag : removedWalletFlags) {
             if (mapArgs.count(flag.first) || mapMultiArgs.count(flag.first)) {
@@ -1615,6 +1640,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
     std::string strWalletFile = GetArg("-wallet", "wallet.dat");
+
+    // No-default-wallet redesign: an existing deployment (a wallet file
+    // already sits at strWalletFile) or an explicit -wallet= (single or
+    // multiple) keeps today's unconditional auto-load behavior, unchanged --
+    // only a genuinely fresh data directory with neither goes through the
+    // true zero-wallet startup path below (Step 5/Step 8). Restoring a
+    // wallet from a known seed phrase is no longer a startup-time decision at
+    // all (the removed -seedphrase= flag): that's now always an explicit
+    // createwallet RPC call against an already-running node, so it plays no
+    // part in this computation.
+    bool fAutoLoadWalletAtStartup = !fDisableWallet &&
+        (mapArgs.count("-wallet") || boost::filesystem::exists(GetDataDir() / strWalletFile));
 #endif // ENABLE_WALLET
 
     fIsBareMultisigStd = GetBoolArg("-permitbaremultisig", true);
@@ -1973,7 +2010,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // ********************************************************* Step 5: verify wallet database integrity
 #ifdef ENABLE_WALLET
-    if (!fDisableWallet) {
+    if (fAutoLoadWalletAtStartup) {
         LogPrintf("Using wallet %s\n", strWalletFile);
         uiInterface.InitMessage(_("Verifying wallet..."));
 
@@ -1988,7 +2025,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (!errorString.empty())
             return InitError(warningString);
 
-    } // (!fDisableWallet)
+    } // (fAutoLoadWalletAtStartup)
 #endif // ENABLE_WALLET
     // Step 6 (network reachability setup + P2P listen bind) now runs earlier -
     // immediately after the datadir lock, before script-check threads, the
@@ -2310,10 +2347,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (fDisableWallet) {
         pwalletMain = NULL;
         LogPrintf("Wallet disabled!\n");
+    } else if (!fAutoLoadWalletAtStartup) {
+        // True zero-wallet startup (no-default-wallet redesign): a genuinely
+        // fresh data directory, no -wallet= given and no existing file at the
+        // conventional default location. Nothing is constructed, verified,
+        // or registered here -- CWalletManager's registry stays exactly as
+        // empty as -disablewallet already leaves it above. An operator must
+        // explicitly run loadwallet or createwallet (or use the GUI's
+        // first-run flow, see qt/splashscreen.cpp) before any wallet RPC, or
+        // mining against wallet funds, becomes usable.
+        pwalletMain = NULL;
+        LogPrintf("No wallet loaded at startup (fresh data directory) -- run loadwallet or createwallet to load or create one.\n");
     } else {
 
         // Snapshot the CLI-derived rescan/salvage/zap flags for the
-        // secondary -wallet= loading loop far below now, before the default
+        // secondary -wallet= loading loop far below now, before the active
         // wallet's own load sequence in this block gets a chance to
         // SoftSetBoolArg("-rescan", true) on itself (its archived-tx
         // validation-failure recovery path does exactly this further down).
@@ -2663,17 +2711,17 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     }
                 }
             } else {
-                recoverySeedPhrase  = GetArg("-seedphrase", "");
-                if (recoverySeedPhrase != "") {
-                    pwalletMain->createType = RECOVERY;
-                } else {
-                    pwalletMain->createType = RANDOM;
-                }
+                // -seedphrase= was removed as a startup flag (no-default-wallet
+                // redesign): restoring from a known phrase is now always an
+                // explicit createwallet RPC call against an already-running
+                // node, not a boot-time decision, so a headless launch always
+                // generates a fresh random seed here.
+                pwalletMain->createType = RANDOM;
             }
 
 
             if (pwalletMain->createType == RECOVERY) {
-                if (!pwalletMain->RestoreSeedFromPhrase(recoverySeedPhrase, recoverySeedLangCode)) {
+                if (!pwalletMain->RestoreSeedFromPhrase(pwalletMain->recoverySeedPhrase, pwalletMain->recoverySeedLangCode)) {
                     LogPrintf("Invalid Seed Phrase - shutting down.\n");
                     return false;
                 }
@@ -2681,7 +2729,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             } else {
               // generate a new HD seed
                 pwalletMain->GenerateNewSeed();
-                pwalletMain->GetSeedPhrase(recoverySeedPhrase);
+                pwalletMain->GetSeedPhrase(pwalletMain->recoverySeedPhrase);
                 if (usingGUI) {
                     uiInterface.InitShowPhrase();
                     while (pwalletMain->createType == RANDOM) {
@@ -2845,7 +2893,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
         vpwallets.push_back(pwalletMain);
 
-        CWalletManager::Get().RegisterDefaultWallet(strWalletFile, pwalletMain);
+        CWalletManager::Get().RegisterInitialWallet(strWalletFile, pwalletMain);
 
         // Best-effort secondary wallets: skip whichever entry became strWalletFile
         // above (already loaded through the full default-wallet sequence) and try
@@ -2877,7 +2925,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             else
                 LogPrintf("Warning: failed to load secondary wallet \"%s\": %s\n", strSecondaryWallet, strWalletLoadError);
         }
-    } // (!fDisableWallet)
+    } // (fAutoLoadWalletAtStartup)
 #else // ENABLE_WALLET
     LogPrintf("No wallet support compiled in!\n");
 #endif // !ENABLE_WALLET

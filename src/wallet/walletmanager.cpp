@@ -5,6 +5,7 @@
 #include "wallet/walletmanager.h"
 
 #include "init.h"
+#include "miner.h"
 #include "rpc/server.h"
 #include "util.h"
 #include "wallet/db.h"
@@ -13,16 +14,25 @@
 #include <boost/filesystem.hpp>
 
 namespace {
-// Empty means "no override for this thread" -- the request runs against the
-// default wallet, exactly like before multiwallet existed.
+// Pinned by RPCWalletRequestGuard to the wallet this request actually
+// resolved to (see GetWalletForRequest()) -- for a /wallet/<name>/ request,
+// `name` itself; for an unscoped request, whichever wallet was active at
+// resolve time. Empty only when nothing resolved at all.
 thread_local std::string g_requestedWalletName;
+// True only for a /wallet/<name>/ request -- see
+// CWalletManager::WasWalletExplicitlySelected()'s own doc comment for why
+// this has to be tracked separately from g_requestedWalletName being
+// non-empty.
+thread_local bool g_explicitWalletSelected = false;
 
 // Deliberately narrower than SanitizeFilename() (util/strencodings.cpp),
 // which is alphanumeric-only and would reject "wallet.dat" itself -- the
-// default wallet's own on-disk name, and the plan's own worked example for a
-// secondary wallet. '.', '_' and '-' are added on top of that; '/' and '\\'
-// stay structurally excluded either way, so a name still can't escape the
-// datadir no matter what letters/digits/./-/_ it's paired with.
+// conventional on-disk name a node's first-ever wallet has always used
+// (still the auto-loaded name on any upgraded deployment), and the plan's
+// own worked example for a secondary wallet. '.', '_' and '-' are added on
+// top of that; '/' and '\\' stay structurally excluded either way, so a name
+// still can't escape the datadir no matter what letters/digits/./-/_ it's
+// paired with.
 const std::string SAFE_WALLET_NAME_CHARS =
     "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-";
 
@@ -77,24 +87,43 @@ CWalletManager& CWalletManager::Get()
     return instance;
 }
 
-void CWalletManager::RegisterDefaultWallet(const std::string& name, CWallet* wallet)
+void CWalletManager::RegisterInitialWallet(const std::string& name, CWallet* wallet)
 {
     LOCK(cs_wallets);
-    defaultWalletName = name;
+    activeWalletName = name;
+    pwalletMain = wallet;
     // Erase any existing entry for `name` first rather than try_emplace's
     // no-op-if-present behavior (and Entry isn't assignable in place, since
     // it holds a std::atomic<int> refcount, so insert_or_assign isn't an
     // option either): zcbenchmarks.cpp's benchmark_loadwallet() deletes and
-    // replaces pwalletMain, then calls this again so the registry's default
+    // replaces pwalletMain, then calls this again so the registry's active
     // entry repoints at the new object instead of being left pointing at the
     // just-deleted one (which CheckpointAllWallets(), reachable from
     // StartShutdown(), would otherwise dereference on the next shutdown).
-    // No outstanding ref/generation state is lost by erasing: the default
-    // wallet is never refcount-pinned by ResolveAndHoldForRequest() (it
-    // returns ResolveOutcome::IsDefault without taking a ref, since the
-    // default can't be unloaded anyway).
+    // No outstanding ref/generation state is lost by erasing: this function
+    // is only ever called with a brand-new, not-yet-registered wallet (an
+    // ordinary reload goes through LoadWallet() instead), so there is never
+    // an outstanding ref against the entry being replaced.
     mapWallets.erase(name);
-    mapWallets.try_emplace(name, wallet, true, nextGeneration.fetch_add(1, std::memory_order_relaxed));
+    mapWallets.try_emplace(name, wallet, nextGeneration.fetch_add(1, std::memory_order_relaxed));
+}
+
+bool CWalletManager::SetActiveWallet(const std::string& name, std::string& strError)
+{
+    LOCK(cs_wallets);
+    if (name.empty()) {
+        activeWalletName.clear();
+        pwalletMain = nullptr;
+        return true;
+    }
+    auto it = mapWallets.find(name);
+    if (it == mapWallets.end()) {
+        strError = strprintf("Wallet not found: %s", name);
+        return false;
+    }
+    activeWalletName = name;
+    pwalletMain = it->second.wallet;
+    return true;
 }
 
 bool CWalletManager::IsValidWalletName(const std::string& name, std::string& strError)
@@ -553,9 +582,23 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                     // ScanForWalletTransactions() (the only two callers that
                     // pass fIgnoreBirthday=false are this and init.cpp) runs
                     // with a value this wallet's file never actually had.
+                    // bip39Enabled: read back the same way, for the same reason
+                    // -- CWallet::LoadWallet() doesn't read this key either, so
+                    // without this every reloaded wallet falls back to
+                    // CWallet::SetNull()'s bip39Enabled=false default regardless
+                    // of what its file actually says. That default silently
+                    // changes which HD derivation scheme
+                    // SaplingExtendedSpendingKey::Master()/the Ironwood
+                    // equivalent use (zcash/address/zip32.cpp) for every new
+                    // address generated from this point on -- a real, opus-
+                    // audit-caught gap: an already-loaded-once wallet reloaded
+                    // via loadwallet/-wallet=/the GUI's open action would start
+                    // deriving new addresses under a different scheme than its
+                    // existing ones the moment this went unread.
                     {
                         CWalletDB walletdb(name);
                         walletdb.ReadWalletBirthday(wallet->nBirthday);
+                        walletdb.ReadWalletBip39Enabled(wallet->bip39Enabled);
                     }
                     CBlockIndex* pindexRescan = nullptr;
                     if (fRescan) {
@@ -647,7 +690,17 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
             // registered on all 9 validation-interface signals -- the exact
             // zombie this guard exists to prevent, arrived at from the
             // commit side instead of an exception.
-            fCommitted = mapWallets.try_emplace(name, wallet, false, nextGeneration.fetch_add(1, std::memory_order_relaxed)).second;
+            fCommitted = mapWallets.try_emplace(name, wallet, nextGeneration.fetch_add(1, std::memory_order_relaxed)).second;
+            // No-default-wallet redesign: the first wallet ever loaded into an
+            // empty registry becomes active automatically, still under this
+            // same lock so no other thread can observe a committed entry with
+            // no wallet active. A later load never steals active status this
+            // way -- mapWallets.size() is already >= 2 by the time any
+            // subsequent LoadWallet() call reaches here.
+            if (fCommitted && mapWallets.size() == 1) {
+                activeWalletName = name;
+                pwalletMain = wallet;
+            }
         }
         if (!fCommitted) {
             strError = strprintf("Wallet %s is already loaded", name);
@@ -660,7 +713,8 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
     }
 }
 
-bool CWalletManager::CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut)
+bool CWalletManager::CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut,
+                                   const SecureString& recoveryPhrase, uint32_t recoveryLangCode)
 {
     if (!IsValidWalletName(name, strError))
         return false;
@@ -708,7 +762,60 @@ bool CWalletManager::CreateWallet(const std::string& name, std::string& strError
     // caller can prompt the user to back it up immediately; there is no way
     // to retrieve it again later.
     try {
-        wallet->GenerateNewSeed();
+        bool fRecovering = !recoveryPhrase.empty();
+        if (fRecovering) {
+            // Not mlock()'d beyond this point -- CWallet::RestoreSeedFromPhrase()
+            // takes a plain std::string&, same pre-existing caveat every other
+            // SecureString-to-plain-std::string handoff in this codebase
+            // already carries (see e.g. loadwallet's own passphrase parameter).
+            std::string strRecoveryPhrase(recoveryPhrase.begin(), recoveryPhrase.end());
+            if (!wallet->RestoreSeedFromPhrase(strRecoveryPhrase, recoveryLangCode)) {
+                // Matches the catch block just below: the wallet is already
+                // registered and visible (LoadWallet() above succeeded), so
+                // this leaves it loaded but seedless rather than silently
+                // deleting something a concurrent listwallets could already
+                // see -- same reasoning as an exception during GenerateNewSeed().
+                strError = strprintf("Wallet %s created but seed phrase was invalid", name);
+                return false;
+            }
+        } else {
+            wallet->GenerateNewSeed();
+        }
+        // Matches init.cpp's own fresh-HD-seed setup exactly (both its RANDOM
+        // and RECOVERY branches set this unconditionally, outside the
+        // create-type check) -- without this, every wallet this function ever
+        // created derived Sapling/Ironwood keys with bip39Enabled=false
+        // (CWallet::SetNull()'s default), a real, opus-audit-caught bug: a
+        // recovered wallet would derive under a *different* scheme than
+        // whatever generated its phrase, landing on addresses with no funds
+        // and no way to reach the real ones; a random-seed wallet would hand
+        // back a phrase that doesn't actually match its own derivation.
+        wallet->bip39Enabled = true;
+        CWalletDB(name).WriteWalletBip39Enabled(true);
+        if (fRecovering) {
+            // Restoring from a known phrase can surface existing on-chain
+            // funds -- unlike GenerateNewSeed()'s brand-new-seed case (nothing
+            // to find, so LoadWallet()'s own fFirstRun handling above already
+            // correctly pinned this wallet's checkpoint at the current tip,
+            // before a seed even existed to pin against), this wallet's
+            // addresses may have history going back to genesis. Matches the
+            // removed -seedphrase= startup flag's own behavior (init.cpp
+            // always forced a full rescan for a recovered wallet) and
+            // LoadWallet()'s own explicit-fRescan branch just above in this
+            // file.
+            // Matches the sibling call site above (LoadWallet()'s own
+            // fRescan branch): cs_main alone, no separate wallet->cs_wallet
+            // lock around the call itself. Scoped to just this block, not
+            // held for the rest of the function -- GenerateNewSaplingZKey()
+            // below takes wallet->cs_wallet on its own and doesn't need it.
+            {
+                LOCK(cs_main);
+                wallet->nBirthday = 0;
+                if (chainActive.Genesis() && chainActive.Tip() != chainActive.Genesis()) {
+                    wallet->ScanForWalletTransactions(chainActive.Genesis(), true, false, false, false);
+                }
+            }
+        }
         wallet->GetSeedPhrase(seedPhraseOut);
         LOCK(wallet->cs_wallet);
         auto zAddress = wallet->GenerateNewSaplingZKey();
@@ -754,14 +861,27 @@ bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError
     // own AsyncRPCOperation while already holding cs_main.
     LOCK2(cs_main, cs_wallets);
 
-    if (defaultWalletName == name) {
-        strError = "The default wallet cannot be unloaded";
+    if (activeWalletName == name) {
+        strError = strprintf("Wallet %s is the active wallet and cannot be unloaded -- "
+                              "call setactivewallet with a different name (or \"\") first", name);
         return false;
     }
 
     auto it = mapWallets.find(name);
     if (it == mapWallets.end()) {
         strError = strprintf("Wallet not found: %s", name);
+        return false;
+    }
+
+    // See GetMiningWallet()'s own doc comment (miner.h): the mining thread
+    // captures a CWallet* by value at thread start and never re-reads
+    // pwalletMain, so a wallet that has stopped being active can still be the
+    // one the miner is using -- deleting it out from under that thread is a
+    // use-after-free the active-wallet check just above cannot catch on its
+    // own once active status has moved elsewhere.
+    if (it->second.wallet == GetMiningWallet()) {
+        strError = strprintf("Wallet %s is currently bound to the mining thread and cannot be "
+                              "unloaded -- stop mining (setgenerate false) first", name);
         return false;
     }
 
@@ -798,14 +918,24 @@ bool CWalletManager::DiscardWalletAfterFailedEncryption(const std::string& name,
     // function returns.
     LOCK2(cs_main, cs_wallets);
 
-    if (defaultWalletName == name) {
-        strError = "The default wallet cannot be discarded this way";
+    if (activeWalletName == name) {
+        strError = "The active wallet cannot be discarded this way";
         return false;
     }
 
     auto it = mapWallets.find(name);
     if (it == mapWallets.end()) {
         strError = strprintf("Wallet not found: %s", name);
+        return false;
+    }
+
+    // Same reasoning as UnloadWallet()'s identical check: a still-running
+    // miner thread holds this wallet's CWallet* for its entire lifetime and
+    // never re-reads pwalletMain, so deleting it out from under that thread
+    // is a use-after-free even though it isn't (or is no longer) active.
+    if (it->second.wallet == GetMiningWallet()) {
+        strError = strprintf("Wallet %s is currently bound to the mining thread and cannot be "
+                              "discarded -- stop mining (setgenerate false) first", name);
         return false;
     }
 
@@ -839,7 +969,7 @@ void CWalletManager::CheckpointAllWallets(const CBlockLocator& locator, int heig
 {
     // Snapshot under cs_wallets, then release it before taking any wallet's
     // cs_wallet -- the established order elsewhere in this class (see
-    // UnloadWallet/FlushAndUnloadAllSecondaryWallets, and the deadlock
+    // UnloadWallet/FlushAndUnloadAllExceptActiveWallet, and the deadlock
     // warning in asyncrpcoperation.cpp) is cs_main -> cs_wallet -> cs_wallets,
     // never the reverse. Locking cs_wallet while still holding cs_wallets
     // here would invert that against, e.g., CWallet::ChainTip()'s
@@ -848,7 +978,7 @@ void CWalletManager::CheckpointAllWallets(const CBlockLocator& locator, int heig
     // Snapshotting the raw pointers is safe without holding cs_wallets for
     // the rest of the function only because the caller (StartShutdown())
     // holds cs_main for the whole call, and both UnloadWallet() and
-    // FlushAndUnloadAllSecondaryWallets() take cs_main before cs_wallets --
+    // FlushAndUnloadAllExceptActiveWallet() take cs_main before cs_wallets --
     // so no entry can be deleted out from under us in between.
     AssertLockHeld(cs_main);
     std::vector<std::pair<std::string, CWallet*>> snapshot;
@@ -885,16 +1015,16 @@ CWallet* CWalletManager::GetWallet(const std::string& name) const
     return (it == mapWallets.end()) ? nullptr : it->second.wallet;
 }
 
-std::string CWalletManager::GetDefaultWalletName() const
+std::string CWalletManager::GetActiveWalletName() const
 {
     LOCK(cs_wallets);
-    return defaultWalletName;
+    return activeWalletName;
 }
 
-bool CWalletManager::IsDefaultWallet(const std::string& name) const
+bool CWalletManager::IsActiveWallet(const std::string& name) const
 {
     LOCK(cs_wallets);
-    return !defaultWalletName.empty() && defaultWalletName == name;
+    return !activeWalletName.empty() && activeWalletName == name;
 }
 
 bool CWalletManager::AddRef(const std::string& name)
@@ -921,11 +1051,21 @@ CWalletManager::ResolvedWallet CWalletManager::ResolveAndHoldForRequest(const st
     LOCK(cs_wallets);
     auto it = mapWallets.find(name);
     if (it == mapWallets.end())
-        return { ResolveOutcome::NotFound, 0 };
-    if (it->second.isDefault)
-        return { ResolveOutcome::IsDefault, it->second.generation };
+        return { ResolveOutcome::NotFound, 0, "" };
     it->second.refcount.fetch_add(1, std::memory_order_relaxed);
-    return { ResolveOutcome::HeldSecondary, it->second.generation };
+    return { ResolveOutcome::Held, it->second.generation, name };
+}
+
+CWalletManager::ResolvedWallet CWalletManager::ResolveAndHoldActiveForRequest()
+{
+    LOCK(cs_wallets);
+    if (activeWalletName.empty())
+        return { ResolveOutcome::NotFound, 0, "" };
+    auto it = mapWallets.find(activeWalletName);
+    if (it == mapWallets.end())
+        return { ResolveOutcome::NotFound, 0, "" }; // Shouldn't happen -- see activeWalletName's own invariant comment.
+    it->second.refcount.fetch_add(1, std::memory_order_relaxed);
+    return { ResolveOutcome::Held, it->second.generation, activeWalletName };
 }
 
 void CWalletManager::ReleaseRefIfCurrent(const std::string& name, uint64_t generation)
@@ -939,7 +1079,7 @@ void CWalletManager::ReleaseRefIfCurrent(const std::string& name, uint64_t gener
     it->second.refcount.fetch_sub(1, std::memory_order_relaxed);
 }
 
-void CWalletManager::FlushAndUnloadAllSecondaryWallets()
+void CWalletManager::FlushAndUnloadAllExceptActiveWallet()
 {
     // Unlike UnloadWallet(), this does not check refcount == 0 before
     // deleting. That's only safe because of shutdown ordering, not because
@@ -985,7 +1125,17 @@ void CWalletManager::FlushAndUnloadAllSecondaryWallets()
     // function runs.
     LOCK2(cs_main, cs_wallets);
     for (auto it = mapWallets.begin(); it != mapWallets.end(); ) {
-        if (it->second.isDefault) {
+        if (it->first == activeWalletName) {
+            ++it;
+            continue;
+        }
+        // Belt-and-braces alongside UnloadWallet()'s own identical check:
+        // the one production caller (Shutdown(), init.cpp) already stops
+        // mining before reaching this call specifically so this branch is
+        // never taken there, but skip defensively rather than delete a
+        // wallet a still-running miner thread could be using, in case a
+        // future caller ever invokes this outside that exact ordering.
+        if (it->second.wallet == GetMiningWallet()) {
             ++it;
             continue;
         }
@@ -1002,10 +1152,17 @@ void CWalletManager::FlushAndUnloadAllSecondaryWallets()
 void CWalletManager::Reset()
 {
     LOCK(cs_wallets);
-    // The default wallet's CWallet* is deleted by Shutdown()'s existing
+    // The active wallet's CWallet* is deleted by Shutdown()'s existing
     // `delete pwalletMain`, so only drop the registry's bookkeeping here.
     mapWallets.clear();
-    defaultWalletName.clear();
+    activeWalletName.clear();
+    // Explicit, rather than relying on Shutdown()'s own `delete pwalletMain;
+    // pwalletMain = NULL;` having already run first: that's true on the one
+    // production call path, but a gtest fixture calling Reset() directly
+    // (without going through Shutdown()) should not be able to leave a
+    // stale pwalletMain pointing at an entry this call just erased from the
+    // registry.
+    pwalletMain = nullptr;
     // Not expected to be non-empty here (Reset() isn't meant to run
     // concurrently with an in-flight LoadWallet()), but cheap to clear
     // defensively rather than leave a stale reservation across, e.g., gtest
@@ -1021,6 +1178,11 @@ void CWalletManager::Reset()
 std::string CWalletManager::GetRequestedWalletName()
 {
     return g_requestedWalletName;
+}
+
+bool CWalletManager::WasWalletExplicitlySelected()
+{
+    return g_explicitWalletSelected;
 }
 
 CWallet* CWalletManager::GetWalletForRequest()
@@ -1041,32 +1203,71 @@ CWallet* CWalletManager::GetWalletForRequest()
 }
 
 RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
-    : strName(name), strPrevWalletName(g_requestedWalletName), fRefHeld(false), fResolved(true), generation(0)
+    : strName(name), strPrevWalletName(g_requestedWalletName),
+      fPrevExplicit(g_explicitWalletSelected), fRefHeld(false), fResolved(true), generation(0)
 {
-    g_requestedWalletName = name;
-    if (!name.empty()) {
-        // Resolution and ref-holding happen as one atomic operation (under
-        // cs_wallets) rather than a separate existence check followed by a
-        // later AddRef -- a lookup-then-add split would leave a window for
-        // unloadwallet to remove the entry in between.
-        CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(name);
-        generation = resolved.generation;
-        switch (resolved.outcome) {
-        case CWalletManager::ResolveOutcome::HeldSecondary:
-            fRefHeld = true;
-            break;
-        case CWalletManager::ResolveOutcome::NotFound:
-            fResolved = false;
-            break;
-        case CWalletManager::ResolveOutcome::IsDefault:
-            break; // Nothing to hold; the default wallet is never unloadable.
-        }
+    // Resolution and ref-holding happen as one atomic operation (under
+    // cs_wallets) rather than a separate existence check followed by a later
+    // AddRef -- a lookup-then-add split would leave a window for
+    // unloadwallet/setactivewallet to remove or move the entry in between.
+    //
+    // No-default-wallet redesign: an empty name (unscoped request) now
+    // resolves against the *active* wallet and holds a ref on it too, rather
+    // than always trivially succeeding with no ref the way it did when the
+    // unscoped target was the permanently-unloadable default wallet. The
+    // active wallet is ordinarily unloadable once deactivated, so an
+    // unscoped request needs the same protection a scoped one already has --
+    // and reports fResolved = false when no wallet is currently active,
+    // giving IsResolved()'s few callers (this doesn't self-enforce; see its
+    // own comment) a way to tell "nothing is active" from "resolved fine"
+    // before falling through to whatever pwalletMain-reading code runs next.
+    CWalletManager::ResolvedWallet resolved = name.empty()
+        ? CWalletManager::Get().ResolveAndHoldActiveForRequest()
+        : CWalletManager::Get().ResolveAndHoldForRequest(name);
+    generation = resolved.generation;
+    switch (resolved.outcome) {
+    case CWalletManager::ResolveOutcome::Held:
+        fRefHeld = true;
+        strResolvedName = resolved.name;
+        break;
+    case CWalletManager::ResolveOutcome::NotFound:
+        fResolved = false;
+        break;
     }
+    // Pin the thread-local to the *resolved* name, not the caller's original
+    // (possibly empty) one -- Opus-audit-caught: leaving it as `name` meant
+    // an unscoped request's later GetWalletForRequest() calls kept
+    // re-reading the live pwalletMain instead of the specific wallet this
+    // guard's own ref protects, so a setactivewallet landing mid-request
+    // could silently redirect the rest of this request's handler to a
+    // different wallet than the one that was active when it resolved. Safe
+    // to look up by name for the rest of the request: holding a ref on
+    // strResolvedName is exactly what prevents unloadwallet from erasing-
+    // and-replacing that entry while this guard is alive, so a plain
+    // name-keyed lookup (GetWalletForRequest()) can't land on a different
+    // object under the same name. Falls back to `name` (unresolved) only
+    // when nothing resolved at all -- IsResolved() being false means the
+    // caller is expected to throw before any handler reaches
+    // GetWalletForRequest().
+    //
+    // g_explicitWalletSelected tracks the ORIGINAL scoping separately, since
+    // the pin above means g_requestedWalletName is no longer, on its own,
+    // able to tell "the caller explicitly named this wallet" apart from "it
+    // was resolved as the active one for an unscoped request" -- see
+    // WasWalletExplicitlySelected()'s own doc comment for why that
+    // distinction still needs to survive (z_buildrawtransaction's
+    // wallet-search design, rpc/rawtransaction.cpp).
+    g_requestedWalletName = fRefHeld ? strResolvedName : name;
+    g_explicitWalletSelected = !name.empty();
 }
 
 RPCWalletRequestGuard::~RPCWalletRequestGuard()
 {
+    // strResolvedName, not strName: for an unscoped request (strName empty),
+    // the ref was actually taken against whichever wallet was active at
+    // construction time -- see ResolvedWallet::name's doc comment.
     if (fRefHeld)
-        CWalletManager::Get().ReleaseRefIfCurrent(strName, generation);
+        CWalletManager::Get().ReleaseRefIfCurrent(strResolvedName, generation);
     g_requestedWalletName = strPrevWalletName;
+    g_explicitWalletSelected = fPrevExplicit;
 }

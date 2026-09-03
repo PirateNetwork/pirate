@@ -260,6 +260,18 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
     if (ensure_CCrequirements(225) < 0)
         throw runtime_error("You need to set -pubkey, or run setpukbey RPC, or imports are disabled on this chain.");
 
+    // Unlike its 8 siblings in this file (e.g. migrate_createnotaryapprovaltransaction
+    // just below), this RPC had no wallet-availability guard at all -- it fell
+    // straight through to AddNormalinputs()/FinalizeCCTx() with no wallet
+    // argument, silently defaulting to the global pwalletMain. Under the
+    // no-default-wallet redesign that can be null even outside -disablewallet,
+    // which previously reached AddNormalinputsLocal()'s assert(pwallet != NULL)
+    // (cc/CCtx.cpp) -- a process-crashing bug reachable today under plain
+    // -disablewallet already, independent of this redesign.
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
     string targetSymbol = params[0].get_str();
     if (targetSymbol.size() == 0 || targetSymbol.size() > 32)
         throw runtime_error("targetSymbol length must be >0 and <=32");
@@ -297,7 +309,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
 
     if (tokenid.IsNull()) {        // coins
         int64_t inputs;
-        if ((inputs = AddNormalinputs(mtx, myPubKey, burnAmount + txfee, 10)) == 0) {
+        if ((inputs = AddNormalinputs(mtx, myPubKey, burnAmount + txfee, 10, false, pwallet)) == 0) {
             throw runtime_error("not enough funds, or need to merge utxos first\n");
         }
 
@@ -360,7 +372,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
             throw runtime_error("Invalid destination pubkey\n");
 
         int64_t inputs;
-        if ((inputs = AddNormalinputs(mtx, myPubKey, txfee, 1)) == 0)  // for miners in dest chain
+        if ((inputs = AddNormalinputs(mtx, myPubKey, txfee, 1, false, pwallet)) == 0)  // for miners in dest chain
             throw runtime_error("No normal input found for two txfee\n");
       
         int64_t ccInputs;
@@ -401,7 +413,7 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         mtx.vout.push_back(CTxOut(txfee, EncodeTokenOpRet(tokenid, voutTokenPubkeys, std::make_pair(OPRETID_BURNDATA, vopretBurnData))));  //burn txfee for miners in dest chain
     }
 
-    std::string burnTxHex = FinalizeCCTx(0, cpTokens, mtx, myPubKey, txfee, CScript()); //no change, no opret
+    std::string burnTxHex = FinalizeCCTx(0, cpTokens, mtx, myPubKey, txfee, CScript(), NULL_pubkeys, pwallet); //no change, no opret
     ret.push_back(Pair("BurnTxHex", burnTxHex));
     return ret;
 }

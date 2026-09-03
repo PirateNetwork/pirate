@@ -8,6 +8,7 @@
 #include "init.h"
 #include "net.h"
 #include "util.h"
+#include "validationinterface.h"
 #include "wallet/wallet.h"
 #include "wallet/walletmanager.h"
 
@@ -43,9 +44,27 @@ protected:
     }
 
     void TearDown() override {
-        CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
-        CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
+        CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
+        CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetActiveWalletName());
         CWalletManager::Get().Reset();
+        // Every other test in this fixture leaves a RegisterInitialWallet()-
+        // registered wallet active -- that path never calls
+        // RegisterValidationInterface() at all (production's equivalent,
+        // init.cpp, does so separately, itself), so deleting it directly was
+        // always safe. The no-default-wallet redesign's own tests instead
+        // exercise LoadWallet()/CreateWallet() ending up as the sole/active
+        // wallet -- that path DOES register with the validation interface,
+        // and FlushAndUnloadAllExceptActiveWallet() deliberately skips
+        // unregistering the active entry (see its own UnloadWallet()-mirrors
+        // comment). Without this, the next test anywhere in this binary that
+        // connects a block dispatches ChainTip()/SyncTransaction() to this
+        // already-deleted CWallet* -- a real, exercised use-after-free, not a
+        // hypothetical one (this is what test_block.cpp's TestStopAt
+        // otherwise segfaults on when run after this fixture). Harmless
+        // no-op for the RegisterInitialWallet() case, which was never
+        // connected to begin with.
+        if (defaultWallet)
+            UnregisterValidationInterface(defaultWallet);
         delete defaultWallet;
         // Individual wallet DB handles are released above; now close the env
         // itself (see gtestutils.cpp's BitcoinTestingSetup::TearDown -- the
@@ -96,13 +115,13 @@ TEST_F(WalletManagerTest, GetNameReturnsTheWalletsOwnFileName)
     EXPECT_EQ("attributed_test.dat", wallet.GetName());
 }
 
-TEST_F(WalletManagerTest, RegisterDefaultWalletIsListedAndFlaggedDefault)
+TEST_F(WalletManagerTest, RegisterInitialWalletIsListedAndBecomesActive)
 {
     CWallet* defaultWallet = new CWallet("default_test.dat");
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
 
-    EXPECT_EQ("default_test.dat", CWalletManager::Get().GetDefaultWalletName());
-    EXPECT_TRUE(CWalletManager::Get().IsDefaultWallet("default_test.dat"));
+    EXPECT_EQ("default_test.dat", CWalletManager::Get().GetActiveWalletName());
+    EXPECT_TRUE(CWalletManager::Get().IsActiveWallet("default_test.dat"));
     EXPECT_EQ(defaultWallet, CWalletManager::Get().GetWallet("default_test.dat"));
 
     std::vector<std::string> names = CWalletManager::Get().ListWalletNames();
@@ -112,12 +131,12 @@ TEST_F(WalletManagerTest, RegisterDefaultWalletIsListedAndFlaggedDefault)
 
 TEST_F(WalletManagerTest, LoadUnloadListHappyPath)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
-    EXPECT_FALSE(CWalletManager::Get().IsDefaultWallet("secondtestwallet"));
+    EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("secondtestwallet"));
     EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("secondtestwallet"));
 
     std::vector<std::string> names = CWalletManager::Get().ListWalletNames();
@@ -135,7 +154,7 @@ TEST_F(WalletManagerTest, LoadUnloadListHappyPath)
 
 TEST_F(WalletManagerTest, LoadWalletRejectsFileThatDoesNotExist)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError;
     EXPECT_FALSE(CWalletManager::Get().LoadWallet("nonexistenttestwallet", strError));
@@ -145,7 +164,7 @@ TEST_F(WalletManagerTest, LoadWalletRejectsFileThatDoesNotExist)
 
 TEST_F(WalletManagerTest, LoadWalletRejectsDuplicateName)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     std::string strError;
@@ -163,7 +182,7 @@ TEST_F(WalletManagerTest, LoadWalletRejectsDuplicateName)
 
 TEST_F(WalletManagerTest, InvalidWalletNamesAreRejectedStructurally)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     const std::vector<std::string> badNames = {
         "",
@@ -192,7 +211,7 @@ TEST_F(WalletManagerTest, ConventionalDotWalletNamesAreAccepted)
     // own worked example ("second.dat") must both be loadable: a charset that
     // rejects '.' would make the default wallet itself unaddressable via
     // /wallet/<name>/ and reject every conventionally-named secondary wallet.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("second.dat");
 
     std::string strError;
@@ -208,7 +227,7 @@ TEST_F(WalletManagerTest, LoadWalletRunsVerifyOnAFileNeverTouchedInThisProcess)
     // is left "already touched" and every one of those tests takes LoadWallet's
     // skip-Verify branch. Copy the bytes onto a brand new name instead, so this
     // one actually exercises CWallet::Verify() itself succeeding.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("sourcewallet");
 
     boost::system::error_code ec;
@@ -231,7 +250,7 @@ TEST_F(WalletManagerTest, LoadWalletFailsOnUnsalvageableCorruptionInsteadOfSkipp
     // bad file too, but with different wording. If Verify() were skipped
     // here, this assertion on the message would fail even though LoadWallet
     // still correctly returns false either way.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("sourcewallet");
 
     boost::filesystem::path sourcePath = GetDataDir() / "sourcewallet";
@@ -261,7 +280,7 @@ TEST_F(WalletManagerTest, LoadWalletRejectsAFileAlreadyLoadedUnderADifferentName
     // loadable, or the second load silently duplicates the first wallet's
     // live CWallet in memory under a name the registry otherwise treats as
     // a distinct, independently-unloadable entry.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     // GetDataDir() appends a per-network subdirectory on top of "-datadir"
@@ -277,9 +296,9 @@ TEST_F(WalletManagerTest, LoadWalletRejectsAFileAlreadyLoadedUnderADifferentName
     EXPECT_NE(std::string::npos, strError.find("already loaded")) << "actual message: " << strError;
 }
 
-TEST_F(WalletManagerTest, UnloadRefusesTheDefaultWalletUnconditionally)
+TEST_F(WalletManagerTest, UnloadRefusesTheActiveWallet)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError;
     EXPECT_FALSE(CWalletManager::Get().UnloadWallet("default_test.dat", strError));
@@ -289,7 +308,7 @@ TEST_F(WalletManagerTest, UnloadRefusesTheDefaultWalletUnconditionally)
 
 TEST_F(WalletManagerTest, UnloadRefusesUnknownWallet)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError;
     EXPECT_FALSE(CWalletManager::Get().UnloadWallet("neverloadedwallet", strError));
@@ -298,7 +317,7 @@ TEST_F(WalletManagerTest, UnloadRefusesUnknownWallet)
 
 TEST_F(WalletManagerTest, UnloadRefusesWhileRefcountHeldThenSucceedsAfterRelease)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     std::string strError;
@@ -317,7 +336,7 @@ TEST_F(WalletManagerTest, UnloadRefusesWhileRefcountHeldThenSucceedsAfterRelease
 
 TEST_F(WalletManagerTest, ResolveAndHoldForRequestIsAtomicWithLookupAndTracksOutcome)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
@@ -325,14 +344,21 @@ TEST_F(WalletManagerTest, ResolveAndHoldForRequestIsAtomicWithLookupAndTracksOut
     auto notFound = CWalletManager::Get().ResolveAndHoldForRequest("neverloadedwallet");
     EXPECT_EQ(CWalletManager::ResolveOutcome::NotFound, notFound.outcome);
 
-    auto isDefault = CWalletManager::Get().ResolveAndHoldForRequest("default_test.dat");
-    EXPECT_EQ(CWalletManager::ResolveOutcome::IsDefault, isDefault.outcome);
-    // The default wallet is never unloadable, so resolving it holds no ref --
-    // confirmed indirectly below by unloading the default wallet still being
-    // refused for the usual reason, not an "in use" one.
+    // No-default-wallet redesign: "default_test.dat" is just the first wallet
+    // registered (via RegisterInitialWallet() above), an ordinary registry
+    // entry like any other -- resolving it now takes a real ref like
+    // everything else does (there is no more an exempt "IsDefault" outcome).
+    auto activeWalletHeld = CWalletManager::Get().ResolveAndHoldForRequest("default_test.dat");
+    EXPECT_EQ(CWalletManager::ResolveOutcome::Held, activeWalletHeld.outcome);
+    // Unloading it is still refused, but now specifically because it's the
+    // *active* wallet (see UnloadWallet()'s own check), not because of the
+    // ref just taken above -- release that ref first to confirm this.
+    CWalletManager::Get().ReleaseRefIfCurrent("default_test.dat", activeWalletHeld.generation);
+    EXPECT_FALSE(CWalletManager::Get().UnloadWallet("default_test.dat", strError));
+    EXPECT_NE(std::string::npos, strError.find("active"));
 
     auto held = CWalletManager::Get().ResolveAndHoldForRequest("secondtestwallet");
-    EXPECT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, held.outcome);
+    EXPECT_EQ(CWalletManager::ResolveOutcome::Held, held.outcome);
     EXPECT_FALSE(CWalletManager::Get().UnloadWallet("secondtestwallet", strError));
     EXPECT_NE(std::string::npos, strError.find("in use"));
 
@@ -347,13 +373,13 @@ TEST_F(WalletManagerTest, ReleaseAfterUnloadAndReloadUnderSameNameDoesNotUnderfl
     // never affect a *different* instance later loaded under the same name,
     // or the new entry's refcount underflows and it can never be unloaded
     // again for the life of the process.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
     auto firstLoad = CWalletManager::Get().ResolveAndHoldForRequest("secondtestwallet");
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, firstLoad.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, firstLoad.outcome);
 
     // Release normally, unload, and load a fresh instance under the same name.
     CWalletManager::Get().ReleaseRefIfCurrent("secondtestwallet", firstLoad.generation);
@@ -377,7 +403,7 @@ TEST_F(WalletManagerTest, UnloadingASecondaryWalletDoesNotTearDownTheSharedEnvir
     // brand-new secondary must still be fully loadable -- if the environment
     // itself had been torn down, either loading a fresh wallet below or the
     // default wallet's own on-disk data would already be broken.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     std::string strError;
@@ -395,10 +421,10 @@ TEST_F(WalletManagerTest, UnloadingASecondaryWalletDoesNotTearDownTheSharedEnvir
     EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("thirdtestwallet"));
 }
 
-TEST_F(WalletManagerTest, FlushAndUnloadAllSecondaryWalletsLeavesDefaultAloneAndIsIdempotent)
+TEST_F(WalletManagerTest, FlushAndUnloadAllExceptActiveWalletLeavesActiveWalletAloneAndIsIdempotent)
 {
     CWallet* defaultWallet = new CWallet("default_test.dat");
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
     CreateWalletFileOnDisk("secondtestwallet");
     CreateWalletFileOnDisk("thirdtestwallet");
 
@@ -406,13 +432,13 @@ TEST_F(WalletManagerTest, FlushAndUnloadAllSecondaryWalletsLeavesDefaultAloneAnd
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("thirdtestwallet", strError)) << strError;
 
-    CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+    CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
     EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("secondtestwallet"));
     EXPECT_EQ(nullptr, CWalletManager::Get().GetWallet("thirdtestwallet"));
     EXPECT_EQ(defaultWallet, CWalletManager::Get().GetWallet("default_test.dat"));
 
     // Calling it again with nothing left to unload must be a harmless no-op.
-    CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+    CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
     EXPECT_EQ(defaultWallet, CWalletManager::Get().GetWallet("default_test.dat"));
 }
 
@@ -430,7 +456,7 @@ TEST_F(WalletManagerTest, CheckpointAllWalletsWritesToEveryLoadedWallet)
     // exercising a real write-then-read-back round trip, not just registry
     // bookkeeping.
     CreateWalletFileOnDisk("default_test.dat");
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
 
     std::string strError;
@@ -465,15 +491,15 @@ TEST_F(WalletManagerTest, CheckpointAllWalletsWritesToEveryLoadedWallet)
     EXPECT_EQ(locator.vHave, readLocatorSecondary.vHave);
 }
 
-TEST_F(WalletManagerTest, ResetIsIdempotentAndDoesNotDeleteTheDefaultWalletObject)
+TEST_F(WalletManagerTest, ResetIsIdempotentAndDoesNotDeleteTheActiveWalletObject)
 {
     CWallet* defaultWallet = new CWallet("default_test.dat");
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
 
     CWalletManager::Get().Reset();
     EXPECT_TRUE(CWalletManager::Get().ListWalletNames().empty());
-    EXPECT_TRUE(CWalletManager::Get().GetDefaultWalletName().empty());
-    EXPECT_FALSE(CWalletManager::Get().IsDefaultWallet("default_test.dat"));
+    EXPECT_TRUE(CWalletManager::Get().GetActiveWalletName().empty());
+    EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("default_test.dat"));
 
     // Idempotent: calling again on an already-empty registry must not crash.
     CWalletManager::Get().Reset();
@@ -489,7 +515,7 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardActuallyBlocksUnloadWhileAlive)
     // depends on -- RPCWalletRequestGuard's ctor/dtor really do take and
     // release a ref via ResolveAndHoldForRequest/ReleaseRefIfCurrent, not
     // just the raw AddRef/ReleaseRef primitives other tests drive directly.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
@@ -506,18 +532,21 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardActuallyBlocksUnloadWhileAlive)
 
 TEST_F(WalletManagerTest, RPCWalletRequestGuardSetsAndClearsThreadLocal)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("secondtestwallet");
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondtestwallet", strError)) << strError;
 
     EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+    EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
     {
         RPCWalletRequestGuard guard("secondtestwallet");
         EXPECT_EQ("secondtestwallet", CWalletManager::GetRequestedWalletName());
+        EXPECT_TRUE(CWalletManager::WasWalletExplicitlySelected());
     }
     // Cleared on normal scope exit.
     EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+    EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
 
     // Cleared even when the guarded work throws -- the same unwinding path
     // tableRPC.execute() takes, which is why this must be RAII and not a
@@ -527,20 +556,30 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardSetsAndClearsThreadLocal)
         throw std::runtime_error("simulated RPC failure");
     }, std::runtime_error);
     EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+    EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
 
     // Back-to-back guards on the same thread must not leak into each other.
     {
         RPCWalletRequestGuard guard1("secondtestwallet");
         EXPECT_EQ("secondtestwallet", CWalletManager::GetRequestedWalletName());
+        EXPECT_TRUE(CWalletManager::WasWalletExplicitlySelected());
     }
     {
+        // No-default-wallet redesign: an unscoped guard now pins
+        // GetRequestedWalletName() to whichever wallet it actually resolved
+        // and ref'd (here, "default_test.dat", the active wallet) rather
+        // than leaving it empty -- Opus-audit-caught, see the constructor's
+        // own comment. WasWalletExplicitlySelected() is what still
+        // distinguishes this from a genuinely scoped request.
         RPCWalletRequestGuard guard2("");
-        EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+        EXPECT_EQ("default_test.dat", CWalletManager::GetRequestedWalletName());
+        EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
     }
     EXPECT_TRUE(CWalletManager::GetRequestedWalletName().empty());
+    EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
 }
 
-TEST_F(WalletManagerTest, GetWalletForRequestResolvesDefaultAndSecondary)
+TEST_F(WalletManagerTest, GetWalletForRequestResolvesActiveAndSecondary)
 {
     // GetWalletForRequest() falls back to the real pwalletMain global for the
     // no-selection case, mirroring init.cpp (which registers the very same
@@ -560,7 +599,7 @@ TEST_F(WalletManagerTest, GetWalletForRequestResolvesDefaultAndSecondary)
 
     CWallet* defaultWallet = new CWallet("default_test.dat");
     pwalletMain = defaultWallet;
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
 
     CreateWalletFileOnDisk("secondtestwallet");
     std::string strError;
@@ -586,6 +625,11 @@ TEST_F(WalletManagerTest, AsyncOperationPinsWalletUnloadableForItsLifetime)
     // via the base class directly -- it's concrete (main() has a default
     // body, not pure virtual), so no subclass or funded transaction is
     // needed to test the wallet-pinning mechanism itself in isolation.
+    // Registered first (no-default-wallet redesign) so "asyncopwallet" below
+    // is a genuine secondary, not the first-loaded-into-empty-registry
+    // wallet that would otherwise become active (and therefore itself
+    // unloadable-refused for an unrelated reason from the one under test).
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("asyncopwallet");
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("asyncopwallet", strError)) << strError;
@@ -616,7 +660,9 @@ TEST_F(WalletManagerTest, AsyncOperationBuiltWithoutAWalletDoesNotPinAnything)
     // CWallet::ChainTip() spawns automatically, which have no
     // request-resolved wallet in scope at all) must not pin or touch the
     // registry -- confirmed here by checking it doesn't block unloading
-    // *any* currently-loaded secondary wallet.
+    // *any* currently-loaded secondary wallet. Registered first for the same
+    // reason as the test above -- see its comment.
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("unrelatedwallet");
     std::string strError;
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("unrelatedwallet", strError)) << strError;
@@ -640,7 +686,7 @@ TEST_F(WalletManagerTest, AsyncOperationBuiltWithoutAWalletDoesNotPinAnything)
 
 TEST_F(WalletManagerTest, PerWalletConsolidationSweepSettingsAreIndependentAcrossWallets)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("walleta.dat");
     CreateWalletFileOnDisk("walletb.dat");
 
@@ -681,7 +727,7 @@ TEST_F(WalletManagerTest, PerWalletConsolidationSweepSettingsAreIndependentAcros
     // into the default wallet either.
     walletB->SetSaplingConsolidationEnabled(true);
     walletB->SetSaplingConsolidationTargetQty(7);
-    CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
+    CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetActiveWalletName());
     EXPECT_FALSE(defaultWallet->fSaplingConsolidationEnabled);
     EXPECT_EQ(100, defaultWallet->targetSaplingConsolidationQty);
     EXPECT_EQ(42, walletA->targetSaplingConsolidationQty); // still walletA's own value
@@ -690,7 +736,7 @@ TEST_F(WalletManagerTest, PerWalletConsolidationSweepSettingsAreIndependentAcros
 
 TEST_F(WalletManagerTest, PerWalletSettingsSurviveUnloadAndReload)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("persistwallet.dat");
 
     std::string strError;
@@ -699,7 +745,7 @@ TEST_F(WalletManagerTest, PerWalletSettingsSurviveUnloadAndReload)
     ASSERT_NE(nullptr, wallet);
     CWalletManager::ResolvedWallet originalEntry =
         CWalletManager::Get().ResolveAndHoldForRequest("persistwallet.dat");
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, originalEntry.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, originalEntry.outcome);
     // Released straight away: a ref held past here would block the unload below.
     CWalletManager::Get().ReleaseRefIfCurrent("persistwallet.dat", originalEntry.generation);
 
@@ -724,7 +770,7 @@ TEST_F(WalletManagerTest, PerWalletSettingsSurviveUnloadAndReload)
     // proof this is a fresh load either way.
     CWalletManager::ResolvedWallet reloadedEntry =
         CWalletManager::Get().ResolveAndHoldForRequest("persistwallet.dat");
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, reloadedEntry.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, reloadedEntry.outcome);
     CWalletManager::Get().ReleaseRefIfCurrent("persistwallet.dat", reloadedEntry.generation);
     EXPECT_NE(originalEntry.generation, reloadedEntry.generation);
 
@@ -743,7 +789,7 @@ TEST_F(WalletManagerTest, SalvageOnOneWalletDoesNotTouchAnotherLoadedWallet)
     // instead -- this doesn't corrupt a file to prove salvage logic itself
     // runs (that's CWallet::Verify()'s own concern), just that requesting it
     // for one wallet's load has no effect on a second, already-loaded one.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("untouchedwallet.dat");
     CreateWalletFileOnDisk("salvagedwallet.dat");
 
@@ -774,7 +820,7 @@ TEST_F(WalletManagerTest, SalvageOnOneWalletDoesNotTouchAnotherLoadedWallet)
 
 TEST_F(WalletManagerTest, CreateWalletRejectsAnAlreadyExistingFile)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("existingwallet.dat");
 
     std::string strError, seedPhrase;
@@ -787,7 +833,7 @@ TEST_F(WalletManagerTest, CreateWalletRejectsAnAlreadyExistingFile)
 
 TEST_F(WalletManagerTest, CreateWalletSucceedsOnANewNameAndReturnsASeedPhrase)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("brandnewwallet.dat", strError, seedPhrase)) << strError;
@@ -795,7 +841,12 @@ TEST_F(WalletManagerTest, CreateWalletSucceedsOnANewNameAndReturnsASeedPhrase)
 
     CWallet* wallet = CWalletManager::Get().GetWallet("brandnewwallet.dat");
     ASSERT_NE(nullptr, wallet);
-    EXPECT_FALSE(CWalletManager::Get().IsDefaultWallet("brandnewwallet.dat"));
+    EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("brandnewwallet.dat"));
+    // Opus-audit-caught regression: bip39Enabled was never set for a wallet
+    // created via this RPC, unlike init.cpp's own fresh-HD-seed setup --
+    // every address this wallet ever derives would have used a different
+    // scheme than the one its own returned seed phrase actually implies.
+    EXPECT_TRUE(wallet->bip39Enabled);
 
     std::vector<std::string> names = CWalletManager::Get().ListWalletNames();
     EXPECT_EQ(2u, names.size());
@@ -810,7 +861,7 @@ TEST_F(WalletManagerTest, CreateWalletSucceedsOnANewNameAndReturnsASeedPhrase)
 
 TEST_F(WalletManagerTest, CreateWalletProducesAWalletWithASaplingAddress)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("seededwallet.dat", strError, seedPhrase)) << strError;
@@ -838,7 +889,7 @@ TEST_F(WalletManagerTest, LoadWalletRefusesAnEncryptedWalletWithAnHonestErrorIns
     // wallet is encrypted, must never say "corrupt", must set the
     // passphrase-required out-param so a caller (the GUI) can prompt instead
     // of dead-ending, and must not have salvaged anything on the way out.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("encryptedreload.dat", strError, seedPhrase)) << strError;
@@ -893,7 +944,7 @@ TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesWhileASecondC
     // running or unpolled AsyncRPCOperation on its own thread, or a wallet
     // open in the Qt GUI each hold a ref of their own; deleting the object
     // under any of them is a use-after-free.
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
     CreateWalletFileOnDisk("discardrefwallet.dat");
 
     std::string strError;
@@ -901,10 +952,10 @@ TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesWhileASecondC
 
     CWalletManager::ResolvedWallet callerRef =
         CWalletManager::Get().ResolveAndHoldForRequest("discardrefwallet.dat");  // "this request"
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, callerRef.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, callerRef.outcome);
     CWalletManager::ResolvedWallet otherRef =
         CWalletManager::Get().ResolveAndHoldForRequest("discardrefwallet.dat");  // somebody else
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, otherRef.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, otherRef.outcome);
 
     EXPECT_FALSE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("discardrefwallet.dat", strError));
     EXPECT_NE(std::string::npos, strError.find("in use")) << strError;
@@ -920,9 +971,9 @@ TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesWhileASecondC
     CWalletManager::Get().ReleaseRefIfCurrent("discardrefwallet.dat", callerRef.generation);
 }
 
-TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesTheDefaultWalletAndUnknownNames)
+TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesTheActiveWalletAndUnknownNames)
 {
-    CWalletManager::Get().RegisterDefaultWallet("default_test.dat", new CWallet("default_test.dat"));
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
 
     std::string strError;
     EXPECT_FALSE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("default_test.dat", strError));
@@ -930,6 +981,231 @@ TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesTheDefaultWal
 
     EXPECT_FALSE(CWalletManager::Get().DiscardWalletAfterFailedEncryption("nosuchwallet.dat", strError));
     EXPECT_NE(std::string::npos, strError.find("not found")) << strError;
+}
+
+// ─── No-default-wallet redesign: zero-wallet startup + active-wallet cursor ─
+
+TEST_F(WalletManagerTest, RegistryStartsEmptyAndFirstLoadedWalletBecomesActiveAutomatically)
+{
+    // True zero-wallet startup: unlike every test above, nothing is ever
+    // registered via RegisterInitialWallet() here -- this is the state a
+    // fresh data directory with no -wallet= actually starts in (init.cpp's
+    // fAutoLoadWalletAtStartup == false).
+    EXPECT_TRUE(CWalletManager::Get().ListWalletNames().empty());
+    EXPECT_TRUE(CWalletManager::Get().GetActiveWalletName().empty());
+
+    CreateWalletFileOnDisk("firstwallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("firstwallet.dat", strError)) << strError;
+
+    // The first wallet ever loaded into an empty registry becomes active
+    // automatically -- no separate setactivewallet call needed.
+    EXPECT_EQ("firstwallet.dat", CWalletManager::Get().GetActiveWalletName());
+    EXPECT_TRUE(CWalletManager::Get().IsActiveWallet("firstwallet.dat"));
+    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), pwalletMain);
+}
+
+TEST_F(WalletManagerTest, SecondLoadedWalletDoesNotStealActiveStatus)
+{
+    CreateWalletFileOnDisk("firstwallet.dat");
+    CreateWalletFileOnDisk("secondwallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("firstwallet.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondwallet.dat", strError)) << strError;
+
+    EXPECT_EQ("firstwallet.dat", CWalletManager::Get().GetActiveWalletName());
+    EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("secondwallet.dat"));
+    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), pwalletMain);
+}
+
+TEST_F(WalletManagerTest, SetActiveWalletSwitchesAndDeactivates)
+{
+    CreateWalletFileOnDisk("firstwallet.dat");
+    CreateWalletFileOnDisk("secondwallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("firstwallet.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondwallet.dat", strError)) << strError;
+
+    ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("secondwallet.dat", strError)) << strError;
+    EXPECT_EQ("secondwallet.dat", CWalletManager::Get().GetActiveWalletName());
+    EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), pwalletMain);
+    EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("firstwallet.dat"));
+
+    // "" deactivates -- both wallets stay loaded, nothing is active.
+    ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("", strError)) << strError;
+    EXPECT_TRUE(CWalletManager::Get().GetActiveWalletName().empty());
+    EXPECT_EQ(nullptr, pwalletMain);
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("firstwallet.dat"));
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("secondwallet.dat"));
+}
+
+TEST_F(WalletManagerTest, SetActiveWalletRejectsUnknownNameAndLeavesActiveUnchanged)
+{
+    CreateWalletFileOnDisk("firstwallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("firstwallet.dat", strError)) << strError;
+
+    EXPECT_FALSE(CWalletManager::Get().SetActiveWallet("neverloadedwallet", strError));
+    EXPECT_NE(std::string::npos, strError.find("not found"));
+    EXPECT_EQ("firstwallet.dat", CWalletManager::Get().GetActiveWalletName());
+}
+
+TEST_F(WalletManagerTest, UnloadingTheSoleLoadedWalletRequiresDeactivatingItFirst)
+{
+    CreateWalletFileOnDisk("onlywallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("onlywallet.dat", strError)) << strError;
+
+    EXPECT_FALSE(CWalletManager::Get().UnloadWallet("onlywallet.dat", strError));
+    EXPECT_NE(std::string::npos, strError.find("active"));
+
+    ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("", strError)) << strError;
+    EXPECT_TRUE(CWalletManager::Get().UnloadWallet("onlywallet.dat", strError)) << strError;
+    EXPECT_TRUE(CWalletManager::Get().ListWalletNames().empty());
+    EXPECT_EQ(nullptr, pwalletMain);
+}
+
+TEST_F(WalletManagerTest, ReloadAfterFullUnloadBecomesActiveAgain)
+{
+    CreateWalletFileOnDisk("onlywallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("onlywallet.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().UnloadWallet("onlywallet.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().ListWalletNames().empty());
+
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("onlywallet.dat", strError)) << strError;
+    EXPECT_EQ("onlywallet.dat", CWalletManager::Get().GetActiveWalletName());
+    EXPECT_EQ(CWalletManager::Get().GetWallet("onlywallet.dat"), pwalletMain);
+}
+
+TEST_F(WalletManagerTest, UnscopedRequestGuardResolvesToWhicheverWalletIsActive)
+{
+    CreateWalletFileOnDisk("firstwallet.dat");
+    CreateWalletFileOnDisk("secondwallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("firstwallet.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondwallet.dat", strError)) << strError;
+
+    {
+        // Unscoped (empty name): resolves to the active wallet and holds a
+        // ref on it, unlike the old default-wallet behavior where an empty
+        // selection never took a ref at all (the default was permanently
+        // unloadable, so there was nothing to protect).
+        RPCWalletRequestGuard guard("");
+        ASSERT_TRUE(guard.IsResolved());
+        EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), CWalletManager::GetWalletForRequest());
+        // The active wallet is already unloadable-refused on its own merits,
+        // but this guard's own ref would refuse it too, independently --
+        // confirmed here indirectly via the currently-active check still
+        // being the one that fires.
+        EXPECT_FALSE(CWalletManager::Get().UnloadWallet("firstwallet.dat", strError));
+    }
+
+    ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("", strError)) << strError;
+    RPCWalletRequestGuard noneActive("");
+    EXPECT_FALSE(noneActive.IsResolved());
+}
+
+TEST_F(WalletManagerTest, UnscopedRequestStaysPinnedToItsResolvedWalletEvenIfActiveStatusMovesMidRequest)
+{
+    // Opus-audit-caught race, now closed: an unscoped request used to leave
+    // GetRequestedWalletName() empty, so GetWalletForRequest() re-read the
+    // *live* pwalletMain for the whole request -- a setactivewallet landing
+    // mid-request (another thread, or a nested call on this one) could
+    // silently redirect an in-flight handler to a different wallet than the
+    // one that was active when the request actually resolved. The guard now
+    // pins GetRequestedWalletName() to the resolved name up front, so
+    // GetWalletForRequest() keeps returning the *same* wallet for the whole
+    // guard's lifetime regardless of what setactivewallet does afterward.
+    CreateWalletFileOnDisk("firstwallet.dat");
+    CreateWalletFileOnDisk("secondwallet.dat");
+    std::string strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("firstwallet.dat", strError)) << strError;
+    ASSERT_TRUE(CWalletManager::Get().LoadWallet("secondwallet.dat", strError)) << strError;
+
+    RPCWalletRequestGuard guard("");
+    ASSERT_TRUE(guard.IsResolved());
+    CWallet* resolvedAtStart = CWalletManager::GetWalletForRequest();
+    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), resolvedAtStart);
+    EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
+
+    // Simulates the race: something else moves which wallet is active while
+    // this request's guard is still alive.
+    ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("secondwallet.dat", strError)) << strError;
+    EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), pwalletMain);
+
+    // GetWalletForRequest() must still return the wallet this guard actually
+    // pinned, not the new live pwalletMain -- the whole point of the fix.
+    EXPECT_EQ(resolvedAtStart, CWalletManager::GetWalletForRequest());
+    EXPECT_EQ("firstwallet.dat", CWalletManager::GetRequestedWalletName());
+}
+
+TEST_F(WalletManagerTest, CreateWalletWithARecoveryPhraseRestoresInsteadOfGeneratingRandom)
+{
+    // Replaces the old -seedphrase=/-wallet= startup-flag combination
+    // (removed): CreateWallet() itself now accepts the recovery phrase
+    // directly.
+    CreateWalletFileOnDisk("sourcewalletforrecovery.dat");
+    std::string strError, sourcePhrase;
+    {
+        CWallet scratch("sourcewalletforrecovery.dat");
+        bool fFirstRun;
+        ASSERT_EQ(DB_LOAD_OK, scratch.LoadWallet(fFirstRun));
+        scratch.GenerateNewSeed();
+        ASSERT_TRUE(scratch.GetSeedPhrase(sourcePhrase));
+    }
+    ASSERT_FALSE(sourcePhrase.empty());
+
+    SecureString recoveryPhrase;
+    recoveryPhrase.reserve(sourcePhrase.size() + 1);
+    recoveryPhrase = sourcePhrase.c_str();
+
+    std::string seedPhraseOut;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("recoveredwallet.dat", strError, seedPhraseOut, recoveryPhrase))
+        << strError;
+    EXPECT_EQ(sourcePhrase, seedPhraseOut);
+
+    CWallet* recovered = CWalletManager::Get().GetWallet("recoveredwallet.dat");
+    ASSERT_NE(nullptr, recovered);
+    std::string phraseFromRecovered;
+    ASSERT_TRUE(recovered->GetSeedPhrase(phraseFromRecovered));
+    EXPECT_EQ(sourcePhrase, phraseFromRecovered);
+
+    // Opus-audit-caught regressions, both now fixed in CreateWallet()'s own
+    // recovery-phrase branch:
+    // (1) bip39Enabled was never set (CWallet::SetNull()'s default is
+    // false), unlike init.cpp's own fresh-HD-seed setup which always sets it
+    // true -- SaplingExtendedSpendingKey::Master()/the Ironwood equivalent
+    // (zcash/address/zip32.cpp) derive under a completely different scheme
+    // depending on this flag, so a recovered wallet would land on addresses
+    // with no funds and no way to reach the real ones.
+    EXPECT_TRUE(recovered->bip39Enabled);
+    // (2) recovery never rescanned -- LoadWallet()'s own fFirstRun handling
+    // (which runs before a recovered wallet even has a seed) pins the
+    // checkpoint at the current tip, appropriate for a brand-new random seed
+    // but wrong for a phrase that may have existing on-chain history.
+    // nBirthday == 0 is CreateWallet()'s own signal that it forced this the
+    // same way LoadWallet()'s explicit-fRescan branch and the old, removed
+    // -seedphrase= startup path both already did.
+    EXPECT_EQ(0, recovered->nBirthday);
+}
+
+TEST_F(WalletManagerTest, CreateWalletRejectsAnInvalidRecoveryPhraseWithoutDeletingTheAlreadyRegisteredWallet)
+{
+    SecureString recoveryPhrase;
+    recoveryPhrase.reserve(32);
+    recoveryPhrase = "not a valid bip39 phrase at all";
+
+    std::string strError, seedPhraseOut;
+    EXPECT_FALSE(CWalletManager::Get().CreateWallet("badrecovery.dat", strError, seedPhraseOut, recoveryPhrase));
+    EXPECT_NE(std::string::npos, strError.find("invalid"));
+    // Matches CreateWallet()'s existing "seeding failed" behavior for the
+    // exception path just below this one in the source: the wallet is
+    // already registered (LoadWallet() succeeded) by the time seeding is
+    // attempted, so a seeding failure leaves it loaded rather than silently
+    // deleting something a concurrent listwallets could already see.
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("badrecovery.dat"));
 }
 
 // -secondarywalletpassphrase=<name>:<passphrase> parsing (init.cpp). Uses the

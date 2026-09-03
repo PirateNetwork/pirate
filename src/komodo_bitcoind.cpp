@@ -12,6 +12,9 @@
  * Removal or modification of this copyright notice is prohibited.            *
  *                                                                            *
  ******************************************************************************/
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
 #include "komodo_bitcoind.h"
 #include "komodo_globals.h"
 #include "komodo.h" // komodo_voutupdate()
@@ -20,6 +23,7 @@
 #include "komodo.h"
 #include "rpc/net.h"
 #include "init.h"
+#include "miner.h"
 
 
 /************************************************************************
@@ -2209,11 +2213,49 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     int32_t PoSperc = 0, newStakerActive;
     std::set<CBitcoinAddress> setAddress; int32_t winners,segid,minage,nHeight,counter=0,i,m,siglen=0,nMinDepth = 1,nMaxDepth = 99999999; std::vector<COutput> vecOutputs; uint32_t block_from_future_rejecttime,besttime,eligible,earliest = 0; CScript best_scriptPubKey; arith_uint256 mindiff,ratio,bnTarget,tmpTarget; CBlockIndex *pindex; CTxDestination address; bool fNegative,fOverflow; uint8_t hashbuf[256]; CTransaction tx; uint256 hashBlock;
     uint64_t cbPerc = *utxovaluep, tocoinbase = 0;
-    if (!EnsureWalletIsAvailable(0))
+    // No-default-wallet redesign, Opus-audit-caught: this function is only
+    // ever called from CreateNewBlockWithKey() (miner.cpp), the same
+    // mining/staking codepath whose CReserveKey -- and therefore whose
+    // BitcoinMiner(pwallet) thread -- is bound to GetMiningWallet() (miner.h),
+    // not necessarily whichever wallet is currently active. Reading
+    // pwalletMain directly here (as this function always used to) meant that,
+    // once "active" became reassignable, a setactivewallet mid-mining could
+    // make this function select and spend a *different* wallet's UTXOs than
+    // the one the coinbase reward's reserve key actually belongs to --
+    // unreachable before this redesign (there was only ever one wallet to
+    // read), and specific to ASSETCHAINS_STAKED chains (Pirate does not run
+    // one), but wrong regardless of how narrow the trigger is. Falls back to
+    // pwalletMain if mining isn't bound to a specific wallet for some reason
+    // (shouldn't happen given the call site, but matches this codebase's
+    // existing pwallet-or-pwalletMain fallback convention elsewhere).
+    //
+    // Resolved BEFORE the availability gate just below (a second Opus-audit
+    // finding, on the first fix's own first draft): the gate must check
+    // *this* wallet, not the live pwalletMain -- otherwise a setactivewallet/
+    // deactivation that leaves pwalletMain null would silently stop staking
+    // even while the actually-mining-bound wallet is still loaded and valid.
+    CWallet* pwallet = GetMiningWallet();
+    if (!pwallet)
+        pwallet = pwalletMain;
+
+    // avoidException=true: this runs on a worker thread, not an RPC dispatch
+    // context -- a thrown JSONRPCError here would propagate out of nowhere
+    // that catches it and std::terminate() the whole process. The guard's
+    // own `if (!...) return 0;` branch already implied this was the intent;
+    // it just never actually took effect before. Currently unreachable in
+    // practice (GenerateBitcoins() itself already gates out calling this
+    // with no wallet), but the no-default-wallet redesign makes "no wallet
+    // loaded" reachable through more paths than -disablewallet alone, so
+    // this is closed defensively rather than left relying on an upstream
+    // gate never loosening. The pwallet-taking overload, not the
+    // pwalletMain-reading one: checking availability of a different wallet
+    // than the one this function goes on to use would defeat the whole
+    // point of resolving `pwallet` above.
+    if (!EnsureWalletIsAvailable(pwallet, true))
         return 0;
 
     bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
-    assert(pwalletMain != NULL);
+    assert(pwallet != NULL);
     *utxovaluep = 0;
     memset(utxotxidp,0,sizeof(*utxotxidp));
     memset(utxovoutp,0,sizeof(*utxovoutp));
@@ -2239,7 +2281,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
         LOCK(cs_main);
         CBlockIndex* pblockindex = chainActive[tipindex->nHeight];
         CBlock block; CTxDestination addressout;
-        if ( ReadBlockFromDisk(block, pblockindex, 1) && komodo_isPoS(&block, nHeight, &addressout) != 0 && IsMine(*pwalletMain,addressout) != 0 )
+        if ( ReadBlockFromDisk(block, pblockindex, 1) && komodo_isPoS(&block, nHeight, &addressout) != 0 && IsMine(*pwallet,addressout) != 0 )
         {
               resetstaker = true;
               fprintf(stderr, "[%s:%d] Reset ram staker after mining a block!\n",chainName.symbol().c_str(),nHeight);
@@ -2248,8 +2290,8 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
 
     if ( resetstaker || array.size() == 0 || time(NULL) > lasttime+600 )
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
+        LOCK2(cs_main, pwallet->cs_wallet);
+        pwallet->AvailableCoins(vecOutputs, false, NULL, true);
         if ( array.size() != 0 )
         {
             array.clear();
@@ -2274,7 +2316,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
             const CScript& pk = out.tx->vout[out.i].scriptPubKey;
             if ( ExtractDestination(pk,address) != 0 )
             {
-                if ( IsMine(*pwalletMain,address) == 0 )
+                if ( IsMine(*pwallet,address) == 0 )
                     continue;
                 if ( myGetTransaction(out.tx->GetHash(),tx,hashBlock) != 0 && (pindex= komodo_getblockindex(hashBlock)) != 0 )
                 {
@@ -2341,7 +2383,7 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
             newHeight = chainActive.Height() + 1;
         }
         auto consensusBranchId = CurrentEpochBranchId(newHeight, Params().GetConsensus());
-        const CKeyStore& keystore = *pwalletMain;
+        const CKeyStore& keystore = *pwallet;
         txNew.vin.resize(1);
         txNew.vout.resize(1);
         txfee = 0;

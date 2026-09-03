@@ -1959,10 +1959,10 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
     // register it now, and clean up the registry (not pwalletMain itself, which
     // BitcoinTestingSetup::TearDown() still owns and deletes) before this test
     // ends, so this process-wide singleton doesn't leak state into later tests.
-    CWalletManager::Get().RegisterDefaultWallet(pwalletMain->GetName(), pwalletMain);
+    CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
     struct WalletManagerCleanup {
         ~WalletManagerCleanup() {
-            CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+            CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
         }
     } walletManagerCleanup;
@@ -2049,7 +2049,7 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
     // only re-derived from Phase 4's own description of what it fixed
     // (registering secondary wallets for ChainTip() specifically).
     //
-    // Reading CWalletManager::LoadWallet()/RegisterDefaultWallet() and
+    // Reading CWalletManager::LoadWallet()/RegisterInitialWallet() and
     // RegisterValidationInterface() (validationinterface.cpp) directly shows
     // registration is actually all-or-nothing -- one call wires a CWallet*
     // into every CValidationInterface signal (SyncTransactions/ChainTip/
@@ -2114,10 +2114,10 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
         }
     } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
 
-    CWalletManager::Get().RegisterDefaultWallet(pwalletMain->GetName(), pwalletMain);
+    CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
     struct WalletManagerCleanup {
         ~WalletManagerCleanup() {
-            CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
+            CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
         }
     } walletManagerCleanup;

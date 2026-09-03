@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2013 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -77,6 +78,22 @@ void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads);
  #else
 void GenerateBitcoins(bool fGenerate, int nThreads);
  #endif
+#endif
+
+#ifdef ENABLE_WALLET
+// No-default-wallet redesign: the wallet a live mining thread is currently
+// bound to, or nullptr if mining isn't running with one (including when
+// ENABLE_MINING isn't compiled in at all -- always declared here, not nested
+// inside an ENABLE_MINING guard, so CWalletManager::UnloadWallet()
+// (wallet/walletmanager.cpp) can call it unconditionally in every
+// ENABLE_WALLET build). GenerateBitcoins() sets/clears this as mining
+// starts/stops; a live BitcoinMiner(pwallet) thread captures pwallet by
+// value at thread start and never re-reads pwalletMain, so a wallet that
+// stops being active (see SetActiveWallet()) can still be the one the miner
+// is using -- UnloadWallet() refuses to delete a wallet this returns,
+// independent of its active-wallet check, to prevent exactly that
+// use-after-free.
+CWallet* GetMiningWallet();
 #endif
 
 void UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParams, const CBlockIndex* pindexPrev);

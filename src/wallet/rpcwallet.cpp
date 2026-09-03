@@ -153,7 +153,7 @@ static std::string LockWalletTimerName(CWallet* pwallet)
     return "lockwallet-" + pwallet->strWalletFile;
 }
 
-// Called by CWalletManager::UnloadWallet()/FlushAndUnloadAllSecondaryWallets()
+// Called by CWalletManager::UnloadWallet()/FlushAndUnloadAllExceptActiveWallet()
 // (wallet/walletmanager.cpp) before deleting a CWallet, so a stale entry
 // doesn't linger in mapSecondaryWalletUnlockTime and so a not-yet-fired timer
 // doesn't stay armed (LockWallet() itself re-resolves by name+generation
@@ -2557,7 +2557,7 @@ static void LockWallet(std::string walletName, uint64_t generation)
         // A *different* wallet has since been loaded under this same name --
         // not the instance this timer was armed for. Release the ref this
         // resolve just took (if any) and do nothing to the new instance.
-        if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+        if (resolved.outcome == CWalletManager::ResolveOutcome::Held)
             CWalletManager::Get().ReleaseRefIfCurrent(walletName, resolved.generation);
         return;
     }
@@ -2566,7 +2566,7 @@ static void LockWallet(std::string walletName, uint64_t generation)
         SetWalletUnlockTime(pWallet, 0);
         pWallet->Lock();
     }
-    if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+    if (resolved.outcome == CWalletManager::ResolveOutcome::Held)
         CWalletManager::Get().ReleaseRefIfCurrent(walletName, resolved.generation);
 }
 
@@ -2707,7 +2707,7 @@ UniValue walletpassphrase(const UniValue& params, bool fHelp, const CPubKey& myp
     // secondary wallet) or the fact that the default wallet can never be
     // unloaded already guarantees pwallet is live for the rest of this call.
     CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(pwallet->strWalletFile);
-    if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+    if (resolved.outcome == CWalletManager::ResolveOutcome::Held)
         CWalletManager::Get().ReleaseRefIfCurrent(pwallet->strWalletFile, resolved.generation);
     if (resolved.outcome == CWalletManager::ResolveOutcome::NotFound) {
         // Should not happen in practice: pwallet is either pwalletMain (never
@@ -2889,15 +2889,18 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // own cs_wallet lock (taken just below, in its own nested scope) is
     // released.
     std::string walletName = pwallet->strWalletFile;
-    // An empty request selection means "the default wallet", the pre-
-    // multiwallet path -- GetWalletForRequest() returned pwalletMain for it
-    // without consulting the registry at all, so decide default-ness from
-    // the selection first and only fall back to matching the registry's
-    // default name. (GetWalletForRequest() also falls back to pwalletMain
-    // for a selected-but-unresolvable name, which this catches too: that
-    // object must never be run through the secondary discard path.)
-    bool fIsDefaultWallet = CWalletManager::GetRequestedWalletName().empty() ||
-                            CWalletManager::Get().IsDefaultWallet(walletName);
+    // Opus-audit-caught stale comment, fixed: GetRequestedWalletName() no
+    // longer returns empty for an unscoped request (it's pinned to the
+    // resolved wallet's name -- see its own doc comment, walletmanager.h),
+    // so that first disjunct is effectively dead now and this really just
+    // checks IsActiveWallet(walletName) directly -- true whenever `pwallet`
+    // (the request-resolved wallet, whatever selected it) is the currently
+    // active one. Kept as an OR rather than simplified: harmless, and
+    // correct either way if GetRequestedWalletName() is ever legitimately
+    // empty here (nothing resolved at all, which EnsureWalletIsAvailable()
+    // above should already have refused).
+    bool fIsActiveWallet = CWalletManager::GetRequestedWalletName().empty() ||
+                            CWalletManager::Get().IsActiveWallet(walletName);
 
     SecureString strWalletPass;
     {
@@ -2971,7 +2974,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // and path copies captured earlier.
         std::string strDiscardError;
         bool fDiscarded = false;
-        if (!fIsDefaultWallet) {
+        if (!fIsActiveWallet) {
             // The default wallet is deliberately not discarded:
             // CWalletManager refuses it unconditionally (there is no reload
             // path for it -- see the "no-default-wallet redesign" backlog
@@ -3024,7 +3027,7 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             strDiscardError = strReloadError;
         }
 
-        if (!fIsDefaultWallet) {
+        if (!fIsActiveWallet) {
             // Either the discard was refused (the wallet is still in use by
             // a concurrent request, an async operation or the GUI, so it
             // isn't ours to delete) or the reload failed. Fall back to the
@@ -3244,6 +3247,7 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  \"keeptxfornblocks\": n,      (numeric) minimum age in blocks before a tx/note is delete-eligible\n"
             "  \"changeaddress\": \"addr\",    (string) configured shielded change address override, empty if unset\n"
             "  \"seedfp\": \"uint256\",        (string) the BLAKE2b-256 hash of the HD seed\n"
+            "  \"isactivewallet\": true|false, (boolean) whether this is the currently active wallet (see getactivewallet)\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("getwalletinfo", "")
@@ -3322,6 +3326,11 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     uint256 seedFp = pwallet->GetHDChain().seedFp;
     if (!seedFp.IsNull())
          obj.push_back(Pair("seedfp", seedFp.GetHex()));
+    // No-default-wallet redesign: cheap to add since pwallet is already the
+    // resolved wallet for this request -- see getactivewallet for a
+    // registry-wide equivalent that doesn't need a request scoped to a
+    // specific wallet first.
+    obj.push_back(Pair("isactivewallet", pwallet == pwalletMain));
     return obj;
 }
 
@@ -5053,8 +5062,8 @@ static bool OperationBelongsToWallet(const std::shared_ptr<AsyncRPCOperation>& o
     if (!opWalletName.empty())
         return opWalletName == requestedWalletName;
     // Compared against pwalletMain->strWalletFile directly rather than
-    // CWalletManager::Get().GetDefaultWalletName(): the latter is only set
-    // by RegisterDefaultWallet(), which some test fixtures never call for
+    // CWalletManager::Get().GetActiveWalletName(): the latter is only set
+    // by RegisterInitialWallet(), which some test fixtures never call for
     // their pwalletMain (it's still a perfectly usable wallet, just not
     // registered) -- comparing against the registry there would wrongly
     // filter out every parameterless-constructor operation in that

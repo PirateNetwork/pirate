@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -255,6 +256,17 @@ public Q_SLOTS:
     void shutdownResult();
     /// Handle runaway exceptions. Shows a message box with the problem and quits the program.
     void handleRunawayException(const QString &message);
+#ifdef ENABLE_WALLET
+    /// No-default-wallet redesign: true zero-wallet startup (a fresh data
+    /// directory, nothing auto-loaded) leaves pwalletMain null when
+    /// AppInit2() returns. initializeResult() detects that and, instead of
+    /// finishing startup immediately, keeps the splash screen up and drives
+    /// SplashScreen's create/restore flow directly against CWalletManager --
+    /// this slot is what it connects to once that flow produces a wallet, to
+    /// resume the rest of startup (window/tab setup) that finishInitialize()
+    /// normally does right away.
+    void walletCreatedDuringStartup();
+#endif
 
 Q_SIGNALS:
     void requestedInitialize();
@@ -279,8 +291,22 @@ private:
     int returnValue;
     const PlatformStyle *platformStyle;
     std::unique_ptr<QWidget> shutdownWindow;
+    // Not owned in the sense of deletion (the splash screen deletes itself
+    // via slotFinish(), same as before this member existed -- see
+    // createSplashScreen()'s own comment) -- kept so initializeResult() can
+    // drive its zero-wallet-startup create/restore flow directly instead of
+    // only ever reacting to uiInterface signals fired from the (in that case,
+    // never blocked) init thread.
+    SplashScreen *splashScreenWidget = nullptr;
 
     void startThread();
+    /// Shared tail of initializeResult(): wallet tab setup (if any), showing
+    /// the main window, and tearing down the splash screen. Called either
+    /// immediately (a wallet was already auto-loaded at startup, or wallet
+    /// support isn't compiled in) or later, from walletCreatedDuringStartup()
+    /// (true zero-wallet startup, once the splash screen's own create/restore
+    /// flow produces one).
+    void finishStartup();
 };
 
 #include "komodo.moc"
@@ -474,12 +500,17 @@ void KomodoApplication::createWindow(const NetworkStyle *networkStyle)
 
 void KomodoApplication::createSplashScreen(const NetworkStyle *networkStyle)
 {
-    SplashScreen *splash = new SplashScreen(networkStyle);
-    // We don't hold a direct pointer to the splash screen after creation, but the splash
-    // screen will take care of deleting itself when slotFinish happens.
-    splash->show();
-    connect(this, SIGNAL(splashFinished(QWidget*)), splash, SLOT(slotFinish(QWidget*)));
-    connect(this, SIGNAL(requestedShutdown()), splash, SLOT(close()));
+    // Kept as splashScreenWidget (was a local before the no-default-wallet
+    // redesign) so initializeResult()/walletCreatedDuringStartup() can drive
+    // its zero-wallet-startup create/restore flow directly -- it still takes
+    // care of deleting itself when slotFinish() happens, same as before.
+    splashScreenWidget = new SplashScreen(networkStyle);
+    splashScreenWidget->show();
+    connect(this, SIGNAL(splashFinished(QWidget*)), splashScreenWidget, SLOT(slotFinish(QWidget*)));
+    connect(this, SIGNAL(requestedShutdown()), splashScreenWidget, SLOT(close()));
+#ifdef ENABLE_WALLET
+    connect(splashScreenWidget, SIGNAL(walletCreated()), this, SLOT(walletCreatedDuringStartup()));
+#endif
 }
 
 void KomodoApplication::startThread()
@@ -546,7 +577,7 @@ void KomodoApplication::requestShutdown()
     // result handler eventually runs, (b) ~QThread aborting the process if
     // it's later destroyed while still running, and (c) the worker's
     // LoadWallet()/CreateWallet() call could commit a wallet into
-    // CWalletManager's registry after FlushAndUnloadAllSecondaryWallets()
+    // CWalletManager's registry after FlushAndUnloadAllExceptActiveWallet()
     // (init.cpp, reached via the requestedShutdown() signal below) has
     // already swept it, leaking a wallet nothing will ever unload.
     window->abortPendingWalletLoad();
@@ -576,52 +607,88 @@ void KomodoApplication::initializeResult(bool success)
     //     PaymentServer::LoadRootCAs();
     // #endif
         paymentServer->setOptionsModel(optionsModel);
-#endif
 
-        clientModel = new ClientModel(optionsModel);
-        window->setClientModel(clientModel);
-
-#ifdef ENABLE_WALLET
-        // vpwallets is a startup-only snapshot (init.cpp), never updated by
-        // CWalletManager -- pwalletMain is the one global guaranteed to stay
-        // in sync with the manager's own idea of "the default wallet", so it
-        // is used here instead. Secondary wallets loaded/created later via
-        // the File > Wallets menu are added straight to window's own wallet-
-        // model map (see PirateOceanGUI), not through this startup path.
-        if (pwalletMain)
-        {
-            WalletModel *walletModel = new WalletModel(platformStyle, pwalletMain, optionsModel);
-
-            window->addWallet(PirateOceanGUI::DEFAULT_WALLET, walletModel);
-            window->setCurrentWallet(PirateOceanGUI::DEFAULT_WALLET);
-
-            // #ifdef ENABLE_BIP70
-            // connect(walletModel, SIGNAL(coinsSent(CWallet*,SendCoinsRecipient,QByteArray)),
-            //                  paymentServer, SLOT(fetchPaymentACK(CWallet*,const SendCoinsRecipient&,QByteArray)));
-            // #endif
+        // No-default-wallet redesign: true zero-wallet startup (a fresh data
+        // directory, nothing auto-loaded -- see init.cpp's
+        // fAutoLoadWalletAtStartup) leaves pwalletMain null here, with no
+        // uiInterface signal ever having fired (AppInit2() never blocked
+        // waiting for one). Rather than finish startup with no wallet at all,
+        // drive the splash screen's existing create/restore widgets directly
+        // -- walletCreatedDuringStartup() resumes the rest of this function
+        // once that flow produces a wallet. Mirrors init.cpp's own
+        // fDisableWallet computation; if wallet support isn't usable at all,
+        // fall through to finishStartup() below exactly as before, with no
+        // wallet tab, same as -disablewallet already behaved.
+        bool fDisableWallet = GetBoolArg("-disablewallet", false) || KOMODO_NSPV_SUPERLITE;
+        if (!pwalletMain && !fDisableWallet && splashScreenWidget) {
+            splashScreenWidget->startZeroWalletFlow(GetArg("-wallet", "wallet.dat"));
+            return;
         }
 #endif
-
-        window->show();
-
-        Q_EMIT splashFinished(window);
-
-#ifdef ENABLE_WALLET
-        // Now that initialization/startup is done, process any command-line
-        // pirate: URIs or payment requests:
-        connect(paymentServer, SIGNAL(receivedPaymentRequest(SendCoinsRecipient)),
-                         window, SLOT(handlePaymentRequest(SendCoinsRecipient)));
-        /*connect(paymentServer, SIGNAL(receivedZPaymentRequest(SendCoinsRecipient)),
-                         window, SLOT(handleZPaymentRequest(SendCoinsRecipient)));*/
-        connect(window, SIGNAL(receivedURI(QString)),
-                         paymentServer, SLOT(handleURIOrFile(QString)));
-        connect(paymentServer, SIGNAL(message(QString,QString,unsigned int)),
-                         window, SLOT(message(QString,QString,unsigned int)));
-        QTimer::singleShot(100, paymentServer, SLOT(uiReady()));
-#endif
+        finishStartup();
     } else {
         quit(); // Exit main loop
     }
+}
+
+#ifdef ENABLE_WALLET
+void KomodoApplication::walletCreatedDuringStartup()
+{
+    finishStartup();
+}
+#endif
+
+void KomodoApplication::finishStartup()
+{
+    clientModel = new ClientModel(optionsModel);
+    window->setClientModel(clientModel);
+
+#ifdef ENABLE_WALLET
+    // vpwallets is a startup-only snapshot (init.cpp), never updated by
+    // CWalletManager -- pwalletMain is the one global guaranteed to stay
+    // in sync with the manager's own idea of the active wallet, so it
+    // is used here instead. Secondary wallets loaded/created later via
+    // the File > Wallets menu are added straight to window's own wallet-
+    // model map (see PirateOceanGUI), not through this startup path.
+    if (pwalletMain)
+    {
+        WalletModel *walletModel = new WalletModel(platformStyle, pwalletMain, optionsModel);
+
+        // No-default-wallet redesign: keyed by its own real registry name
+        // now, same as every wallet loaded/created later via the File >
+        // Wallets menu -- no more a separate "~Default" GUI-internal alias
+        // for specifically whichever wallet happened to be active at
+        // startup (see PirateOceanGUI::mapWalletModels' own comment for why
+        // that aliasing was a real bug once active status became
+        // reassignable independent of this window).
+        QString realName = QString::fromStdString(pwalletMain->GetName());
+        window->addWallet(realName, walletModel);
+        window->setCurrentWallet(realName);
+
+        // #ifdef ENABLE_BIP70
+        // connect(walletModel, SIGNAL(coinsSent(CWallet*,SendCoinsRecipient,QByteArray)),
+        //                  paymentServer, SLOT(fetchPaymentACK(CWallet*,const SendCoinsRecipient&,QByteArray)));
+        // #endif
+    }
+#endif
+
+    window->show();
+
+    Q_EMIT splashFinished(window);
+
+#ifdef ENABLE_WALLET
+    // Now that initialization/startup is done, process any command-line
+    // pirate: URIs or payment requests:
+    connect(paymentServer, SIGNAL(receivedPaymentRequest(SendCoinsRecipient)),
+                     window, SLOT(handlePaymentRequest(SendCoinsRecipient)));
+    /*connect(paymentServer, SIGNAL(receivedZPaymentRequest(SendCoinsRecipient)),
+                     window, SLOT(handleZPaymentRequest(SendCoinsRecipient)));*/
+    connect(window, SIGNAL(receivedURI(QString)),
+                     paymentServer, SLOT(handleURIOrFile(QString)));
+    connect(paymentServer, SIGNAL(message(QString,QString,unsigned int)),
+                     window, SLOT(message(QString,QString,unsigned int)));
+    QTimer::singleShot(100, paymentServer, SLOT(uiReady()));
+#endif
 }
 
 void KomodoApplication::shutdownResult()

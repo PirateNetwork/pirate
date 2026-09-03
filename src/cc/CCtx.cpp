@@ -690,7 +690,15 @@ int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total
 
 #ifdef ENABLE_WALLET
     if (pwallet == nullptr) pwallet = pwalletMain;
-    assert(pwallet != NULL);
+    // No-default-wallet redesign: pwalletMain can now be null outside of
+    // -disablewallet too (true zero-wallet startup, or every wallet
+    // deactivated via setactivewallet) -- an assert here would crash the
+    // whole process on what is now a normal, reachable "no wallet available"
+    // condition (e.g. a CC RPC called before any wallet is loaded/active).
+    // Matches SignTx()'s own graceful-return pattern just above in this file,
+    // and this function's own existing "insufficient funds" convention of
+    // returning 0 rather than a positive total.
+    if (pwallet == nullptr) return 0;
     const CKeyStore& keystore = *pwallet;
     LOCK2(cs_main, pwallet->cs_wallet);
     pwallet->AvailableCoins(vecOutputs, false, NULL, true);

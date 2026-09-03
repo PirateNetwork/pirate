@@ -1,5 +1,6 @@
 // Copyright (c) 2017 The Zcash developers
 // Copyright (c) 2022-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -247,7 +248,15 @@ void AsyncRPCOperation_mergetoaddress::main()
     // touched for multiwallet, and must not become so now.
 #ifdef ENABLE_MINING
 #ifdef ENABLE_WALLET
-    GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
+    // Same guard as init.cpp's own startup call to this function: under the
+    // no-default-wallet redesign pwalletMain can be null here without
+    // -mineraddress being set either (true zero-wallet startup, or every
+    // wallet deactivated) -- unlike the startup call site, mining was never
+    // actually stopped for that reason here (this call only ever *restarts*
+    // mining this operation itself paused further up), so skipping it is a
+    // no-op rather than a behavior change for the common case.
+    if (pwalletMain || !GetArg("-mineraddress", "").empty())
+        GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
 #else
     GenerateBitcoins(GetBoolArg("-gen", false), GetArg("-genproclimit", 1));
 #endif

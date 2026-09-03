@@ -474,7 +474,7 @@ double benchmark_loadwallet()
     // so without this the registry's "wallet.dat" entry is left dangling on
     // the freed wallet until the next real startup. A shutdown landing in
     // that window would otherwise have CheckpointAllWallets() dereference it.
-    CWalletManager::Get().RegisterDefaultWallet("wallet.dat", pwalletMain);
+    CWalletManager::Get().RegisterInitialWallet("wallet.dat", pwalletMain);
     post_wallet_load();
     return res;
 }

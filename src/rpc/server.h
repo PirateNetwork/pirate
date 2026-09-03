@@ -421,7 +421,7 @@ class CWallet;
 /**
  * Cancels `pwallet`'s pending walletpassphrase auto-relock timer (if any) and
  * drops its entry from the unlock-deadline bookkeeping. Must be called by
- * CWalletManager::UnloadWallet()/FlushAndUnloadAllSecondaryWallets() before
+ * CWalletManager::UnloadWallet()/FlushAndUnloadAllExceptActiveWallet() before
  * deleting a CWallet. walletpassphrase (wallet/rpcwallet.cpp) schedules that
  * timer bound to the wallet's *name* and generation, not a raw CWallet*, so a
  * still-armed timer that fires after unload will safely no-op via

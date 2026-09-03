@@ -227,7 +227,7 @@ protected:
             SetRPCWarmupFinished();
 
         CWallet* defaultWallet = new CWallet("default_test.dat");
-        CWalletManager::Get().RegisterDefaultWallet("default_test.dat", defaultWallet);
+        CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
         // GetWalletForRequest() falls back to the real pwalletMain global for
         // the no-selection case, exactly like init.cpp -- which registers the
         // same CWallet* as both. Without this, tests exercising a rewired RPC
@@ -246,8 +246,8 @@ protected:
 
     void TearDown() override {
         pwalletMain = previousPwalletMain;
-        CWalletManager::Get().FlushAndUnloadAllSecondaryWallets();
-        CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
+        CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
+        CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetActiveWalletName());
         CWalletManager::Get().Reset();
         delete defaultWallet;
         // Individual wallet DB handles are released above; now close the env
@@ -349,7 +349,7 @@ TEST_F(MultiWalletDispatchTest, EncryptWalletSucceedsOnASecondaryWalletAndCanBeR
     // ReleaseRefIfCurrent()'s own doc comment for why generation, not the
     // raw pointer, is this registry's real identity for an entry instance).
     auto originalResolved = CWalletManager::Get().ResolveAndHoldForRequest("secondarytestwallet");
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, originalResolved.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, originalResolved.outcome);
     CWalletManager::Get().ReleaseRefIfCurrent("secondarytestwallet", originalResolved.generation);
 
     std::string strUnloadError;
@@ -385,7 +385,7 @@ TEST_F(MultiWalletDispatchTest, EncryptWalletSucceedsOnASecondaryWalletAndCanBeR
         << "loadwallet's own unlock path should leave it usable immediately, unlike encryptwallet's";
 
     auto reloadedResolved = CWalletManager::Get().ResolveAndHoldForRequest("secondarytestwallet");
-    ASSERT_EQ(CWalletManager::ResolveOutcome::HeldSecondary, reloadedResolved.outcome);
+    ASSERT_EQ(CWalletManager::ResolveOutcome::Held, reloadedResolved.outcome);
     CWalletManager::Get().ReleaseRefIfCurrent("secondarytestwallet", reloadedResolved.generation);
     EXPECT_NE(originalResolved.generation, reloadedResolved.generation)
         << "should be a genuinely new registry entry, not the pre-unload one still alive";
@@ -655,7 +655,7 @@ TEST_F(MultiWalletDispatchTest, ZExportSeedPhraseReadsTheSelectedWalletNotTheDef
     // seed phrase -- a cross-wallet key disclosure, not just a wrong answer.
     // Both test wallets are non-bip39, so the observable difference is which
     // wallet's bip39Enabled flag is consulted; flip it on the default only.
-    CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetDefaultWalletName());
+    CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetActiveWalletName());
     ASSERT_NE(nullptr, defaultWallet);
     CWallet* secondary = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondary);

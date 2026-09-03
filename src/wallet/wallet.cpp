@@ -1,6 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Copyright (c) 2022-2025 Pirate developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -119,11 +120,9 @@ bool fWalletRbf = DEFAULT_WALLET_RBF;
 /** Progress percentage for blockchain scanning operations */
 int scanperc;
 
-/** Recovery seed phrase for wallet restoration */
-std::string recoverySeedPhrase = "";
-
-/** BIP-39 language index (hd_seed::MnemonicLanguage) chosen by the user during restore */
-uint32_t recoverySeedLangCode = 0;
+// recoverySeedPhrase/recoverySeedLangCode moved to CWallet member fields
+// (wallet.h, next to createType) as part of the no-default-wallet redesign --
+// see the comment there.
 
 /** Flag indicating if GUI is being used */
 bool usingGUI = false;

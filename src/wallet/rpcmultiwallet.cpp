@@ -124,24 +124,33 @@ UniValue loadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue createwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (fHelp || params.size() != 1)
+    if (fHelp || params.size() < 1 || params.size() > 3)
         throw runtime_error(
-            "createwallet \"filename\"\n"
-            "\nCreates a brand-new, freshly-seeded wallet file in the data directory and\n"
-            "loads it (same restrictions as loadwallet once loaded). Refuses if a file\n"
-            "already exists under this name -- use loadwallet for that.\n"
-            "\nIMPORTANT: the seed phrase for the new wallet is returned exactly once, in\n"
-            "this call's result. Record it immediately; there is no way to retrieve it\n"
-            "again later except via the wallet's own z_exportwallet/dumpwallet-style\n"
-            "backup once it's loaded. Restoring a new wallet from an existing seed phrase\n"
-            "is not supported by this RPC -- use -seedphrase together with -wallet=\n"
-            "at node startup instead.\n"
+            "createwallet \"filename\" ( \"recoveryphrase\" recoverylangcode )\n"
+            "\nCreates a wallet file in the data directory and loads it (same restrictions\n"
+            "as loadwallet once loaded). Refuses if a file already exists under this name\n"
+            "-- use loadwallet for that.\n"
+            "\nWith no recoveryphrase, generates a brand-new random seed. IMPORTANT: the\n"
+            "seed phrase for a newly-generated wallet is returned exactly once, in this\n"
+            "call's result. Record it immediately; there is no way to retrieve it again\n"
+            "later except via the wallet's own z_exportwallet/dumpwallet-style backup\n"
+            "once it's loaded.\n"
+            "\nWith recoveryphrase given, restores the wallet's seed from it instead of\n"
+            "generating a new one -- this is the replacement for the old -seedphrase=\n"
+            "startup flag (removed): start the node with nothing loaded (or -wallet=\n"
+            "naming a not-yet-existing file), then call this RPC with the known phrase.\n"
             "\nArguments:\n"
-            "1. \"filename\"    (string, required) the wallet file name to create, in the data directory\n"
+            "1. \"filename\"        (string, required) the wallet file name to create, in the data directory\n"
+            "2. \"recoveryphrase\"  (string, optional) an existing 12/18/24-word seed phrase to restore from,\n"
+            "                     instead of generating a new random seed\n"
+            "3. recoverylangcode  (numeric, optional, default=0) the BIP-39 wordlist language recoveryphrase\n"
+            "                     was generated in (hd_seed::MnemonicLanguage) -- only meaningful together\n"
+            "                     with recoveryphrase\n"
             "\nResult:\n"
             "{\n"
             "  \"name\" : \"filename\",     (string) the wallet name\n"
-            "  \"seedphrase\" : \"...\"      (string) the newly-generated seed phrase -- back this up now\n"
+            "  \"seedphrase\" : \"...\"      (string) the wallet's seed phrase -- the newly-generated one, or an\n"
+            "                             echo of recoveryphrase if one was given -- back this up now\n"
             "}\n"
             "\nExamples:\n"
             + HelpExampleCli("createwallet", "\"second\"")
@@ -149,8 +158,20 @@ UniValue createwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         );
 
     std::string name = params[0].get_str();
+
+    // Not mlock()'d beyond this point, same pre-existing caveat every other
+    // SecureString-from-a-UniValue-parameter handoff in this codebase already
+    // carries (see e.g. loadwallet's own passphrase parameter) -- UniValue's
+    // own string storage isn't secure-heap backed either way.
+    SecureString recoveryPhrase;
+    if (params.size() > 1 && !params[1].get_str().empty()) {
+        recoveryPhrase.reserve(params[1].get_str().size() + 1);
+        recoveryPhrase = params[1].get_str().c_str();
+    }
+    uint32_t recoveryLangCode = params.size() > 2 ? (uint32_t)params[2].get_int() : 0;
+
     std::string strError, seedPhrase;
-    if (!CWalletManager::Get().CreateWallet(name, strError, seedPhrase))
+    if (!CWalletManager::Get().CreateWallet(name, strError, seedPhrase, recoveryPhrase, recoveryLangCode))
         throw JSONRPCError(RPC_WALLET_ERROR, strError);
 
     UniValue result(UniValue::VOBJ);
@@ -164,8 +185,11 @@ UniValue unloadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     if (fHelp || params.size() != 1)
         throw runtime_error(
             "unloadwallet \"walletname\"\n"
-            "\nUnloads a currently loaded, non-default wallet.\n"
-            "The default wallet can never be unloaded, and a wallet cannot be unloaded\n"
+            "\nUnloads a currently loaded wallet.\n"
+            "The currently active wallet (see getactivewallet/setactivewallet) can never\n"
+            "be unloaded directly -- call setactivewallet with a different name (or \"\")\n"
+            "first. A wallet currently bound to the mining thread (setgenerate true) can\n"
+            "also not be unloaded until mining is stopped. A wallet cannot be unloaded\n"
             "while it has a pending request routed to it, or a queued/finished-but-\n"
             "unpolled z_sendmany/z_shieldcoinbase/z_mergetoaddress/consolidateaddress\n"
             "operation of its own -- see z_getoperationresult to retrieve and free one.\n"
@@ -187,6 +211,73 @@ UniValue unloadwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return NullUniValue;
 }
 
+UniValue getactivewallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "getactivewallet\n"
+            "\nReturns the name of the currently active wallet, or null if no wallet is\n"
+            "active. An unscoped RPC call (no /wallet/<name>/ URI segment) always resolves\n"
+            "to this wallet.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"name\" : \"filename\"    (string or null) the active wallet's name, or null if none is active\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("getactivewallet", "")
+            + HelpExampleRpc("getactivewallet", "")
+        );
+
+    std::string name = CWalletManager::Get().GetActiveWalletName();
+    UniValue result(UniValue::VOBJ);
+    if (name.empty())
+        result.pushKV("name", NullUniValue);
+    else
+        result.pushKV("name", name);
+    return result;
+}
+
+UniValue setactivewallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "setactivewallet ( \"walletname\" )\n"
+            "\nSets which currently-loaded wallet is active. An unscoped RPC call (no\n"
+            "/wallet/<name>/ URI segment) always resolves to the active wallet -- loading a\n"
+            "new wallet (loadwallet/createwallet) never changes which wallet is active,\n"
+            "call this afterward if you want the newly loaded wallet to become the target\n"
+            "of unscoped RPCs.\n"
+            "\nPass \"\" (or omit) to deactivate -- no wallet will be active until this is\n"
+            "called again. Deactivating is the only way to make the very last loaded\n"
+            "wallet eligible for unloadwallet: the active wallet itself can never be\n"
+            "unloaded directly.\n"
+            "\nArguments:\n"
+            "1. \"walletname\"    (string, optional, default=\"\") the wallet name to activate, or \"\" to deactivate\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"name\" : \"walletname\"    (string or null) the new active wallet's name, or null if deactivated\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("setactivewallet", "\"second\"")
+            + HelpExampleRpc("setactivewallet", "\"second\"")
+        );
+
+    std::string name = params.size() > 0 ? params[0].get_str() : "";
+    std::string strError;
+    if (!CWalletManager::Get().SetActiveWallet(name, strError)) {
+        if (strError.find("not found") != std::string::npos)
+            throw JSONRPCError(RPC_WALLET_NOT_FOUND, strError);
+        throw JSONRPCError(RPC_WALLET_ERROR, strError);
+    }
+
+    UniValue result(UniValue::VOBJ);
+    if (name.empty())
+        result.pushKV("name", NullUniValue);
+    else
+        result.pushKV("name", name);
+    return result;
+}
+
 static const CRPCCommand commands[] =
 { //  category              name                actor (function)     okSafeMode
   //  --------------------- ------------------- --------------------- ----------
@@ -194,6 +285,8 @@ static const CRPCCommand commands[] =
     { "wallet",             "loadwallet",       &loadwallet,          true  },
     { "wallet",             "createwallet",     &createwallet,        true  },
     { "wallet",             "unloadwallet",     &unloadwallet,        true  },
+    { "wallet",             "getactivewallet",  &getactivewallet,     true  },
+    { "wallet",             "setactivewallet",  &setactivewallet,     true  },
 };
 
 void RegisterMultiWalletRPCCommands(CRPCTable &tableRPC)
@@ -227,6 +320,12 @@ bool IsMultiWalletAwareRPC(const std::string& name)
     // are now safe to include below.
     static const std::set<std::string> aware = {
         "loadwallet", "unloadwallet", "listwallets", "createwallet",
+        // No-default-wallet redesign: same reasoning as loadwallet/unloadwallet
+        // above -- these ignore any URI-selected wallet by design, but a
+        // /wallet/x/setactivewallet call shouldn't be refused outright by the
+        // dispatch gate just because it isn't yet rewired the way ordinary
+        // wallet-operating RPCs are.
+        "getactivewallet", "setactivewallet",
         "getbalance", "getnewaddress", "sendtoaddress",
         "listtransactions", "listunspent", "gettransaction",
         "getwalletinfo", "listaddressgroupings", "z_getbalance",
@@ -318,6 +417,11 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         // build unsigned proof transactions, not wallet-signed ones) but are
         // included for the same read-only-consistency reason as above.
         "migrate_checkburntransactionsource", "migrate_createnotaryapprovaltransaction",
+        // No-default-wallet redesign: migrate_createburntransaction was
+        // conspicuously missing from this list despite being wallet-aware
+        // like its siblings just above -- it had no EnsureWalletIsAvailable
+        // guard at all until this phase (rpc/crosschain.cpp).
+        "migrate_createburntransaction",
         "selfimport", "importdual", "importgatewayddress", "importgatewayinfo",
         "importgatewaybind", "importgatewaydeposit", "importgatewaywithdraw",
         "importgatewaypartialsign", "importgatewaycompletesigning",

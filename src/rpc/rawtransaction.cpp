@@ -1,6 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Copyright (c) 2024-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1979,10 +1980,19 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   else
       ironwoodAddr = tb.vIronwoodSpends[0].addr;
 
-  const std::string strRequestedWallet = CWalletManager::GetRequestedWalletName();
+  // WasWalletExplicitlySelected(), not GetRequestedWalletName().empty():
+  // Opus-audit-caught -- once RPCWalletRequestGuard started pinning the
+  // resolved (rather than the caller-given) name so a mid-request
+  // setactivewallet can't silently redirect other wallet-manager consumers,
+  // GetRequestedWalletName() is non-empty for an unscoped request too (it's
+  // the active wallet's name). WasWalletExplicitlySelected() is the signal
+  // that still means what this check has always needed it to mean: did the
+  // caller name a specific wallet, or should every loaded wallet be
+  // searched (this RPC's own design -- an offline-signing blob carries no
+  // wallet identity by construction).
   std::vector<std::string> candidateNames;
-  if (!strRequestedWallet.empty())
-      candidateNames.push_back(strRequestedWallet);
+  if (CWalletManager::WasWalletExplicitlySelected())
+      candidateNames.push_back(CWalletManager::GetRequestedWalletName());
   else
       candidateNames = CWalletManager::Get().ListWalletNames();
 
@@ -1999,7 +2009,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   // GetWallet() below returns a raw pointer after dropping cs_wallets, which the
   // very next line dereferences -- safe only because cs_main (held for this
   // entire function, see the top of it) is taken before cs_wallets by every
-  // deletion path (CWalletManager::UnloadWallet/FlushAndUnloadAllSecondaryWallets,
+  // deletion path (CWalletManager::UnloadWallet/FlushAndUnloadAllExceptActiveWallet,
   // both LOCK2(cs_main, cs_wallets)), so nothing can free `candidate` while this
   // function is running. Asserted explicitly since nothing else at this call site
   // makes that dependency visible.
@@ -2064,7 +2074,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet \"" + lockedMatches.front() + "\" holds the spending key for this address but is locked; unlock it with walletpassphrase and try again.");
   } else if (!watchOnlyMatches.empty()) {
       throw JSONRPCError(RPC_WALLET_ERROR, "Wallet \"" + watchOnlyMatches.front() + "\" recognizes this address but only holds a viewing key for it, not a spending key.");
-  } else if (!strRequestedWallet.empty()) {
+  } else if (CWalletManager::WasWalletExplicitlySelected()) {
       throw JSONRPCError(RPC_WALLET_ERROR, "The selected wallet does not recognize the address(es) referenced by this transaction builder.");
   } else {
       throw JSONRPCError(RPC_WALLET_ERROR, "No loaded wallet recognizes the address(es) referenced by this transaction builder.");

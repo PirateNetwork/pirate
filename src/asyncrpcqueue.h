@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -74,7 +75,7 @@ public:
     // before CWalletManager::Get().Reset() -- an AsyncRPCOperation built
     // against a wallet releases that wallet's ref in its own destructor,
     // and CWalletManager's static instance is constructed (via
-    // RegisterDefaultWallet()) after this queue's, so plain process-exit
+    // RegisterInitialWallet()) after this queue's, so plain process-exit
     // static destruction would run these destructors in the wrong order
     // otherwise: after CWalletManager's own static has already been torn
     // down.

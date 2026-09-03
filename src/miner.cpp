@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -28,6 +29,16 @@
 #include "cc/CCinclude.h"
 #ifdef ENABLE_MINING
 #include "pow/tromp/equi_miner.h"
+#endif
+
+#if defined(ENABLE_WALLET) && !defined(ENABLE_MINING)
+// GetMiningWallet()'s real implementation lives alongside GenerateBitcoins()
+// further down, inside this file's own #ifdef ENABLE_MINING block -- but
+// miner.h declares it unconditionally for every ENABLE_WALLET build (see its
+// own comment) so CWalletManager::UnloadWallet() can call it regardless of
+// whether mining is compiled in at all. This is that build's definition:
+// mining can never be bound to a wallet if it can't run in the first place.
+CWallet* GetMiningWallet() { return nullptr; }
 #endif
 
 #include "amount.h"
@@ -1051,8 +1062,15 @@ CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, 
         if (IsValidDestination(dest)) {
             scriptPubKey = GetScriptForDestination(dest);
         }
-        else if (GetBoolArg("-disablewallet", false)) {
-            // wallet disabled and no valid mineraddress
+        else if (reservekey.GetWallet() == nullptr) {
+            // No wallet available and no valid mineraddress -- checked via
+            // the actual reserve-key's wallet pointer, not the -disablewallet
+            // flag: under the no-default-wallet redesign that flag is no
+            // longer the only way to have zero wallets loaded (true
+            // zero-wallet startup, or every wallet deactivated via
+            // setactivewallet), so checking it instead of the real pointer
+            // would let this fall through to GetReservedKey() below and
+            // dereference a null wallet.
             return NULL;
         }
         else {
@@ -1757,6 +1775,23 @@ void static BitcoinMiner()
     }
 
 #ifdef ENABLE_WALLET
+    // No-default-wallet redesign: tracks which wallet (if any) the miner
+    // threads below are currently bound to -- see GetMiningWallet()'s own
+    // comment (miner.h) for why this exists and what it protects against.
+    // Plain (non-atomic) is enough: GenerateBitcoins() is only ever called
+    // from init.cpp's startup thread and RPC/async-operation threads that
+    // already serialize mining start/stop against each other the same way
+    // the pre-existing minerThreads pointer above does (no lock protects that
+    // either), and UnloadWallet()'s read of it is a benign torn-read
+    // non-issue -- a pointer-sized aligned store is atomic on every target
+    // platform, the same accepted-risk class as reading pwalletMain itself.
+    static CWallet* g_miningWallet = nullptr;
+
+    CWallet* GetMiningWallet()
+    {
+        return g_miningWallet;
+    }
+
     void GenerateBitcoins(bool fGenerate, CWallet* pwallet, int nThreads)
 #else
     void GenerateBitcoins(bool fGenerate, int nThreads)
@@ -1782,12 +1817,25 @@ void static BitcoinMiner()
             if ( pwallet != NULL )
                 nThreads = 1;
             else
+            {
+#ifdef ENABLE_WALLET
+                g_miningWallet = nullptr; // Old threads already torn down just above; nothing new is starting.
+#endif
                 return;
+            }
         }
 
         if (nThreads == 0 || !fGenerate)
+        {
+#ifdef ENABLE_WALLET
+            g_miningWallet = nullptr;
+#endif
             return;
+        }
 
+#ifdef ENABLE_WALLET
+        g_miningWallet = pwallet;
+#endif
         minerThreads = new boost::thread_group();
 
         for (int i = 0; i < nThreads; i++) {

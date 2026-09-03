@@ -847,25 +847,45 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     // Load-bearing correctness guard: only IsMultiWalletAwareRPC() methods
     // (rpc/server.h) have been rewired to consult GetWalletForRequest() --
     // every other RPC still reads pwalletMain directly, so without this gate
-    // a request routed to a non-default wallet would silently run against
-    // the default wallet instead of being refused -- a fund-misdirection
-    // risk. Deny-by-default across every category, not just "wallet":
-    // pwalletMain is read directly by RPCs registered under several other
-    // categories too (e.g. "pirate Exclusive", "rawtransactions",
-    // "generating", "control", "hidden"), and a category allowlist would
-    // silently let those reach the wrong wallet instead of being refused
-    // like the rest. Checked ahead of the fRPCNeedUnlocked branch below (not
-    // just in the normal-dispatch "else"), since that branch lets
-    // "openwallet" run unconditionally during the encrypted-wallet-unlock
-    // window -- without this check here, a passphrase supplied for one
-    // wallet name could unlock a different one.
+    // a request routed to a wallet other than the currently-active one would
+    // silently run against the active wallet instead of being refused -- a
+    // fund-misdirection risk. The IsActiveWallet() exemption below tracks a
+    // movable target now (whichever wallet setactivewallet last selected),
+    // not a startup-fixed one, but the reasoning is unchanged: a request
+    // explicitly naming the wallet that also happens to be the unscoped
+    // fallback target is harmless even for a not-yet-rewired RPC, since it's
+    // the exact same object pwalletMain already points at. Deny-by-default
+    // across every category, not just "wallet": pwalletMain is read directly
+    // by RPCs registered under several other categories too (e.g. "pirate
+    // Exclusive", "rawtransactions", "generating", "control", "hidden"), and
+    // a category allowlist would silently let those reach the wrong wallet
+    // instead of being refused like the rest. Checked ahead of the
+    // fRPCNeedUnlocked branch below (not just in the normal-dispatch "else"),
+    // since that branch lets "openwallet" run unconditionally during the
+    // encrypted-wallet-unlock window -- without this check here, a
+    // passphrase supplied for one wallet name could unlock a different one.
     {
         std::string strRequestedWallet = CWalletManager::GetRequestedWalletName();
         if (pcmd && !strRequestedWallet.empty() &&
-            !CWalletManager::Get().IsDefaultWallet(strRequestedWallet) &&
+            !CWalletManager::Get().IsActiveWallet(strRequestedWallet) &&
             !IsMultiWalletAwareRPC(pcmd->name)) {
+            // Opus-audit-caught: an *unscoped* request can reach here too now
+            // that GetRequestedWalletName() pins the resolved wallet's name
+            // instead of staying empty (see its own doc comment,
+            // walletmanager.h) -- specifically if a concurrent
+            // setactivewallet moved active status away from the wallet this
+            // request resolved to, in the narrow window between this
+            // request's own guard resolving and this check running. Rare and
+            // fail-closed (refusing here is safer than letting a not-yet-
+            // rewired handler read whatever pwalletMain now points at
+            // instead of the wallet this request actually resolved), but the
+            // generic message below would otherwise be confusing for a
+            // request that named no wallet at all -- word it accordingly.
             throw JSONRPCError(RPC_WALLET_NOT_SPECIFIED,
-                strprintf("RPC method \"%s\" is not yet supported against a non-default wallet", pcmd->name));
+                CWalletManager::WasWalletExplicitlySelected()
+                    ? strprintf("RPC method \"%s\" is not yet supported against a non-active wallet", pcmd->name)
+                    : strprintf("RPC method \"%s\" is not yet supported against a non-active wallet "
+                                "(the wallet active when this request resolved is no longer active)", pcmd->name));
         }
     }
 #endif

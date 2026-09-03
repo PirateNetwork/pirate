@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -118,14 +119,14 @@ AsyncRPCOperation::AsyncRPCOperation(CWallet* wallet) : AsyncRPCOperation() {
     walletName_ = wallet_->strWalletFile;
     CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(walletName_);
     walletGeneration_ = resolved.generation;
-    // NotFound and IsDefault both mean "nothing to hold": IsDefault because
-    // the default wallet is never unloadable (same as
-    // RPCWalletRequestGuard's own handling of this outcome); NotFound
-    // because some test fixtures construct a CWallet and use it as
-    // pwalletMain without ever registering it with CWalletManager -- in
-    // that environment nothing can "unload" it through this system either,
-    // so not pinning a ref doesn't leave anything reachable unprotected.
-    if (resolved.outcome == CWalletManager::ResolveOutcome::HeldSecondary)
+    // NotFound means "nothing to hold": some test fixtures construct a
+    // CWallet and use it as pwalletMain without ever registering it with
+    // CWalletManager -- in that environment nothing can "unload" it through
+    // this system either, so not pinning a ref doesn't leave anything
+    // reachable unprotected. No-default-wallet redesign: every resolved
+    // wallet is now uniformly ref-countable (there is no more an exempt
+    // "default" outcome the way there used to be), so Held always pins one.
+    if (resolved.outcome == CWalletManager::ResolveOutcome::Held)
         walletRefHeld_ = true;
 }
 #else
