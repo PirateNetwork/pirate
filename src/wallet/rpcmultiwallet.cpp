@@ -357,6 +357,10 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "setdeletetx", "setdeleteconflicttx", "setdeleteinterval",
         "setkeeptxnum", "setkeeptxfornblocks",
         "setchangeaddress", "upgradewallet",
+        // rederiveironwoodscopes: the per-wallet equivalent of
+        // -rederiverironwoodscopes, previously only reachable for whichever
+        // wallet was the default one (Phase 11 audit backlog item, fixed).
+        "rederiveironwoodscopes",
         // Backlog item 9: encryptwallet now resolves GetWalletForRequest()
         // instead of always pwalletMain, and a failed attempt against a
         // secondary wallet recovers in-process (CWalletManager::

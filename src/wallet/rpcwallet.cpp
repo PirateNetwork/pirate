@@ -6665,6 +6665,49 @@ UniValue upgradewallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return result;
 }
 
+UniValue rederiveironwoodscopes(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
+        return NullUniValue;
+
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "rederiveironwoodscopes\n"
+            "\nRe-derive and correct the external/internal scope recorded against every\n"
+            "Ironwood address in this wallet, from its own full viewing key. Equivalent\n"
+            "to what -rederiverironwoodscopes does for the default wallet at startup, but\n"
+            "callable at any time against any loaded wallet -- was previously only\n"
+            "reachable for whichever wallet happened to be the default one.\n"
+            "\nResult:\n"
+            "{\n"
+            "  \"success\": true|false    (boolean) false if one or more addresses could not be rederived --\n"
+            "                            check debug.log for which ones\n"
+            "}\n"
+            "\nExamples:\n"
+            + HelpExampleCli("rederiveironwoodscopes", "")
+            + HelpExampleRpc("rederiveironwoodscopes", "")
+        );
+
+    LOCK(pwallet->cs_wallet);
+    // Audit finding: RederiveIronwoodAddressScopes() corrects the in-memory
+    // scope first and only then tries to persist it, and its on-disk write
+    // path needs the wallet unlocked (same as any other encrypted-setting
+    // write) -- without this, a locked wallet would silently mutate memory,
+    // fail every persist, and return {"success": false} with no indication
+    // that unlocking is what's actually needed. Same call upgradewallet
+    // makes directly above.
+    EnsureWalletIsUnlocked(pwallet);
+
+    bool fSuccess = pwallet->RederiveIronwoodAddressScopes();
+    if (!fSuccess)
+        LogPrintf("rederiveironwoodscopes: some scopes for wallet \"%s\" could not be rederived, see the log lines above\n", pwallet->GetName());
+
+    UniValue result(UniValue::VOBJ);
+    result.push_back(Pair("success", fSuccess));
+    return result;
+}
+
 // ─── Fee/behavior/pruning RPCs ─────────────────────────────────────────────────
 // These settings used to be process-wide CLI/pirate.conf flags shared by
 // every wallet; Phase 5 of the multiwallet effort made each one a per-wallet
@@ -10539,6 +10582,7 @@ static const CRPCCommand commands[] =
 
     { "wallet",                "setchangeaddress",         &setchangeaddress,          true },
     { "wallet",                "upgradewallet",            &upgradewallet,             true },
+    { "wallet",                "rederiveironwoodscopes",   &rederiveironwoodscopes,    true },
     { "wallet",                "setmintxfee",              &setmintxfee,               true },
     { "wallet",                "settxconfirmtarget",       &settxconfirmtarget,        true },
     { "wallet",                "setspendzeroconfchange",   &setspendzeroconfchange,    true },

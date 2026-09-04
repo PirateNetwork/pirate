@@ -247,7 +247,10 @@ static const CRPCConvertParam vRPCConvertParams[] =
     { "z_createbuildinstructionscoincontrol", 0 },
     { "z_createbuildinstructionscoincontrol", 1 },
     { "z_createbuildinstructionscoincontrol", 2 },
-    { "z_createbuildinstructionscoincontrol", 3 }
+    { "z_createbuildinstructionscoincontrol", 3 },
+
+    // returnwalletname (backlog item 11(a)'s deferred wallet-attribution fix)
+    { "z_buildrawtransaction", 1 }
 };
 
 class CRPCConvertTable

@@ -1867,9 +1867,9 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
  */
 UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-  if (fHelp || params.size() != 1)
+  if (fHelp || params.size() < 1 || params.size() > 2)
       throw runtime_error(
-          "z_buildrawtransaction \"hexstring\"\n"
+          "z_buildrawtransaction \"hexstring\" ( returnwalletname )\n"
           "\nBuild and finalize a shielded transaction from transaction builder data.\n"
           "Processes hex-encoded transaction builder instructions to create a complete\n"
           "shielded transaction for Sapling or Ironwood pools.\n"
@@ -1886,10 +1886,21 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
           "originating wallet's change should land.\n"
 
           "\nArguments:\n"
-          "1. \"hex\"      (string, required) The transaction builder hex string\n"
+          "1. \"hex\"              (string, required) The transaction builder hex string\n"
+          "2. returnwalletname   (boolean, optional, default=false) return an object naming which\n"
+          "                      wallet actually signed instead of the bare hex string -- useful\n"
+          "                      when the wallet wasn't explicitly selected (see above) and the\n"
+          "                      caller wants to know which one was found. Opt-in and defaults to\n"
+          "                      false so every existing caller expecting a plain string is unaffected.\n"
 
-          "\nResult:\n"
+          "\nResult (returnwalletname omitted or false):\n"
           "\"transaction\"  (string) Hex-encoded raw transaction ready for broadcast\n"
+
+          "\nResult (returnwalletname true):\n"
+          "{\n"
+          "  \"hex\" : \"transaction\",  (string) Hex-encoded raw transaction ready for broadcast\n"
+          "  \"wallet\" : \"name\"       (string) the wallet that actually signed this transaction\n"
+          "}\n"
 
           "\nExamples:\n"
           + HelpExampleCli("z_buildrawtransaction", "\"hexstring\"")
@@ -1906,9 +1917,18 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   // relevant address(es) and uses that one, once the blob is decoded far enough to
   // know what to search for.
   LOCK(cs_main);
-  RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR));
+  // No fAllowNull here (matching sendrawtransaction's own "hex ( bool )"
+  // shape immediately above) -- optionality of the second parameter already
+  // comes from RPCTypeCheck() only checking as many positions as were
+  // actually supplied, not from allowing an explicit JSON null in either
+  // position. Audit finding: the previous `true` here let a null through
+  // argument 0 only to fail later with a confusing generic error instead of
+  // a clean type-mismatch one, and didn't make null in argument 1 mean
+  // "absent" either -- it still threw in get_bool().
+  RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR)(UniValue::VBOOL));
 
   string strHexTb = params[0].get_str();
+  bool fReturnWalletName = params.size() > 1 && params[1].get_bool();
   if (!IsHex(strHexTb)) {
       throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "Invalid hex string");
   }
@@ -2288,7 +2308,20 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   //Return Hex encoded serialized completed transaction
   CDataStream ssTx(SER_NETWORK, PROTOCOL_VERSION);
   ssTx << rtx;
-  return HexStr(ssTx.begin(), ssTx.end());
+  std::string strHex = HexStr(ssTx.begin(), ssTx.end());
+  if (!fReturnWalletName)
+      return strHex;
+
+  // Opt-in object shape (backlog item 11(a)'s own deferred note: surfacing
+  // which wallet actually signed needed a result-shape change, weighed
+  // against compatibility and left for later -- this is that later,
+  // additive rather than breaking). strFoundWalletName is always the real
+  // registry name here: either the explicitly-selected wallet (unchanged
+  // through the whole call), or whichever one the search above found.
+  UniValue result(UniValue::VOBJ);
+  result.pushKV("hex", strHex);
+  result.pushKV("wallet", strFoundWalletName);
+  return result;
 
   }
 }

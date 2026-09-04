@@ -288,6 +288,16 @@ private:
     // which is what removeAllWallets()/removeWallet() actually delete --
     // keeping a second owning pointer here would double-free it at shutdown.
 #endif
+    // Snapshot of whether the two pre-Phase-5 QSettings preferences
+    // (fTxDeleteEnabled/fSaplingConsolidationEnabled) were genuinely present
+    // before OptionsModel::Init() ran -- Init() unconditionally (re)writes
+    // both keys with a default value if missing, so checking contains() any
+    // later than createOptionsModel() would always be true, even on a
+    // brand-new installation that never had either preference (audit
+    // finding). Read once, used by finishStartup()'s migration block below.
+    bool fHadLegacyTxDeleteSetting = false;
+    bool fHadLegacySaplingConsolidationSetting = false;
+
     int returnValue;
     const PlatformStyle *platformStyle;
     std::unique_ptr<QWidget> shutdownWindow;
@@ -486,6 +496,16 @@ void KomodoApplication::createPaymentServer()
 
 void KomodoApplication::createOptionsModel(bool resetSettings)
 {
+    // Must be captured before OptionsModel's constructor runs Init() (see
+    // the member declarations' comment) and skipped entirely on an explicit
+    // -resetguisettings run -- a user asking to reset GUI settings shouldn't
+    // have a stale legacy preference resurrected into the wallet it migrates
+    // to next.
+    if (!resetSettings) {
+        QSettings settingsBeforeInit;
+        fHadLegacyTxDeleteSetting = settingsBeforeInit.contains("fTxDeleteEnabled");
+        fHadLegacySaplingConsolidationSetting = settingsBeforeInit.contains("fSaplingConsolidationEnabled");
+    }
     optionsModel = new OptionsModel(nullptr, resetSettings);
 }
 
@@ -652,6 +672,58 @@ void KomodoApplication::finishStartup()
     // model map (see PirateOceanGUI), not through this startup path.
     if (pwalletMain)
     {
+        // One-time migration of two pre-Phase-5 QSettings preferences into
+        // their now-per-wallet equivalents (backlog item 1's own deferred
+        // note, flagged since 2026-08-28, actually fixed here). Before the
+        // multiwallet effort's Phase 5, "auto-delete old transactions" and
+        // "auto-consolidate Sapling notes" were single global toggles
+        // (fTxDeleteEnabled/fSaplingConsolidationEnabled in QSettings,
+        // defaulting to true, forwarded to -deletetx/-saplingconsolidation)
+        // -- both flags were removed and the equivalent settings promoted to
+        // real per-CWallet fields whose *compiled-in* default is false
+        // (wallet.h). Without this, every existing GUI user upgrading into a
+        // build with this effort would have both features silently disabled
+        // the moment their wallet first loads under it, with no indication
+        // anything changed short of noticing consolidation/pruning stopped
+        // happening. Applied once per wallet name (not once globally -- a
+        // profile with more than one wallet, or a fresh wallet created via
+        // the zero-wallet-startup flow with nothing to inherit, must not
+        // share one process-wide marker with whichever wallet happens to
+        // load first; see audit findings on the original single-marker,
+        // always-true-contains() version of this block).
+        //
+        // fHadLegacy*Setting (captured in createOptionsModel(), before
+        // OptionsModel::Init() ever ran) is what actually distinguishes a
+        // real inherited preference from a default OptionsModel::Init()
+        // just invented for a brand-new profile -- migrationSettings.
+        // contains() here would always be true and is not used for that.
+        //
+        // A wallet is only recorded as migrated once the corresponding
+        // setter reports the new value actually reached disk. Both setters
+        // route through CWallet::WriteEncryptableSetting(), which fails
+        // closed (returns false, changes nothing on disk) against an
+        // encrypted wallet that is still locked at this point in startup --
+        // init.cpp re-locks every crypted wallet before finishStartup() ever
+        // runs. Leaving such a wallet off the migrated list means this block
+        // simply tries again the next time this wallet is the one that
+        // loads here, rather than silently losing the preference forever
+        // the first time it fails.
+        QSettings migrationSettings;
+        QString migratingWalletName = QString::fromStdString(pwalletMain->GetName());
+        QStringList migratedWallets = migrationSettings.value("phase5MigratedWallets").toStringList();
+        if (!migratedWallets.contains(migratingWalletName)) {
+            bool fTxDeleteMigratedOk = true;
+            bool fSaplingMigratedOk = true;
+            if (fHadLegacyTxDeleteSetting)
+                fTxDeleteMigratedOk = pwalletMain->SetTxDeleteEnabled(migrationSettings.value("fTxDeleteEnabled").toBool());
+            if (fHadLegacySaplingConsolidationSetting)
+                fSaplingMigratedOk = pwalletMain->SetSaplingConsolidationEnabled(migrationSettings.value("fSaplingConsolidationEnabled").toBool());
+            if (fTxDeleteMigratedOk && fSaplingMigratedOk) {
+                migratedWallets.append(migratingWalletName);
+                migrationSettings.setValue("phase5MigratedWallets", migratedWallets);
+            }
+        }
+
         WalletModel *walletModel = new WalletModel(platformStyle, pwalletMain, optionsModel);
 
         // No-default-wallet redesign: keyed by its own real registry name

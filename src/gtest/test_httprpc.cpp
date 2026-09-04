@@ -622,6 +622,65 @@ TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsThePhase10RewiredSubs
     EXPECT_NO_THROW(tableRPC.execute("z_listunspent", UniValue(UniValue::VARR)));
 }
 
+TEST_F(MultiWalletDispatchTest, RederiveIronwoodScopesRunsAgainstTheSelectedWalletNotTheDefault)
+{
+    // Backlog item (Phase 11 audit, deferred): -rederiverironwoodscopes was
+    // only ever reachable for the default wallet at startup; this RPC is the
+    // per-wallet equivalent, callable against any loaded wallet at any time.
+    // A wallet with no Ironwood keys at all has nothing to rederive, so this
+    // also confirms the trivial-success path doesn't throw or misreport.
+    RPCWalletRequestGuard guard("secondarytestwallet");
+    UniValue result;
+    ASSERT_NO_THROW(result = tableRPC.execute("rederiveironwoodscopes", UniValue(UniValue::VARR)));
+    ASSERT_EQ(UniValue::VOBJ, result.getType());
+    EXPECT_TRUE(find_value(result, "success").get_bool());
+}
+
+TEST_F(MultiWalletDispatchTest, RederiveIronwoodScopesActuallyCorrectsAScopeOnTheSelectedWalletOnly)
+{
+    // Audit follow-up to the test above: that one only reaches
+    // RederiveIronwoodAddressScopes()'s "no Ironwood keys found" early
+    // return, which proves dispatch (allowlisting + wallet resolution) but
+    // never exercises the actual scope-correction loop. This forces a real
+    // mismatch -- the same kind a stale/mis-derived entry would leave -- and
+    // confirms it's corrected, and only on the wallet the request was
+    // scoped to, not on whatever pwalletMain happens to be.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    libzcash::IronwoodPaymentAddress addr;
+    libzcash::IronwoodIncomingViewingKey ivk;
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryWallet->GenerateNewSeed();
+        addr = secondaryWallet->GenerateNewIronwoodZKey();
+        ASSERT_TRUE(secondaryWallet->GetIronwoodIncomingViewingKey(addr, ivk));
+
+        // Overwrite the freshly (correctly) derived scope with the wrong
+        // one, via the same public setter the wallet's own loading code
+        // uses -- simulating the stale-entry case this RPC exists to fix.
+        secondaryWallet->AddIronwoodIncomingViewingKey(ivk, addr, KeyScope::Internal);
+    }
+    KeyScope scopeBefore;
+    ASSERT_TRUE(secondaryWallet->GetIronwoodKeyScope(addr, scopeBefore));
+    ASSERT_EQ(KeyScope::Internal, scopeBefore);
+
+    RPCWalletRequestGuard guard("secondarytestwallet");
+    UniValue result;
+    ASSERT_NO_THROW(result = tableRPC.execute("rederiveironwoodscopes", UniValue(UniValue::VARR)));
+    ASSERT_EQ(UniValue::VOBJ, result.getType());
+    EXPECT_TRUE(find_value(result, "success").get_bool());
+
+    KeyScope scopeAfter;
+    ASSERT_TRUE(secondaryWallet->GetIronwoodKeyScope(addr, scopeAfter));
+    EXPECT_EQ(KeyScope::External, scopeAfter);
+
+    // The default wallet -- never touched by this request -- has no
+    // Ironwood key at all, confirming the fix is scoped to the selected
+    // wallet rather than to whichever wallet pwalletMain happens to be.
+    EXPECT_FALSE(pwalletMain->HaveIronwoodIncomingViewingKey(addr));
+}
+
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRpcPirateWalletAndRpcDumpSubset)
 {
     // The rpcpiratewallet/rpcdump plumbing phase's additions. Each name has to
@@ -1099,6 +1158,45 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionFindsTheOwningWalletEvenWhen
         std::string message = find_value(objError, "message").get_str();
         EXPECT_EQ(std::string::npos, message.find("No loaded wallet recognizes"));
         EXPECT_EQ(std::string::npos, message.find("not found"));
+        EXPECT_NE(std::string::npos, message.find("Anchor cannot be null"));
+    }
+}
+
+TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionAcceptsTheOptionalReturnWalletNameParamWithoutChangingSearchBehavior)
+{
+    // Backlog item 11(a)'s deferred wallet-attribution fix: a new, opt-in,
+    // boolean second parameter (default false, so every existing caller
+    // expecting a bare hex string is unaffected) wraps the result in
+    // {"hex":..., "wallet":...} instead. This doesn't reach that wrapped
+    // result -- reaching an actual successful Build() needs a real funded
+    // note and a built chain, well beyond this fixture -- but proves the new
+    // parameter parses correctly (RPCTypeCheck accepts a bool in position 1)
+    // and doesn't disturb the search/resolution logic that runs before it:
+    // the owning secondary wallet is still found and used (same "Anchor
+    // cannot be null" failure point as the equivalent true test without this
+    // parameter), not rejected as a bad argument or silently mis-routed.
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
+    ASSERT_NE(nullptr, secondaryWallet);
+    ASSERT_NE(secondaryWallet, pwalletMain);
+
+    libzcash::SaplingPaymentAddress ownedAddr;
+    {
+        LOCK(secondaryWallet->cs_wallet);
+        secondaryWallet->GenerateNewSeed();
+        ownedAddr = secondaryWallet->GenerateNewSaplingZKey();
+    }
+
+    UniValue params(UniValue::VARR);
+    params.push_back(BuildDegenerateSaplingSpendHex(ownedAddr, uint256()));
+    params.push_back(UniValue(true));
+
+    try {
+        tableRPC.execute("z_buildrawtransaction", params);
+        FAIL() << "expected the degenerate null anchor to be rejected once the owning wallet is found";
+    } catch (const UniValue& objError) {
+        std::string message = find_value(objError, "message").get_str();
+        EXPECT_EQ(std::string::npos, message.find("Expected type"));
+        EXPECT_EQ(std::string::npos, message.find("No loaded wallet recognizes"));
         EXPECT_NE(std::string::npos, message.find("Anchor cannot be null"));
     }
 }

@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -176,7 +177,8 @@ void ZSignDialog::on_signButton_clicked()
           "\nArguments:\n"
           "\"hexstring\"              (string, required) The hex-encoded transaction builder instructions\n"
           "\nResult:\n"
-          "\"transaction\"            (string) Hex-encoded signed transaction ready for broadcast\n";
+          "\"transaction\"            (string) Hex-encoded signed transaction ready for broadcast\n"
+          "(this dialog also asks for, and displays, which wallet actually signed it)\n";
         
         ui->teResult->setText(qsResult);
         return;
@@ -185,24 +187,33 @@ void ZSignDialog::on_signButton_clicked()
       //Create parameters for z_buildrawtransaction
       UniValue params(UniValue::VARR);
       params.push_back(hexInput);
-      
+      // returnwalletname=true: this dialog never scopes the call to a
+      // specific wallet (z_buildrawtransaction searches every loaded one --
+      // see its own help text), so surfacing which one was actually found
+      // and used is the only way the user learns that from this screen at
+      // all, instead of only a server-side LogPrintf nobody watching the
+      // GUI would see. Backlog item 11(a)'s own deferred note, fixed here.
+      params.push_back(true);
+
       //Execute z_buildrawtransaction RPC call
       oResult = tableRPC.execute("z_buildrawtransaction", params);
-      
-      if (oResult.isNull() || oResult.getType() != UniValue::VSTR)
+
+      if (oResult.isNull() || oResult.getType() != UniValue::VOBJ)
       {
         ui->teResult->setText("Transaction signing failed. The result is empty or invalid.");
         return;
       }
 
-      std::string signedTx = oResult.get_str();
+      std::string signedTx = find_value(oResult, "hex").get_str();
+      std::string signingWallet = find_value(oResult, "wallet").get_str();
       if (signedTx.empty())
       {
         ui->teResult->setText("Transaction signing failed. The signed transaction is empty.");
         return;
       }
-      
-      ui->lbResult->setText("Signed transaction output: The transaction was successfully signed. Copy the hex below and paste it into the Broadcast field or use sendrawtransaction on your online wallet.");
+
+      ui->lbResult->setText(QString("Signed transaction output: The transaction was successfully signed using wallet \"%1\". Copy the hex below and paste it into the Broadcast field or use sendrawtransaction on your online wallet.")
+          .arg(QString::fromStdString(signingWallet)));
       ui->teResult->setText(QString::fromStdString(signedTx));
     }
     catch (UniValue& objError)

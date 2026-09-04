@@ -847,6 +847,12 @@ TEST_F(WalletManagerTest, CreateWalletSucceedsOnANewNameAndReturnsASeedPhrase)
     // every address this wallet ever derives would have used a different
     // scheme than the one its own returned seed phrase actually implies.
     EXPECT_TRUE(wallet->bip39Enabled);
+    // Backlog item (Phase 11 audit, deferred): a fresh secondary wallet
+    // never got the same unconditional FEATURE_LATEST upgrade a fresh
+    // default wallet gets from init.cpp's own
+    // GetBoolArg("-upgradewallet", fFirstRun) default-true-on-first-run
+    // behavior. CreateWallet() now does this itself.
+    EXPECT_EQ((int)FEATURE_LATEST, wallet->GetVersion());
 
     std::vector<std::string> names = CWalletManager::Get().ListWalletNames();
     EXPECT_EQ(2u, names.size());

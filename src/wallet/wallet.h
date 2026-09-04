@@ -2422,7 +2422,12 @@ public:
      * handlers call these rather than assigning the fields directly, so a
      * setting can never be changed in memory without also being persisted.
      */
-    void SetSaplingConsolidationEnabled(bool enabled);
+    // Return WriteEncryptableSetting()'s own result (false if this wallet is
+    // encrypted and still locked -- audit finding: a caller that needs to
+    // know whether the new value actually reached disk, rather than only
+    // taking effect in memory for this session, must check this instead of
+    // assuming success the way every other setter's void return implied.
+    bool SetSaplingConsolidationEnabled(bool enabled);
     void SetIronwoodConsolidationEnabled(bool enabled);
     void SetSaplingConsolidationInterval(int interval);
     void SetIronwoodConsolidationInterval(int interval);
@@ -2445,7 +2450,9 @@ public:
     void SetMinTxValue(CAmount value);
     void SetKeypoolSizeTarget(int64_t size);
     void SetWalletNotifyCommand(const std::string& command);
-    void SetTxDeleteEnabled(bool enabled);
+    // See SetSaplingConsolidationEnabled()'s comment: return value reflects
+    // whether the new value actually persisted to disk.
+    bool SetTxDeleteEnabled(bool enabled);
     void SetTxConflictDeleteEnabled(bool enabled);
     void SetDeleteInterval(int interval);
     void SetKeepTransactionsAfterNBlocks(unsigned int nBlocks);

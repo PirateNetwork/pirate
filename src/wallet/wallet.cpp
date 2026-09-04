@@ -3622,11 +3622,11 @@ bool CWallet::SetMaxVersion(int nVersion)
  * Write*() methods and CWalletDB::ReadKeyValue() for how these are loaded
  * back in on the next CWallet::LoadWallet() call).
  */
-void CWallet::SetSaplingConsolidationEnabled(bool enabled)
+bool CWallet::SetSaplingConsolidationEnabled(bool enabled)
 {
     LOCK(cs_wallet);
     fSaplingConsolidationEnabled = enabled;
-    WriteEncryptableSetting("saplingconsolidationenabled", "csaplingconsolidationenabled", enabled);
+    return WriteEncryptableSetting("saplingconsolidationenabled", "csaplingconsolidationenabled", enabled);
 }
 
 void CWallet::SetIronwoodConsolidationEnabled(bool enabled)
@@ -3810,11 +3810,11 @@ void CWallet::SetWalletNotifyCommand(const std::string& command)
     strWalletNotifyCommand = command;
 }
 
-void CWallet::SetTxDeleteEnabled(bool enabled)
+bool CWallet::SetTxDeleteEnabled(bool enabled)
 {
     LOCK(cs_wallet);
     fTxDeleteEnabled = enabled;
-    WriteEncryptableSetting("deletetxenabled", "cdeletetxenabled", enabled);
+    return WriteEncryptableSetting("deletetxenabled", "cdeletetxenabled", enabled);
 }
 
 void CWallet::SetTxConflictDeleteEnabled(bool enabled)

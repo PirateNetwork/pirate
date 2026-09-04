@@ -792,6 +792,30 @@ bool CWalletManager::CreateWallet(const std::string& name, std::string& strError
         // back a phrase that doesn't actually match its own derivation.
         wallet->bip39Enabled = true;
         CWalletDB(name).WriteWalletBip39Enabled(true);
+        // Matches init.cpp's own fresh-default-wallet behavior too: a
+        // brand-new default wallet is unconditionally upgraded to
+        // FEATURE_LATEST at creation (GetBoolArg("-upgradewallet", fFirstRun)
+        // defaults true whenever -upgradewallet itself isn't given, since
+        // fFirstRun is true for it). CreateWallet() never had an equivalent
+        // -- every secondary wallet it ever produced was left at
+        // CWallet::SetNull()'s un-upgraded default version instead, a
+        // Phase 11-audit-flagged, previously-deferred gap. There is no
+        // "explicit -upgradewallet=<N>" partial-upgrade equivalent to
+        // replicate here (that variant only makes sense for an *existing*
+        // wallet being brought forward from an old version at startup); a
+        // brand-new wallet has nothing to preserve compatibility with, so it
+        // always gets the unconditional full-upgrade branch instead.
+        //
+        // Real behavior change, not just a version-number bump (audit
+        // finding): FEATURE_LATEST == FEATURE_COMPRPUBKEY, so from here on
+        // GenerateNewKey() emits compressed transparent pubkeys for every
+        // wallet this method creates, instead of uncompressed ones. Every
+        // secondary wallet created by an older build of this method, before
+        // this line existed, stays at FEATURE_BASE forever unless the
+        // operator runs the upgradewallet RPC against it explicitly -- this
+        // only changes what newly created wallets get, it does not reach
+        // back and upgrade anything already on disk.
+        wallet->SetMinVersion(FEATURE_LATEST);
         if (fRecovering) {
             // Restoring from a known phrase can surface existing on-chain
             // funds -- unlike GenerateNewSeed()'s brand-new-seed case (nothing
