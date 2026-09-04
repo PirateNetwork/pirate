@@ -1961,11 +1961,26 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
     // ends, so this process-wide singleton doesn't leak state into later tests.
     CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
     struct WalletManagerCleanup {
+        CWallet* prevPwalletMain;
         ~WalletManagerCleanup() {
             CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
+            // Reset() nulls pwalletMain (walletmanager.cpp) -- restore it to
+            // the fixture's own wallet (captured above, before Reset() ran)
+            // so BitcoinTestingSetup::TearDown()'s own
+            // UnregisterValidationInterface(pwalletMain)/delete pwalletMain
+            // (gtestutils.cpp) actually run against it instead of a null
+            // pointer. Audit finding: without this, the fixture's real
+            // CWallet stayed registered with every validation-interface
+            // signal and was never freed -- a zombie wallet a later test's
+            // block connection could still dispatch into, potentially
+            // writing into that later test's own wallet.dat (same filename,
+            // since strWalletFile is just "wallet.dat" either way). Matches
+            // the save/restore pattern test_httprpc.cpp's fixture already
+            // uses for the same reason.
+            pwalletMain = prevPwalletMain;
         }
-    } walletManagerCleanup;
+    } walletManagerCleanup{pwalletMain};
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_zcbi_test.dat", strError, seedPhrase)) << strError;
@@ -2035,6 +2050,166 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
         EXPECT_TRUE(find_error(u, "Insufficient funds")) << "unexpected error: " << u.write();
     } catch (const std::exception& e) {
         FAIL() << "z_createbuildinstructions threw a non-UniValue exception: " << e.what();
+    }
+}
+
+TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_operates_on_selected_wallet_not_default)
+{
+    // Regression coverage for the multiwallet effort, closing the one gap left
+    // by the test above: z_createbuildinstructionscoincontrol was never given
+    // its own dedicated test (backlog item 11, Phase 12 entry). Unlike
+    // z_createbuildinstructions, this RPC takes explicit txid/index coin
+    // control and resolves each input via pwallet->GetWalletTx(txid) --
+    // an upfront, per-wallet lookup that throws "Wallet transaction does not
+    // exist" outright when the resolved wallet doesn't hold that tx, rather
+    // than silently falling through to an empty builder. That gives this test
+    // a cleaner signal than the by-address version above, but the setup is
+    // the same: a real, witnessed Sapling note only the secondary wallet has
+    // ever seen, built via the shared SetupSecondaryWalletWithShieldedSaplingNote()
+    // helper.
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+
+    NOTARY_PUBKEY = notaryPubkey;
+    USE_EXTERNAL_PUBKEY = 0;
+
+    // Same chain-identity fix as the test above -- see its own comment for the
+    // full rationale (a KMD-identified height-1 coinbase overflows the
+    // vendored zcash_primitives crate's MAX_MONEY).
+    assetchain originalChainName = chainName;
+    uint64_t originalReward0 = ASSETCHAINS_REWARD[0];
+    uint64_t originalHalving0 = ASSETCHAINS_HALVING[0];
+    uint64_t originalSupply = ASSETCHAINS_SUPPLY;
+    uint8_t originalPrivate = ASSETCHAINS_PRIVATE;
+    chainName = assetchain("PIRATE");
+    ASSETCHAINS_REWARD[0] = 25600000000;
+    ASSETCHAINS_HALVING[0] = 77777;
+    ASSETCHAINS_SUPPLY = 0;
+    ASSETCHAINS_PRIVATE = 1;
+    struct ChainIdentityReverter {
+        assetchain originalChainName;
+        uint64_t originalReward0;
+        uint64_t originalHalving0;
+        uint64_t originalSupply;
+        uint8_t originalPrivate;
+        ~ChainIdentityReverter() {
+            chainName = originalChainName;
+            ASSETCHAINS_REWARD[0] = originalReward0;
+            ASSETCHAINS_HALVING[0] = originalHalving0;
+            ASSETCHAINS_SUPPLY = originalSupply;
+            ASSETCHAINS_PRIVATE = originalPrivate;
+        }
+    } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
+
+    CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
+    struct WalletManagerCleanup {
+        CWallet* prevPwalletMain;
+        ~WalletManagerCleanup() {
+            CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
+            CWalletManager::Get().Reset();
+            // Reset() nulls pwalletMain (walletmanager.cpp) -- restore it to
+            // the fixture's own wallet (captured above, before Reset() ran)
+            // so BitcoinTestingSetup::TearDown()'s own
+            // UnregisterValidationInterface(pwalletMain)/delete pwalletMain
+            // (gtestutils.cpp) actually run against it instead of a null
+            // pointer. Audit finding: without this, the fixture's real
+            // CWallet stayed registered with every validation-interface
+            // signal and was never freed -- a zombie wallet a later test's
+            // block connection could still dispatch into, potentially
+            // writing into that later test's own wallet.dat (same filename,
+            // since strWalletFile is just "wallet.dat" either way). Matches
+            // the save/restore pattern test_httprpc.cpp's fixture already
+            // uses for the same reason.
+            pwalletMain = prevPwalletMain;
+        }
+    } walletManagerCleanup{pwalletMain};
+
+    std::string strError, seedPhrase;
+    ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_zcbicc_test.dat", strError, seedPhrase)) << strError;
+    CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondary_zcbicc_test.dat");
+    ASSERT_NE(nullptr, secondaryWallet);
+
+    libzcash::SaplingPaymentAddress secondaryAddr = SetupSecondaryWalletWithShieldedSaplingNote(secondaryWallet);
+    // HasFailure(), not HasFatalFailure(): the helper reports through
+    // ADD_FAILURE(), which is non-fatal and invisible to the latter.
+    ASSERT_FALSE(HasFailure());
+
+    // Grab the funding note's own outpoint (txid + shielded output index)
+    // straight off the secondary wallet's own note data, the same way
+    // SecondaryWalletOwnSpendIsTrackedByItselfBeforeConfirmation below
+    // captures its nullifier -- this is what coin control addresses inputs by.
+    SaplingOutPoint fundingOp;
+    {
+        LOCK2(cs_main, secondaryWallet->cs_wallet);
+        std::vector<SaplingNoteEntry> saplingEntries;
+        std::vector<IronwoodNoteEntry> ironwoodEntries;
+        std::set<libzcash::PaymentAddress> filterAddresses = {secondaryAddr};
+        secondaryWallet->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, 1);
+        ASSERT_EQ(1u, saplingEntries.size());
+        fundingOp = saplingEntries[0].op;
+    }
+
+    UniValue inputObj(UniValue::VOBJ);
+    inputObj.push_back(Pair("txid", fundingOp.hash.GetHex()));
+    inputObj.push_back(Pair("index", (int)fundingOp.n));
+    UniValue inputs(UniValue::VARR);
+    inputs.push_back(inputObj);
+
+    UniValue outputObj(UniValue::VOBJ);
+    outputObj.push_back(Pair("address", EncodePaymentAddress(secondaryAddr)));
+    outputObj.push_back(Pair("amount", ValueFromAmount(1000)));
+    UniValue outputs(UniValue::VARR);
+    outputs.push_back(outputObj);
+
+    UniValue params(UniValue::VARR);
+    params.push_back(inputs);
+    params.push_back(outputs);
+
+    if (RPCIsInWarmup(nullptr))
+        SetRPCWarmupFinished();
+
+    UniValue secondaryResult;
+    {
+        RPCWalletRequestGuard guard("secondary_zcbicc_test.dat");
+        ASSERT_TRUE(guard.IsResolved());
+        try {
+            secondaryResult = tableRPC.execute("z_createbuildinstructionscoincontrol", params);
+        } catch (const UniValue& u) {
+            FAIL() << "z_createbuildinstructionscoincontrol threw UniValue: " << u.write();
+        } catch (const std::exception& e) {
+            FAIL() << "z_createbuildinstructionscoincontrol threw: " << e.what();
+        }
+    }
+    TransactionBuilder secondaryTb;
+    {
+        std::vector<unsigned char> raw = ParseHex(secondaryResult.get_str());
+        CDataStream ss(raw, SER_NETWORK, PROTOCOL_VERSION);
+        ss >> secondaryTb;
+    }
+    ASSERT_FALSE(secondaryTb.vSaplingSpends.empty());
+    // Confirms coin control actually selected the requested outpoint, not
+    // just some non-empty spend list (audit follow-up: SaplingSpendDescriptionInfo::op
+    // is public, cheap to check directly).
+    EXPECT_EQ(fundingOp, secondaryTb.vSaplingSpends[0].op);
+
+    // pwalletMain (the default wallet, no RPCWalletRequestGuard in scope)
+    // never saw this tx at all -- unlike the by-address version above, this
+    // RPC's own GetWalletTx() lookup throws immediately instead of silently
+    // returning an empty builder, proof this RPC resolved a different wallet
+    // than the one above, not just a weaker one.
+    try {
+        tableRPC.execute("z_createbuildinstructionscoincontrol", params);
+        FAIL() << "z_createbuildinstructionscoincontrol against the default wallet should have thrown";
+    } catch (const UniValue& u) {
+        EXPECT_TRUE(find_error(u, "Wallet transaction does not exist")) << "unexpected error: " << u.write();
+    } catch (const std::exception& e) {
+        FAIL() << "z_createbuildinstructionscoincontrol threw a non-UniValue exception: " << e.what();
     }
 }
 
@@ -2116,11 +2291,26 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
 
     CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
     struct WalletManagerCleanup {
+        CWallet* prevPwalletMain;
         ~WalletManagerCleanup() {
             CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
+            // Reset() nulls pwalletMain (walletmanager.cpp) -- restore it to
+            // the fixture's own wallet (captured above, before Reset() ran)
+            // so BitcoinTestingSetup::TearDown()'s own
+            // UnregisterValidationInterface(pwalletMain)/delete pwalletMain
+            // (gtestutils.cpp) actually run against it instead of a null
+            // pointer. Audit finding: without this, the fixture's real
+            // CWallet stayed registered with every validation-interface
+            // signal and was never freed -- a zombie wallet a later test's
+            // block connection could still dispatch into, potentially
+            // writing into that later test's own wallet.dat (same filename,
+            // since strWalletFile is just "wallet.dat" either way). Matches
+            // the save/restore pattern test_httprpc.cpp's fixture already
+            // uses for the same reason.
+            pwalletMain = prevPwalletMain;
         }
-    } walletManagerCleanup;
+    } walletManagerCleanup{pwalletMain};
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_selfspend_test.dat", strError, seedPhrase)) << strError;
