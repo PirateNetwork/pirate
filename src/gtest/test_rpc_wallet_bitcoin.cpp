@@ -55,8 +55,10 @@ using namespace std;
 extern UniValue createArgs(int nRequired, const char* address1 = NULL, const char* address2 = NULL);
 extern UniValue CallRPC(string args);
 
-extern CWallet* pwalletMain;
-
+// No longer needs its own extern CWallet* pwalletMain -- that global is
+// gone entirely. Every reference in this file now resolves
+// BitcoinTestingSetup's own `pwallet` member (gtestutils.h), inherited by
+// the fixtures below (pwalletMain-elimination effort).
 bool find_error(const UniValue& objError, const std::string& expected) {
     return find_value(objError, "message").get_str().find(expected) != string::npos;
 }
@@ -72,7 +74,7 @@ class rpc_wallet_tests_bitcoin : public BitcoinTestingSetup {};
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_addmultisig)
 {
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     rpcfn_type addmultisig = tableRPC["addmultisigaddress"]->actor;
 
@@ -114,22 +116,22 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet)
     // Test RPC calls for various wallet statistics
     UniValue r;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    CPubKey demoPubkey = pwalletMain->GenerateNewKey();
+    CPubKey demoPubkey = pwallet->GenerateNewKey();
     CTxDestination demoAddress(CTxDestination(demoPubkey.GetID()));
     UniValue retValue;
     string strAccount = "";
     string strPurpose = "receive";
     EXPECT_NO_THROW({ /*Initialize Wallet with an account */
-        CWalletDB walletdb(pwalletMain->strWalletFile);
+        CWalletDB walletdb(pwallet->strWalletFile);
         CAccount account;
         account.vchPubKey = demoPubkey;
-        pwalletMain->SetAddressBook(account.vchPubKey.GetID(), strAccount, strPurpose);
+        pwallet->SetAddressBook(account.vchPubKey.GetID(), strAccount, strPurpose);
         walletdb.WriteAccount(strAccount, account);
     });
 
-    CPubKey setaccountDemoPubkey = pwalletMain->GenerateNewKey();
+    CPubKey setaccountDemoPubkey = pwallet->GenerateNewKey();
     CTxDestination setaccountDemoAddress(CTxDestination(setaccountDemoPubkey.GetID()));
 
     /*********************************
@@ -263,7 +265,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet)
      * that's simply a different key than demoAddress, rather than a foreign
      * vanilla-Zcash-mainnet literal (this fork's real MAIN prefix doesn't decode
      * that address at all, making verifymessage throw instead of returning false) */
-    CTxDestination wrongAddress(CTxDestination(pwalletMain->GenerateNewKey().GetID()));
+    CTxDestination wrongAddress(CTxDestination(pwallet->GenerateNewKey().GetID()));
     EXPECT_TRUE(CallRPC("verifymessage " + EncodeDestination(wrongAddress) + " " + retValue.get_str() + " mymessage").get_bool() == false);
     /* Correct address and signature but wrong message */
     EXPECT_TRUE(CallRPC("verifymessage " + EncodeDestination(demoAddress) + " " + retValue.get_str() + " wrongmessage").get_bool() == false);
@@ -346,7 +348,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_getbalance)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
 
     // "tmC6YZnCUhm19dEXxh3Jb7srdBJxDawaCab" was a vanilla-Zcash-testnet literal
@@ -354,7 +356,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_getbalance)
     // generated address instead for the EXPECT_NO_THROW cases (the EXPECT_THROW
     // ones below still throw regardless of which reason - decode failure or
     // otherwise - so the literal is harmless there).
-    CTxDestination realTestnetAddr(CTxDestination(pwalletMain->GenerateNewKey().GetID()));
+    CTxDestination realTestnetAddr(CTxDestination(pwallet->GenerateNewKey().GetID()));
     std::string realTestnetAddrStr = EncodeDestination(realTestnetAddr);
     EXPECT_THROW(CallRPC("z_getbalance too many args"), runtime_error);
     EXPECT_THROW(CallRPC("z_getbalance invalidaddress"), runtime_error);
@@ -385,7 +387,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_validateaddress)
 {
     SelectParams(CBaseChainParams::MAIN);
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     UniValue retValue;
 
@@ -395,7 +397,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_validateaddress)
 
     // Wallet should be empty
     std::set<libzcash::SproutPaymentAddress> addrs;
-    pwalletMain->GetSproutPaymentAddresses(addrs);
+    pwallet->GetSproutPaymentAddresses(addrs);
     EXPECT_TRUE(addrs.size()==0);
 
     // This address is not valid, it belongs to another network
@@ -436,10 +438,10 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_validateaddress)
     // SaplingPaymentAddress above, but nothing exercised that branch. Since
     // there's no pre-existing valid Ironwood literal to reuse for the
     // not-in-wallet case, generate a real one and confirm ismine=true instead.
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    std::string ironwoodAddr = EncodePaymentAddress(pwalletMain->GenerateNewIronwoodZKey());
+    std::string ironwoodAddr = EncodePaymentAddress(pwallet->GenerateNewIronwoodZKey());
     EXPECT_NO_THROW(retValue = CallRPC("z_validateaddress " + ironwoodAddr));
     resultObj = retValue.get_obj();
     b = find_value(resultObj, "isvalid").get_bool();
@@ -456,28 +458,28 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_validateaddress)
  */
 TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_exportwallet)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // z_exportwallet/dumpwallet_impl no longer writes Sprout keys at all (only
     // transparent and Sapling), so this test now exercises a Sapling key
     // instead of the original Sprout one - the RPC mechanism being tested
     // (does the exported file actually contain the addr+key pair) is
     // unaffected by which shielded pool the key belongs to.
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
 
     // wallet should be empty
     std::set<libzcash::SaplingPaymentAddress> addrs;
-    pwalletMain->GetSaplingPaymentAddresses(addrs);
+    pwallet->GetSaplingPaymentAddresses(addrs);
     EXPECT_TRUE(addrs.size()==0);
 
     // wallet should have one key - but GenerateNewSaplingZKey() also registers
     // an internal/change address alongside the external one it returns (see
     // CBasicKeyStore::AddSaplingExtendedFullViewingKey), so the keystore now
     // reports 2 addresses for a single generated key, not 1.
-    libzcash::SaplingPaymentAddress addr = pwalletMain->GenerateNewSaplingZKey();
-    pwalletMain->GetSaplingPaymentAddresses(addrs);
+    libzcash::SaplingPaymentAddress addr = pwallet->GenerateNewSaplingZKey();
+    pwallet->GetSaplingPaymentAddresses(addrs);
     EXPECT_TRUE(addrs.size()==2);
 
     // Set up paths
@@ -501,7 +503,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_exportwallet)
     EXPECT_NO_THROW(CallRPC(string("z_exportwallet ") + tmpfilename.string()));
 
 
-    auto key = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), libzcash::PaymentAddress(addr));
+    auto key = std::visit(GetSpendingKeyForPaymentAddress(pwallet), libzcash::PaymentAddress(addr));
     ASSERT_TRUE(key.has_value());
 
     std::string s1 = EncodePaymentAddress(addr);
@@ -510,7 +512,11 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_exportwallet)
     // There's no way to really delete a private key so we will read in the
     // exported wallet file and search for the spending key and payment address.
 
-    EnsureWalletIsUnlocked();
+    // The old zero-arg overload read the raw pwalletMain global directly;
+    // that global is gone entirely now (pwalletMain-elimination effort) --
+    // use the CWallet*-taking overload against the fixture's own wallet
+    // instead.
+    EnsureWalletIsUnlocked(pwallet);
 
     ifstream file;
     file.open(exportfilepath.string().c_str(), std::ios::in | std::ios::ate);
@@ -541,7 +547,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_exportwallet)
  */
 TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // error if no args
     EXPECT_THROW(CallRPC("z_importwallet"), runtime_error);
@@ -593,7 +599,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
 
     // wallet should currently be empty
     std::set<libzcash::SaplingPaymentAddress> addrs;
-    pwalletMain->GetSaplingPaymentAddresses(addrs);
+    pwallet->GetSaplingPaymentAddresses(addrs);
     EXPECT_TRUE(addrs.size()==0);
 
     // import test data from file into wallet
@@ -601,7 +607,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
 
     // wallet should now have one zkey (plus its auto-registered internal/
     // change address - see the "2, not 1" note in rpc_wallet_z_exportwallet)
-    pwalletMain->GetSaplingPaymentAddresses(addrs);
+    pwallet->GetSaplingPaymentAddresses(addrs);
     EXPECT_TRUE(addrs.size()==2);
 
     // check that we have the spending key for the address
@@ -609,7 +615,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
     EXPECT_TRUE(IsValidPaymentAddress(address));
     ASSERT_TRUE(std::get_if<libzcash::SaplingPaymentAddress>(&address) != nullptr);
     auto addr = std::get_if<libzcash::SaplingPaymentAddress>(&address);
-    auto k = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), address);
+    auto k = std::visit(GetSpendingKeyForPaymentAddress(pwallet), address);
     EXPECT_TRUE(k.has_value());
 
     // Verify the spending key is the same as the test data
@@ -622,13 +628,13 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
  */
 TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
     UniValue retValue;
     int n1 = 1000; // number of times to import/export
     int n2 = 1000; // number of addresses to create and list
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
 
     // error if no args
@@ -654,7 +660,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
 
     // wallet should currently be empty
     std::set<libzcash::SaplingPaymentAddress> saplingAddrs;
-    pwalletMain->GetSaplingPaymentAddresses(saplingAddrs);
+    pwallet->GetSaplingPaymentAddresses(saplingAddrs);
     EXPECT_TRUE(saplingAddrs.empty());
 
     std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed(32);
@@ -690,9 +696,9 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
 
     // Make new addresses for the set (2 per generated key: external + internal)
     for (int i=0; i<n2; i++) {
-        pwalletMain->GenerateNewSaplingZKey();
+        pwallet->GenerateNewSaplingZKey();
     }
-    pwalletMain->GetSaplingPaymentAddresses(saplingAddrs);
+    pwallet->GetSaplingPaymentAddresses(saplingAddrs);
     for (const auto& a : saplingAddrs) {
         myaddrs.insert(EncodePaymentAddress(a));
     }
@@ -700,7 +706,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
     // Verify number of addresses stored in wallet
     int numAddrs = myaddrs.size();
     EXPECT_TRUE(numAddrs == (2 * n1) + (2 * n2));
-    pwalletMain->GetSaplingPaymentAddresses(saplingAddrs);
+    pwallet->GetSaplingPaymentAddresses(saplingAddrs);
     EXPECT_TRUE(saplingAddrs.size() == numAddrs);
 
     // Ask wallet to list addresses
@@ -731,7 +737,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
     auto address = DecodePaymentAddress(newaddress);
     EXPECT_TRUE(IsValidPaymentAddress(address));
     ASSERT_TRUE(std::get_if<libzcash::SaplingPaymentAddress>(&address) != nullptr);
-    auto k = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), address);
+    auto k = std::visit(GetSpendingKeyForPaymentAddress(pwallet), address);
     EXPECT_TRUE(k.has_value());
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
     SelectParams(CBaseChainParams::MAIN);
@@ -749,15 +755,15 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
 // let a caller filter these out or at least identify them.
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_listaddresses_verbose_reports_change_vs_normal)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
 
-    libzcash::SaplingPaymentAddress externalAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress externalAddr = pwallet->GenerateNewSaplingZKey();
     libzcash::SaplingExtendedSpendingKey extsk;
-    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(externalAddr, extsk));
+    ASSERT_TRUE(pwallet->GetSaplingExtendedSpendingKey(externalAddr, extsk));
     libzcash::SaplingPaymentAddress internalAddr;
     ASSERT_TRUE(extsk.ToXFVK().DefaultAddressInternal(&internalAddr));
 
@@ -1091,7 +1097,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     EXPECT_THROW(CallRPC("z_sendmany"), runtime_error);
     EXPECT_THROW(CallRPC("z_sendmany toofewargs"), runtime_error);
@@ -1152,11 +1158,11 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
     std::vector<char> v (2 * (ZC_MEMO_SIZE+1));     // x2 for hexadecimal string format
     std::fill(v.begin(),v.end(), 'A');
     std::string badmemo(v.begin(), v.end());
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    std::string fromZaddr = EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
-    std::string toZaddr = EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
+    std::string fromZaddr = EncodePaymentAddress(pwallet->GenerateNewSaplingZKey());
+    std::string toZaddr = EncodePaymentAddress(pwallet->GenerateNewSaplingZKey());
     try {
         CallRPC(string("z_sendmany ") + fromZaddr + " "
             + "[{\"address\":\"" + toZaddr + "\",\"amount\":123.456,\"memo\":\"" + badmemo + "\"}]");
@@ -1180,13 +1186,13 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
     // outright, directing callers to z_shieldcoinbase instead).
     auto consensusParams = Params().GetConsensus();
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "", {}, {}, -1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(pwallet, consensusParams, nHeight, "", {}, {}, -1));
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Minconf cannot be negative"));
     }
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "", {}, {}, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_sendmany(pwallet, consensusParams, nHeight, "", {}, {}, 1));
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "From address parameter missing"));
     }
@@ -1195,14 +1201,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
         // Recipients-empty is still checked before the from-address's
         // transparent/shielded classification, so this still surfaces
         // "No recipients" rather than the transparent-source rejection.
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ", {}, {}, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwallet, consensusParams, nHeight, "tmRr6yJonqGK23UVhrKuyvTpF8qxQQjKigJ", {}, {}, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "No recipients"));
     }
 
     try {
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "INVALID", recipients, {}, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwallet, consensusParams, nHeight, "INVALID", recipients, {}, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid from address"));
     }
@@ -1210,7 +1216,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
     try {
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U", recipients, {}, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwallet, consensusParams, nHeight, "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U", recipients, {}, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid from address"));
     }
@@ -1231,7 +1237,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
         std::string notOwnedAddr = EncodePaymentAddress(notOwnedKey.DefaultAddress());
         std::vector<SendManyRecipient> recipients = { SendManyRecipient("dummy",1.0, "") };
         try {
-            std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwalletMain, consensusParams, nHeight, notOwnedAddr, recipients, {}, 1) );
+            std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_sendmany(pwallet, consensusParams, nHeight, notOwnedAddr, recipients, {}, 1) );
             FAIL() << "expected construction to throw for an address with no spending key";
         } catch (const UniValue& objError) {
             EXPECT_TRUE(find_error(objError, "spending key not found"));
@@ -1263,7 +1269,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
     UniValue retValue;
     int n = 100;
 
@@ -1280,14 +1286,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
     bool previousUnlockedForReporting = fUnlockedForReporting;
     fUnlockedForReporting = true;
 
-    if(!pwalletMain->HaveHDSeed())
+    if(!pwallet->HaveHDSeed())
     {
-        pwalletMain->GenerateNewSeed();
+        pwallet->GenerateNewSeed();
     }
 
     // wallet should currently be empty
     std::set<libzcash::SaplingPaymentAddress> addrs;
-    pwalletMain->GetSaplingPaymentAddresses(addrs);
+    pwallet->GetSaplingPaymentAddresses(addrs);
     EXPECT_TRUE(addrs.size()==0);
 
     // create keys
@@ -1318,7 +1324,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
     // a CWD that no longer exists on disk.
     boost::filesystem::path previousCwd = boost::filesystem::current_path();
     boost::filesystem::current_path(GetArg("-datadir","/tmp/thisshouldnothappen"));
-    EXPECT_TRUE(pwalletMain->EncryptWallet(strWalletPass));
+    EXPECT_TRUE(pwallet->EncryptWallet(strWalletPass));
 
     // Verify we can still list the keys imported
     EXPECT_NO_THROW(retValue = CallRPC("z_listaddresses"));
@@ -1330,7 +1336,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
 
     // We can't call RPC walletpassphrase as that invokes RPCRunLater which breaks tests.
     // So we manually unlock.
-    EXPECT_TRUE(pwalletMain->Unlock(strWalletPass));
+    EXPECT_TRUE(pwallet->Unlock(strWalletPass));
 
     // Now add a key
     EXPECT_NO_THROW(CallRPC("z_getnewaddress sapling"));
@@ -1361,7 +1367,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_sapling_outputs_without_s
     // one or more outputs - hit this worst-case: outputCount was truncated to
     // zero and the outputs array came back empty even though the wallet could
     // decrypt the note. Build exactly that shape and confirm the RPC reports it.
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // TransactionBuilder needs Sapling active; UpdateNetworkUpgradeParameters()
     // always mutates the REGTEST params singleton (chainparams.cpp:670).
@@ -1374,12 +1380,12 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_sapling_outputs_without_s
         }
     } upgradeReverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress myAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress myAddr = pwallet->GenerateNewSaplingZKey();
     libzcash::SaplingExtendedSpendingKey myExtsk;
-    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(myAddr, myExtsk));
+    ASSERT_TRUE(pwallet->GetSaplingExtendedSpendingKey(myAddr, myExtsk));
 
     // Funding key for the transparent input; only used to build the tx
     // locally, never broadcast or mined.
@@ -1421,7 +1427,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_sapling_outputs_without_s
     std::vector<CTransaction> vAdded;
     std::set<libzcash::SaplingPaymentAddress> saplingAddressesFound;
     std::set<libzcash::IronwoodPaymentAddress> ironwoodAddressesFound;
-    pwalletMain->AddToWalletIfInvolvingMe(vtx, vAdded, nullptr, 1, true, saplingAddressesFound, ironwoodAddressesFound, false);
+    pwallet->AddToWalletIfInvolvingMe(vtx, vAdded, nullptr, 1, true, saplingAddressesFound, ironwoodAddressesFound, false);
     ASSERT_EQ(vAdded.size(), 1u);
 
     UniValue result;
@@ -1451,7 +1457,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_ironwood_outputs)
     // of the GetSaplingOutputsCount()/GetSaplingSpendsCount() bug fixed above.
     // Confirm a plain Ironwood receive (own address, own OVK, zero spends) is
     // now reported.
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // TransactionBuilder needs Overwinter/Sapling/Ironwood active; REGTEST is
     // the only chain UpdateNetworkUpgradeParameters() mutates.
@@ -1468,12 +1474,12 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_ironwood_outputs)
         }
     } upgradeReverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::IronwoodPaymentAddress myAddr = pwalletMain->GenerateNewIronwoodZKey();
+    libzcash::IronwoodPaymentAddress myAddr = pwallet->GenerateNewIronwoodZKey();
     libzcash::IronwoodExtendedSpendingKeyPirate myExtsk;
-    ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(myAddr, myExtsk));
+    ASSERT_TRUE(pwallet->GetIronwoodExtendedSpendingKey(myAddr, myExtsk));
     libzcash::IronwoodFullViewingKey myFvk;
     ASSERT_TRUE(myExtsk.sk.DeriveFVK(&myFvk));
     libzcash::IronwoodOutgoingViewingKey myOvk;
@@ -1515,7 +1521,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_viewtransaction_ironwood_outputs)
     std::vector<CTransaction> vAdded;
     std::set<libzcash::SaplingPaymentAddress> saplingAddressesFound;
     std::set<libzcash::IronwoodPaymentAddress> ironwoodAddressesFound;
-    pwalletMain->AddToWalletIfInvolvingMe(vtx, vAdded, nullptr, 1, true, saplingAddressesFound, ironwoodAddressesFound, false);
+    pwallet->AddToWalletIfInvolvingMe(vtx, vAdded, nullptr, 1, true, saplingAddressesFound, ironwoodAddressesFound, false);
     ASSERT_EQ(vAdded.size(), 1u);
 
     UniValue result;
@@ -1539,7 +1545,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_listunspent_parameters)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     UniValue retValue;
 
@@ -1589,10 +1595,10 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_listunspent_parameters)
     // test needs to stay on TESTNET throughout for its address-encoding
     // checks. GenerateNewSaplingZKey() is the same underlying wallet method
     // z_getnewaddress calls, minus the RPC-level activation gate.
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    std::string myzaddr = EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
+    std::string myzaddr = EncodePaymentAddress(pwallet->GenerateNewSaplingZKey());
 
     // return empty array for this address
     EXPECT_NO_THROW(retValue = CallRPC("z_listunspent 1 999 false [\"" + myzaddr + "\"]"));
@@ -1608,7 +1614,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     EXPECT_THROW(CallRPC("z_shieldcoinbase"), runtime_error);
     EXPECT_THROW(CallRPC("z_shieldcoinbase toofewargs"), runtime_error);
@@ -1679,7 +1685,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
     std::string mainnetzaddr = "zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U";
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(pwalletMain, consensusParams, nHeight, mtx, {}, testnetzaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_shieldcoinbase(pwallet, consensusParams, nHeight, mtx, {}, testnetzaddr, 1));
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "No coinbase inputs provided for shielding"));
     }
@@ -1687,7 +1693,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
     try {
         std::vector<ShieldCoinbaseUTXO> inputs = { ShieldCoinbaseUTXO{uint256(),0,0} };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(pwalletMain, consensusParams, nHeight, mtx, inputs, mainnetzaddr, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_shieldcoinbase(pwallet, consensusParams, nHeight, mtx, inputs, mainnetzaddr, 1) );
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid recipient address"));
     }
@@ -1706,7 +1712,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_parameters)
 // InitializeIronwood() in the equivalent spot.
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_sapling_builds_transaction)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // TransactionBuilder needs Sapling active; UpdateNetworkUpgradeParameters()
     // always mutates the REGTEST params singleton (chainparams.cpp:670).
@@ -1719,16 +1725,16 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_sapling_builds_transaction
         }
     } upgradeReverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress myAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress myAddr = pwallet->GenerateNewSaplingZKey();
 
     // Funding key for the transparent coinbase input. Unlike the
     // z_viewtransaction tests above (which use a standalone CBasicKeyStore),
-    // this key must live in pwalletMain itself: AsyncRPCOperation_shieldcoinbase
-    // builds its TransactionBuilder against pwalletMain as the signing keystore.
-    CPubKey pubkey = pwalletMain->GenerateNewKey();
+    // this key must live in pwallet itself: AsyncRPCOperation_shieldcoinbase
+    // builds its TransactionBuilder against pwallet as the signing keystore.
+    CPubKey pubkey = pwallet->GenerateNewKey();
     CScript scriptPubKey = GetScriptForDestination(pubkey.GetID());
 
     CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 1);
@@ -1746,7 +1752,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_shieldcoinbase_sapling_builds_transaction
     };
 
     auto operation = std::make_shared<AsyncRPCOperation_shieldcoinbase>(
-        pwalletMain, Params().GetConsensus(), 1, CMutableTransaction(), inputs, EncodePaymentAddress(myAddr), 10000);
+        pwallet, Params().GetConsensus(), 1, CMutableTransaction(), inputs, EncodePaymentAddress(myAddr), 10000);
     operation->testmode = true;
 
     TEST_FRIEND_AsyncRPCOperation_shieldcoinbase proxy(operation);
@@ -1817,9 +1823,18 @@ static libzcash::SaplingPaymentAddress SetupSecondaryWalletWithShieldedSaplingNo
         return secondaryAddr;
     }
     CTransaction coinbaseTx = coinbaseBlock->vtx[0];
+    // A free function, not a BitcoinTestingSetup method -- no inherited
+    // member to shadow the global, so resolve the fixture's own wallet
+    // explicitly via the manager instead (this always runs before any
+    // caller's mid-test Reset(), so the fixture wallet is still active here).
+    CWallet* fixtureWallet = CWalletManager::Get().GetActiveWallet();
+    if (!fixtureWallet) {
+        ADD_FAILURE() << "no active wallet -- caller must register/activate the fixture wallet before calling this helper";
+        return secondaryAddr;
+    }
     for (int i = 0; i < 100; i++) {
-        if (generateBlock(pwalletMain) == nullptr) {
-            ADD_FAILURE() << "generateBlock(pwalletMain) returned null at maturity block " << i;
+        if (generateBlock(fixtureWallet) == nullptr) {
+            ADD_FAILURE() << "generateBlock(fixtureWallet) returned null at maturity block " << i;
             return secondaryAddr;
         }
     }
@@ -1869,8 +1884,8 @@ static libzcash::SaplingPaymentAddress SetupSecondaryWalletWithShieldedSaplingNo
             return secondaryAddr;
         }
     }
-    if (generateBlock(pwalletMain) == nullptr) {
-        ADD_FAILURE() << "generateBlock(pwalletMain) returned null mining the shielding tx";
+    if (generateBlock(fixtureWallet) == nullptr) {
+        ADD_FAILURE() << "generateBlock(fixtureWallet) returned null mining the shielding tx";
     }
 
     return secondaryAddr;
@@ -1880,7 +1895,8 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
 {
     // Regression coverage for the multiwallet effort: z_createbuildinstructions
     // must read notes from the *request-resolved* wallet (CWalletManager::
-    // GetWalletForRequest()), not silently fall through to pwalletMain. Unlike
+    // GetWalletForRequest()), not silently fall through to the active
+    // wallet. Unlike
     // z_buildrawtransaction's own gtest coverage (test_httprpc.cpp), there's no
     // shortcut via error messages here -- this RPC has no upfront "does this
     // wallet own the from-address" check, so calling it against the wrong wallet
@@ -1954,33 +1970,31 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
         }
     } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
 
-    // BitcoinTestingSetup::SetUp() constructs pwalletMain directly and never
-    // registers it with CWalletManager (it predates the multiwallet effort) --
-    // register it now, and clean up the registry (not pwalletMain itself, which
-    // BitcoinTestingSetup::TearDown() still owns and deletes) before this test
-    // ends, so this process-wide singleton doesn't leak state into later tests.
-    CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
+    // BitcoinTestingSetup::SetUp() already registers pwallet with
+    // CWalletManager under "wallet.dat"; re-registering here under the
+    // wallet's own reported name is idempotent (RegisterInitialWallet()
+    // erases and re-emplaces) and keeps this test self-contained. The
+    // cleanup below clears the registry (not pwallet itself, which
+    // BitcoinTestingSetup::TearDown() still owns and deletes) before this
+    // test ends, so this process-wide singleton doesn't leak state into
+    // later tests.
+    CWalletManager::Get().RegisterInitialWallet(pwallet->GetName(), pwallet);
     struct WalletManagerCleanup {
-        CWallet* prevPwalletMain;
         ~WalletManagerCleanup() {
             CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
-            // Reset() nulls pwalletMain (walletmanager.cpp) -- restore it to
-            // the fixture's own wallet (captured above, before Reset() ran)
-            // so BitcoinTestingSetup::TearDown()'s own
-            // UnregisterValidationInterface(pwalletMain)/delete pwalletMain
-            // (gtestutils.cpp) actually run against it instead of a null
-            // pointer. Audit finding: without this, the fixture's real
-            // CWallet stayed registered with every validation-interface
-            // signal and was never freed -- a zombie wallet a later test's
-            // block connection could still dispatch into, potentially
-            // writing into that later test's own wallet.dat (same filename,
-            // since strWalletFile is just "wallet.dat" either way). Matches
-            // the save/restore pattern test_httprpc.cpp's fixture already
-            // uses for the same reason.
-            pwalletMain = prevPwalletMain;
+            // Reset() only clears CWalletManager's own bookkeeping (the
+            // registry map and the active-wallet name); it never touches
+            // pwallet itself, since that's a genuine BitcoinTestingSetup
+            // member now (pwalletMain-elimination effort), not the old
+            // global Reset() used to null as a side effect of mirroring the
+            // active wallet. So there's nothing to save/restore here --
+            // BitcoinTestingSetup::TearDown()'s own
+            // UnregisterValidationInterface(pwallet)/delete pwallet
+            // (gtestutils.cpp) finds it exactly as SetUp() left it, whether
+            // or not this destructor has run yet.
         }
-    } walletManagerCleanup{pwalletMain};
+    } walletManagerCleanup;
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_zcbi_test.dat", strError, seedPhrase)) << strError;
@@ -1992,7 +2006,7 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
     // ADD_FAILURE(), which is non-fatal and invisible to the latter.
     ASSERT_FALSE(HasFailure());
 
-    // The secondary wallet now holds a real, witnessed Sapling note pwalletMain
+    // The secondary wallet now holds a real, witnessed Sapling note pwallet
     // has never seen. Build the same instructions request against each wallet in
     // turn: it must succeed with a non-empty spend list (vSaplingSpends is
     // public on TransactionBuilder specifically for tests like this) when
@@ -2038,7 +2052,7 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
     }
     EXPECT_FALSE(secondaryTb.vSaplingSpends.empty());
 
-    // pwalletMain (the default wallet, no RPCWalletRequestGuard in scope) has
+    // pwallet (the default wallet, no RPCWalletRequestGuard in scope) has
     // never seen this note, so it finds zero notes to spend and must reject
     // the request as insufficient funds rather than silently returning an
     // empty, unusable builder -- proof this RPC resolved a different wallet
@@ -2107,28 +2121,23 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_op
         }
     } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
 
-    CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
+    CWalletManager::Get().RegisterInitialWallet(pwallet->GetName(), pwallet);
     struct WalletManagerCleanup {
-        CWallet* prevPwalletMain;
         ~WalletManagerCleanup() {
             CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
-            // Reset() nulls pwalletMain (walletmanager.cpp) -- restore it to
-            // the fixture's own wallet (captured above, before Reset() ran)
-            // so BitcoinTestingSetup::TearDown()'s own
-            // UnregisterValidationInterface(pwalletMain)/delete pwalletMain
-            // (gtestutils.cpp) actually run against it instead of a null
-            // pointer. Audit finding: without this, the fixture's real
-            // CWallet stayed registered with every validation-interface
-            // signal and was never freed -- a zombie wallet a later test's
-            // block connection could still dispatch into, potentially
-            // writing into that later test's own wallet.dat (same filename,
-            // since strWalletFile is just "wallet.dat" either way). Matches
-            // the save/restore pattern test_httprpc.cpp's fixture already
-            // uses for the same reason.
-            pwalletMain = prevPwalletMain;
+            // Reset() only clears CWalletManager's own bookkeeping (the
+            // registry map and the active-wallet name); it never touches
+            // pwallet itself, since that's a genuine BitcoinTestingSetup
+            // member now (pwalletMain-elimination effort), not the old
+            // global Reset() used to null as a side effect of mirroring the
+            // active wallet. So there's nothing to save/restore here --
+            // BitcoinTestingSetup::TearDown()'s own
+            // UnregisterValidationInterface(pwallet)/delete pwallet
+            // (gtestutils.cpp) finds it exactly as SetUp() left it, whether
+            // or not this destructor has run yet.
         }
-    } walletManagerCleanup{pwalletMain};
+    } walletManagerCleanup;
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_zcbicc_test.dat", strError, seedPhrase)) << strError;
@@ -2198,7 +2207,7 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_op
     // is public, cheap to check directly).
     EXPECT_EQ(fundingOp, secondaryTb.vSaplingSpends[0].op);
 
-    // pwalletMain (the default wallet, no RPCWalletRequestGuard in scope)
+    // pwallet (the default wallet, no RPCWalletRequestGuard in scope)
     // never saw this tx at all -- unlike the by-address version above, this
     // RPC's own GetWalletTx() lookup throws immediately instead of silently
     // returning an empty builder, proof this RPC resolved a different wallet
@@ -2231,8 +2240,8 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
     // UpdatedTransaction/EraseTransaction/Inventory/BlockChecked/Broadcast),
     // not just ChainTip -- and CWallet::SyncTransactions()/
     // AddToWalletIfInvolvingMe()/IsSaplingSpent() are all `this`-based with
-    // zero remaining pwalletMain references, so a secondary wallet is exactly
-    // as capable of tracking its own spend as pwalletMain is. This first
+    // zero remaining pwallet references, so a secondary wallet is exactly
+    // as capable of tracking its own spend as pwallet is. This first
     // version of this test (built on that reading alone) failed empirically,
     // for a reason that has nothing to do with which wallet is involved: the
     // wallet-facing SyncWithWallets() call for a mempool-accepted (not yet
@@ -2247,7 +2256,7 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
     // With that accounted for, this test proves the actual item-8 question:
     // a secondary wallet spending its own note to itself must (a) mark that
     // note's nullifier spent, and (b) record the resulting change tx, using
-    // its own state -- both before any block confirms it -- and pwalletMain
+    // its own state -- both before any block confirms it -- and pwallet
     // must see neither, proving no cross-wallet leakage either direction.
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -2289,28 +2298,23 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
         }
     } chainIdentityReverter{originalChainName, originalReward0, originalHalving0, originalSupply, originalPrivate};
 
-    CWalletManager::Get().RegisterInitialWallet(pwalletMain->GetName(), pwalletMain);
+    CWalletManager::Get().RegisterInitialWallet(pwallet->GetName(), pwallet);
     struct WalletManagerCleanup {
-        CWallet* prevPwalletMain;
         ~WalletManagerCleanup() {
             CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
             CWalletManager::Get().Reset();
-            // Reset() nulls pwalletMain (walletmanager.cpp) -- restore it to
-            // the fixture's own wallet (captured above, before Reset() ran)
-            // so BitcoinTestingSetup::TearDown()'s own
-            // UnregisterValidationInterface(pwalletMain)/delete pwalletMain
-            // (gtestutils.cpp) actually run against it instead of a null
-            // pointer. Audit finding: without this, the fixture's real
-            // CWallet stayed registered with every validation-interface
-            // signal and was never freed -- a zombie wallet a later test's
-            // block connection could still dispatch into, potentially
-            // writing into that later test's own wallet.dat (same filename,
-            // since strWalletFile is just "wallet.dat" either way). Matches
-            // the save/restore pattern test_httprpc.cpp's fixture already
-            // uses for the same reason.
-            pwalletMain = prevPwalletMain;
+            // Reset() only clears CWalletManager's own bookkeeping (the
+            // registry map and the active-wallet name); it never touches
+            // pwallet itself, since that's a genuine BitcoinTestingSetup
+            // member now (pwalletMain-elimination effort), not the old
+            // global Reset() used to null as a side effect of mirroring the
+            // active wallet. So there's nothing to save/restore here --
+            // BitcoinTestingSetup::TearDown()'s own
+            // UnregisterValidationInterface(pwallet)/delete pwallet
+            // (gtestutils.cpp) finds it exactly as SetUp() left it, whether
+            // or not this destructor has run yet.
         }
-    } walletManagerCleanup{pwalletMain};
+    } walletManagerCleanup;
 
     std::string strError, seedPhrase;
     ASSERT_TRUE(CWalletManager::Get().CreateWallet("secondary_selfspend_test.dat", strError, seedPhrase)) << strError;
@@ -2354,8 +2358,8 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
         ASSERT_FALSE(secondaryWallet->IsSaplingSpent(fundingNullifier));
     }
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        ASSERT_FALSE(pwalletMain->IsSaplingSpent(fundingNullifier));
+        LOCK2(cs_main, pwallet->cs_wallet);
+        ASSERT_FALSE(pwallet->IsSaplingSpent(fundingNullifier));
     }
 
     // Send part of the note back to the same address (self-spend, produces a
@@ -2414,30 +2418,30 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
             << "secondary wallet never recorded its own self-spend/change tx from the mempool";
     }
 
-    // pwalletMain was never involved and must see neither the spend nor the
+    // pwallet was never involved and must see neither the spend nor the
     // new change tx -- proves the mempool notification isn't leaking into,
     // or being satisfied by, the default wallet instead.
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        EXPECT_FALSE(pwalletMain->IsSaplingSpent(fundingNullifier));
-        EXPECT_EQ(0u, pwalletMain->mapWallet.count(selfSpendTx.GetHash()))
-            << "the self-spend tx was recorded in pwalletMain, not just the secondary wallet";
+        LOCK2(cs_main, pwallet->cs_wallet);
+        EXPECT_FALSE(pwallet->IsSaplingSpent(fundingNullifier));
+        EXPECT_EQ(0u, pwallet->mapWallet.count(selfSpendTx.GetHash()))
+            << "the self-spend tx was recorded in pwallet, not just the secondary wallet";
     }
 
     // Confirm it for real and re-check both facts still hold post-confirmation
     // (the mempool-only checks above are the interesting, previously-unverified
     // part, but a regression that only breaks the unconfirmed path and not the
     // confirmed one is still worth catching).
-    ASSERT_NE(nullptr, generateBlock(pwalletMain));
+    ASSERT_NE(nullptr, generateBlock(pwallet));
     {
         LOCK2(cs_main, secondaryWallet->cs_wallet);
         EXPECT_TRUE(secondaryWallet->IsSaplingSpent(fundingNullifier));
         EXPECT_EQ(1u, secondaryWallet->mapWallet.count(selfSpendTx.GetHash()));
     }
     {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        EXPECT_FALSE(pwalletMain->IsSaplingSpent(fundingNullifier));
-        EXPECT_EQ(0u, pwalletMain->mapWallet.count(selfSpendTx.GetHash()));
+        LOCK2(cs_main, pwallet->cs_wallet);
+        EXPECT_FALSE(pwallet->IsSaplingSpent(fundingNullifier));
+        EXPECT_EQ(0u, pwallet->mapWallet.count(selfSpendTx.GetHash()));
     }
 }
 
@@ -2466,7 +2470,7 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
 TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesaplingconsolidation_roundtrips)
 {
     SelectParams(CBaseChainParams::TESTNET);
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     UniValue status = CallRPC("consolidationstatus");
     UniValue obj = status.get_obj();
@@ -2492,7 +2496,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesaplingconsolidation_roundtrips)
 TEST_F(rpc_wallet_tests_bitcoin, rpc_enableironwoodconsolidation_roundtrips)
 {
     SelectParams(CBaseChainParams::TESTNET);
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     UniValue status = CallRPC("consolidationstatus");
     UniValue obj = status.get_obj();
@@ -2519,7 +2523,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_enableironwoodconsolidation_roundtrips)
 TEST_F(rpc_wallet_tests_bitcoin, rpc_enableconsolidation_both_pools_roundtrips)
 {
     SelectParams(CBaseChainParams::TESTNET);
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     UniValue status = CallRPC("consolidationstatus");
     UniValue obj = status.get_obj();
@@ -2555,10 +2559,10 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesweep_roundtrips)
     // UpdateNetworkUpgradeParameters() only ever mutates REGTEST's params.
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
 
     UniValue status = CallRPC("sweepstatus");
@@ -2589,7 +2593,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesweep_roundtrips)
 TEST_F(rpc_wallet_tests_bitcoin, rpc_consolidateaddress_parameters)
 {
     SelectParams(CBaseChainParams::TESTNET);
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     EXPECT_THROW(CallRPC("consolidateaddress"), runtime_error);
     EXPECT_THROW(CallRPC("consolidateaddress addr fee maxnotes maxtransactions toomany"), runtime_error);
@@ -2611,7 +2615,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
 {
     SelectParams(CBaseChainParams::TESTNET);
 
-    LOCK(pwalletMain->cs_wallet);
+    LOCK(pwallet->cs_wallet);
 
     EXPECT_THROW(CallRPC("z_mergetoaddress"), runtime_error);
     EXPECT_THROW(CallRPC("z_mergetoaddress toofewargs"), runtime_error);
@@ -2692,8 +2696,8 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
     std::vector<char> v (2 * (ZC_MEMO_SIZE+1));     // x2 for hexadecimal string format
     std::fill(v.begin(),v.end(), 'A');
     std::string badmemo(v.begin(), v.end());
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
     // "ANY_SAPLING" requires Sapling active at the current (synthetic, low)
     // test-chain height; UpdateNetworkUpgradeParameters only ever mutates
@@ -2702,7 +2706,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
     // test function.
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
-    std::string zaddr1 = EncodePaymentAddress(pwalletMain->GenerateNewSaplingZKey());
+    std::string zaddr1 = EncodePaymentAddress(pwallet->GenerateNewSaplingZKey());
     try {
         CallRPC(string("z_mergetoaddress [\"ANY_SAPLING\"] ")
             + zaddr1 + " 0.0001 100 100 100 " + badmemo);
@@ -2735,14 +2739,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
         "mainnet memo");
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, -1 ));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwallet, consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, -1 ));
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Fee is out of range"));
     }
 
     try {
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwallet, consensusParams, nHeight, mtx, {}, {}, {}, testnetzaddr, 1));
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "No inputs"));
@@ -2752,7 +2756,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
 
     try {
         MergeToAddressRecipient badaddr("", "memo");
-        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, inputs, {}, {}, badaddr, 1));
+        std::shared_ptr<AsyncRPCOperation> operation(new AsyncRPCOperation_mergetoaddress(pwallet, consensusParams, nHeight, mtx, inputs, {}, {}, badaddr, 1));
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Recipient parameter missing"));
@@ -2761,7 +2765,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
     // Testnet payment addresses begin with 'zt'.  This test detects an incorrect prefix.
     try {
         std::vector<MergeToAddressInputUTXO> inputs = { MergeToAddressInputUTXO{ COutPoint{uint256(), 0}, 0, CScript()} };
-        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_mergetoaddress(pwalletMain, consensusParams, nHeight, mtx, inputs, {}, {}, mainnetzaddr, 1) );
+        std::shared_ptr<AsyncRPCOperation> operation( new AsyncRPCOperation_mergetoaddress(pwallet, consensusParams, nHeight, mtx, inputs, {}, {}, mainnetzaddr, 1) );
         FAIL() << "Should have caused an error";
     } catch (const UniValue& objError) {
         EXPECT_TRUE( find_error(objError, "Invalid recipient address"));
@@ -2783,7 +2787,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_mergetoaddress_parameters)
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_rejects_bad_input_type)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // The "type" field is validated before the wallet is even asked whether
     // it knows this txid, so a dummy all-zero txid is fine here.
@@ -2798,7 +2802,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_reject
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwood_output_gated_by_activation)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     // UpdateNetworkUpgradeParameters() always mutates the REGTEST params
     // singleton regardless of what's currently selected - switch there and
@@ -2814,10 +2818,10 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwo
     // Ironwood to be consensus-active, so this reproduces the real scenario
     // of a wallet already holding a valid Ironwood address before the
     // network upgrade activates.
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    std::string zoAddr = EncodePaymentAddress(pwalletMain->GenerateNewIronwoodZKey());
+    std::string zoAddr = EncodePaymentAddress(pwallet->GenerateNewIronwoodZKey());
 
     try {
         CallRPC("z_createbuildinstructionscoincontrol [] [{\"address\":\"" + zoAddr + "\",\"amount\":0.0001}]");
@@ -2829,7 +2833,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwo
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwood_output_allowed_after_activation)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -2844,10 +2848,10 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_ironwo
         }
     } reverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    std::string zoAddr = EncodePaymentAddress(pwalletMain->GenerateNewIronwoodZKey());
+    std::string zoAddr = EncodePaymentAddress(pwallet->GenerateNewIronwoodZKey());
 
     // No inputs are supplied, so this still throws - on insufficient funds,
     // not on the Ironwood-not-activated check the previous test exercises.
@@ -2884,7 +2888,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_sets_c
     // silently broken end-to-end. fee=0 with empty inputs/outputs keeps
     // `total` at exactly 0 so the RPC's own balance check doesn't reject the
     // call before reaching the code under test.
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     UniValue params(UniValue::VARR);
     params.push_back(UniValue(UniValue::VARR));  // inputs
@@ -2903,18 +2907,23 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_sets_c
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_bakes_in_configured_change_address)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress overrideChangeAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress overrideChangeAddr = pwallet->GenerateNewSaplingZKey();
 
     struct Reverter {
+        // A local struct's own methods don't inherit BitcoinTestingSetup's
+        // member scope the way this TEST_F body's own statements do, so
+        // pwallet has to be captured explicitly here rather than read
+        // unqualified (pwalletMain-elimination effort).
+        CWallet* wallet;
         std::optional<libzcash::PaymentAddress> saved;
-        ~Reverter() { pwalletMain->configuredChangeAddress = saved; }
-    } reverter{pwalletMain->configuredChangeAddress};
-    pwalletMain->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
+        ~Reverter() { wallet->configuredChangeAddress = saved; }
+    } reverter{pwallet, pwallet->configuredChangeAddress};
+    pwallet->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
 
     UniValue params(UniValue::VARR);
     params.push_back(UniValue(UniValue::VARR));  // inputs
@@ -2936,7 +2945,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_bakes_
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_configured_change_address)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -2949,18 +2958,23 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_configur
         }
     } reverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
-    libzcash::SaplingPaymentAddress toAddr = pwalletMain->GenerateNewSaplingZKey();
-    libzcash::SaplingPaymentAddress overrideChangeAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress fromAddr = pwallet->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress toAddr = pwallet->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress overrideChangeAddr = pwallet->GenerateNewSaplingZKey();
 
     struct ChangeAddrReverter {
+        // See the Reverter struct above (same file, earlier test): a local
+        // struct's own methods don't inherit BitcoinTestingSetup's member
+        // scope, so pwallet has to be captured explicitly here rather
+        // than read unqualified (pwalletMain-elimination effort).
+        CWallet* wallet;
         std::optional<libzcash::PaymentAddress> saved;
-        ~ChangeAddrReverter() { pwalletMain->configuredChangeAddress = saved; }
-    } changeAddrReverter{pwalletMain->configuredChangeAddress};
-    pwalletMain->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
+        ~ChangeAddrReverter() { wallet->configuredChangeAddress = saved; }
+    } changeAddrReverter{pwallet, pwallet->configuredChangeAddress};
+    pwallet->configuredChangeAddress = libzcash::PaymentAddress(overrideChangeAddr);
 
     // amount=0 and fee=0 keeps totalOut at exactly 0, so the RPC's insufficient-
     // funds check (totalIn < totalOut) doesn't reject this dry run before
@@ -2996,7 +3010,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_default_
     // in the *source* wallet's own ZIP-32 default internal address - derivable
     // from just the full viewing key, so this doesn't require a spending key
     // or any real notes to already exist for fromAddr.
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -3009,14 +3023,14 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_default_
         }
     } reverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
-    libzcash::SaplingPaymentAddress toAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress fromAddr = pwallet->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress toAddr = pwallet->GenerateNewSaplingZKey();
 
     libzcash::SaplingExtendedSpendingKey fromExtsk;
-    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(fromAddr, fromExtsk));
+    ASSERT_TRUE(pwallet->GetSaplingExtendedSpendingKey(fromAddr, fromExtsk));
     libzcash::SaplingPaymentAddress expectedChangeAddr;
     ASSERT_TRUE(fromExtsk.ToXFVK().DefaultAddressInternal(&expectedChangeAddr));
 
@@ -3057,7 +3071,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_insuffici
     // case) used to silently produce a checksum-valid but unbuildable blob whose
     // failure only surfaced much later, as a confusing "Change cannot be
     // negative" out of z_buildrawtransaction instead of a clear error here.
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -3070,11 +3084,11 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_insuffici
         }
     } reverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
-    libzcash::SaplingPaymentAddress toAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress fromAddr = pwallet->GenerateNewSaplingZKey();
+    libzcash::SaplingPaymentAddress toAddr = pwallet->GenerateNewSaplingZKey();
 
     UniValue outputs(UniValue::VARR);
     UniValue output(UniValue::VOBJ);
@@ -3098,7 +3112,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_transpare
 {
     // Outputs are shielded-only for this RPC — a transparent destination must
     // be rejected outright, not silently accepted as a transparent output.
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     SelectParams(CBaseChainParams::REGTEST);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
@@ -3111,11 +3125,11 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_transpare
         }
     } reverter;
 
-    if (!pwalletMain->HaveHDSeed()) {
-        pwalletMain->GenerateNewSeed();
+    if (!pwallet->HaveHDSeed()) {
+        pwallet->GenerateNewSeed();
     }
-    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
-    std::string tAddr = EncodeDestination(pwalletMain->GenerateNewKey().GetID());
+    libzcash::SaplingPaymentAddress fromAddr = pwallet->GenerateNewSaplingZKey();
+    std::string tAddr = EncodeDestination(pwallet->GenerateNewKey().GetID());
 
     UniValue outputs(UniValue::VARR);
     UniValue output(UniValue::VOBJ);
@@ -3137,9 +3151,9 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_transpare
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_rejects_transparent_output_address)
 {
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
-    std::string tAddr = EncodeDestination(pwalletMain->GenerateNewKey().GetID());
+    std::string tAddr = EncodeDestination(pwallet->GenerateNewKey().GetID());
 
     UniValue outputs(UniValue::VARR);
     UniValue output(UniValue::VOBJ);

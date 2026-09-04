@@ -127,9 +127,12 @@ ZCJoinSplit* pzcashParams = NULL;
 
 assetchain chainName;
 
-#ifdef ENABLE_WALLET
-CWallet* pwalletMain = NULL;
-#endif
+// The process-global pwalletMain pointer itself is gone (pwalletMain-
+// elimination effort) -- AppInit2()'s Step 8 and Shutdown() below each
+// declare their own genuinely local `CWallet* pwallet` instead (deliberately
+// not reusing the old global's name, so it can't be mistaken for one); every
+// external reader goes through CWalletManager::Get().GetActiveWallet() or a
+// request-scoped CWalletManager::GetWalletForRequest() instead.
 bool fFeeEstimatesInitialized = false;
 
 #if ENABLE_ZMQ
@@ -194,15 +197,16 @@ void StartShutdown()
       //Flush wallet on exit
       //Write all transactions and block locator to the wallet
 #ifdef ENABLE_WALLET
-    if ( pwalletMain && (loadComplete) && (nMaxConnections>0) ) {
+    // Checks the registry directly, not "is a wallet active" -- pwalletMain
+    // elimination effort, audit finding: the registry can hold wallets
+    // (still loaded, still synced) with none of them active (setactivewallet
+    // ""), and the old pwalletMain-non-null guard skipped every checkpoint
+    // in that state even though CheckpointAllWallets() below always covers
+    // every loaded wallet, not just the active one.
+    if ( !CWalletManager::Get().ListWalletNames().empty() && (loadComplete) && (nMaxConnections>0) ) {
         LOCK(cs_main);
         CBlockLocator currentBlock = chainActive.GetLocator();
         int chainHeight = chainActive.Tip()->nHeight;
-        // Checkpoints every loaded wallet, not just pwalletMain -- a
-        // secondary wallet unloaded via FlushAndUnloadAllExceptActiveWallet()
-        // during the rest of shutdown otherwise never gets a final
-        // SetBestChain() write, leaving its on-disk checkpoint stale by
-        // however many blocks passed since its last periodic flush.
         CWalletManager::Get().CheckpointAllWallets(currentBlock, chainHeight);
     }
 #endif
@@ -277,7 +281,7 @@ void Shutdown()
     // GetMiningWallet() (miner.h) -- only UnloadWallet() got that check. A
     // still-running miner thread holds the CWallet* it was started with
     // (BitcoinMiner(pwallet), and CReserveKey reservekey(pwallet) alongside
-    // it) for its entire lifetime and never re-reads pwalletMain, so joining
+    // it) for its entire lifetime and never re-resolves the active wallet, so joining
     // every miner thread here, before any wallet this shutdown path deletes
     // could possibly be one they're using, closes that use-after-free at the
     // one call site that matters instead of teaching the flush sweep about
@@ -305,8 +309,13 @@ void Shutdown()
     // Secondary wallets first: nothing routes a request to one after this point,
     // and they must be gone before Reset() clears the registry at the end of Shutdown().
     CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
-    if (pwalletMain)
-        pwalletMain->Flush(false);
+    // Resolved once here, as a plain local named `pwallet` (pwalletMain-
+    // elimination effort removed the global of that name entirely) -- and
+    // reused for the rest of this function -- nothing else can change which
+    // wallet is active during a single-threaded shutdown sequence.
+    CWallet* pwallet = CWalletManager::Get().GetActiveWallet();
+    if (pwallet)
+        pwallet->Flush(false);
 #endif
     StopNode();
 #if ENABLE_EMBEDDED_I2PD
@@ -359,8 +368,8 @@ void Shutdown()
         }
     }
 #ifdef ENABLE_WALLET
-    if (pwalletMain)
-        pwalletMain->Flush(true);
+    if (pwallet)
+        pwallet->Flush(true);
 #endif
 
 #if ENABLE_ZMQ
@@ -380,8 +389,8 @@ void Shutdown()
 #endif
     UnregisterAllValidationInterfaces();
 #ifdef ENABLE_WALLET
-    delete pwalletMain;
-    pwalletMain = NULL;
+    delete pwallet;
+    pwallet = NULL;
     CWalletManager::Get().Reset();
 #endif
     delete pzcashParams;
@@ -1553,7 +1562,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // process-global CWallet::minTxFee/payTxFee. Phase 5 of the multiwallet
     // effort made both per-wallet fields instead (setmintxfee/settxfee RPCs);
     // the flags themselves are rejected explicitly further down, once
-    // pwalletMain exists, rather than silently accepted and ignored here.
+    // `pwallet` exists, rather than silently accepted and ignored here.
     if (mapArgs.count("-maxtxfee"))
     {
         CAmount nMaxFee = 0;
@@ -2087,7 +2096,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         InitBlockIndex();
         SetRPCWarmupFinished();
         uiInterface.InitMessage(_("Done loading"));
-        pwalletMain = new CWallet("tmptmp.wallet");
+        // Registered with CWalletManager (previously left as a bare
+        // unregistered global, an invariant violation relative to
+        // activeWalletName's own documented contract -- audit finding,
+        // pwalletMain-elimination effort; inert in practice since Pirate
+        // itself never runs NSPV superlite, fixed for consistency anyway).
+        CWalletManager::Get().RegisterInitialWallet("tmptmp.wallet", new CWallet("tmptmp.wallet"));
         return !ShutdownRequested();
     }
     // ********************************************************* Step 7: load block chain
@@ -2344,8 +2358,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // ********************************************************* Step 8: load wallet
 #ifdef ENABLE_WALLET
+    // pwalletMain-elimination effort: `pwallet` is a genuinely local
+    // variable here (no more a process-wide global other translation units
+    // could read directly), scoped to the rest of this function -- every
+    // RPC handler, the mining thread, the CC framework, and the Qt GUI now
+    // resolve CWalletManager::GetWalletForRequest()/GetActiveWallet()
+    // instead. Registered with CWalletManager immediately after each
+    // construction below (not just once at the end), so those call sites --
+    // in particular the openwallet RPC and qt/splashscreen.cpp's
+    // pre-existing create/restore/unlock flow, both of which need to see
+    // the wallet this function is still busy constructing, from a
+    // different thread, during the encrypted-wallet unlock busy-wait below
+    // -- resolve it correctly for the whole duration of this sequence, not
+    // only once it finishes.
+    CWallet* pwallet = nullptr;
     if (fDisableWallet) {
-        pwalletMain = NULL;
+        pwallet = NULL;
         LogPrintf("Wallet disabled!\n");
     } else if (!fAutoLoadWalletAtStartup) {
         // True zero-wallet startup (no-default-wallet redesign): a genuinely
@@ -2356,7 +2384,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // explicitly run loadwallet or createwallet (or use the GUI's
         // first-run flow, see qt/splashscreen.cpp) before any wallet RPC, or
         // mining against wallet funds, becomes usable.
-        pwalletMain = NULL;
+        pwallet = NULL;
         LogPrintf("No wallet loaded at startup (fresh data directory) -- run loadwallet or createwallet to load or create one.\n");
     } else {
 
@@ -2433,48 +2461,56 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 }
             }
 
-            delete pwalletMain;
-            pwalletMain = NULL;
+            delete pwallet;
+            pwallet = NULL;
         }
 
         //Run ZapWalletTx to clean out transactions
         //Reset transactions on redindex
         if (zapTransactions || fReindex) {
             uiInterface.InitMessage(_("Zapping all transactions from wallet..."));
-            pwalletMain = new CWallet(strWalletFile);
-            DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
+            pwallet = new CWallet(strWalletFile);
+            DBErrors nZapWalletRet = pwallet->ZapWalletTx(vWtx);
             if (nZapWalletRet != DB_LOAD_OK) {
                 uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
                 return false;
             }
 
             //Reset the saplingwallet on zap
-            pwalletMain->SaplingWalletReset();
-            pwalletMain->IronwoodWalletReset();
+            pwallet->SaplingWalletReset();
+            pwallet->IronwoodWalletReset();
 
-            delete pwalletMain;
-            pwalletMain = NULL;
+            delete pwallet;
+            pwallet = NULL;
         }
 
         uiInterface.InitMessage(_("Loading wallet..."));
 
         nStart = GetTimeMillis();
         bool fFirstRun = true;
-        pwalletMain = new CWallet(strWalletFile);
+        pwallet = new CWallet(strWalletFile);
+        // Registered immediately, not only once this whole sequence finishes
+        // (still done again at the end, harmlessly idempotent) -- openwallet
+        // (wallet/rpcwallet.cpp) and qt/splashscreen.cpp's pre-existing
+        // create/restore/unlock flow both need CWalletManager::
+        // GetActiveWallet() to resolve to this exact object from a different
+        // thread during the encrypted-unlock/create-type busy-waits just
+        // below, not only after they've already finished.
+        CWalletManager::Get().RegisterInitialWallet(strWalletFile, pwallet);
 
         //Check for crypted flag and wait for the wallet password if crypted
-        DBErrors nInitalizeCryptedLoad = pwalletMain->InitalizeCryptedLoad();
+        DBErrors nInitalizeCryptedLoad = pwallet->InitalizeCryptedLoad();
         if (nInitalizeCryptedLoad == DB_LOAD_CRYPTED) {
-            pwalletMain->SetDBCrypted();
+            pwallet->SetDBCrypted();
             SetRPCNeedsUnlocked(true);
-            DBErrors nLoadCryptedSeed = pwalletMain->LoadCryptedSeedFromDB();
+            DBErrors nLoadCryptedSeed = pwallet->LoadCryptedSeedFromDB();
             if (nLoadCryptedSeed != DB_LOAD_OK) {
                 uiInterface.InitMessage(_("Error loading wallet.dat: Wallet crypted seed corrupted"));
                 return false;
             }
             uiInterface.InitNeedUnlockWallet();
         }
-        while (pwalletMain->IsLocked()) {
+        while (pwallet->IsLocked()) {
             //wait for response from GUI
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             if (fRequestShutdown)
@@ -2486,20 +2522,20 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         SetRPCNeedsUnlocked(false);
 
         //A Crypted wallet must have an HDSeed.
-        if (pwalletMain->IsCrypted()) {
+        if (pwallet->IsCrypted()) {
             // Try to get the seed
             HDSeed seed;
-            if (!pwalletMain->GetHDSeed(seed)) {
+            if (!pwallet->GetHDSeed(seed)) {
                 LogPrintf("HD seed not found. Exiting.\n");
                 return false;
             }
 
             //Create a uniquie seedFP used to salt encryption hashes, DO NOT SAVE THIS TO THE WALLET!!!!
             //This will be used to salt hashes of know values such as transaction ids and public addresses
-            pwalletMain->seedEncyptionFP = seed.EncryptionFingerprint();
+            pwallet->seedEncyptionFP = seed.EncryptionFingerprint();
         }
 
-        DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRun);
+        DBErrors nLoadWalletRet = pwallet->LoadWallet(fFirstRun);
         if (nLoadWalletRet != DB_LOAD_OK)
         {
             if (nLoadWalletRet == DB_CORRUPT)
@@ -2533,11 +2569,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // step checks every crypted key decrypts before persisting the new master key.
         // Only the master-key wrapping changes; no spending-key material is touched.
         if ((nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) &&
-            pwalletMain->IsCrypted() && strOpeningWalletPassphrase != NULL &&
-            pwalletMain->NeedsKDFUpgrade()) {
+            pwallet->IsCrypted() && strOpeningWalletPassphrase != NULL &&
+            pwallet->NeedsKDFUpgrade()) {
             uiInterface.InitMessage(_("Upgrading wallet encryption..."));
             LogPrintf("Upgrading wallet encryption KDF to current method...\n");
-            if (pwalletMain->ChangeWalletPassphrase(*strOpeningWalletPassphrase, *strOpeningWalletPassphrase)) {
+            if (pwallet->ChangeWalletPassphrase(*strOpeningWalletPassphrase, *strOpeningWalletPassphrase)) {
                 LogPrintf("Wallet encryption KDF upgraded successfully.\n");
             } else {
                 LogPrintf("Warning: automatic wallet encryption KDF upgrade failed; continuing with existing encryption.\n");
@@ -2549,14 +2585,14 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // erases the plaintext record). In-memory copies are unchanged. One-time:
         // once stored encrypted, the plaintext record no longer exists to migrate.
         if ((nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) &&
-            pwalletMain->IsCrypted() && !pwalletMain->IsLocked()) {
-            if (!pwalletMain->WriteHDChainToDisk(pwalletMain->GetHDChain())) {
+            pwallet->IsCrypted() && !pwallet->IsLocked()) {
+            if (!pwallet->WriteHDChainToDisk(pwallet->GetHDChain())) {
                 LogPrintf("Warning: could not migrate HD chain to encrypted storage.\n");
             }
-            if (!pwalletMain->MigrateDestDataToEncrypted()) {
+            if (!pwallet->MigrateDestDataToEncrypted()) {
                 LogPrintf("Warning: could not migrate destination data to encrypted storage.\n");
             }
-            if (!pwalletMain->MigrateSettingsToEncrypted()) {
+            if (!pwallet->MigrateSettingsToEncrypted()) {
                 LogPrintf("Warning: could not migrate consolidation/sweep/fee/pruning settings to encrypted storage.\n");
             }
         }
@@ -2568,41 +2604,55 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             uiInterface.InitMessage(_("Validating transaction archive..."));
             bool fInitializeArcTxInner = false;
             {
-              LOCK2(cs_main, pwalletMain->cs_wallet);
+              LOCK2(cs_main, pwallet->cs_wallet);
               if (chainActive.Tip())
-                  fInitializeArcTxInner = pwalletMain->initalizeArcTx();
+                  fInitializeArcTxInner = pwallet->initalizeArcTx();
             }
             if(!fInitializeArcTxInner && chainActive.Tip()) {
               fInitializeArcTx = false; // signal line ~2706 to trigger rescan after reload
               SoftSetBoolArg("-rescan", true);
               //ArcTx validation failed, delete wallet point and clear vWtx
-              delete pwalletMain;
-              pwalletMain = NULL;
+              delete pwallet;
+              pwallet = NULL;
+              // Drop the registry entry registered above (line ~2499) in the
+              // same breath as the delete, before anything can observe it:
+              // it points at the object just freed, and it is not repaired
+              // until RegisterInitialWallet() runs again further down. The
+              // ZapWalletTx() step in between has its own `return false` on
+              // corruption, and that path goes straight to Shutdown(), which
+              // resolves GetActiveWallet() and then flushes *and deletes*
+              // whatever it gets -- a use-after-free plus a double free off
+              // a stale registry entry. Clearing here means Shutdown() sees
+              // "no wallet registered" for the whole window instead.
+              CWalletManager::Get().Reset();
               vWtx.clear();
 
               //Zap All Transactions
               uiInterface.InitMessage(_("Transaction archive not initalized, Zapping all transactions..."));
               LogPrintf("Transaction archive not initalized, Zapping all transactions.\n");
-              pwalletMain = new CWallet(strWalletFile);
-              DBErrors nZapWalletRet = pwalletMain->ZapWalletTx(vWtx);
+              pwallet = new CWallet(strWalletFile);
+              DBErrors nZapWalletRet = pwallet->ZapWalletTx(vWtx);
               if (nZapWalletRet != DB_LOAD_OK) {
                   uiInterface.InitMessage(_("Error loading wallet.dat: Wallet corrupted"));
                   return false;
               }
 
-              delete pwalletMain;
-              pwalletMain = NULL;
+              delete pwallet;
+              pwallet = NULL;
 
               //Reload Wallet
               uiInterface.InitMessage(_("Reloading wallet, set to rescan..."));
-              pwalletMain = new CWallet(strWalletFile);
+              pwallet = new CWallet(strWalletFile);
+              // Same reasoning as the primary load path above -- keep the
+              // registry pointed at whichever object is currently live.
+              CWalletManager::Get().RegisterInitialWallet(strWalletFile, pwallet);
 
               //Check for crypted flag and wait for the wallet password if crypted
-              DBErrors nInitalizeCryptedLoad = pwalletMain->InitalizeCryptedLoad();
+              DBErrors nInitalizeCryptedLoad = pwallet->InitalizeCryptedLoad();
               if (nInitalizeCryptedLoad == DB_LOAD_CRYPTED) {
-                  pwalletMain->SetDBCrypted();
+                  pwallet->SetDBCrypted();
                   SetRPCNeedsUnlocked(true);
-                  DBErrors nLoadCryptedSeed = pwalletMain->LoadCryptedSeedFromDB();
+                  DBErrors nLoadCryptedSeed = pwallet->LoadCryptedSeedFromDB();
                   if (nLoadCryptedSeed != DB_LOAD_OK) {
                       uiInterface.InitMessage(_("Error loading wallet.dat: Wallet crypted seed corrupted"));
                       return false;
@@ -2618,7 +2668,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
               //Cleared after the delete rather than left dangling: this global
               //outlives startup (the openwallet RPC assigns it at runtime too).
               if (strOpeningWalletPassphrase != NULL) {
-                  pwalletMain->OpenWallet(*strOpeningWalletPassphrase);
+                  pwallet->OpenWallet(*strOpeningWalletPassphrase);
 
                   delete strOpeningWalletPassphrase;
                   strOpeningWalletPassphrase = NULL;
@@ -2627,21 +2677,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
               SetRPCNeedsUnlocked(false);
 
               //A Crypted wallet must have an HDSeed.
-              if (pwalletMain->IsCrypted()) {
+              if (pwallet->IsCrypted()) {
                   // Try to get the seed
                   HDSeed seed;
-                  if (!pwalletMain->GetHDSeed(seed)) {
+                  if (!pwallet->GetHDSeed(seed)) {
                       LogPrintf("HD seed not found. Exiting.\n");
                       return false;
                   }
 
                   //Create a uniquie seedFP used to salt encryption hashes, DO NOT SAVE THIS TO THE WALLET!!!!
                   //This will be used to salt hashes of know values such as transaction ids and public addresses
-                  pwalletMain->seedEncyptionFP = seed.EncryptionFingerprint();
+                  pwallet->seedEncyptionFP = seed.EncryptionFingerprint();
               }
 
               // Reload wallet after zap — transactions are gone so this must succeed cleanly.
-              DBErrors nReloadWalletRet = pwalletMain->LoadWallet(fFirstRun);
+              DBErrors nReloadWalletRet = pwallet->LoadWallet(fFirstRun);
               if (nReloadWalletRet == DB_CORRUPT) {
                   strErrors << _("Error loading wallet.dat: Wallet corrupted after zap") << "\n";
               } else if (nReloadWalletRet == DB_NEED_REWRITE) {
@@ -2654,7 +2704,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             } else {
                 //Wallet loaded ok and Transaction archive validated true
-                DBErrors cleanWallet = pwalletMain->ZapOldRecords();
+                DBErrors cleanWallet = pwallet->ZapOldRecords();
                 if (cleanWallet != DB_LOAD_OK) {
                     LogPrintf("Warning: Wallet cleanup of obsolete records did not complete successfully.");
                 }
@@ -2672,21 +2722,21 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             {
                 LogPrintf("Performing wallet upgrade to %i\n", FEATURE_LATEST);
                 nMaxVersion = CLIENT_VERSION;
-                pwalletMain->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
+                pwallet->SetMinVersion(FEATURE_LATEST); // permanently upgrade the wallet immediately
             }
             else
                 LogPrintf("Allowing wallet upgrade up to %i\n", nMaxVersion);
-            if (nMaxVersion < pwalletMain->GetVersion())
+            if (nMaxVersion < pwallet->GetVersion())
                 strErrors << _("Cannot downgrade wallet") << "\n";
-            pwalletMain->SetMaxVersion(nMaxVersion);
+            pwallet->SetMaxVersion(nMaxVersion);
         }
 
         // Check if we need to rederive Ironwood address scopes (for wallet upgrade compatibility)
         if (GetBoolArg("-rederiverironwoodscopes", false)) {
             uiInterface.InitMessage(_("Rederiving Ironwood address scopes..."));
             LogPrintf("Manual Ironwood scope rederivation requested via -rederiverironwoodscopes\n");
-            LOCK(pwalletMain->cs_wallet);
-            if (!pwalletMain->RederiveIronwoodAddressScopes()) {
+            LOCK(pwallet->cs_wallet);
+            if (!pwallet->RederiveIronwoodAddressScopes()) {
                 InitWarning(_("Warning: Some Ironwood address scopes could not be rederived"));
             } else {
                 LogPrintf("Successfully rederived all Ironwood address scopes\n");
@@ -2694,13 +2744,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         }
 
         bool recoverWallet = false;
-        if (!pwalletMain->HaveHDSeed())
+        if (!pwallet->HaveHDSeed())
         {
 
             uiInterface.InitMessage(_(""));
             uiInterface.InitCreateWallet();
             if (usingGUI) {
-                while (pwalletMain->createType == UNSET) {
+                while (pwallet->createType == UNSET) {
                   //wait for response from GUI
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -2716,23 +2766,23 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 // explicit createwallet RPC call against an already-running
                 // node, not a boot-time decision, so a headless launch always
                 // generates a fresh random seed here.
-                pwalletMain->createType = RANDOM;
+                pwallet->createType = RANDOM;
             }
 
 
-            if (pwalletMain->createType == RECOVERY) {
-                if (!pwalletMain->RestoreSeedFromPhrase(pwalletMain->recoverySeedPhrase, pwalletMain->recoverySeedLangCode)) {
+            if (pwallet->createType == RECOVERY) {
+                if (!pwallet->RestoreSeedFromPhrase(pwallet->recoverySeedPhrase, pwallet->recoverySeedLangCode)) {
                     LogPrintf("Invalid Seed Phrase - shutting down.\n");
                     return false;
                 }
                 recoverWallet = true;
             } else {
               // generate a new HD seed
-                pwalletMain->GenerateNewSeed();
-                pwalletMain->GetSeedPhrase(pwalletMain->recoverySeedPhrase);
+                pwallet->GenerateNewSeed();
+                pwallet->GetSeedPhrase(pwallet->recoverySeedPhrase);
                 if (usingGUI) {
                     uiInterface.InitShowPhrase();
-                    while (pwalletMain->createType == RANDOM) {
+                    while (pwallet->createType == RANDOM) {
                       //wait for response from GUI
                         std::this_thread::sleep_for(std::chrono::milliseconds(100));
                         if (fRequestShutdown)
@@ -2746,25 +2796,25 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             //Write Wallet birthday
             {
-                pwalletMain->nBirthday = 0;
+                pwallet->nBirthday = 0;
                 CWalletDB walletdb(strWalletFile);
-                walletdb.WriteWalletBirthday(pwalletMain->nBirthday);
+                walletdb.WriteWalletBirthday(pwallet->nBirthday);
             }
 
             //Write bip39Enabled
             {
-                pwalletMain->bip39Enabled = true;
+                pwallet->bip39Enabled = true;
                 CWalletDB walletdb(strWalletFile);
-                walletdb.WriteWalletBip39Enabled(pwalletMain->bip39Enabled);
+                walletdb.WriteWalletBip39Enabled(pwallet->bip39Enabled);
             }
 
             // generate 1 address
-            LOCK(pwalletMain->cs_wallet);
-            auto zAddress = pwalletMain->GenerateNewSaplingZKey();
-            pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
+            LOCK(pwallet->cs_wallet);
+            auto zAddress = pwallet->GenerateNewSaplingZKey();
+            pwallet->SetZAddressBook(zAddress, "Sapling", "");
         }
 
-        pwalletMain->fUseDpowConfs = GetBoolArg("-usedpowconfs", true);
+        pwallet->fUseDpowConfs = GetBoolArg("-usedpowconfs", true);
 
         //Set up Reporting while encrypted options
         fUnlockedForReporting = GetBoolArg("-unlockforreporting", false);
@@ -2774,22 +2824,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             useBootstrap = false;
             // Create new keyUser and set as default key
             CPubKey newDefaultKey;
-            if (pwalletMain->GetKeyFromPool(newDefaultKey)) {
-                pwalletMain->SetDefaultKey(newDefaultKey);
-                if (!pwalletMain->SetAddressBook(pwalletMain->vchDefaultKey.GetID(), "", "receive"))
+            if (pwallet->GetKeyFromPool(newDefaultKey)) {
+                pwallet->SetDefaultKey(newDefaultKey);
+                if (!pwallet->SetAddressBook(pwallet->vchDefaultKey.GetID(), "", "receive"))
                     strErrors << _("Cannot write default address") << "\n";
             }
 
             if (chainActive.Tip()) {
-                LOCK(pwalletMain->cs_wallet);
-                pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->nHeight);
+                LOCK(pwallet->cs_wallet);
+                pwallet->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->nHeight);
             }
         }
 
         LogPrintf("%s", strErrors.str());
         LogPrintf(" wallet      %15dms\n", GetTimeMillis() - nStart);
 
-        RegisterValidationInterface(pwalletMain);
+        RegisterValidationInterface(pwallet);
 
         LOCK(cs_main);
         CBlockIndex *pindexRescan = chainActive.Tip();
@@ -2797,33 +2847,33 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Load Wallet birthday
         {
             CWalletDB walletdb(strWalletFile);
-            walletdb.ReadWalletBirthday(pwalletMain->nBirthday);
+            walletdb.ReadWalletBirthday(pwallet->nBirthday);
         }
 
         //Load bip39Enabled
         {
             CWalletDB walletdb(strWalletFile);
-            walletdb.ReadWalletBip39Enabled(pwalletMain->bip39Enabled);
+            walletdb.ReadWalletBip39Enabled(pwallet->bip39Enabled);
         }
 
         {
             //Sort Transactions by block and block index, then reorder
-            LOCK2(cs_main, pwalletMain->cs_wallet);
+            LOCK2(cs_main, pwallet->cs_wallet);
             if (chainActive.Tip()) {
                 LogPrintf("Runnning transaction reorder\n");
                 int64_t maxOrderPos = 0;
                 std::map<std::pair<int,int>, CWalletTx*> mapSorted;
-                pwalletMain->ReorderWalletTransactions(mapSorted, maxOrderPos);
-                pwalletMain->UpdateWalletTransactionOrder(mapSorted);
+                pwallet->ReorderWalletTransactions(mapSorted, maxOrderPos);
+                pwallet->UpdateWalletTransactionOrder(mapSorted);
             }
         }
 
         if (clearWitnessCaches || GetBoolArg("-rescan", false) || !fInitializeArcTx || useBootstrap || zapTransactions)
         {
             pindexRescan = chainActive.Genesis();
-            pwalletMain->nBirthday = 0;
-            pwalletMain->SaplingWalletReset();
-            pwalletMain->IronwoodWalletReset();
+            pwallet->nBirthday = 0;
+            pwallet->SaplingWalletReset();
+            pwallet->IronwoodWalletReset();
 
             int rescanHeight = GetArg("-rescanheight", 0);
             if (chainActive.Tip() && rescanHeight > 0) {
@@ -2856,7 +2906,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
             nStart = GetTimeMillis();
-            pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
+            pwallet->ScanForWalletTransactions(pindexRescan, true, false, false, false);
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
         } else {
             //Rescan at minimum last 1 block
@@ -2865,35 +2915,33 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 uiInterface.InitMessage(_("Rescanning..."));
                 LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
                 nStart = GetTimeMillis();
-                pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
+                pwallet->ScanForWalletTransactions(pindexRescan, true, false, false, false);
                 LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
             }
         }
 
         //Validate Rust Sapling Wallet, rebuild if needed
         if (chainActive.Tip() && chainActive.Height() > 0) {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
+            LOCK2(cs_main, pwallet->cs_wallet);
 
             LogPrintf("Validating Sapling Note Positions from height %i\n", chainActive.Height());
-            if (!pwalletMain->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
-                pwalletMain->SaplingWalletReset();
-                pwalletMain->IncrementSaplingWallet(chainActive.Tip());
+            if (!pwallet->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
+                pwallet->SaplingWalletReset();
+                pwallet->IncrementSaplingWallet(chainActive.Tip());
             }
-            pwalletMain->saplingWalletPositionsValidated=true;
+            pwallet->saplingWalletPositionsValidated=true;
 
             LogPrintf("Validating Ironwood Note Positions from height %i\n", chainActive.Height());
-            if (!pwalletMain->ValidateIronwoodWalletTrackedPositions(chainActive.Tip())) {
-                pwalletMain->IronwoodWalletReset();
-                pwalletMain->IncrementIronwoodWallet(chainActive.Tip());
+            if (!pwallet->ValidateIronwoodWalletTrackedPositions(chainActive.Tip())) {
+                pwallet->IronwoodWalletReset();
+                pwallet->IncrementIronwoodWallet(chainActive.Tip());
             }
-            pwalletMain->ironwoodWalletPositionsValidated=true;
+            pwallet->ironwoodWalletPositionsValidated=true;
         }
 
-        pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
+        pwallet->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));
 
-        vpwallets.push_back(pwalletMain);
-
-        CWalletManager::Get().RegisterInitialWallet(strWalletFile, pwalletMain);
+        CWalletManager::Get().RegisterInitialWallet(strWalletFile, pwallet);
 
         // Best-effort secondary wallets: skip whichever entry became strWalletFile
         // above (already loaded through the full default-wallet sequence) and try
@@ -2948,11 +2996,11 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     if (mapArgs.count("-mineraddress")) {
  #ifdef ENABLE_WALLET
         bool minerAddressInLocalWallet = false;
-        if (pwalletMain) {
+        if (pwallet) {
             // Address has alreday been validated
             CTxDestination addr = DecodeDestination(mapArgs["-mineraddress"]);
             CKeyID *keyID = std::get_if<CKeyID>(&addr);
-            minerAddressInLocalWallet = pwalletMain->HaveKey(*keyID);
+            minerAddressInLocalWallet = pwallet->HaveKey(*keyID);
         }
         if (GetBoolArg("-minetolocalwallet", true) && !minerAddressInLocalWallet) {
             return InitError(_("-mineraddress is not in the local wallet. Either use a local address, or set -minetolocalwallet=0"));
@@ -3038,9 +3086,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #ifdef ENABLE_WALLET
     RescanWallets();
 
-    LogPrintf("setKeyPool.size() = %u\n",      pwalletMain ? pwalletMain->setKeyPool.size() : 0);
-    LogPrintf("mapWallet.size() = %u\n",       pwalletMain ? pwalletMain->mapWallet.size() : 0);
-    LogPrintf("mapAddressBook.size() = %u\n",  pwalletMain ? pwalletMain->mapAddressBook.size() : 0);
+    LogPrintf("setKeyPool.size() = %u\n",      pwallet ? pwallet->setKeyPool.size() : 0);
+    LogPrintf("mapWallet.size() = %u\n",       pwallet ? pwallet->mapWallet.size() : 0);
+    LogPrintf("mapAddressBook.size() = %u\n",  pwallet ? pwallet->mapAddressBook.size() : 0);
 #endif
 
     // Start the thread that notifies listeners of transactions that have been
@@ -3080,8 +3128,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 #ifdef ENABLE_MINING
     // Generate coins in the background
  #ifdef ENABLE_WALLET
-    if (pwalletMain || !GetArg("-mineraddress", "").empty())
-        GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", -1));
+    if (pwallet || !GetArg("-mineraddress", "").empty())
+        GenerateBitcoins(GetBoolArg("-gen", false), pwallet, GetArg("-genproclimit", -1));
  #else
     GenerateBitcoins(GetBoolArg("-gen", false), GetArg("-genproclimit", -1));
  #endif
@@ -3090,7 +3138,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     // ********************************************************* Step 11: finished
 
 #ifdef ENABLE_WALLET
-    if (pwalletMain) {
+    if (pwallet) {
         // Add wallet transactions that aren't already in a block to
         // mapTransactions, and lock any wallet that's encrypted -- for every
         // wallet loaded so far (default + secondaries loaded via -wallet=
@@ -3129,13 +3177,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     uiInterface.InitMessage(_("Done loading"));
 
 #ifdef ENABLE_WALLET
-    if (pwalletMain) {
-        // Run a thread to flush wallet periodically. ThreadFlushWalletDB
-        // (wallet/walletdb.cpp) already flushes every wallet file currently
-        // open in the shared BDB environment on its own, not just strFile --
-        // one thread here covers every wallet loaded now or later.
-        threadGroup.create_thread(boost::bind(&ThreadFlushWalletDB, boost::ref(pwalletMain->strWalletFile)));
-    }
+    // Started unconditionally, not gated on pwalletMain -- audit finding
+    // (pwalletMain-elimination effort): a genuinely fresh datadir (true
+    // zero-wallet startup) or every wallet deactivated left this thread
+    // never started at all, so every wallet created afterward (createwallet,
+    // loadwallet, the Qt zero-wallet first-run flow) ran with no periodic
+    // BDB flush for the rest of the process. ThreadFlushWalletDB
+    // (wallet/walletdb.cpp) already flushes every wallet file currently open
+    // in the shared BDB environment on its own and, per its own comment,
+    // never actually uses the string argument below -- one thread here
+    // covers every wallet loaded now or later regardless of whether one is
+    // loaded yet at this exact point in startup.
+    threadGroup.create_thread(boost::bind(&ThreadFlushWalletDB, std::string()));
 #endif
 
     // SENDALERT

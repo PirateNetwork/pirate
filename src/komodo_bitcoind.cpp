@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 /******************************************************************************
  * Copyright © 2014-2019 The SuperNET Developers.                             *
  *                                                                            *
@@ -24,6 +28,7 @@
 #include "rpc/net.h"
 #include "init.h"
 #include "miner.h"
+#include "wallet/walletmanager.h"
 
 
 /************************************************************************
@@ -2225,18 +2230,20 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     // unreachable before this redesign (there was only ever one wallet to
     // read), and specific to ASSETCHAINS_STAKED chains (Pirate does not run
     // one), but wrong regardless of how narrow the trigger is. Falls back to
-    // pwalletMain if mining isn't bound to a specific wallet for some reason
-    // (shouldn't happen given the call site, but matches this codebase's
-    // existing pwallet-or-pwalletMain fallback convention elsewhere).
+    // the active wallet if mining isn't bound to a specific wallet for some
+    // reason (shouldn't happen given the call site, but matches this
+    // codebase's existing pwallet-or-active-wallet fallback convention
+    // elsewhere -- pwalletMain-elimination effort: this used to read the raw
+    // pwalletMain global here, which no longer mirrors anything live).
     //
     // Resolved BEFORE the availability gate just below (a second Opus-audit
     // finding, on the first fix's own first draft): the gate must check
-    // *this* wallet, not the live pwalletMain -- otherwise a setactivewallet/
-    // deactivation that leaves pwalletMain null would silently stop staking
-    // even while the actually-mining-bound wallet is still loaded and valid.
+    // *this* wallet, not whatever's active -- otherwise a setactivewallet/
+    // deactivation would silently stop staking even while the actually-
+    // mining-bound wallet is still loaded and valid.
     CWallet* pwallet = GetMiningWallet();
     if (!pwallet)
-        pwallet = pwalletMain;
+        pwallet = CWalletManager::Get().GetActiveWallet();
 
     // avoidException=true: this runs on a worker thread, not an RPC dispatch
     // context -- a thrown JSONRPCError here would propagate out of nowhere
@@ -2247,10 +2254,10 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     // with no wallet), but the no-default-wallet redesign makes "no wallet
     // loaded" reachable through more paths than -disablewallet alone, so
     // this is closed defensively rather than left relying on an upstream
-    // gate never loosening. The pwallet-taking overload, not the
-    // pwalletMain-reading one: checking availability of a different wallet
-    // than the one this function goes on to use would defeat the whole
-    // point of resolving `pwallet` above.
+    // gate never loosening. The pwallet-taking overload, not a zero-arg
+    // one: checking availability of a different wallet than the one this
+    // function goes on to use would defeat the whole point of resolving
+    // `pwallet` above.
     if (!EnsureWalletIsAvailable(pwallet, true))
         return 0;
 

@@ -31,7 +31,7 @@ bool HeirValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, 
 class CoinHelper;
 class TokenHelper;
 
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 UniValue HeirFundCoinCaller(int64_t txfee, int64_t coins, std::string heirName, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string memo, CWallet *pwallet=nullptr);
 UniValue HeirFundTokenCaller(int64_t txfee, int64_t satoshis, std::string heirName, CPubKey heirPubkey, int64_t inactivityTimeSec, std::string memo, uint256 tokenid, CWallet *pwallet=nullptr);
 UniValue HeirClaimCaller(uint256 fundingtxid, int64_t txfee, std::string amount, CWallet *pwallet=nullptr);

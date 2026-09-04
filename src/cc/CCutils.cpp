@@ -27,6 +27,7 @@
 #include "komodo_utils.h"
 #include "key_io.h"
 #include "komodo_bitcoind.h"
+#include "wallet/walletmanager.h"
 
 #ifdef TESTMODE
     #define MIN_NON_NOTARIZED_CONFIRMS 2
@@ -485,17 +486,20 @@ bool Myprivkey(uint8_t myprivkey[])
         if ( address.SetString(strAddress) != 0 && address.GetKeyID(keyID) != 0 )
         {
 #ifdef ENABLE_WALLET
-            // Deliberately always pwalletMain, never a request-selected wallet:
-            // this resolves the privkey for the process-global CC identity
-            // (-pubkey/NOTARY_PUBKEY33/Mypubkey(), not anything wallet-derived),
-            // and is reachable from block validation via
+            // Deliberately always the active wallet, never a request-selected
+            // one: this resolves the privkey for the process-global CC
+            // identity (-pubkey/NOTARY_PUBKEY33/Mypubkey(), not anything
+            // wallet-derived), and is reachable from block validation via
             // DiceValidate -> DiceIsWinner -> DiceHashEntropy -> Myprivkey, on
             // scriptcheckqueue worker threads -- there is no "selected wallet"
             // concept to consult there, and there must never be one. The null
-            // guard below is the actual fix: under -disablewallet, pwalletMain
-            // is null, and this call used to dereference it unconditionally,
-            // a null-deref reachable from inside block validation.
-            if ( pwalletMain != NULL && pwalletMain->GetKey(keyID,vchSecret) != 0 )
+            // guard below is the actual fix: under -disablewallet (or true
+            // zero-wallet startup / every wallet deactivated), there is no
+            // active wallet, and this call used to dereference the old
+            // pwalletMain global unconditionally, a null-deref reachable from
+            // inside block validation.
+            CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
+            if ( pwallet != NULL && pwallet->GetKey(keyID,vchSecret) != 0 )
             {
                 memcpy(myprivkey,vchSecret.begin(),32);
                 memset((uint8_t *)vchSecret.begin(),0,32);

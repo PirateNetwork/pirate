@@ -5,7 +5,6 @@
 
 #include "zsigndialog.h"
 #include "ui_zsigndialog.h"
-#include "init.h"     //for *pwalletMain
 #include "core_io.h"  //for EncodeHexTx()
 #include "util.h"     //for HexToCharArray()
 #include "rpc/client.h" //for RPCConvertValues()

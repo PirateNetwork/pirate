@@ -27,7 +27,7 @@
 
 bool DiceValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
 
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's
 // convention (see CCtx.cpp) -- lets the RPC handlers pass the request-resolved
 // wallet while the dice background thread (dealer0_loop, dicefinish pthread)
 // keeps calling these with no wallet argument at all, unchanged.

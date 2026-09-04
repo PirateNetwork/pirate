@@ -52,6 +52,7 @@ CBlockIndex *komodo_chainactive(int32_t height);
 
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 #endif
 
 #include <stdint.h>
@@ -258,7 +259,7 @@ public Q_SLOTS:
     void handleRunawayException(const QString &message);
 #ifdef ENABLE_WALLET
     /// No-default-wallet redesign: true zero-wallet startup (a fresh data
-    /// directory, nothing auto-loaded) leaves pwalletMain null when
+    /// directory, nothing auto-loaded) leaves no wallet active when
     /// AppInit2() returns. initializeResult() detects that and, instead of
     /// finishing startup immediately, keeps the splash screen up and drives
     /// SplashScreen's create/restore flow directly against CWalletManager --
@@ -630,7 +631,7 @@ void KomodoApplication::initializeResult(bool success)
 
         // No-default-wallet redesign: true zero-wallet startup (a fresh data
         // directory, nothing auto-loaded -- see init.cpp's
-        // fAutoLoadWalletAtStartup) leaves pwalletMain null here, with no
+        // fAutoLoadWalletAtStartup) leaves no wallet active here, with no
         // uiInterface signal ever having fired (AppInit2() never blocked
         // waiting for one). Rather than finish startup with no wallet at all,
         // drive the splash screen's existing create/restore widgets directly
@@ -640,7 +641,7 @@ void KomodoApplication::initializeResult(bool success)
         // fall through to finishStartup() below exactly as before, with no
         // wallet tab, same as -disablewallet already behaved.
         bool fDisableWallet = GetBoolArg("-disablewallet", false) || KOMODO_NSPV_SUPERLITE;
-        if (!pwalletMain && !fDisableWallet && splashScreenWidget) {
+        if (!CWalletManager::Get().GetActiveWallet() && !fDisableWallet && splashScreenWidget) {
             splashScreenWidget->startZeroWalletFlow(GetArg("-wallet", "wallet.dat"));
             return;
         }
@@ -664,13 +665,17 @@ void KomodoApplication::finishStartup()
     window->setClientModel(clientModel);
 
 #ifdef ENABLE_WALLET
-    // vpwallets is a startup-only snapshot (init.cpp), never updated by
-    // CWalletManager -- pwalletMain is the one global guaranteed to stay
-    // in sync with the manager's own idea of the active wallet, so it
-    // is used here instead. Secondary wallets loaded/created later via
-    // the File > Wallets menu are added straight to window's own wallet-
-    // model map (see PirateOceanGUI), not through this startup path.
-    if (pwalletMain)
+    // finishStartup() always runs strictly after a wallet is fully loaded
+    // and active -- either init.cpp's own Step 8 sequence completed
+    // normally, or (true zero-wallet startup) startZeroWalletFlow()'s
+    // CreateWallet()/LoadWallet() call already registered and activated one
+    // before walletCreatedDuringStartup() got here -- so resolving the
+    // active wallet fresh here is always correct. Secondary wallets loaded/
+    // created later via the File > Wallets menu are added straight to
+    // window's own wallet-model map (see PirateOceanGUI), not through this
+    // startup path.
+    CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
+    if (pwallet)
     {
         // One-time migration of two pre-Phase-5 QSettings preferences into
         // their now-per-wallet equivalents (backlog item 1's own deferred
@@ -709,22 +714,22 @@ void KomodoApplication::finishStartup()
         // loads here, rather than silently losing the preference forever
         // the first time it fails.
         QSettings migrationSettings;
-        QString migratingWalletName = QString::fromStdString(pwalletMain->GetName());
+        QString migratingWalletName = QString::fromStdString(pwallet->GetName());
         QStringList migratedWallets = migrationSettings.value("phase5MigratedWallets").toStringList();
         if (!migratedWallets.contains(migratingWalletName)) {
             bool fTxDeleteMigratedOk = true;
             bool fSaplingMigratedOk = true;
             if (fHadLegacyTxDeleteSetting)
-                fTxDeleteMigratedOk = pwalletMain->SetTxDeleteEnabled(migrationSettings.value("fTxDeleteEnabled").toBool());
+                fTxDeleteMigratedOk = pwallet->SetTxDeleteEnabled(migrationSettings.value("fTxDeleteEnabled").toBool());
             if (fHadLegacySaplingConsolidationSetting)
-                fSaplingMigratedOk = pwalletMain->SetSaplingConsolidationEnabled(migrationSettings.value("fSaplingConsolidationEnabled").toBool());
+                fSaplingMigratedOk = pwallet->SetSaplingConsolidationEnabled(migrationSettings.value("fSaplingConsolidationEnabled").toBool());
             if (fTxDeleteMigratedOk && fSaplingMigratedOk) {
                 migratedWallets.append(migratingWalletName);
                 migrationSettings.setValue("phase5MigratedWallets", migratedWallets);
             }
         }
 
-        WalletModel *walletModel = new WalletModel(platformStyle, pwalletMain, optionsModel);
+        WalletModel *walletModel = new WalletModel(platformStyle, pwallet, optionsModel);
 
         // No-default-wallet redesign: keyed by its own real registry name
         // now, same as every wallet loaded/created later via the File >
@@ -733,7 +738,7 @@ void KomodoApplication::finishStartup()
         // startup (see PirateOceanGUI::mapWalletModels' own comment for why
         // that aliasing was a real bug once active status became
         // reassignable independent of this window).
-        QString realName = QString::fromStdString(pwalletMain->GetName());
+        QString realName = QString::fromStdString(pwallet->GetName());
         window->addWallet(realName, walletModel);
         window->setCurrentWallet(realName);
 

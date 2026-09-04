@@ -19,6 +19,7 @@
 
 #include "CCinclude.h"
 #include "key_io.h"
+#include "wallet/walletmanager.h"
 
 std::vector<CPubKey> NULL_pubkeys;
 struct NSPV_CCmtxinfo NSPV_U;
@@ -27,7 +28,7 @@ struct NSPV_CCmtxinfo NSPV_U;
 bool SignTx(CMutableTransaction &mtx,const PrecomputedTransactionData& txToDataIn, int32_t vini,int64_t utxovalue,const CScript scriptPubKey,CWallet *pwallet)
 {
 #ifdef ENABLE_WALLET
-    if (pwallet == nullptr) pwallet = pwalletMain;
+    if (pwallet == nullptr) pwallet = CWalletManager::Get().GetActiveWallet();
     if (pwallet == nullptr) return false;
     CTransaction txNewConst(mtx); SignatureData sigdata; const CKeyStore& keystore = *pwallet;
     auto consensusBranchId = CurrentEpochBranchId(chainActive.Height() + 1, Params().GetConsensus());
@@ -87,7 +88,7 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
 
     //Myprivkey(myprivkey);  // for NSPV mode we need to add myprivkey for the explicitly defined mypk param
 #ifdef ENABLE_WALLET
-    if (pwallet == nullptr) pwallet = pwalletMain;
+    if (pwallet == nullptr) pwallet = CWalletManager::Get().GetActiveWallet();
     // get privkey for mypk
     if (pwallet != nullptr)
     {
@@ -689,8 +690,8 @@ int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total
     //     return(AddNormalinputs3(mtx, mypk, total, maxinputs));
 
 #ifdef ENABLE_WALLET
-    if (pwallet == nullptr) pwallet = pwalletMain;
-    // No-default-wallet redesign: pwalletMain can now be null outside of
+    if (pwallet == nullptr) pwallet = CWalletManager::Get().GetActiveWallet();
+    // No-default-wallet redesign: the active wallet can be null outside of
     // -disablewallet too (true zero-wallet startup, or every wallet
     // deactivated via setactivewallet) -- an assert here would crash the
     // whole process on what is now a normal, reachable "no wallet available"

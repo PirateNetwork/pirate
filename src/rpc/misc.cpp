@@ -341,7 +341,15 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         if ( (notaryid= StakedNotaryID(notaryname, (char *)NOTARY_ADDRESS.c_str())) != -1 ) {
             obj.push_back(Pair("notaryid",        notaryid));
             obj.push_back(Pair("notaryname",      notaryname));
-        } else if( (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.Tip()->nHeight,komodo_chainactive_timestamp())) >= 0 )  {
+        // chainActive.Tip() guarded the same way the "tiptime" field above
+        // guards it: this branch dereferences the tip for a height, and there
+        // is no tip at all before the block index is loaded. Reachable
+        // whenever -pubkey is set (that's what makes NOTARY_PUBKEY33
+        // non-zero) and something calls getinfo before the chain exists --
+        // caught for real by the gtest suite under --gtest_shuffle, where a
+        // chainless fixture's getinfo inherits NOTARY_PUBKEY33 from an
+        // earlier chain-building test and segfaults here.
+        } else if( chainActive.Tip() != 0 && (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.Tip()->nHeight,komodo_chainactive_timestamp())) >= 0 )  {
             obj.push_back(Pair("notaryid",        notaryid));
             if ( KOMODO_LASTMINED != 0 )
                 obj.push_back(Pair("lastmined", KOMODO_LASTMINED));
@@ -406,10 +414,10 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 class DescribeAddressVisitor : public boost::static_visitor<UniValue>
 {
 public:
-    // Defaults to pwalletMain when not given, per the multiwallet effort's
-    // convention (see cc/CCtx.cpp), so validateaddress can pass the
-    // request-resolved wallet instead of always the default one.
-    DescribeAddressVisitor(CWallet *pwalletIn = nullptr) : pwallet(pwalletIn ? pwalletIn : pwalletMain) {}
+    // Defaults to the active wallet when not given, per the multiwallet
+    // effort's convention (see cc/CCtx.cpp), so validateaddress can pass the
+    // request-resolved wallet instead.
+    DescribeAddressVisitor(CWallet *pwalletIn = nullptr) : pwallet(pwalletIn ? pwalletIn : CWalletManager::Get().GetActiveWallet()) {}
 
     UniValue operator()(const CNoDestination &dest) const { return UniValue(UniValue::VOBJ); }
 
@@ -592,10 +600,10 @@ class DescribePaymentAddressVisitor : public boost::static_visitor<UniValue>
 {
 public:
 #ifdef ENABLE_WALLET
-    // Defaults to pwalletMain when not given, per the multiwallet effort's
-    // convention (see cc/CCtx.cpp), so z_validateaddress can pass the
-    // request-resolved wallet instead of always the default one.
-    DescribePaymentAddressVisitor(CWallet *pwalletIn = nullptr) : pwallet(pwalletIn ? pwalletIn : pwalletMain) {}
+    // Defaults to the active wallet when not given, per the multiwallet
+    // effort's convention (see cc/CCtx.cpp), so z_validateaddress can pass
+    // the request-resolved wallet instead.
+    DescribePaymentAddressVisitor(CWallet *pwalletIn = nullptr) : pwallet(pwalletIn ? pwalletIn : CWalletManager::Get().GetActiveWallet()) {}
 #endif
 
     UniValue operator()(const libzcash::InvalidEncoding &zaddr) const { return UniValue(UniValue::VOBJ); }
@@ -711,8 +719,15 @@ UniValue z_validateaddress(const UniValue& params, bool fHelp, const CPubKey& my
 /**
  * Used by addmultisigaddress / createmultisig:
  */
-CScript _createmultisig_redeemScript(const UniValue& params)
+CScript _createmultisig_redeemScript(const UniValue& params, CWallet* pwallet = nullptr)
 {
+    // addmultisigaddress passes its own request-resolved wallet explicitly;
+    // createmultisig (no wallet selection of its own, works with no wallet
+    // loaded at all) leaves this defaulted, falling back to the active
+    // wallet purely as a best-effort convenience for the address-form
+    // pubkey lookup below (Case 2's hex-pubkey path works with none at all).
+    if (pwallet == nullptr)
+        pwallet = CWalletManager::Get().GetActiveWallet();
     int nRequired = params[0].get_int();
     const UniValue& keys = params[1].get_array();
 
@@ -733,13 +748,13 @@ CScript _createmultisig_redeemScript(const UniValue& params)
 #ifdef ENABLE_WALLET
         // Case 1: Bitcoin address and we have full public key:
         CTxDestination dest = DecodeDestination(ks);
-        if (pwalletMain && IsValidDestination(dest)) {
+        if (pwallet && IsValidDestination(dest)) {
             const CKeyID *keyID = std::get_if<CKeyID>(&dest);
             if (!keyID) {
                 throw std::runtime_error(strprintf("%s does not refer to a key", ks));
             }
             CPubKey vchPubKey;
-            if (!pwalletMain->GetPubKey(*keyID, vchPubKey)) {
+            if (!pwallet->GetPubKey(*keyID, vchPubKey)) {
                 throw std::runtime_error(strprintf("no full public key for address %s", ks));
             }
             if (!vchPubKey.IsFullyValid())

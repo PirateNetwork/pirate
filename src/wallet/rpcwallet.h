@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -24,8 +25,8 @@ class CRPCTable;
 class CWallet;
 
 void RegisterWalletRPCCommands(CRPCTable &tableRPC);
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's
-// convention (see cc/CCtx.cpp) -- lets z_gettotalbalance pass the
+// pwallet defaults to the active wallet when not given, per the multiwallet
+// effort's convention (see cc/CCtx.cpp) -- lets z_gettotalbalance pass the
 // request-resolved wallet, while komodo_update_interest() (background
 // maintenance thread, komodo_gateway.cpp) and qt/walletmodel.cpp's polling
 // keep calling with no wallet argument at all, unchanged.

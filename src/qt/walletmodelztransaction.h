@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -46,9 +47,6 @@ public:
     void setOperationId(const AsyncRPCOperationId& newOperationId);
     AsyncRPCOperationId getOperationId() const;
 
-    void setZSignOfflineTransaction(const string& sTransaction);
-    string getZSignOfflineTransaction() const;
-
 private:
     QString fromaddress;
     bool    bIsMine;     //True: Spending key must be in the local adres book. False: Prepare an offline transaction signing (Off-line PC wallet || h/w wallet)
@@ -60,7 +58,6 @@ private:
     UniValue contextInfo;
 
     AsyncRPCOperationId operationId;
-    string sZSignOfflineTransaction;
 };
 
 #endif // KOMODO_QT_WALLETMODELZTRANSACTION_H

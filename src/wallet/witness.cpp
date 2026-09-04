@@ -1,23 +1,25 @@
 // Copyright (c) 2019 Cryptoforge
 // Copyright (c) 2019 The Zero developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "witness.h"
 #include "coins.h"
 #include "init.h"
+#include "komodo_bitcoind.h"
 #include "rpc/server.h"
 #include "utilmoneystr.h"
 #include "wallet.h"
+#include "wallet/walletmanager.h"
 
 using namespace std;
 using namespace libzcash;
 
-bool EnsureWalletIsAvailable(bool avoidException);
-
 UniValue getsaplingwitness(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 2)
@@ -31,7 +33,8 @@ UniValue getsaplingwitness(const UniValue& params, bool fHelp, const CPubKey& my
 
 UniValue exportsaplingtree(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() > 0)
@@ -45,7 +48,8 @@ UniValue exportsaplingtree(const UniValue& params, bool fHelp, const CPubKey& my
 
 UniValue getsaplingwitnessatheight(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
-    if (!EnsureWalletIsAvailable(fHelp))
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;
 
     if (fHelp || params.size() != 3)

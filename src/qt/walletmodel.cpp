@@ -957,7 +957,6 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
       switch(status)
       {
         case OperationStatus::CANCELLED:
-          transaction.setZSignOfflineTransaction("Background thread was cancelled");
           qsResult=QString::asprintf("Background thread was cancelled");
           Q_EMIT coinsZSent(operationId);
           return SendCoinsReturn(TransactionCreationFailed,qsResult);
@@ -987,19 +986,9 @@ WalletModel::SendCoinsReturn WalletModel::zsendCoins(WalletModelZTransaction &tr
         case OperationStatus::SUCCESS:
           oResult = operation->getResult();
           sResult = oResult[0].get_str();
-          if (sResult.find("z_sign_offline") != std::string::npos)
-          {
-            transaction.setZSignOfflineTransaction(sResult);
-          }
-          else
-          {
-            //Specific for the off-line transactions. Normal 'online' transactions won't see this
-            transaction.setZSignOfflineTransaction("Could not find z_sign_offline in the result: "+sResult);
-          }
           iCounter=11; //exit polling loop
           break;
         default:
-          transaction.setZSignOfflineTransaction("Unknown result from the background thread");
           qsResult=QString::asprintf("Unknown result from the background thread");
           Q_EMIT coinsZSent(operationId);
           return SendCoinsReturn(TransactionCreationFailed,qsResult);

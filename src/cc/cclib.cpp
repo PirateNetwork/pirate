@@ -118,7 +118,7 @@ UniValue rogue_extract(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
 #else
 bool sudoku_validate(struct CCcontract_info *cp,int32_t height,Eval *eval,const CTransaction tx);
 UniValue sudoku_txidinfo(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 UniValue sudoku_generate(uint64_t txfee,struct CCcontract_info *cp,cJSON *params,CWallet *pwallet=nullptr);
 UniValue sudoku_solution(uint64_t txfee,struct CCcontract_info *cp,cJSON *params,CWallet *pwallet=nullptr);
 UniValue sudoku_pending(uint64_t txfee,struct CCcontract_info *cp,cJSON *params);

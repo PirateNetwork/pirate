@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -76,7 +77,7 @@ struct FeeCalculation
  * field instead. `wallet`, when given, is the wallet whose own minTxFee
  * applies -- CWallet::CreateTransaction() always passes `this`. Left null
  * (the default, for call sites not yet made wallet-aware, e.g. Qt's fee
- * preview code), falls back to pwalletMain's setting, or a compiled-in
+ * preview code), falls back to the active wallet's setting, or a compiled-in
  * default if no wallet is loaded at all.
  */
 CAmount GetRequiredFee(unsigned int nTxBytes, const CWallet* wallet = nullptr);

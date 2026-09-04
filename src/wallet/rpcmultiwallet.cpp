@@ -361,6 +361,17 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         // -rederiverironwoodscopes, previously only reachable for whichever
         // wallet was the default one (Phase 11 audit backlog item, fixed).
         "rederiveironwoodscopes",
+        // setpubkey: rewired as part of the pwalletMain-elimination effort
+        // (it now resolves GetWalletForRequest() -- optionally, since its
+        // core -pubkey/notary-identity function works with no wallet loaded
+        // at all -- for its "ismine" check instead of always pwalletMain).
+        "setpubkey",
+        // kvupdate, addmultisigaddress, fundrawtransaction, nn_split,
+        // nn_makenota: rewired as part of the pwalletMain-elimination
+        // effort's mechanical RPC pass (rpc/notaries.cpp's nn_getwalletinfo
+        // was already done; these two siblings had been missed).
+        "kvupdate", "addmultisigaddress", "fundrawtransaction",
+        "nn_split", "nn_makenota", "opreturn_burn",
         // Backlog item 9: encryptwallet now resolves GetWalletForRequest()
         // instead of always pwalletMain, and a failed attempt against a
         // secondary wallet recovers in-process (CWalletManager::

@@ -13,27 +13,32 @@
 // StartShutdown() (init.cpp) unconditionally locked pwalletMain->cs_wallet to
 // flush the wallet once the node had finished loading, without checking
 // whether pwalletMain was actually set. With -disablewallet, pwalletMain
-// stays NULL for the life of the process, so calling `stop` (or any other
+// stayed NULL for the life of the process, so calling `stop` (or any other
 // path that reaches StartShutdown() post-load) dereferenced a null pointer.
 // SIGTERM-driven shutdown didn't hit this, since it takes a different path
 // that happened not to call StartShutdown() the same way - only the RPC
 // `stop` command did, which is why the crash was reported specifically on
 // exit rather than on every shutdown.
+//
+// pwalletMain-elimination effort: StartShutdown()'s guard now checks the
+// registry directly (an empty registry, not a null pointer, is what
+// -disablewallet -- and true zero-wallet startup, and every wallet
+// deactivated -- actually look like now), so this simulates the same
+// "nothing loaded" condition via CWalletManager::Reset() instead of nulling
+// a global that no longer exists.
 
 extern bool loadComplete;
 extern std::atomic<bool> fRequestShutdown;
-extern CWallet* pwalletMain;
 
 TEST(init_tests, StartShutdownDoesNotCrashWithWalletDisabled)
 {
     bool savedLoadComplete = loadComplete;
     int savedMaxConnections = nMaxConnections;
-    CWallet* savedWallet = pwalletMain;
     bool savedShutdown = fRequestShutdown;
 
+    CWalletManager::Get().Reset();
     loadComplete = true;
     nMaxConnections = 8;
-    pwalletMain = nullptr;
     fRequestShutdown = false;
 
     EXPECT_NO_THROW(StartShutdown());
@@ -41,7 +46,6 @@ TEST(init_tests, StartShutdownDoesNotCrashWithWalletDisabled)
 
     loadComplete = savedLoadComplete;
     nMaxConnections = savedMaxConnections;
-    pwalletMain = savedWallet;
     fRequestShutdown = savedShutdown;
 }
 

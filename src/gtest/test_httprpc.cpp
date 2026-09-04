@@ -226,15 +226,14 @@ protected:
         if (RPCIsInWarmup(nullptr))
             SetRPCWarmupFinished();
 
-        CWallet* defaultWallet = new CWallet("default_test.dat");
+        defaultWallet = new CWallet("default_test.dat");
         CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
-        // GetWalletForRequest() falls back to the real pwalletMain global for
-        // the no-selection case, exactly like init.cpp -- which registers the
-        // same CWallet* as both. Without this, tests exercising a rewired RPC
-        // via the default "/" path would run against whatever pwalletMain was
-        // left over from an earlier, unrelated test in this binary.
-        previousPwalletMain = pwalletMain;
-        pwalletMain = defaultWallet;
+        // RegisterInitialWallet() makes this the active wallet, so
+        // GetWalletForRequest()'s no-selection case (now GetActiveWallet())
+        // resolves to it -- exactly like init.cpp. Without this, tests
+        // exercising a rewired RPC via the default "/" path would run
+        // against whatever was left active by an earlier, unrelated test in
+        // this binary.
 
         bool fFirstRun;
         CWallet scratch("secondarytestwallet");
@@ -245,9 +244,7 @@ protected:
     }
 
     void TearDown() override {
-        pwalletMain = previousPwalletMain;
         CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
-        CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetActiveWalletName());
         CWalletManager::Get().Reset();
         delete defaultWallet;
         // Individual wallet DB handles are released above; now close the env
@@ -269,7 +266,10 @@ protected:
     std::shared_ptr<CDBEnv> previousBitdb;
     bool fHadPreviousDatadir;
     std::string previousDatadir;
-    CWallet* previousPwalletMain = nullptr; // in case SetUp() fails before it's assigned
+    // pwalletMain-elimination effort: this fixture's own wallet, held
+    // directly rather than repointing the (removed) global -- every TEST_F
+    // body in this fixture reads this member instead of pwalletMain now.
+    CWallet* defaultWallet = nullptr;
 };
 
 TEST_F(MultiWalletDispatchTest, DefaultWalletUriRunsWalletRPCsNormally)
@@ -286,15 +286,21 @@ TEST_F(MultiWalletDispatchTest, RootUriWithNoWalletSegmentAlsoRunsWalletRPCsNorm
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksOrdinaryWalletRPCs)
 {
-    // addmultisigaddress is still plain pwalletMain-only, no
-    // GetWalletForRequest() resolution -- a mechanical rewiring nobody has
-    // had reason to do yet. Good stand-in for "an ordinary, still-gated
-    // 'wallet'-category RPC" now that settxfee/getbalance/encryptwallet
-    // (backlog item 9) are all rewired.
+    // addmultisigaddress (the previous stand-in here) was itself rewired to
+    // GetWalletForRequest() during the pwalletMain-elimination effort, along
+    // with every other RPC that used to read pwalletMain unconditionally --
+    // there is no longer any "wallet"-category RPC left that isn't request-
+    // scoped. setgenerate is a permanent, deliberate exception instead of a
+    // temporary gap: starting/stopping the node's one mining thread is
+    // process-wide, not per-request (see miner.cpp's GetMiningWallet()), so
+    // it resolves CWalletManager::Get().GetActiveWallet() directly and is
+    // intentionally never added to IsMultiWalletAwareRPC()'s allowlist --
+    // scoping it to a named secondary wallet would let a caller bind mining
+    // to a wallet that isn't active, which the design doesn't intend.
     RPCWalletRequestGuard guard("secondarytestwallet");
     try {
-        tableRPC.execute("addmultisigaddress", UniValue(UniValue::VARR));
-        FAIL() << "expected addmultisigaddress to be refused against a non-default wallet";
+        tableRPC.execute("setgenerate", UniValue(UniValue::VARR));
+        FAIL() << "expected setgenerate to be refused against a non-default wallet";
     } catch (const UniValue& objError) {
         EXPECT_EQ((int)RPC_WALLET_NOT_SPECIFIED, find_value(objError, "code").get_int());
     }
@@ -435,19 +441,24 @@ TEST_F(MultiWalletDispatchTest, EncryptWalletFailureOnTheDefaultWalletStillResta
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriBlocksNonWalletCategoryRPCsToo)
 {
-    // The gate must not key off pcmd->category == "wallet": pwalletMain is
+    // The gate must not key off pcmd->category == "wallet": a wallet can be
     // read directly by RPCs registered under other categories too (e.g.
-    // "rawtransactions", "pirate Exclusive"), and a category allowlist would
-    // silently let those reach the wrong wallet instead of being refused.
-    // fundrawtransaction ("rawtransactions") is registered by
-    // RegisterAllCoreRPCCommands in SetUp() and reads pwalletMain directly --
-    // the gate must fire before that ever runs. (signrawtransaction, the
-    // previous stand-in here, was itself made multiwallet-aware in Phase 10
-    // and is no longer a valid "still refused" example.)
+    // "mining", "generating"), and a category allowlist would silently let
+    // those reach the wrong wallet instead of being refused.
+    // getblocktemplate ("mining") is registered by RegisterAllCoreRPCCommands
+    // in SetUp() and resolves CWalletManager::Get().GetActiveWallet()
+    // directly (mining is process-wide, not per-request -- see
+    // miner.cpp's GetMiningWallet() -- so it's deliberately never added to
+    // IsMultiWalletAwareRPC()'s allowlist) -- the gate must fire before that
+    // ever runs. (signrawtransaction, then fundrawtransaction, were each in
+    // turn the previous stand-in here, and each was itself made
+    // multiwallet-aware later and stopped being a valid "still refused"
+    // example -- unlike those, this one is excluded by permanent design, not
+    // a temporary gap, so it won't need swapping out again.)
     RPCWalletRequestGuard guard("secondarytestwallet");
     try {
-        tableRPC.execute("fundrawtransaction", UniValue(UniValue::VARR));
-        FAIL() << "expected fundrawtransaction to be refused against a non-default wallet";
+        tableRPC.execute("getblocktemplate", UniValue(UniValue::VARR));
+        FAIL() << "expected getblocktemplate to be refused against a non-default wallet";
     } catch (const UniValue& objError) {
         EXPECT_EQ((int)RPC_WALLET_NOT_SPECIFIED, find_value(objError, "code").get_int());
     }
@@ -518,7 +529,7 @@ TEST_F(MultiWalletDispatchTest, WitnessCacheRebuildOnOneWalletDoesNotBlockRpcsAg
 
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
-    ASSERT_NE(nullptr, pwalletMain);
+    ASSERT_NE(nullptr, defaultWallet);
 
     // Reset via RAII rather than a trailing assignment: FAIL()/ASSERT_* below
     // expand to a bare `return`, so a mid-test failure would otherwise skip
@@ -558,7 +569,7 @@ TEST_F(MultiWalletDispatchTest, WitnessCacheRebuildOnOneWalletDoesNotBlockRpcsAg
             EXPECT_NO_THROW(tableRPC.execute("listwallets", UniValue(UniValue::VARR)));
         }
         {
-            RPCWalletRequestGuard guard(""); // no selection -> resolves to pwalletMain
+            RPCWalletRequestGuard guard(""); // no selection -> resolves to defaultWallet
             EXPECT_NO_THROW(tableRPC.execute("listwallets", UniValue(UniValue::VARR)));
         }
     }
@@ -566,14 +577,14 @@ TEST_F(MultiWalletDispatchTest, WitnessCacheRebuildOnOneWalletDoesNotBlockRpcsAg
     // Symmetric check: flagging the DEFAULT wallet must not block a request
     // explicitly scoped to the secondary.
     {
-        ScopedRebuildFlag rebuilding(pwalletMain);
+        ScopedRebuildFlag rebuilding(defaultWallet);
 
         for (const char* method : kMethods) {
             RPCWalletRequestGuard guard("secondarytestwallet");
             EXPECT_NO_THROW(tableRPC.execute(method, UniValue(UniValue::VARR))) << method;
         }
         {
-            RPCWalletRequestGuard guard(""); // resolves to pwalletMain, which is flagged
+            RPCWalletRequestGuard guard(""); // resolves to defaultWallet, which is flagged
             try {
                 tableRPC.execute("listwallets", UniValue(UniValue::VARR));
                 ADD_FAILURE() << "listwallets should be refused while the default wallet rebuilds";
@@ -644,7 +655,7 @@ TEST_F(MultiWalletDispatchTest, RederiveIronwoodScopesActuallyCorrectsAScopeOnTh
     // never exercises the actual scope-correction loop. This forces a real
     // mismatch -- the same kind a stale/mis-derived entry would leave -- and
     // confirms it's corrected, and only on the wallet the request was
-    // scoped to, not on whatever pwalletMain happens to be.
+    // scoped to, not on whatever defaultWallet happens to be.
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
 
@@ -677,8 +688,8 @@ TEST_F(MultiWalletDispatchTest, RederiveIronwoodScopesActuallyCorrectsAScopeOnTh
 
     // The default wallet -- never touched by this request -- has no
     // Ironwood key at all, confirming the fix is scoped to the selected
-    // wallet rather than to whichever wallet pwalletMain happens to be.
-    EXPECT_FALSE(pwalletMain->HaveIronwoodIncomingViewingKey(addr));
+    // wallet rather than to whichever wallet defaultWallet happens to be.
+    EXPECT_FALSE(defaultWallet->HaveIronwoodIncomingViewingKey(addr));
 }
 
 TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRpcPirateWalletAndRpcDumpSubset)
@@ -709,7 +720,7 @@ TEST_F(MultiWalletDispatchTest, SecondaryWalletUriNowAllowsTheRpcPirateWalletAnd
 
 TEST_F(MultiWalletDispatchTest, ZExportSeedPhraseReadsTheSelectedWalletNotTheDefault)
 {
-    // z_exportseedphrase was missed by Phase 10 and read pwalletMain outright,
+    // z_exportseedphrase was missed by Phase 10 and read defaultWallet outright,
     // so selecting a secondary wallet used to hand back the DEFAULT wallet's
     // seed phrase -- a cross-wallet key disclosure, not just a wrong answer.
     // Both test wallets are non-bip39, so the observable difference is which
@@ -732,7 +743,7 @@ TEST_F(MultiWalletDispatchTest, ZExportSeedPhraseReadsTheSelectedWalletNotTheDef
     defaultWallet->bip39Enabled = previousBip39;
 
     // The secondary wallet has bip39 off, so it must report exactly that. If
-    // the RPC were still reading pwalletMain it would have taken the enabled
+    // the RPC were still reading defaultWallet it would have taken the enabled
     // branch and returned the default wallet's phrase instead.
     EXPECT_NE(std::string::npos, result.get_str().find("Bip39 is not enabled"));
 }
@@ -768,11 +779,11 @@ TEST_F(MultiWalletDispatchTest, GetNewAddressOperatesOnTheSelectedWalletNotTheDe
 {
     // The real correctness property phase 2 exists for: a rewired RPC must
     // touch the *resolved* wallet's own state, not silently fall through to
-    // pwalletMain the way it would if GetWalletForRequest() were wired wrong
+    // defaultWallet the way it would if GetWalletForRequest() were wired wrong
     // or a helper function still referenced the global internally.
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
-    ASSERT_NE(secondaryWallet, pwalletMain);
+    ASSERT_NE(secondaryWallet, defaultWallet);
 
     UniValue result;
     {
@@ -787,8 +798,8 @@ TEST_F(MultiWalletDispatchTest, GetNewAddressOperatesOnTheSelectedWalletNotTheDe
         EXPECT_TRUE(secondaryWallet->mapAddressBook.count(dest));
     }
     {
-        LOCK(pwalletMain->cs_wallet);
-        EXPECT_FALSE(pwalletMain->mapAddressBook.count(dest));
+        LOCK(defaultWallet->cs_wallet);
+        EXPECT_FALSE(defaultWallet->mapAddressBook.count(dest));
     }
 }
 
@@ -810,7 +821,7 @@ TEST_F(MultiWalletDispatchTest, GetWalletUnlockTimeForRequestReflectsTheSelected
     // same hazard in a different test.
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
-    ASSERT_NE(secondaryWallet, pwalletMain);
+    ASSERT_NE(secondaryWallet, defaultWallet);
 
     // walletpassphrase arms a process-wide RPCRunLater auto-relock timer,
     // which throws unless some RPCTimerInterface is registered -- see
@@ -848,7 +859,7 @@ TEST_F(MultiWalletDispatchTest, GetWalletUnlockTimeForRequestReflectsTheSelected
 
     EXPECT_GT(GetWalletUnlockTimeForRequest(secondaryWallet), 0)
         << "the unlocked secondary wallet's own deadline must be visible via its own CWallet*";
-    EXPECT_EQ(0, GetWalletUnlockTimeForRequest(pwalletMain))
+    EXPECT_EQ(0, GetWalletUnlockTimeForRequest(defaultWallet))
         << "the default wallet (never unlocked here) must not pick up the secondary wallet's deadline";
 
     std::string strError;
@@ -1008,7 +1019,7 @@ TEST_F(MultiWalletDispatchTest, AsyncOperationStatusIsScopedToTheRequestingWalle
     ASSERT_FALSE(q->isClosed());
     auto secondaryOp = std::make_shared<AsyncRPCOperation>(secondaryWallet);
     q->addOperation(secondaryOp);
-    auto defaultOp = std::make_shared<AsyncRPCOperation>(pwalletMain);
+    auto defaultOp = std::make_shared<AsyncRPCOperation>(defaultWallet);
     q->addOperation(defaultOp);
     AsyncRPCOperationId secondaryOpId = secondaryOp->getId();
     AsyncRPCOperationId defaultOpId = defaultOp->getId();
@@ -1131,7 +1142,7 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionFindsTheOwningWalletEvenWhen
 {
     // The real correctness property this phase exists for: z_buildrawtransaction
     // must locate and use whichever wallet actually holds the address's keys, even
-    // when that's a secondary wallet, not just fall through to pwalletMain the way
+    // when that's a secondary wallet, not just fall through to defaultWallet the way
     // it unconditionally did before. Proven here by generating the address in the
     // secondary wallet specifically (never touching the default wallet at all) and
     // confirming the call gets past both the "no wallet recognizes this" stage and
@@ -1139,7 +1150,7 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionFindsTheOwningWalletEvenWhen
     // check below is if it resolved and used the secondary wallet's own keys.
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
-    ASSERT_NE(secondaryWallet, pwalletMain);
+    ASSERT_NE(secondaryWallet, defaultWallet);
 
     libzcash::SaplingPaymentAddress ownedAddr;
     {
@@ -1177,7 +1188,7 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionAcceptsTheOptionalReturnWall
     // parameter), not rejected as a bad argument or silently mis-routed.
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
-    ASSERT_NE(secondaryWallet, pwalletMain);
+    ASSERT_NE(secondaryWallet, defaultWallet);
 
     libzcash::SaplingPaymentAddress ownedAddr;
     {
@@ -1215,17 +1226,17 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionHonorsAnExplicitWalletSelect
     CWallet* secondaryWallet = CWalletManager::Get().GetWallet("secondarytestwallet");
     ASSERT_NE(nullptr, secondaryWallet);
 
-    // Unlike "secondarytestwallet", SetUp() never calls LoadWallet() on pwalletMain
+    // Unlike "secondarytestwallet", SetUp() never calls LoadWallet() on defaultWallet
     // itself (most tests in this file never need it to persist anything) -- do so
     // here so its CWalletDB actually has a file to open ("r+" mode, used by every
     // write below, doesn't auto-create one).
     libzcash::SaplingPaymentAddress addr;
     {
-        LOCK(pwalletMain->cs_wallet);
+        LOCK(defaultWallet->cs_wallet);
         bool fFirstRun;
-        ASSERT_EQ(DB_LOAD_OK, pwalletMain->LoadWallet(fFirstRun));
-        pwalletMain->GenerateNewSeed();
-        addr = pwalletMain->GenerateNewSaplingZKey();
+        ASSERT_EQ(DB_LOAD_OK, defaultWallet->LoadWallet(fFirstRun));
+        defaultWallet->GenerateNewSeed();
+        addr = defaultWallet->GenerateNewSaplingZKey();
     }
 
     UniValue params(UniValue::VARR);
@@ -1273,12 +1284,12 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionSucceedsWhenMultipleWalletsH
     {
         // Import the exact same spending key into the default wallet too, so both
         // wallets now genuinely hold it. LoadWallet() first for the same reason as
-        // the explicit-selection test above -- pwalletMain's file was never created
+        // the explicit-selection test above -- defaultWallet's file was never created
         // by SetUp(), and AddSaplingZKey() writes through to disk.
-        LOCK(pwalletMain->cs_wallet);
+        LOCK(defaultWallet->cs_wallet);
         bool fFirstRun;
-        ASSERT_EQ(DB_LOAD_OK, pwalletMain->LoadWallet(fFirstRun));
-        ASSERT_TRUE(pwalletMain->AddSaplingZKey(extsk));
+        ASSERT_EQ(DB_LOAD_OK, defaultWallet->LoadWallet(fFirstRun));
+        ASSERT_TRUE(defaultWallet->AddSaplingZKey(extsk));
     }
 
     UniValue params(UniValue::VARR);
@@ -1318,10 +1329,10 @@ TEST_F(MultiWalletDispatchTest, ZBuildRawTransactionRefusesAWatchOnlyMatchWithNo
     {
         // Only the viewing key is ever added -- no wallet ever holds expsk/extsk.
         // LoadWallet() first for the same reason as the tests above.
-        LOCK(pwalletMain->cs_wallet);
+        LOCK(defaultWallet->cs_wallet);
         bool fFirstRun;
-        ASSERT_EQ(DB_LOAD_OK, pwalletMain->LoadWallet(fFirstRun));
-        ASSERT_TRUE(pwalletMain->AddSaplingIncomingViewingKey(ivk, addr));
+        ASSERT_EQ(DB_LOAD_OK, defaultWallet->LoadWallet(fFirstRun));
+        ASSERT_TRUE(defaultWallet->AddSaplingIncomingViewingKey(ivk, addr));
     }
 
     UniValue params(UniValue::VARR);

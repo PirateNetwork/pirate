@@ -40,11 +40,11 @@ public:
 
     // No-default-wallet redesign: entry point for true zero-wallet startup
     // (init.cpp's fAutoLoadWalletAtStartup was false, so AppInit2() returned
-    // with pwalletMain still null and never fired InitCreateWallet() -- there
+    // with no wallet active and never fired InitCreateWallet() -- there
     // is no wallet object yet for this dialog to merely configure). Shows the
     // same create/restore widgets as the pre-existing InitCreateWallet()
     // signal path, but every handler below creates/loads walletName via
-    // CWalletManager directly instead of touching a pre-existing pwalletMain
+    // CWalletManager directly instead of touching a pre-existing active wallet
     // -- see fZeroWalletStartup's own comment. Emits walletCreated() once a
     // wallet exists (KomodoApplication::walletCreatedDuringStartup() resumes
     // the rest of Qt startup from there).
@@ -53,7 +53,7 @@ public:
     // True once startZeroWalletFlow() has been called -- selects, in each of
     // on_btnTypeSelected_clicked()/on_btnRestore_clicked()/on_btnDone_clicked()
     // and the free function showNewPhrase() below, between the pre-existing
-    // pwalletMain-based logic (an already-constructed wallet this dialog is
+    // active-wallet-based logic (an already-constructed wallet this dialog is
     // merely configuring, driven by init.cpp's own busy-wait) and the new
     // CWalletManager-based logic (no wallet exists yet, this dialog is what
     // creates one). Public alongside this class's other UI-state members
@@ -72,7 +72,7 @@ public:
     std::string zeroWalletName;
     // Set by CWalletManager::CreateWallet() on success (zero-wallet mode
     // only) -- this dialog's own stand-in for what the pre-existing flow
-    // stores on pwalletMain->recoverySeedPhrase, since there is no wallet
+    // stores on the active wallet's recoverySeedPhrase, since there is no wallet
     // object to hang it on until CreateWallet() itself returns.
     std::string zeroWalletSeedPhrase;
 
@@ -102,7 +102,7 @@ Q_SIGNALS:
     // Emitted once startZeroWalletFlow() has produced a loaded wallet (a
     // brand-new random seed, or one restored from a phrase). Never emitted
     // for the pre-existing InitCreateWallet()-signal-driven flow (an
-    // already-existing pwalletMain), which has no equivalent completion
+    // an already-active wallet), which has no equivalent completion
     // signal of its own -- init.cpp's own busy-wait loop notices that case
     // directly by polling createType.
     void walletCreated();

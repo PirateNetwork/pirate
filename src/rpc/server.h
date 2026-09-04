@@ -203,7 +203,6 @@ extern uint256 ParseHashO(const UniValue& o, std::string strKey);
 extern std::vector<unsigned char> ParseHexV(const UniValue& v, std::string strName);
 extern std::vector<unsigned char> ParseHexO(const UniValue& o, std::string strKey);
 
-extern int64_t nWalletUnlockTime;
 extern CAmount AmountFromValue(const UniValue& value);
 extern UniValue ValueFromAmount(const CAmount& amount);
 extern double GetDifficulty(const CBlockIndex* blockindex = NULL);
@@ -212,17 +211,13 @@ extern std::string HelpRequiringPassphrase();
 extern std::string HelpExampleCli(const std::string& methodname, const std::string& args);
 extern std::string HelpExampleRpc(const std::string& methodname, const std::string& args);
 
-extern void EnsureWalletIsUnlocked();
-extern void EnsureWalletIsUnlockedForReporting();
 // Overloads taking an explicit wallet (CWalletManager::GetWalletForRequest())
 // so non-wallet-library callers can be multiwallet-aware without linking
 // against wallet/rpcwallet.cpp's request-context machinery.
 class CWallet;
 extern void EnsureWalletIsUnlocked(CWallet* pwallet);
 extern void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
-// Reads a wallet's own auto-lock deadline (walletpassphrase/walletlock),
-// unlike the plain nWalletUnlockTime global which only ever reflects the
-// default wallet.
+// Reads a wallet's own auto-lock deadline (walletpassphrase/walletlock).
 extern int64_t GetWalletUnlockTimeForRequest(CWallet* pwallet);
 
 bool StartRPC();
@@ -409,11 +404,15 @@ extern UniValue unloadwallet(const UniValue& params, bool fHelp, const CPubKey& 
 /** Register wallet-registry management RPC commands (listwallets/loadwallet/unloadwallet) */
 void RegisterMultiWalletRPCCommands(CRPCTable &tableRPC);
 /**
- * True for an RPC method that's been rewired (wallet/rpcwallet.cpp,
- * wallet/rpcdump.cpp) to resolve CWalletManager::GetWalletForRequest()
- * instead of always reading the global pwalletMain -- i.e. one that's safe
- * to let CRPCTable::execute()'s dispatch gate route to a non-default
- * wallet. Every other RPC still gets refused there, regardless of category.
+ * True for an RPC method that's been reviewed and confirmed (wallet/
+ * rpcwallet.cpp, wallet/rpcdump.cpp) to correctly honor an explicitly-named,
+ * non-active wallet via CWalletManager::GetWalletForRequest() -- i.e. one
+ * that's safe to let CRPCTable::execute()'s dispatch gate route to a
+ * non-active wallet. Every RPC handler resolves its own wallet through
+ * CWalletManager now (there is no process-global default to silently fall
+ * back to), but a handler not on this list hasn't been confirmed safe against
+ * a wallet other than the active one and still gets refused there, regardless
+ * of category.
  */
 bool IsMultiWalletAwareRPC(const std::string& name); // in rpcmultiwallet.cpp
 

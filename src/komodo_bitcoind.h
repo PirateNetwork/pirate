@@ -27,7 +27,6 @@
 #include "cc/CCinclude.h"
 #include "komodo_globals.h"
 
-bool EnsureWalletIsAvailable(bool avoidException);
 // Overload taking an explicit wallet (CWalletManager::GetWalletForRequest()) so
 // non-wallet-library callers (e.g. rpc/crosschain.cpp) can be multiwallet-aware
 // without linking against wallet/rpcwallet.cpp's request-context machinery.

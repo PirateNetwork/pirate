@@ -581,24 +581,13 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardSetsAndClearsThreadLocal)
 
 TEST_F(WalletManagerTest, GetWalletForRequestResolvesActiveAndSecondary)
 {
-    // GetWalletForRequest() falls back to the real pwalletMain global for the
-    // no-selection case, mirroring init.cpp (which registers the very same
-    // CWallet* as both pwalletMain and the manager's default). Unlike this
-    // fixture's other tests -- which register a default wallet with the
-    // manager but never touch the real pwalletMain global, since nothing
-    // else in this file calls GetWalletForRequest() -- pwalletMain has to be
-    // saved and restored explicitly here rather than left to TearDown().
-    // Scope-exit rather than a plain assignment at the end: an ASSERT_*
-    // below returning early would otherwise skip the restore and leave
-    // pwalletMain pointing at a wallet TearDown() is about to delete,
-    // dangling for whatever test in this binary runs next.
-    struct PwalletMainRestorer {
-        CWallet* saved;
-        ~PwalletMainRestorer() { pwalletMain = saved; }
-    } restorer{pwalletMain};
-
+    // GetWalletForRequest() falls back to the active wallet for the
+    // no-selection case (GetActiveWallet(), pwalletMain-elimination effort)
+    // -- RegisterInitialWallet() below makes defaultWallet active, so
+    // nothing needs saving/restoring here anymore; TearDown() already
+    // resolves and cleans up whatever's active via the registry, not a
+    // global.
     CWallet* defaultWallet = new CWallet("default_test.dat");
-    pwalletMain = defaultWallet;
     CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
 
     CreateWalletFileOnDisk("secondtestwallet");
@@ -1008,7 +997,7 @@ TEST_F(WalletManagerTest, RegistryStartsEmptyAndFirstLoadedWalletBecomesActiveAu
     // automatically -- no separate setactivewallet call needed.
     EXPECT_EQ("firstwallet.dat", CWalletManager::Get().GetActiveWalletName());
     EXPECT_TRUE(CWalletManager::Get().IsActiveWallet("firstwallet.dat"));
-    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), pwalletMain);
+    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), CWalletManager::Get().GetActiveWallet());
 }
 
 TEST_F(WalletManagerTest, SecondLoadedWalletDoesNotStealActiveStatus)
@@ -1021,7 +1010,7 @@ TEST_F(WalletManagerTest, SecondLoadedWalletDoesNotStealActiveStatus)
 
     EXPECT_EQ("firstwallet.dat", CWalletManager::Get().GetActiveWalletName());
     EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("secondwallet.dat"));
-    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), pwalletMain);
+    EXPECT_EQ(CWalletManager::Get().GetWallet("firstwallet.dat"), CWalletManager::Get().GetActiveWallet());
 }
 
 TEST_F(WalletManagerTest, SetActiveWalletSwitchesAndDeactivates)
@@ -1034,13 +1023,13 @@ TEST_F(WalletManagerTest, SetActiveWalletSwitchesAndDeactivates)
 
     ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("secondwallet.dat", strError)) << strError;
     EXPECT_EQ("secondwallet.dat", CWalletManager::Get().GetActiveWalletName());
-    EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), pwalletMain);
+    EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), CWalletManager::Get().GetActiveWallet());
     EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("firstwallet.dat"));
 
     // "" deactivates -- both wallets stay loaded, nothing is active.
     ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("", strError)) << strError;
     EXPECT_TRUE(CWalletManager::Get().GetActiveWalletName().empty());
-    EXPECT_EQ(nullptr, pwalletMain);
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetActiveWallet());
     EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("firstwallet.dat"));
     EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("secondwallet.dat"));
 }
@@ -1068,7 +1057,7 @@ TEST_F(WalletManagerTest, UnloadingTheSoleLoadedWalletRequiresDeactivatingItFirs
     ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("", strError)) << strError;
     EXPECT_TRUE(CWalletManager::Get().UnloadWallet("onlywallet.dat", strError)) << strError;
     EXPECT_TRUE(CWalletManager::Get().ListWalletNames().empty());
-    EXPECT_EQ(nullptr, pwalletMain);
+    EXPECT_EQ(nullptr, CWalletManager::Get().GetActiveWallet());
 }
 
 TEST_F(WalletManagerTest, ReloadAfterFullUnloadBecomesActiveAgain)
@@ -1082,7 +1071,7 @@ TEST_F(WalletManagerTest, ReloadAfterFullUnloadBecomesActiveAgain)
 
     ASSERT_TRUE(CWalletManager::Get().LoadWallet("onlywallet.dat", strError)) << strError;
     EXPECT_EQ("onlywallet.dat", CWalletManager::Get().GetActiveWalletName());
-    EXPECT_EQ(CWalletManager::Get().GetWallet("onlywallet.dat"), pwalletMain);
+    EXPECT_EQ(CWalletManager::Get().GetWallet("onlywallet.dat"), CWalletManager::Get().GetActiveWallet());
 }
 
 TEST_F(WalletManagerTest, UnscopedRequestGuardResolvesToWhicheverWalletIsActive)
@@ -1139,7 +1128,7 @@ TEST_F(WalletManagerTest, UnscopedRequestStaysPinnedToItsResolvedWalletEvenIfAct
     // Simulates the race: something else moves which wallet is active while
     // this request's guard is still alive.
     ASSERT_TRUE(CWalletManager::Get().SetActiveWallet("secondwallet.dat", strError)) << strError;
-    EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), pwalletMain);
+    EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), CWalletManager::Get().GetActiveWallet());
 
     // GetWalletForRequest() must still return the wallet this guard actually
     // pinned, not the new live pwalletMain -- the whole point of the fix.

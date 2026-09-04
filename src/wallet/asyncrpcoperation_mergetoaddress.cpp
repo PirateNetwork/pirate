@@ -52,6 +52,7 @@
 #include "utilmoneystr.h"
 #include "utiltime.h"
 #include "wallet.h"
+#include "wallet/walletmanager.h"
 #include "walletdb.h"
 #include "zcash/IncrementalMerkleTree.hpp"
 
@@ -234,8 +235,8 @@ void AsyncRPCOperation_mergetoaddress::main()
         set_error_message("unknown error");
     }
 
-    // Re-enable mining if it was previously enabled. Deliberately pwalletMain,
-    // not wallet_: this restarts the process-global miner thread group
+    // Re-enable mining if it was previously enabled. Deliberately the active
+    // wallet, not wallet_: this restarts the process-global miner thread group
     // (GenerateBitcoins() interrupts/joins whatever's running and spawns a
     // new BitcoinMiner(pwallet) holding that raw pointer for the thread's
     // entire lifetime), so binding it to this operation's own wallet would
@@ -249,14 +250,15 @@ void AsyncRPCOperation_mergetoaddress::main()
 #ifdef ENABLE_MINING
 #ifdef ENABLE_WALLET
     // Same guard as init.cpp's own startup call to this function: under the
-    // no-default-wallet redesign pwalletMain can be null here without
+    // no-default-wallet redesign the active wallet can be null here without
     // -mineraddress being set either (true zero-wallet startup, or every
     // wallet deactivated) -- unlike the startup call site, mining was never
     // actually stopped for that reason here (this call only ever *restarts*
     // mining this operation itself paused further up), so skipping it is a
     // no-op rather than a behavior change for the common case.
-    if (pwalletMain || !GetArg("-mineraddress", "").empty())
-        GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
+    CWallet* const activeWallet = CWalletManager::Get().GetActiveWallet();
+    if (activeWallet || !GetArg("-mineraddress", "").empty())
+        GenerateBitcoins(GetBoolArg("-gen", false), activeWallet, GetArg("-genproclimit", 1));
 #else
     GenerateBitcoins(GetBoolArg("-gen", false), GetArg("-genproclimit", 1));
 #endif

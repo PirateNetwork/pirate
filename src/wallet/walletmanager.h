@@ -25,9 +25,10 @@ struct CBlockLocator;
  * given time (activeWalletName/SetActiveWallet() below): a wallet-touching
  * RPC request that names a wallet explicitly (/wallet/<name>/) operates on
  * that one; an unscoped request operates on whichever is currently active,
- * via GetWalletForRequest() below and the process-global pwalletMain (kept
- * as a live alias for the active wallet -- see SetActiveWallet()'s own
- * comment for why). The first wallet ever loaded into an empty registry
+ * resolved via GetWalletForRequest() below or GetActiveWallet() directly
+ * (there is no process-global mirror of the active wallet -- every external
+ * reader resolves fresh from this registry on every call). The first wallet
+ * ever loaded into an empty registry
  * becomes active automatically; every later load leaves active status where
  * it was until SetActiveWallet() is called explicitly. A core subset of
  * wallet RPCs (see IsMultiWalletAwareRPC, rpc/server.h) can be routed to a
@@ -134,12 +135,11 @@ public:
     // SetActiveWallet() -- call that first, with a different name or "", to
     // make this one eligible) and refuses a wallet still bound to the mining
     // thread (see GetMiningWallet(), miner.h) regardless of active status.
-    // Both exist for the same reason: pwalletMain is kept as a live alias for
-    // "the active wallet" (reassigned by SetActiveWallet()/
-    // RegisterInitialWallet()/LoadWallet()'s own first-wallet-promotion), read
-    // without any lock by miner.cpp, the Crypto-Conditions framework, and the
-    // Qt GUI -- deleting a wallet either of those could still be dereferencing
-    // is a use-after-free these two refusals exist specifically to prevent.
+    // Both exist for the same reason: GetActiveWallet() (below) is read
+    // without any lock held past its own call by miner.cpp, the
+    // Crypto-Conditions framework, and the Qt GUI -- deleting a wallet either
+    // of those could still be dereferencing is a use-after-free these two
+    // refusals exist specifically to prevent.
     bool UnloadWallet(const std::string& name, std::string& strError);
 
     // Used only by encryptwallet()'s failed-encryption recovery path
@@ -168,9 +168,9 @@ public:
     // is open in a tab (qt/pirateoceangui.cpp). Deleting the CWallet* out
     // from under any of those is a use-after-free, and the gap between the
     // delete and the caller's follow-up LoadWallet() is worse still --
-    // GetWalletForRequest() falls back to pwalletMain for an unresolvable
-    // name, so a concurrent request scoped to this secondary wallet would
-    // silently run against the *active* wallet instead. Refusing here
+    // GetWalletForRequest() falls back to the active wallet for an
+    // unresolvable name, so a concurrent request scoped to this secondary
+    // wallet would silently run against the *active* wallet instead. Refusing here
     // leaves the caller on its pre-existing StartShutdown() path, which is
     // safe.
     //
@@ -212,23 +212,40 @@ public:
     CWallet* GetWallet(const std::string& name) const;
     std::string GetActiveWalletName() const;
     bool IsActiveWallet(const std::string& name) const;
+    // Resolves activeWalletName against mapWallets fresh, under this same
+    // lock, on every call -- no caching, so no stale-pointer risk from a
+    // concurrent SetActiveWallet(). The sanctioned replacement for every
+    // non-request-scoped external read of the (removed) pwalletMain global:
+    // the mining thread's initial pin point, the Crypto-Conditions
+    // framework's null-wallet fallback, the Qt GUI, zcbenchmarks, and the
+    // wallet_fees.cpp fee-fallback helpers all resolve "whichever wallet is
+    // active right now" through this instead of a shared mutable pointer.
+    // Returns nullptr if no wallet is active. Same accepted lockless-read
+    // tradeoff as GetWallet()/GetWalletForRequest() -- this does not
+    // ref-count the returned pointer, so a caller that stores it past this
+    // call has no stronger guarantee against a concurrent unload than a raw
+    // pointer read ever gave; an active wallet still can't be unloaded while
+    // active (UnloadWallet()'s own refusal), which is what actually protects
+    // a lockless reader here.
+    CWallet* GetActiveWallet() const;
 
     // Changes which loaded wallet an unscoped RPC request (no /wallet/<name>/
-    // URI segment) resolves to, and which wallet the ~47 STAY-GLOBAL call
-    // sites across the codebase (miner.cpp, the Crypto-Conditions framework,
-    // the Qt GUI, ...) see when they read the process-global pwalletMain --
-    // this reassigns that global too, under the same lock, so those sites
-    // need no changes of their own (see the design note on activeWalletName
-    // below for the accepted lockless-read tradeoff this implies).
+    // URI segment) resolves to, and which wallet every non-request-scoped
+    // call site across the codebase (miner.cpp, the Crypto-Conditions
+    // framework, the Qt GUI, ...) sees the next time it calls
+    // GetActiveWallet() -- all of those resolve fresh from activeWalletName
+    // under cs_wallets rather than caching anything, so this update is all
+    // any of them needs (see the design note on activeWalletName below for
+    // the accepted lockless-read tradeoff this implies).
     //
-    // name == "" deactivates: activeWalletName becomes empty and pwalletMain
-    // becomes nullptr, while every wallet named here stays loaded and fully
-    // synced to the chain tip. This is the only way to reach that state
-    // without unloading anything, and therefore the only way to make the
-    // last remaining loaded wallet eligible for unloadwallet (see
-    // UnloadWallet()'s own refusal of the active wallet). A non-empty name
-    // must already identify a currently-loaded wallet; RPC_WALLET_NOT_FOUND
-    // otherwise, activeWalletName/pwalletMain left unchanged.
+    // name == "" deactivates: activeWalletName becomes empty, so
+    // GetActiveWallet() starts returning nullptr, while every wallet named
+    // here stays loaded and fully synced to the chain tip. This is the only
+    // way to reach that state without unloading anything, and therefore the
+    // only way to make the last remaining loaded wallet eligible for
+    // unloadwallet (see UnloadWallet()'s own refusal of the active wallet).
+    // A non-empty name must already identify a currently-loaded wallet;
+    // RPC_WALLET_NOT_FOUND otherwise, activeWalletName left unchanged.
     bool SetActiveWallet(const std::string& name, std::string& strError);
 
     // Held for the duration of a request routed to `name`; forward-looking
@@ -317,14 +334,14 @@ public:
     // Resolves the current thread's selected wallet (via
     // GetRequestedWalletName(), a name-keyed registry lookup) to an actual
     // CWallet* for a rewired RPC to operate on. Opus-audit-caught stale
-    // comment, fixed: this does NOT fall back to pwalletMain "when no wallet
-    // was explicitly selected" -- GetRequestedWalletName() is pinned to the
-    // *resolved* wallet's name for an unscoped request too (see its own doc
-    // comment), so the lookup here finds the same object pwalletMain would
-    // currently point at, by name rather than by re-reading the live global.
-    // pwalletMain is only the fallback for the two cases where
-    // GetRequestedWalletName() is empty: nothing resolved at all (an
-    // unscoped request with no wallet active), or -- should not happen in
+    // comment, fixed: this does NOT fall back to GetActiveWallet() "when no
+    // wallet was explicitly selected" -- GetRequestedWalletName() is pinned
+    // to the *resolved* wallet's name for an unscoped request too (see its
+    // own doc comment), so the lookup here finds the same object
+    // GetActiveWallet() would currently return, by name rather than by
+    // re-resolving live. GetActiveWallet() is only the fallback for the two
+    // cases where GetRequestedWalletName() is empty: nothing resolved at all
+    // (an unscoped request with no wallet active), or -- should not happen in
     // practice, the gate and RPCWalletRequestGuard::IsResolved() already
     // guarantee otherwise by the time a rewired RPC runs -- a resolved name
     // that somehow isn't found in the registry. Only meaningful to call from

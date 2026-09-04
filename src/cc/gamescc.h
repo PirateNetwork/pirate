@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #ifndef H_GAMESCC_H
 #define H_GAMESCC_H
 
@@ -10,7 +14,6 @@
 #ifndef STANDALONE
 
 #define ENABLE_WALLET
-extern CWallet* pwalletMain;
 
 #include "CCinclude.h"
 #include "secp256k1.h"

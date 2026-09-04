@@ -58,7 +58,7 @@ UniValue AssetOrders(uint256 tokenid, CPubKey pubkey, uint8_t additionalEvalCode
 //std::string AssetTransfer(int64_t txfee,uint256 assetid,std::vector<uint8_t> destpubkey,int64_t total);
 //std::string AssetConvert(int64_t txfee,uint256 assetid,std::vector<uint8_t> destpubkey,int64_t total,int32_t evalcode);
 
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's
 // convention (see CCtx.cpp). CreateSwap is intentionally left unparameterized:
 // its only caller, tokenswapask, is unregistered in the RPC command table (dead).
 std::string CreateBuyOffer(int64_t txfee,int64_t bidamount,uint256 assetid,int64_t pricetotal,CWallet *pwallet=nullptr);

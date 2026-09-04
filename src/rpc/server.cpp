@@ -291,7 +291,10 @@ UniValue stop(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nStop Komodo server.");
 
 #ifdef ENABLE_WALLET
-    GenerateBitcoins(false, pwalletMain, 0);
+    // Deliberately the active wallet, not a request-scoped resolution:
+    // starting/stopping the node's one mining thread is process-wide, not
+    // per-request (see miner.cpp's GetMiningWallet()/g_miningWallet).
+    GenerateBitcoins(false, CWalletManager::Get().GetActiveWallet(), 0);
 #else
     GenerateBitcoins(false, 0);
 #endif
@@ -845,21 +848,28 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
 
 #ifdef ENABLE_WALLET
     // Load-bearing correctness guard: only IsMultiWalletAwareRPC() methods
-    // (rpc/server.h) have been rewired to consult GetWalletForRequest() --
-    // every other RPC still reads pwalletMain directly, so without this gate
-    // a request routed to a wallet other than the currently-active one would
-    // silently run against the active wallet instead of being refused -- a
-    // fund-misdirection risk. The IsActiveWallet() exemption below tracks a
+    // (rpc/server.h) are reviewed and marked as safe to run against an
+    // explicitly-named, non-active wallet. Every RPC handler resolves its own
+    // CWallet* via CWalletManager (GetWalletForRequest()/GetActiveWallet())
+    // now -- pwalletMain-elimination effort: there's no longer a raw global
+    // for an un-reviewed handler to silently fall back to -- but the
+    // allowlist is kept as the same permanent defense-in-depth it always
+    // was: a handler not on it hasn't been confirmed to correctly honor a
+    // non-active wallet selection (an internal `pwallet ? pwallet :
+    // GetActiveWallet()` default-parameter fallback, say, would otherwise
+    // silently run against the active wallet instead of the one the request
+    // named -- a fund-misdirection risk), so it's refused outright rather
+    // than trusted by default. The IsActiveWallet() exemption below tracks a
     // movable target now (whichever wallet setactivewallet last selected),
     // not a startup-fixed one, but the reasoning is unchanged: a request
     // explicitly naming the wallet that also happens to be the unscoped
-    // fallback target is harmless even for a not-yet-rewired RPC, since it's
-    // the exact same object pwalletMain already points at. Deny-by-default
-    // across every category, not just "wallet": pwalletMain is read directly
-    // by RPCs registered under several other categories too (e.g. "pirate
-    // Exclusive", "rawtransactions", "generating", "control", "hidden"), and
-    // a category allowlist would silently let those reach the wrong wallet
-    // instead of being refused like the rest. Checked ahead of the
+    // fallback target is harmless even for a not-yet-reviewed RPC, since
+    // it's the exact same object GetActiveWallet() would already resolve to.
+    // Deny-by-default across every category, not just "wallet": several
+    // other categories (e.g. "pirate Exclusive", "rawtransactions",
+    // "generating", "control", "hidden") register RPCs that touch a wallet
+    // too, and a category allowlist would silently let those reach the wrong
+    // wallet instead of being refused like the rest. Checked ahead of the
     // fRPCNeedUnlocked branch below (not just in the normal-dispatch "else"),
     // since that branch lets "openwallet" run unconditionally during the
     // encrypted-wallet-unlock window -- without this check here, a
@@ -877,8 +887,8 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
             // request resolved to, in the narrow window between this
             // request's own guard resolving and this check running. Rare and
             // fail-closed (refusing here is safer than letting a not-yet-
-            // rewired handler read whatever pwalletMain now points at
-            // instead of the wallet this request actually resolved), but the
+            // reviewed handler fall back to whatever's active instead of the
+            // wallet this request actually resolved), but the
             // generic message below would otherwise be confusing for a
             // request that named no wallet at all -- word it accordingly.
             throw JSONRPCError(RPC_WALLET_NOT_SPECIFIED,
@@ -931,8 +941,8 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
           // different, perfectly idle wallet. It's now a per-CWallet member;
           // GetWalletForRequest() resolves to exactly the wallet this call is
           // actually going to touch (the requested one if the earlier gate
-          // above let a non-default selection through, pwalletMain otherwise --
-          // the same wallet an un-rewired RPC would implicitly use anyway), so
+          // above let a non-default selection through, the active wallet
+          // otherwise -- the same wallet any handler resolves by default), so
           // only requests against a wallet that's actually mid-rebuild are
           // refused. Safe to read here without cs_wallet, exactly as the old
           // global was: the write side (Increment*Wallet, under cs_main +
@@ -942,9 +952,10 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
           //
           // The null check is load-bearing, not defensive padding: with
           // -disablewallet the node is built with ENABLE_WALLET but runs with
-          // pwalletMain == nullptr, and every non-wallet RPC still reaches
-          // here, so dereferencing unconditionally would be a remotely
-          // triggerable null deref. Skipping the check is also the correct
+          // no wallet loaded (GetWalletForRequest() returns nullptr), and
+          // every non-wallet RPC still reaches here, so dereferencing
+          // unconditionally would be a remotely triggerable null deref.
+          // Skipping the check is also the correct
           // answer in that case -- with no wallet loaded there is nothing that
           // can be rebuilding a witness cache.
           {

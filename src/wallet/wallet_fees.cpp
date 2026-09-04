@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2017 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -12,24 +13,26 @@
 #include "coincontrol.h"
 #include "main.h"
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 
 namespace {
 // minTxFee/payTxFee used to be process-global/static CWallet state; Phase 5
 // made both real per-CWallet fields. Call sites not yet made wallet-aware
-// (Qt's fee-preview code) pass wallet=nullptr and fall back to pwalletMain's
-// setting, or a compiled-in default if no wallet is loaded at all -- the
-// same behavior these call sites had before the settings became per-wallet.
+// (Qt's fee-preview code) pass wallet=nullptr and fall back to the active
+// wallet's setting, or a compiled-in default if no wallet is loaded at all --
+// the same behavior these call sites had before the settings became
+// per-wallet.
 CFeeRate GetEffectiveMinTxFee(const CWallet* wallet)
 {
     if (wallet) return wallet->minTxFee;
-    if (pwalletMain) return pwalletMain->minTxFee;
+    if (CWallet* active = CWalletManager::Get().GetActiveWallet()) return active->minTxFee;
     return CFeeRate(1000);
 }
 
 CFeeRate GetEffectivePayTxFee(const CWallet* wallet)
 {
     if (wallet) return wallet->payTxFee;
-    if (pwalletMain) return pwalletMain->payTxFee;
+    if (CWallet* active = CWalletManager::Get().GetActiveWallet()) return active->payTxFee;
     return CFeeRate(DEFAULT_TRANSACTION_FEE);
 }
 } // namespace

@@ -33,6 +33,7 @@
 #include "cc/CCinclude.h"
 #include "init.h"
 #include "net.h"
+#include "wallet/walletmanager.h"
 #include "rpc/register.h"
 #include "wallet/db.h"
 #include "txmempool.h"
@@ -405,9 +406,17 @@ void BitcoinTestingSetup::SetUp()
 #ifdef ENABLE_WALLET
     bitdb->MakeMock();
     bool fFirstRun;
-    pwalletMain = new CWallet("wallet.dat");
-    pwalletMain->LoadWallet(fFirstRun);
-    RegisterValidationInterface(pwalletMain);
+    pwallet = new CWallet("wallet.dat");
+    pwallet->LoadWallet(fFirstRun);
+    RegisterValidationInterface(pwallet);
+    // Without this, CWalletManager's registry is empty for every test built
+    // on this base fixture -- RPCWalletRequestGuard's real resolution path
+    // (ResolveAndHoldActiveForRequest()) would report NotFound for all of
+    // them, and any test exercising the real dispatch/guard path would only
+    // ever pass because GetWalletForRequest() fell back to this
+    // registry-invisible wallet, not because resolution actually
+    // worked (audit finding, pwalletMain-elimination effort).
+    CWalletManager::Get().RegisterInitialWallet("wallet.dat", pwallet);
 #endif
     nScriptCheckThreads = 3;
     for (int i = 0; i < nScriptCheckThreads - 1; i++)
@@ -421,9 +430,26 @@ void BitcoinTestingSetup::TearDown()
     threadGroup.interrupt_all();
     threadGroup.join_all();
 #ifdef ENABLE_WALLET
-    UnregisterValidationInterface(pwalletMain);
-    delete pwalletMain;
-    pwalletMain = nullptr;
+    // Audit finding: without this, a walletpassphrase call earlier in this
+    // test left a CWallet*-keyed entry in mapWalletUnlockTime pointing at
+    // the object deleted just below -- a later `new CWallet` landing on the
+    // same freed address would silently inherit a bogus unlock deadline.
+    // Every production teardown path (UnloadWallet(),
+    // FlushAndUnloadAllExceptActiveWallet(), DiscardWalletAfterFailedEncryption())
+    // already cancels this first; this fixture didn't.
+    CancelWalletAutoLockTimer(pwallet);
+    UnregisterValidationInterface(pwallet);
+    delete pwallet;
+    pwallet = nullptr;
+    // Reset() drops only CWalletManager's own bookkeeping; it never touches
+    // this fixture's pwallet member, so the unregister/delete above owns
+    // the object outright and the two are independent now. Kept in this
+    // order anyway to match the ordering the old global required, when
+    // Reset() nulled it as a side effect of mirroring the active wallet and
+    // running first would have turned the unregister/delete into no-ops --
+    // leaking this wallet as a still-validation-registered zombie (the exact
+    // class of bug found and fixed elsewhere in this test suite).
+    CWalletManager::Get().Reset();
 #endif
     UnloadBlockIndex();
     delete pcoinsTip;

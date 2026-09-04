@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,8 +14,6 @@ WalletModelZTransaction::WalletModelZTransaction(const QString &_fromaddress, co
     fee(_fee),
     bIsMine(_bIsMine)
 {
-  //Initialise private variables:
-  sZSignOfflineTransaction="";
 }
 
 WalletModelZTransaction::~WalletModelZTransaction()
@@ -105,14 +104,4 @@ void WalletModelZTransaction::setOperationId(const AsyncRPCOperationId& newOpera
 AsyncRPCOperationId WalletModelZTransaction::getOperationId() const
 {
     return operationId;
-}
-
-void WalletModelZTransaction::setZSignOfflineTransaction(const string& sNewTransaction)
-{
-    sZSignOfflineTransaction = sNewTransaction;
-}
-
-string WalletModelZTransaction::getZSignOfflineTransaction() const
-{
-    return sZSignOfflineTransaction;
 }

@@ -84,9 +84,6 @@
 using namespace std;
 using namespace libzcash;
 
-/** Global vector containing references to all wallet instances */
-std::vector<CWalletRef> vpwallets;
-
 /**
  * @section Wallet Configuration Settings
  *

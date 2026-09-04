@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,6 +40,7 @@
 #include "validationinterface.h"
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#include "wallet/walletmanager.h"
 #endif
 
 #include <stdint.h>
@@ -316,9 +318,15 @@ UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleCli("generate", "11")
         );
 
+#ifdef ENABLE_WALLET
+    // Deliberately the active wallet, not a request-scoped resolution:
+    // mining is process-wide, not per-request (see miner.cpp's
+    // GetMiningWallet()/g_miningWallet).
+    CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
+#endif
     if (GetArg("-mineraddress", "").empty()) {
 #ifdef ENABLE_WALLET
-        if (!pwalletMain) {
+        if (!pwallet) {
             throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Wallet disabled and -mineraddress not set");
         }
 #else
@@ -344,7 +352,7 @@ UniValue generate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     int nHeight = 0;
     int nGenerate = params[0].get_int();
 #ifdef ENABLE_WALLET
-    CReserveKey reservekey(pwalletMain);
+    CReserveKey reservekey(pwallet);
 #endif
 
     {   // Don't keep cs_main locked
@@ -414,9 +422,15 @@ UniValue setgenerate(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("setgenerate", "true, 1")
         );
 
+#ifdef ENABLE_WALLET
+    // Deliberately the active wallet, not a request-scoped resolution:
+    // mining is process-wide, not per-request (see miner.cpp's
+    // GetMiningWallet()/g_miningWallet).
+    CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
+#endif
     if (GetArg("-mineraddress", "").empty()) {
 #ifdef ENABLE_WALLET
-        if (!pwalletMain) {
+        if (!pwallet) {
             throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Wallet disabled and -mineraddress not set");
         }
 #else
@@ -444,7 +458,7 @@ UniValue setgenerate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     mapArgs ["-genproclimit"] = itostr(KOMODO_MININGTHREADS);
 
 #ifdef ENABLE_WALLET
-    GenerateBitcoins(fGenerate, pwalletMain, nGenProcLimit);
+    GenerateBitcoins(fGenerate, pwallet, nGenProcLimit);
 #else
     GenerateBitcoins(fGenerate, nGenProcLimit);
 #endif
@@ -678,7 +692,9 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
     // Wallet or miner address is required because we support coinbasetxn
     if (GetArg("-mineraddress", "").empty()) {
 #ifdef ENABLE_WALLET
-        if (!pwalletMain) {
+        // Deliberately the active wallet: mining is process-wide, not
+        // per-request (see miner.cpp's GetMiningWallet()/g_miningWallet).
+        if (!CWalletManager::Get().GetActiveWallet()) {
             throw JSONRPCError(RPC_METHOD_NOT_FOUND, "Wallet disabled and -mineraddress not set");
         }
 #else
@@ -833,7 +849,7 @@ UniValue getblocktemplate(const UniValue& params, bool fHelp, const CPubKey& myp
             pblocktemplate = NULL;
         }
 #ifdef ENABLE_WALLET
-        CReserveKey reservekey(pwalletMain);
+        CReserveKey reservekey(CWalletManager::Get().GetActiveWallet());
         LEAVE_CRITICAL_SECTION(cs_main);
         pblocktemplate = CreateNewBlockWithKey(reservekey,pindexPrevNew->nHeight+1,KOMODO_MAXGPUCOUNT,false);
 #else

@@ -32,7 +32,7 @@ extern int32_t lastSnapShotHeight;
 bool PaymentsValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
 
 // CCcustom
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 UniValue PaymentsRelease(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
 UniValue PaymentsFund(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);
 UniValue PaymentsMerge(struct CCcontract_info *cp,char *jsonstr,CWallet *pwallet=nullptr);

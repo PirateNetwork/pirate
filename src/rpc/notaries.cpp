@@ -233,11 +233,12 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
             + HelpExampleRpc("nn_split", std::to_string(countNotaryVinToCreate_DEFAULT) + " , " + FormatMoney(NN_SPLIT_DEFAULT_MINERS_FEE))
         );
 
-    if (!pwalletMain)
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!pwallet)
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not available.");
-    if (pwalletMain->IsLocked())
+    if (pwallet->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is locked.");
-    
+
     std::string pubkeyStr = GetArg("-pubkey", "");
     if (!(pubkeyStr.size() == 2 * CPubKey::COMPRESSED_PUBLIC_KEY_SIZE && IsHex(pubkeyStr)))
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Notary pubkey is not set.");
@@ -283,7 +284,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
     CScript nn_p2pk_script = CScript() << ToByteVector(nn_pubkey) << OP_CHECKSIG;
     CScript nn_p2pkh_script = CScript() << OP_DUP << OP_HASH160 << ToByteVector(nn_pubkey.GetID()) << OP_EQUALVERIFY << OP_CHECKSIG;
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     const int nextBlockHeight = chainActive.Height() + 1;
     const bool overwinterActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_OVERWINTER);
@@ -291,7 +292,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
     CTxDestination dest; std::string pubkey_address = "";
 
-    bool fHavePrivateKey = pwalletMain->HaveKey(nn_pubkey.GetID());
+    bool fHavePrivateKey = pwallet->HaveKey(nn_pubkey.GetID());
     if (!fHavePrivateKey)
         throw JSONRPCError(RPC_INTERNAL_ERROR, "Haven't privkey in the wallet, won't split.");
 
@@ -310,7 +311,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
         // Get available utxos
         vector<COutput> vecOutputs;
-        pwalletMain->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
+        pwallet->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
 
         // TODO: implement only choose utxos to send notaryvins, without join all our utxos
 
@@ -407,7 +408,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
         // lock all utxos
         for (auto utxo : utxoInputs) {
-            pwalletMain->LockCoin(std::get<0>(utxo));
+            pwallet->LockCoin(std::get<0>(utxo));
         }
 
         bool fUseTxBuilder = false;
@@ -471,7 +472,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
         {
             /* with builder */
 
-            TransactionBuilder builder(Params().GetConsensus(), nextBlockHeight, pwalletMain);
+            TransactionBuilder builder(Params().GetConsensus(), nextBlockHeight, pwallet);
             builder.SetFee(minersFee);
             for (const std::tuple<COutPoint, CAmount, CScript>& t : utxoInputs) {
                 COutPoint outPoint = std::get<0>(t);
@@ -516,7 +517,7 @@ UniValue nn_split(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
         // unlock all utxos
         for (auto utxo : utxoInputs) {
-            pwalletMain->UnlockCoin(std::get<0>(utxo));
+            pwallet->UnlockCoin(std::get<0>(utxo));
         }
 
         // result.pushKV("params", params);
@@ -603,14 +604,15 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
             + HelpExampleRpc("nn_makenota", "")
         );
 
-    if (!pwalletMain)
+    CWallet* const pwallet = CWalletManager::GetWalletForRequest();
+    if (!pwallet)
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet is not available.");
-    if (pwalletMain->IsLocked())
+    if (pwallet->IsLocked())
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Wallet is locked.");
     if (chainName.isKMD())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "This test RPC works on assetchains only (PIRATE).");
 
-    LOCK2(cs_main, pwalletMain->cs_wallet);
+    LOCK2(cs_main, pwallet->cs_wallet);
 
     /* 1. Make sure the chain is synced */
     if (chainActive.Tip() == nullptr)
@@ -654,7 +656,7 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
     std::vector<int32_t> myNotaries;
     for (int32_t i = 0; i < numSN; i++) {
         CPubKey pk(&notarypubkeys[i][0], &notarypubkeys[i][0] + 33);
-        if (pk.IsFullyValid() && pwalletMain->HaveKey(pk.GetID()))
+        if (pk.IsFullyValid() && pwallet->HaveKey(pk.GetID()))
             myNotaries.push_back(i);
     }
 
@@ -670,7 +672,7 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
     const CAmount neededValue = minersFee + (CAmount)requiredSigs * NOTARY_VIN_AMOUNT;
 
     std::vector<COutput> vecOutputs;
-    pwalletMain->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
+    pwallet->AvailableCoins(vecOutputs, fUseOnlyConfirmed, NULL, false, true);
 
     std::vector<std::tuple<COutPoint, CAmount, CScript>> utxoInputs;
     for (const COutput& out : vecOutputs) {
@@ -717,7 +719,7 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
 
     for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
         COutPoint outpoint = std::get<0>(utxo);
-        pwalletMain->LockCoin(outpoint);
+        pwallet->LockCoin(outpoint);
     }
 
     CTransaction fundingTxSigned;
@@ -727,13 +729,13 @@ UniValue nn_makenota(const UniValue& params, bool fHelp, const CPubKey& mypk) {
     } catch (...) {
         for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
             COutPoint outpoint = std::get<0>(utxo);
-            pwalletMain->UnlockCoin(outpoint);
+            pwallet->UnlockCoin(outpoint);
         }
         throw;
     }
     for (const std::tuple<COutPoint, CAmount, CScript>& utxo : utxoInputs) {
         COutPoint outpoint = std::get<0>(utxo);
-        pwalletMain->UnlockCoin(outpoint);
+        pwallet->UnlockCoin(outpoint);
     }
 
     const uint256 fundingTxid = fundingTxSigned.GetHash();

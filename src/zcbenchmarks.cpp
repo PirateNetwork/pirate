@@ -1,3 +1,7 @@
+// Copyright (c) 2026 Pirate Chain developers
+// Distributed under the MIT software license, see the accompanying
+// file COPYING or http://www.opensource.org/licenses/mit-license.php.
+
 #include <cstdio>
 #include <future>
 #include <map>
@@ -36,35 +40,93 @@
 
 using namespace libzcash;
 // This method is based on Shutdown from init.cpp
-void pre_wallet_load()
+//
+// Rewritten during the pwalletMain-elimination effort (audit finding): the
+// previous version deleted whichever wallet was active regardless of its
+// real name and re-registered a freshly loaded one under the hardcoded name
+// "wallet.dat" in benchmark_loadwallet() below -- corrupting the registry
+// (a dangling mapWallets["<real name>"] entry pointing at freed memory)
+// whenever the active wallet actually had a different name, with no
+// cs_main protection against a concurrent ChainTip() dispatch either. Now
+// routes through CWalletManager's own UnloadWallet()/LoadWallet(), which
+// already take the right locks and keep the registry correct, instead of
+// duplicating that logic ad hoc. Returns the real wallet name discovered so
+// benchmark_loadwallet() can reload the same one.
+std::string pre_wallet_load()
 {
     LogPrintf("%s: In progress...\n", __func__);
     if (ShutdownRequested())
         throw new std::runtime_error("The node is shutting down");
 
-    if (pwalletMain)
-        pwalletMain->Flush(false);
+    std::string walletName = CWalletManager::Get().GetActiveWalletName();
+    if (walletName.empty())
+        walletName = "wallet.dat"; // matches this benchmark's historical default when nothing was loaded yet
+
+    CWallet* pwallet = CWalletManager::Get().GetWallet(walletName);
+    if (pwallet)
+        pwallet->Flush(false);
 #ifdef ENABLE_MINING
     GenerateBitcoins(false, NULL, 0);
 #endif
     UnregisterNodeSignals(GetNodeSignals());
-    if (pwalletMain)
-        pwalletMain->Flush(true);
+    if (pwallet)
+        pwallet->Flush(true);
 
-    UnregisterValidationInterface(pwalletMain);
-    delete pwalletMain;
-    pwalletMain = NULL;
+    if (pwallet) {
+        std::string strError;
+        // UnloadWallet() refuses the active wallet outright -- deactivate
+        // first (the only way to make it eligible), the same pattern used
+        // elsewhere in this codebase (e.g. splashscreen.cpp's
+        // discard-on-failed-create path).
+        CWalletManager::Get().SetActiveWallet("", strError);
+        if (!CWalletManager::Get().UnloadWallet(walletName, strError)) {
+            // Bail out here rather than log and carry on. Everything below
+            // assumes the wallet is really gone: bitdb->Reset() destroys the
+            // shared BDB environment, which would leave this still-loaded
+            // wallet holding Db handles bound to a deleted DbEnv, and
+            // benchmark_loadwallet()'s follow-up LoadWallet() would just
+            // fail with "already loaded", permanently stranding the node
+            // with no active wallet (nothing re-promotes it -- LoadWallet()
+            // only auto-promotes into an *empty* registry).
+            //
+            // The common reason to land here is the calling zcbenchmark
+            // request's own RPCWalletRequestGuard ref, which UnloadWallet()
+            // counts and refuses on. Making this benchmark work through an
+            // RPC request again needs UnloadWallet() to tolerate exactly the
+            // caller's own ref, the way DiscardWalletAfterFailedEncryption()
+            // already does (refcount <= 1) -- a deliberate API change, not
+            // something to sneak in here.
+            std::string strRestoreError;
+            CWalletManager::Get().SetActiveWallet(walletName, strRestoreError);
+            RegisterNodeSignals(GetNodeSignals());
+            throw std::runtime_error(
+                "pre_wallet_load: cannot unload wallet " + walletName +
+                " for the benchmark: " + strError);
+        }
+    }
+    // bitdb->Reset() destroys the shared BDB environment outright -- correct
+    // only because this benchmark is meant to run in isolation against a
+    // single wallet with nothing else loaded; a wallet loaded concurrently
+    // would be left with Db handles bound to the now-deleted DbEnv. Accepted
+    // as a benchmark-only limitation (not a production code path) rather
+    // than removed, since removing it would change what this specific
+    // benchmark measures (a cold BDB environment plus a cold wallet load).
     bitdb->Reset();
     RegisterNodeSignals(GetNodeSignals());
     LogPrintf("%s: done\n", __func__);
+    return walletName;
 }
 
-void post_wallet_load(){
-    RegisterValidationInterface(pwalletMain);
+void post_wallet_load(const std::string& walletName)
+{
+    // LoadWallet() (called by benchmark_loadwallet() between pre_wallet_load()
+    // and this) already registers the reloaded wallet with the validation
+    // interface itself -- nothing to do here for that part anymore.
+    CWallet* pwallet = CWalletManager::Get().GetWallet(walletName);
 #ifdef ENABLE_MINING
     // Generate coins in the background
-    if (pwalletMain || !GetArg("-mineraddress", "").empty())
-        GenerateBitcoins(GetBoolArg("-gen", false), pwalletMain, GetArg("-genproclimit", 1));
+    if (pwallet || !GetArg("-mineraddress", "").empty())
+        GenerateBitcoins(GetBoolArg("-gen", false), pwallet, GetArg("-genproclimit", 1));
 #endif
 }
 
@@ -462,20 +524,20 @@ double benchmark_sendtoaddress(CAmount amount)
 
 double benchmark_loadwallet()
 {
-    pre_wallet_load();
+    std::string walletName = pre_wallet_load();
     struct timeval tv_start;
-    bool fFirstRunRet=true;
     timer_start(tv_start);
-    pwalletMain = new CWallet("wallet.dat");
-    DBErrors nLoadWalletRet = pwalletMain->LoadWallet(fFirstRunRet);
+    // Reloads by the same real name pre_wallet_load() discovered and
+    // unloaded, through CWalletManager::LoadWallet() -- this constructs and
+    // loads the CWallet, commits it into the registry (becoming active
+    // again automatically, since pre_wallet_load() emptied the registry),
+    // and registers it with the validation interface itself, all under the
+    // correct locking, so none of that needs doing manually here anymore.
+    std::string strError;
+    if (!CWalletManager::Get().LoadWallet(walletName, strError))
+        LogPrintf("%s: LoadWallet(%s) failed: %s\n", __func__, walletName, strError);
     auto res = timer_stop(tv_start);
-    // Re-point the multiwallet registry's default entry at the new object --
-    // pre_wallet_load() deleted the old pwalletMain without deregistering it,
-    // so without this the registry's "wallet.dat" entry is left dangling on
-    // the freed wallet until the next real startup. A shutdown landing in
-    // that window would otherwise have CheckpointAllWallets() dereference it.
-    CWalletManager::Get().RegisterInitialWallet("wallet.dat", pwalletMain);
-    post_wallet_load();
+    post_wallet_load(walletName);
     return res;
 }
 

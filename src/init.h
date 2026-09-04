@@ -35,7 +35,13 @@ namespace boost
 class thread_group;
 } // namespace boost
 
-extern CWallet* pwalletMain;
+// The process-global pwalletMain pointer is gone (pwalletMain-elimination
+// effort): every external reader now resolves CWalletManager::Get().
+// GetActiveWallet() (wallet/walletmanager.h) or a request-scoped
+// CWalletManager::GetWalletForRequest() instead. init.cpp's own AppInit2()/
+// Shutdown() each declare their own genuinely local `CWallet* pwallet` --
+// deliberately not reusing the old global's name, so it can't be mistaken
+// for one -- and use it for the rest of their own bodies.
 extern ZCJoinSplit* pzcashParams;
 
 void StartShutdown();

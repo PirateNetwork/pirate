@@ -32,7 +32,7 @@
 // CCcustom
 bool TokensValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, uint32_t nIn);
 bool TokensExactAmounts(bool goDeeper, struct CCcontract_info *cpTokens, int64_t &inputs, int64_t &outputs, Eval* eval, const CTransaction &tx, uint256 tokenid);
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 std::string CreateToken(int64_t txfee, int64_t assetsupply, std::string name, std::string description, std::vector<uint8_t> nonfungibleData, CWallet *pwallet=nullptr);
 std::string TokenTransfer(int64_t txfee, uint256 assetid, std::vector<uint8_t> destpubkey, int64_t total, CWallet *pwallet=nullptr);
 int64_t HasBurnedTokensvouts(struct CCcontract_info *cp, Eval* eval, const CTransaction& tx, uint256 reftokenid);

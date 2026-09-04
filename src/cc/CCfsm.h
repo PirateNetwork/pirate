@@ -29,7 +29,7 @@ bool FSMValidate(struct CCcontract_info *cp,Eval* eval,const CTransaction &tx, u
 
 std::string FSMList();
 std::string FSMInfo(uint256 fsmtxid);
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 std::string FSMCreate(uint64_t txfee,std::string name,std::string states,CWallet *pwallet=nullptr);
 
 #endif

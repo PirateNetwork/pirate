@@ -51,7 +51,7 @@ bool CheckVinPubKey(const CTransaction &sourcetx, int32_t i, uint8_t pubkey33[33
  * @param amount the amount
  * @returns a transaction based on the inputs
  */
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 CMutableTransaction MakeSelfImportSourceTx(const CTxDestination &dest, int64_t amount, CWallet *pwallet=nullptr);
 
 /*****

@@ -91,14 +91,13 @@ void CWalletManager::RegisterInitialWallet(const std::string& name, CWallet* wal
 {
     LOCK(cs_wallets);
     activeWalletName = name;
-    pwalletMain = wallet;
     // Erase any existing entry for `name` first rather than try_emplace's
     // no-op-if-present behavior (and Entry isn't assignable in place, since
     // it holds a std::atomic<int> refcount, so insert_or_assign isn't an
     // option either): zcbenchmarks.cpp's benchmark_loadwallet() deletes and
-    // replaces pwalletMain, then calls this again so the registry's active
-    // entry repoints at the new object instead of being left pointing at the
-    // just-deleted one (which CheckpointAllWallets(), reachable from
+    // replaces the active wallet, then calls this again so the registry's
+    // active entry repoints at the new object instead of being left pointing
+    // at the just-deleted one (which CheckpointAllWallets(), reachable from
     // StartShutdown(), would otherwise dereference on the next shutdown).
     // No outstanding ref/generation state is lost by erasing: this function
     // is only ever called with a brand-new, not-yet-registered wallet (an
@@ -113,7 +112,6 @@ bool CWalletManager::SetActiveWallet(const std::string& name, std::string& strEr
     LOCK(cs_wallets);
     if (name.empty()) {
         activeWalletName.clear();
-        pwalletMain = nullptr;
         return true;
     }
     auto it = mapWallets.find(name);
@@ -122,7 +120,6 @@ bool CWalletManager::SetActiveWallet(const std::string& name, std::string& strEr
         return false;
     }
     activeWalletName = name;
-    pwalletMain = it->second.wallet;
     return true;
 }
 
@@ -699,7 +696,6 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
             // subsequent LoadWallet() call reaches here.
             if (fCommitted && mapWallets.size() == 1) {
                 activeWalletName = name;
-                pwalletMain = wallet;
             }
         }
         if (!fCommitted) {
@@ -898,11 +894,11 @@ bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError
     }
 
     // See GetMiningWallet()'s own doc comment (miner.h): the mining thread
-    // captures a CWallet* by value at thread start and never re-reads
-    // pwalletMain, so a wallet that has stopped being active can still be the
-    // one the miner is using -- deleting it out from under that thread is a
-    // use-after-free the active-wallet check just above cannot catch on its
-    // own once active status has moved elsewhere.
+    // captures a CWallet* by value at thread start and never re-resolves the
+    // active wallet afterward, so a wallet that has stopped being active can
+    // still be the one the miner is using -- deleting it out from under that
+    // thread is a use-after-free the active-wallet check just above cannot
+    // catch on its own once active status has moved elsewhere.
     if (it->second.wallet == GetMiningWallet()) {
         strError = strprintf("Wallet %s is currently bound to the mining thread and cannot be "
                               "unloaded -- stop mining (setgenerate false) first", name);
@@ -955,8 +951,9 @@ bool CWalletManager::DiscardWalletAfterFailedEncryption(const std::string& name,
 
     // Same reasoning as UnloadWallet()'s identical check: a still-running
     // miner thread holds this wallet's CWallet* for its entire lifetime and
-    // never re-reads pwalletMain, so deleting it out from under that thread
-    // is a use-after-free even though it isn't (or is no longer) active.
+    // never re-resolves the active wallet, so deleting it out from under
+    // that thread is a use-after-free even though it isn't (or is no
+    // longer) active.
     if (it->second.wallet == GetMiningWallet()) {
         strError = strprintf("Wallet %s is currently bound to the mining thread and cannot be "
                               "discarded -- stop mining (setgenerate false) first", name);
@@ -1049,6 +1046,15 @@ bool CWalletManager::IsActiveWallet(const std::string& name) const
 {
     LOCK(cs_wallets);
     return !activeWalletName.empty() && activeWalletName == name;
+}
+
+CWallet* CWalletManager::GetActiveWallet() const
+{
+    LOCK(cs_wallets);
+    if (activeWalletName.empty())
+        return nullptr;
+    auto it = mapWallets.find(activeWalletName);
+    return it != mapWallets.end() ? it->second.wallet : nullptr;
 }
 
 bool CWalletManager::AddRef(const std::string& name)
@@ -1176,17 +1182,14 @@ void CWalletManager::FlushAndUnloadAllExceptActiveWallet()
 void CWalletManager::Reset()
 {
     LOCK(cs_wallets);
-    // The active wallet's CWallet* is deleted by Shutdown()'s existing
-    // `delete pwalletMain`, so only drop the registry's bookkeeping here.
+    // The active wallet's CWallet* itself is deleted by whoever owns it
+    // (Shutdown(), or a gtest fixture's own TearDown()) -- this only drops
+    // the registry's own bookkeeping, never touching any CWallet object
+    // directly (pwalletMain-elimination effort: GetActiveWallet() resolves
+    // fresh from activeWalletName/mapWallets on every call, so there is no
+    // separate mirror pointer here left to null).
     mapWallets.clear();
     activeWalletName.clear();
-    // Explicit, rather than relying on Shutdown()'s own `delete pwalletMain;
-    // pwalletMain = NULL;` having already run first: that's true on the one
-    // production call path, but a gtest fixture calling Reset() directly
-    // (without going through Shutdown()) should not be able to leave a
-    // stale pwalletMain pointing at an entry this call just erased from the
-    // registry.
-    pwalletMain = nullptr;
     // Not expected to be non-empty here (Reset() isn't meant to run
     // concurrently with an in-flight LoadWallet()), but cheap to clear
     // defensively rather than leave a stale reservation across, e.g., gtest
@@ -1213,17 +1216,17 @@ CWallet* CWalletManager::GetWalletForRequest()
 {
     std::string name = GetRequestedWalletName();
     if (name.empty())
-        return pwalletMain;
+        return CWalletManager::Get().GetActiveWallet();
     CWallet* wallet = CWalletManager::Get().GetWallet(name);
-    // Falls back to pwalletMain rather than returning nullptr: by the time a
-    // rewired RPC calls this, CRPCTable::execute()'s gate has already
+    // Falls back to the active wallet rather than returning nullptr: by the
+    // time a rewired RPC calls this, CRPCTable::execute()'s gate has already
     // confirmed the name is either the default or IsMultiWalletAwareRPC(), and
     // httprpc.cpp's RPCWalletRequestGuard::IsResolved() already confirmed it
     // was loaded when the request started -- reaching here with `wallet ==
     // nullptr` means it was unloaded in the brief window since (the guard
     // holds a ref on a secondary specifically to prevent that, so this is
     // belt-and-braces, not the expected path).
-    return wallet ? wallet : pwalletMain;
+    return wallet ? wallet : CWalletManager::Get().GetActiveWallet();
 }
 
 RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
@@ -1244,7 +1247,8 @@ RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
     // and reports fResolved = false when no wallet is currently active,
     // giving IsResolved()'s few callers (this doesn't self-enforce; see its
     // own comment) a way to tell "nothing is active" from "resolved fine"
-    // before falling through to whatever pwalletMain-reading code runs next.
+    // before falling through to whatever GetActiveWallet()-reading code runs
+    // next.
     CWalletManager::ResolvedWallet resolved = name.empty()
         ? CWalletManager::Get().ResolveAndHoldActiveForRequest()
         : CWalletManager::Get().ResolveAndHoldForRequest(name);
@@ -1261,8 +1265,8 @@ RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
     // Pin the thread-local to the *resolved* name, not the caller's original
     // (possibly empty) one -- Opus-audit-caught: leaving it as `name` meant
     // an unscoped request's later GetWalletForRequest() calls kept
-    // re-reading the live pwalletMain instead of the specific wallet this
-    // guard's own ref protects, so a setactivewallet landing mid-request
+    // re-resolving the live active wallet instead of the specific wallet
+    // this guard's own ref protects, so a setactivewallet landing mid-request
     // could silently redirect the rest of this request's handler to a
     // different wallet than the one that was active when it resolved. Safe
     // to look up by name for the rest of the request: holding a ref on

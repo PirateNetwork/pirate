@@ -316,7 +316,7 @@ void SplashScreen::startZeroWalletFlow(const std::string& walletName)
     fZeroWalletStartup = true;
     zeroWalletName = walletName;
     // Same widget transition InitCreateWallet()'s signal handler drives
-    // above for the pre-existing pwalletMain-based flow -- the choice of
+    // above for the pre-existing active-wallet-based flow -- the choice of
     // "new" vs "restore" widgets is identical either way, only what happens
     // once the user picks one differs (see fZeroWalletStartup's own comment,
     // splashscreen.h).
@@ -328,9 +328,13 @@ static void showNewPhrase(SplashScreen *splash)
     splash->newSeed->setVisible(true);
     splash->btnDone->setVisible(true);
     // fZeroWalletStartup selects which of the two flows' own seed-phrase
-    // storage to read from -- see its own comment (splashscreen.h).
+    // storage to read from -- see its own comment (splashscreen.h). The
+    // non-zero-wallet-startup branch reads the wallet init.cpp's Step 8 is
+    // currently constructing, registered with CWalletManager immediately
+    // upon construction (before this signal can fire) specifically so it
+    // resolves here as the active wallet.
     std::string phrase = splash->fZeroWalletStartup ? splash->zeroWalletSeedPhrase
-                                                     : pwalletMain->recoverySeedPhrase;
+                                                     : CWalletManager::Get().GetActiveWallet()->recoverySeedPhrase;
     splash->newSeed->ui->txtSeed->setPlainText(QString::fromStdString(phrase));
 }
 
@@ -363,7 +367,7 @@ void SplashScreen::on_btnTypeSelected_clicked()
         this->restoreSeed->setVisible(true);
         this->btnRestore->setVisible(true);
     } else if (fZeroWalletStartup) {
-        // No pre-existing pwalletMain to seed here (true zero-wallet
+        // No pre-existing wallet under construction here (true zero-wallet
         // startup, see fZeroWalletStartup's own comment) -- create the
         // wallet outright instead of just flagging createType and waiting
         // for init.cpp's busy-wait to notice.
@@ -375,7 +379,7 @@ void SplashScreen::on_btnTypeSelected_clicked()
         }
         showNewPhrase(this);
     } else {
-        pwalletMain->createType = RANDOM;
+        CWalletManager::Get().GetActiveWallet()->createType = RANDOM;
     }
 }
 
@@ -405,14 +409,14 @@ void SplashScreen::on_btnRestore_clicked()
 
 
       uint32_t langCode = (uint32_t)restoreSeed->selectedLanguage();
-      // fZeroWalletStartup: no pre-existing pwalletMain to validate against
-      // (true zero-wallet startup) -- CWallet::IsValidPhrase() only ever
-      // constructs a throwaway HDSeed and checks that, never touching the
-      // instance it's called on (see its own implementation, wallet.cpp), so
-      // checking against a bare HDSeed directly here is equivalent, without
-      // needing a CWallet at all.
+      // fZeroWalletStartup: no pre-existing wallet under construction to
+      // validate against (true zero-wallet startup) -- CWallet::
+      // IsValidPhrase() only ever constructs a throwaway HDSeed and checks
+      // that, never touching the instance it's called on (see its own
+      // implementation, wallet.cpp), so checking against a bare HDSeed
+      // directly here is equivalent, without needing a CWallet at all.
       bool fValid = fZeroWalletStartup ? HDSeed().IsValidPhrase(phrase, langCode)
-                                        : pwalletMain->IsValidPhrase(phrase, langCode);
+                                        : CWalletManager::Get().GetActiveWallet()->IsValidPhrase(phrase, langCode);
       if (fValid) {
           this->restoreSeed->ui->lblInvalid->setVisible(false);
           if (fZeroWalletStartup) {
@@ -444,9 +448,10 @@ void SplashScreen::on_btnRestore_clicked()
               this->seed->setVisible(false);
               Q_EMIT walletCreated();
           } else {
-              pwalletMain->recoverySeedLangCode = langCode;
-              pwalletMain->recoverySeedPhrase = phrase;
-              pwalletMain->createType = RECOVERY;
+              CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
+              pwallet->recoverySeedLangCode = langCode;
+              pwallet->recoverySeedPhrase = phrase;
+              pwallet->createType = RECOVERY;
               //Hide the dialog. The program execution will continue
               this->seed->setVisible(false);
           }
@@ -464,7 +469,7 @@ void SplashScreen::on_btnDone_clicked()
         // -- this button just confirms the user has recorded the phrase.
         Q_EMIT walletCreated();
     } else {
-        pwalletMain->createType = COMPLETE;
+        CWalletManager::Get().GetActiveWallet()->createType = COMPLETE;
     }
 }
 
@@ -478,13 +483,13 @@ void SplashScreen::on_btnOpen_clicked()
   openWallet->ui->passPhraseEdit->setText(QString(" ").repeated(openWallet->ui->passPhraseEdit->text().size()));
   openWallet->ui->passPhraseEdit->clear();
 
-  if (pwalletMain->OpenWallet(passPhrase)) {
+  if (CWalletManager::Get().GetActiveWallet()->OpenWallet(passPhrase)) {
       // OpenWallet() no longer captures this itself (see its own comment,
       // wallet/wallet.cpp) -- init.cpp's automatic KDF-upgrade check and its
-      // -zapwallettxes reopen both still need it for pwalletMain specifically,
-      // which this startup dialog always operates on. Released before being
-      // replaced so a previously captured passphrase isn't left behind,
-      // unreachable and never freed, in mlock()'d memory.
+      // -zapwallettxes reopen both still need it for whichever wallet is
+      // active, which this startup dialog always operates on. Released
+      // before being replaced so a previously captured passphrase isn't
+      // left behind, unreachable and never freed, in mlock()'d memory.
       delete strOpeningWalletPassphrase;
       strOpeningWalletPassphrase = new SecureString(passPhrase);
       seed->setVisible(false);
@@ -498,7 +503,8 @@ void SplashScreen::on_btnOpen_clicked()
 void SplashScreen::on_newSeedLanguageChanged(int index)
 {
     std::string phrase;
-    if (pwalletMain && pwalletMain->GetSeedPhrase(phrase, (uint32_t)index)) {
+    CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
+    if (pwallet && pwallet->GetSeedPhrase(phrase, (uint32_t)index)) {
         newSeed->ui->txtSeed->setPlainText(QString::fromStdString(phrase));
     }
 }

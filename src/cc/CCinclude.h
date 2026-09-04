@@ -233,9 +233,6 @@ struct oracleprice_info
 typedef std::vector<uint8_t> vscript_t;
 extern struct NSPV_CCmtxinfo NSPV_U;  //!< global variable with info about mtx object and used utxo
 
-#ifdef ENABLE_WALLET
-extern CWallet* pwalletMain;  //!< global wallet object pointer to access wallet functionality
-#endif
 //extern CCoinsViewCache *pcoinsTip;
 
 /// @private seems old-style
@@ -252,7 +249,7 @@ int32_t CCgetspenttxid(uint256 &spenttxid,int32_t &vini,int32_t &height,uint256 
 
 /// @private
 void CCclearvars(struct CCcontract_info *cp);
-// pwallet defaults to pwalletMain when not given, per the multiwallet effort's convention (see CCtx.cpp).
+// pwallet defaults to the active wallet when not given, per the multiwallet effort's convention (see CCtx.cpp).
 UniValue CClib(struct CCcontract_info *cp,char *method,char *jsonstr,CWallet *pwallet=nullptr);
 UniValue CClib_info(struct CCcontract_info *cp);
 
@@ -797,7 +794,7 @@ CPubKey check_signing_pubkey(CScript scriptSig);
 /// @param vini order number of transaction input to sign (starting from 0)
 /// @param utxovalue amount of utxo spent by the input to sign (this amount will be added to the signature hash)
 /// @param scriptPubKey scriptPubKey of the utxo spent by the input to sign
-/// @param pwallet wallet whose keystore signs this input; defaults to the process's default wallet (pwalletMain) when null
+/// @param pwallet wallet whose keystore signs this input; defaults to the active wallet when null
 bool SignTx(CMutableTransaction &mtx,const PrecomputedTransactionData& txToDataIn,int32_t vini,int64_t utxovalue,const CScript scriptPubKey,CWallet *pwallet=nullptr);
 
 extern std::vector<CPubKey> NULL_pubkeys; //!< constant value for use in functions where such value might be passed @see FinalizeCCTx
@@ -810,7 +807,7 @@ extern std::vector<CPubKey> NULL_pubkeys; //!< constant value for use in functio
 /// @param txfee transaction fee
 /// @param opret opreturn vout which function will add if it is not empty 
 /// @param pubkeys array of pubkeys to make multiple probe 1of2 cc's with the call Make1of2cond(cp->evalcode, globalpk, pubkeys[i])
-/// @param pwallet wallet whose keys/UTXOs fund and sign this transaction; defaults to the process's default wallet (pwalletMain) when null
+/// @param pwallet wallet whose keys/UTXOs fund and sign this transaction; defaults to the active wallet when null
 /// @returns signed transaction in hex encoding
 std::string FinalizeCCTx(uint64_t skipmask,struct CCcontract_info *cp,CMutableTransaction &mtx,CPubKey mypk,uint64_t txfee,CScript opret,std::vector<CPubKey> pubkeys = NULL_pubkeys,CWallet *pwallet=nullptr);
 
@@ -831,7 +828,7 @@ std::string FinalizeCCTx(uint64_t skipmask,struct CCcontract_info *cp,CMutableTr
 /// @param txfee transaction fee
 /// @param opret opreturn vout which function will add if it is not empty 
 /// @param pubkeys array of pubkeys to make multiple probe 1of2 cc's with the call Make1of2cond(cp->evalcode, globalpk, pubkeys[i])
-/// @param pwallet wallet whose keys/UTXOs fund and sign this transaction (meaningless when remote=true); defaults to the process's default wallet (pwalletMain) when null
+/// @param pwallet wallet whose keys/UTXOs fund and sign this transaction (meaningless when remote=true); defaults to the active wallet when null
 /// @returns signed transaction in hex encoding
 UniValue FinalizeCCTxExt(bool remote, uint64_t skipmask, struct CCcontract_info *cp, CMutableTransaction &mtx, CPubKey mypk, uint64_t txfee, CScript opret, std::vector<CPubKey> pubkeys = NULL_pubkeys, CWallet *pwallet=nullptr);
 
@@ -871,7 +868,7 @@ int64_t NSPV_AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total
 /// @param total amount of inputs to add. If total equals to 0 the function does not add inputs but returns amount of all available normal inputs in the wallet
 /// @param maxinputs maximum number of inputs to add
 /// @param remote true if running in remote nspv mode (default false)
-/// @param pwallet wallet whose UTXOs fund the transaction on the local (non-remote) path; defaults to the process's default wallet (pwalletMain) when null; meaningless when remote=true
+/// @param pwallet wallet whose UTXOs fund the transaction on the local (non-remote) path; defaults to the active wallet when null; meaningless when remote=true
 /// @returns amount of added normal inputs or amount of all normal inputs in the wallet
 /// @see AddNormalinputsLocal
 /// @see AddNormalinputsRemote
@@ -882,7 +879,7 @@ int64_t AddNormalinputs(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int3
 /// @param mypk not used
 /// @param total amount of inputs to add. If total equals to 0 the function does not add inputs but returns amount of all available normal inputs in the wallet
 /// @param maxinputs maximum number of inputs to add
-/// @param pwallet wallet whose UTXOs fund the transaction; defaults to the process's default wallet (pwalletMain) when null
+/// @param pwallet wallet whose UTXOs fund the transaction; defaults to the active wallet when null
 /// @returns amount of added normal inputs or amount of all normal inputs in the wallet
 int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total,int32_t maxinputs,CWallet *pwallet=nullptr);
 

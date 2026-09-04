@@ -116,7 +116,7 @@
         <item>
          <widget class="QTextEdit" name="teInput">
           <property name="placeholderText">
-           <string>An on-line wallet will created a sign request when a &quot;viewing only&quot; address was used to send ARRR to a recipient. Paste the 'z_sign_offline' text in this text box and click on 'Sign' to have the transaction authorised. You need the spend key (private key) of the viewing address (public key) in your address book in order to sign the transaction</string>
+           <string>Paste the hex output of z_createbuildinstructions from your on-line (viewing-only) wallet into this text box and click 'Sign' to have the transaction authorised. You need the spend key (private key) of the viewing address in your address book in order to sign the transaction.</string>
           </property>
          </widget>
         </item>
