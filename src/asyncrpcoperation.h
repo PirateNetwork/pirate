@@ -164,7 +164,8 @@ protected:
     // nothing ever invokes these), so making this immutable-after-
     // construction a documented convention rather than a compiler-enforced
     // one avoids having to touch that dead code just to keep it compiling.
-    // Subclasses read this directly in place of the pwalletMain global.
+    // The wallet this operation was constructed against; subclasses read
+    // this directly.
     CWallet* wallet_ = nullptr;
 
     void start_execution_clock();

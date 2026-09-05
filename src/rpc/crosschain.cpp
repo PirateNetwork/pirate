@@ -261,13 +261,11 @@ UniValue migrate_createburntransaction(const UniValue& params, bool fHelp, const
         throw runtime_error("You need to set -pubkey, or run setpukbey RPC, or imports are disabled on this chain.");
 
     // Unlike its 8 siblings in this file (e.g. migrate_createnotaryapprovaltransaction
-    // just below), this RPC had no wallet-availability guard at all -- it fell
-    // straight through to AddNormalinputs()/FinalizeCCTx() with no wallet
-    // argument, silently defaulting to the global pwalletMain. Under the
-    // no-default-wallet redesign that can be null even outside -disablewallet,
-    // which previously reached AddNormalinputsLocal()'s assert(pwallet != NULL)
-    // (cc/CCtx.cpp) -- a process-crashing bug reachable today under plain
-    // -disablewallet already, independent of this redesign.
+    // just below), this RPC needs an explicit wallet-availability guard: with
+    // no wallet loaded (e.g. -disablewallet), falling straight through to
+    // AddNormalinputs()/FinalizeCCTx() with no wallet argument would reach
+    // AddNormalinputsLocal()'s assert(pwallet != NULL) (cc/CCtx.cpp) and
+    // crash the process.
     CWallet* const pwallet = CWalletManager::GetWalletForRequest();
     if (!EnsureWalletIsAvailable(pwallet, fHelp))
         return NullUniValue;

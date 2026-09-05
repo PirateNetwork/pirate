@@ -850,11 +850,10 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
     // Load-bearing correctness guard: only IsMultiWalletAwareRPC() methods
     // (rpc/server.h) are reviewed and marked as safe to run against an
     // explicitly-named, non-active wallet. Every RPC handler resolves its own
-    // CWallet* via CWalletManager (GetWalletForRequest()/GetActiveWallet())
-    // now -- pwalletMain-elimination effort: there's no longer a raw global
-    // for an un-reviewed handler to silently fall back to -- but the
-    // allowlist is kept as the same permanent defense-in-depth it always
-    // was: a handler not on it hasn't been confirmed to correctly honor a
+    // CWallet* via CWalletManager (GetWalletForRequest()/GetActiveWallet());
+    // there's no raw global for an un-reviewed handler to silently fall back
+    // to. The allowlist is permanent defense-in-depth all the same: a
+    // handler not on it hasn't been confirmed to correctly honor a
     // non-active wallet selection (an internal `pwallet ? pwallet :
     // GetActiveWallet()` default-parameter fallback, say, would otherwise
     // silently run against the active wallet instead of the one the request
@@ -879,8 +878,8 @@ UniValue CRPCTable::execute(const std::string &strMethod, const UniValue &params
         if (pcmd && !strRequestedWallet.empty() &&
             !CWalletManager::Get().IsActiveWallet(strRequestedWallet) &&
             !IsMultiWalletAwareRPC(pcmd->name)) {
-            // Opus-audit-caught: an *unscoped* request can reach here too now
-            // that GetRequestedWalletName() pins the resolved wallet's name
+            // An *unscoped* request can reach here too, since
+            // GetRequestedWalletName() pins the resolved wallet's name
             // instead of staying empty (see its own doc comment,
             // walletmanager.h) -- specifically if a concurrent
             // setactivewallet moved active status away from the wallet this

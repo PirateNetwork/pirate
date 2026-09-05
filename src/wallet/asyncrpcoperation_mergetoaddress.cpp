@@ -249,10 +249,10 @@ void AsyncRPCOperation_mergetoaddress::main()
     // touched for multiwallet, and must not become so now.
 #ifdef ENABLE_MINING
 #ifdef ENABLE_WALLET
-    // Same guard as init.cpp's own startup call to this function: under the
-    // no-default-wallet redesign the active wallet can be null here without
-    // -mineraddress being set either (true zero-wallet startup, or every
-    // wallet deactivated) -- unlike the startup call site, mining was never
+    // Same guard as init.cpp's own startup call to this function: the
+    // active wallet can be null here without -mineraddress being set
+    // either (true zero-wallet startup, or every wallet deactivated) --
+    // unlike the startup call site, mining was never
     // actually stopped for that reason here (this call only ever *restarts*
     // mining this operation itself paused further up), so skipping it is a
     // no-op rather than a behavior change for the common case.

@@ -1921,10 +1921,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   // shape immediately above) -- optionality of the second parameter already
   // comes from RPCTypeCheck() only checking as many positions as were
   // actually supplied, not from allowing an explicit JSON null in either
-  // position. Audit finding: the previous `true` here let a null through
-  // argument 0 only to fail later with a confusing generic error instead of
-  // a clean type-mismatch one, and didn't make null in argument 1 mean
-  // "absent" either -- it still threw in get_bool().
+  // position.
   RPCTypeCheck(params, boost::assign::list_of(UniValue::VSTR)(UniValue::VBOOL));
 
   string strHexTb = params[0].get_str();
@@ -2001,11 +1998,11 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
       ironwoodAddr = tb.vIronwoodSpends[0].addr;
 
   // WasWalletExplicitlySelected(), not GetRequestedWalletName().empty():
-  // Opus-audit-caught -- once RPCWalletRequestGuard started pinning the
-  // resolved (rather than the caller-given) name so a mid-request
-  // setactivewallet can't silently redirect other wallet-manager consumers,
-  // GetRequestedWalletName() is non-empty for an unscoped request too (it's
-  // the active wallet's name). WasWalletExplicitlySelected() is the signal
+  // RPCWalletRequestGuard pins the resolved (rather than the caller-given)
+  // name so a mid-request setactivewallet can't silently redirect other
+  // wallet-manager consumers, so GetRequestedWalletName() is non-empty for
+  // an unscoped request too (it's the active wallet's name).
+  // WasWalletExplicitlySelected() is the signal
   // that still means what this check has always needed it to mean: did the
   // caller name a specific wallet, or should every loaded wallet be
   // searched (this RPC's own design -- an offline-signing blob carries no
@@ -2312,12 +2309,10 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   if (!fReturnWalletName)
       return strHex;
 
-  // Opt-in object shape (backlog item 11(a)'s own deferred note: surfacing
-  // which wallet actually signed needed a result-shape change, weighed
-  // against compatibility and left for later -- this is that later,
-  // additive rather than breaking). strFoundWalletName is always the real
-  // registry name here: either the explicitly-selected wallet (unchanged
-  // through the whole call), or whichever one the search above found.
+  // Opt-in object shape, additive rather than breaking. strFoundWalletName
+  // is always the real registry name here: either the explicitly-selected
+  // wallet (unchanged through the whole call), or whichever one the search
+  // above found.
   UniValue result(UniValue::VOBJ);
   result.pushKV("hex", strHex);
   result.pushKV("wallet", strFoundWalletName);

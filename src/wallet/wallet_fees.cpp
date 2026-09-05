@@ -16,12 +16,9 @@
 #include "wallet/walletmanager.h"
 
 namespace {
-// minTxFee/payTxFee used to be process-global/static CWallet state; Phase 5
-// made both real per-CWallet fields. Call sites not yet made wallet-aware
+// minTxFee/payTxFee are per-CWallet fields. Call sites not made wallet-aware
 // (Qt's fee-preview code) pass wallet=nullptr and fall back to the active
-// wallet's setting, or a compiled-in default if no wallet is loaded at all --
-// the same behavior these call sites had before the settings became
-// per-wallet.
+// wallet's setting, or a compiled-in default if no wallet is loaded at all.
 CFeeRate GetEffectiveMinTxFee(const CWallet* wallet)
 {
     if (wallet) return wallet->minTxFee;

@@ -191,7 +191,7 @@ void ZSignDialog::on_signButton_clicked()
       // see its own help text), so surfacing which one was actually found
       // and used is the only way the user learns that from this screen at
       // all, instead of only a server-side LogPrintf nobody watching the
-      // GUI would see. Backlog item 11(a)'s own deferred note, fixed here.
+      // GUI would see.
       params.push_back(true);
 
       //Execute z_buildrawtransaction RPC call

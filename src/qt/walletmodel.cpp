@@ -52,10 +52,8 @@
 
 /* from rpcwallet.cpp */
 extern CAmount getBalanceTaddr(CWallet* pwallet, std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true);
-// Phase 10 of the multiwallet effort gave this a trailing CWallet* pwallet=nullptr
-// (declared in wallet/rpcwallet.h, already visible here via wallet/wallet.h above)
-// -- this stale zero-arg redeclaration was left behind uncaught until Phase 11's
-// qt rebuild, since qt wasn't rebuilt as part of Phase 10's own verification. The
+// komodo_interestsum() takes a trailing CWallet* pwallet=nullptr, declared in
+// wallet/rpcwallet.h (already visible here via wallet/wallet.h above). The
 // default argument is only spelled out on the first declaration seen by the
 // compiler (rpcwallet.h's); repeating it here would be a redefinition error.
 extern uint64_t komodo_interestsum(CWallet *pwallet);

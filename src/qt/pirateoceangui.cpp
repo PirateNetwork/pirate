@@ -875,8 +875,8 @@ bool PirateOceanGUI::removeWallet(const QString& name)
     CWalletManager::Get().ReleaseRef(walletManagerName);
     if (currentWalletName == name) {
         currentWalletName.clear();
-        // Opus-audit-caught: closeWalletClicked()'s own post-close fallback
-        // already re-selects a new current tab when one remains, which in
+        // closeWalletClicked()'s own post-close fallback already re-selects
+        // a new current tab when one remains, which in
         // turn re-binds the console via setCurrentWallet() -- but when this
         // was the last tab, nothing calls setCurrentWallet() at all, and
         // without this the console stayed bound to `name` after it was
@@ -1225,12 +1225,8 @@ void PirateOceanGUI::rebuildWalletsMenu()
     // when clicked (setCurrentWallet() has nothing to switch to). Loading a
     // wallet through Load Wallet below is the only way to actually attach
     // one to this window right now.
-    // No-default-wallet redesign: display each tab under its own real,
-    // stable name always -- no more computing "what does this tab's alias
-    // currently mean" at render time (the Opus-audit-caught bug this used
-    // to have: two open tabs could end up displaying the identical label if
-    // one of them was still keyed by a now-stale alias for whichever wallet
-    // *used to be* active). "(active)" is recomputed fresh on every rebuild
+    // Each tab displays under its own real, stable name always. "(active)"
+    // is recomputed fresh on every rebuild
     // against whichever tab's real name currently matches
     // GetActiveWalletName(), so it always reflects reality even if active
     // status moved via setactivewallet from outside this window entirely.
@@ -1487,8 +1483,7 @@ void PirateOceanGUI::closeWalletClicked()
         // ref held by a concurrent RPC request) -- restore the protective
         // ref and leave the GUI side untouched. Detaching here anyway would
         // strand a wallet that's still actually loaded, with no way back
-        // into the GUI short of a restart (see the audit finding this
-        // guards against).
+        // into the GUI short of a restart.
         CWalletManager::Get().AddRef(managerName);
         QMessageBox::warning(this, tr("Close Wallet"),
             tr("Could not close wallet \"%1\": %2").arg(guiKey, QString::fromStdString(strError)));

@@ -493,11 +493,10 @@ bool Myprivkey(uint8_t myprivkey[])
             // DiceValidate -> DiceIsWinner -> DiceHashEntropy -> Myprivkey, on
             // scriptcheckqueue worker threads -- there is no "selected wallet"
             // concept to consult there, and there must never be one. The null
-            // guard below is the actual fix: under -disablewallet (or true
+            // guard below is required: under -disablewallet (or true
             // zero-wallet startup / every wallet deactivated), there is no
-            // active wallet, and this call used to dereference the old
-            // pwalletMain global unconditionally, a null-deref reachable from
-            // inside block validation.
+            // active wallet, and dereferencing it unconditionally would be
+            // a null-deref reachable from inside block validation.
             CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
             if ( pwallet != NULL && pwallet->GetKey(keyID,vchSecret) != 0 )
             {

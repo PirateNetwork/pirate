@@ -186,11 +186,8 @@ protected:
     std::string previousDatadir;
 
     // The fixture's own default wallet, constructed in SetUp() and torn down
-    // in TearDown(). This used to be the global `pwalletMain` (init.h) --
-    // pwalletMain-elimination effort: it's a member here instead (protected,
-    // so every TEST_F built on this fixture can read it via ordinary member
-    // lookup), deliberately not reusing the old global's name so it can't be
-    // mistaken for one. Unlike the global, this member is never touched by
+    // in TearDown(). Protected, so every TEST_F built on this fixture can
+    // read it via ordinary member lookup. Never touched by
     // CWalletManager::Reset() -- it stays valid across a mid-test Reset()
     // (see test_rpc_wallet_bitcoin.cpp's WalletManagerCleanup helpers), so
     // TearDown() can always find and delete it without the save/restore

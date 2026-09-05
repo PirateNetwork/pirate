@@ -28,8 +28,8 @@ struct CBlockLocator;
  * resolved via GetWalletForRequest() below or GetActiveWallet() directly
  * (there is no process-global mirror of the active wallet -- every external
  * reader resolves fresh from this registry on every call). The first wallet
- * ever loaded into an empty registry
- * becomes active automatically; every later load leaves active status where
+ * ever loaded into an empty registry becomes active automatically; every
+ * later load leaves active status where
  * it was until SetActiveWallet() is called explicitly. A core subset of
  * wallet RPCs (see IsMultiWalletAwareRPC, rpc/server.h) can be routed to a
  * specific, explicitly-named wallet this way; everything else still only
@@ -45,24 +45,18 @@ public:
     CWalletManager& operator=(const CWalletManager&) = delete;
 
     // Startup (init.cpp) and zcbenchmarks.cpp's benchmark_loadwallet() only:
+    // registers a wallet the caller has already constructed, without going
+    // through LoadWallet()'s file-opening machinery. Not a general "switch
+    // the active wallet" API (see SetActiveWallet() for that) -- it
     // unconditionally overwrites whichever wallet is currently active,
-    // regardless of prior state -- not a general "switch the active wallet"
-    // API (see SetActiveWallet() for that). Named for what it actually does
-    // now that there is no more a permanently privileged "default" wallet:
-    // this registers the wallet loaded before any other, at process startup,
-    // and (per the no-default-wallet redesign) that wallet becomes active the
-    // same way any other first-loaded wallet would via LoadWallet()'s own
-    // empty-registry-promotion rule -- this function exists only because
-    // startup already has a fully-constructed CWallet* in hand and doesn't
-    // need to go through LoadWallet()'s file-opening machinery to register it.
+    // regardless of prior state. The wallet registered here becomes active
+    // the same way any other first-loaded wallet would, via LoadWallet()'s
+    // own empty-registry-promotion rule.
     void RegisterInitialWallet(const std::string& name, CWallet* wallet);
 
     // fRescan/nRescanHeight/fSalvage/fZapWalletTxes mirror what init.cpp's
-    // startup path offers the default wallet via -rescan/-rescanheight/
-    // -salvagewallet/-zapwallettxes -- Phase 5 of the multiwallet effort
-    // exposed the same actions for a secondary wallet loaded here instead of
-    // only ever applying to the default wallet (or, for -salvagewallet,
-    // applying process-wide to every wallet loaded regardless of intent).
+    // startup path offers via -rescan/-rescanheight/-salvagewallet/
+    // -zapwallettxes, applied to whichever wallet is loaded here.
     // fZapWalletTxes implies fRescan, same as -zapwallettxes implies -rescan.
     // fAllowCreate is for CreateWallet()'s own internal delegation below
     // ONLY -- every other caller (the loadwallet RPC, multi-`-wallet=`
@@ -100,34 +94,21 @@ public:
                      const SecureString& strPassphrase = SecureString(),
                      bool* pfPassphraseRequired = nullptr);
 
-    // Phase 6: LoadWallet() above only ever loads a file that already
-    // exists by default (see fAllowCreate just above) -- CreateWallet() is
-    // the opposite: it rejects a name whose file already exists, then
-    // delegates straight to LoadWallet(name, ..., /*fAllowCreate=*/true),
-    // which handles "no file yet" correctly once that flag lets it past its
-    // own existence check (CWallet::LoadWallet() then auto-creates the file,
-    // returning fFirstRun=true, which LoadWallet()'s own registration/catch-up
-    // tail already special-cases). This deliberately reuses that whole tail
-    // unchanged rather than duplicating it, since it's the same delicate,
-    // already-audited locking/exception-safety sequence either way. All
-    // that's added on top is the seed generation a brand-new wallet needs --
-    // mirroring init.cpp's own fresh-default-wallet setup, minus the
-    // interactive GUI seed-phrase-confirmation flow that only makes sense
-    // during first-run startup, not for adding a wallet to an already-running
-    // node. `seedPhraseOut` receives the newly-generated seed phrase so the
-    // caller (RPC result, then the GUI) can prompt the user to back it up
-    // immediately -- restoring a new wallet from a caller-supplied phrase is
-    // out of scope (use -seedphrase/-wallet= at startup instead).
-    // recoveryPhrase/recoveryLangCode: restore this wallet's HD seed from an
+    // LoadWallet() above only ever loads a file that already exists by
+    // default (see fAllowCreate just above) -- CreateWallet() is the
+    // opposite: it rejects a name whose file already exists, then delegates
+    // straight to LoadWallet(name, ..., /*fAllowCreate=*/true), which
+    // handles "no file yet" correctly (CWallet::LoadWallet() auto-creates
+    // the file, returning fFirstRun=true, which LoadWallet()'s own
+    // registration/catch-up tail already special-cases). All that's added
+    // on top is the seed generation a brand-new wallet needs. `seedPhraseOut`
+    // receives the newly-generated seed phrase so the caller (RPC result,
+    // then the GUI) can prompt the user to back it up immediately.
+    // recoveryPhrase/recoveryLangCode restore this wallet's HD seed from an
     // existing phrase instead of generating a brand-new random one -- the
     // createwallet RPC's and the Qt first-run "restore" flow's shared
-    // implementation. Replaces the old -seedphrase=/-wallet= startup-flag
-    // combination (removed as part of the no-default-wallet redesign, along
-    // with the plaintext recoverySeedPhrase/recoverySeedLangCode process
-    // globals it used to pass through): restoring a known phrase is now
-    // always an explicit action against an already-running node, never an
-    // implicit side effect of a boot-time flag. Leave recoveryPhrase empty
-    // (the default) for the original random-seed behavior.
+    // implementation. Leave recoveryPhrase empty (the default) for the
+    // random-seed behavior.
     bool CreateWallet(const std::string& name, std::string& strError, std::string& seedPhraseOut,
                        const SecureString& recoveryPhrase = SecureString(), uint32_t recoveryLangCode = 0);
 
@@ -190,22 +171,18 @@ public:
     // permanently skewing that file's use count for the rest of the process.
     //
     // Never valid against the active wallet -- refuses, matching
-    // UnloadWallet()'s own active-wallet refusal, and deliberately NOT lifted
-    // by the no-default-wallet redesign even though every wallet is otherwise
-    // now symmetric: encryption-failure recovery is already a narrow,
-    // security-sensitive path, and a reload of the sole/active wallet falls
-    // back to the caller's pre-existing StartShutdown() path exactly as
-    // before, which is a fine outcome for what should be a rare failure.
+    // UnloadWallet()'s own active-wallet refusal: encryption-failure
+    // recovery is a narrow, security-sensitive path, and a reload of the
+    // sole/active wallet falls back to the caller's StartShutdown() path
+    // instead, a fine outcome for what should be a rare failure.
     bool DiscardWalletAfterFailedEncryption(const std::string& name, std::string& strError);
 
     // Writes a best-chain checkpoint to every currently loaded wallet
     // (including the active one). Called from StartShutdown() (init.cpp) so
     // a secondary wallet's on-disk checkpoint doesn't go stale by however
-    // many blocks passed since its last periodic flush -- previously only
-    // pwalletMain ever got this checkpoint written on shutdown. Caller is
-    // expected to already hold cs_main while reading the chain state passed
-    // in here (SetBestChain() itself only asserts cs_wallet, taken per-entry
-    // below).
+    // many blocks passed since its last periodic flush. Caller is expected
+    // to already hold cs_main while reading the chain state passed in here
+    // (SetBestChain() itself only asserts cs_wallet, taken per-entry below).
     void CheckpointAllWallets(const CBlockLocator& locator, int height);
 
     std::vector<std::string> ListWalletNames() const;
@@ -214,13 +191,12 @@ public:
     bool IsActiveWallet(const std::string& name) const;
     // Resolves activeWalletName against mapWallets fresh, under this same
     // lock, on every call -- no caching, so no stale-pointer risk from a
-    // concurrent SetActiveWallet(). The sanctioned replacement for every
-    // non-request-scoped external read of the (removed) pwalletMain global:
-    // the mining thread's initial pin point, the Crypto-Conditions
+    // concurrent SetActiveWallet(). The sanctioned way for a
+    // non-request-scoped caller to resolve "whichever wallet is active right
+    // now": the mining thread's initial pin point, the Crypto-Conditions
     // framework's null-wallet fallback, the Qt GUI, zcbenchmarks, and the
-    // wallet_fees.cpp fee-fallback helpers all resolve "whichever wallet is
-    // active right now" through this instead of a shared mutable pointer.
-    // Returns nullptr if no wallet is active. Same accepted lockless-read
+    // wallet_fees.cpp fee-fallback helpers all use this. Returns nullptr if
+    // no wallet is active. Same accepted lockless-read
     // tradeoff as GetWallet()/GetWalletForRequest() -- this does not
     // ref-count the returned pointer, so a caller that stores it past this
     // call has no stronger guarantee against a concurrent unload than a raw
@@ -248,19 +224,17 @@ public:
     // RPC_WALLET_NOT_FOUND otherwise, activeWalletName left unchanged.
     bool SetActiveWallet(const std::string& name, std::string& strError);
 
-    // Held for the duration of a request routed to `name`; forward-looking
-    // infra for phase 2. Kept as a simple name-keyed pair for direct/test use;
-    // RPCWalletRequestGuard uses the generation-safe pair below instead, since
-    // a name-only Release can't tell "the wallet I held a ref on" apart from
-    // "whatever now lives under that name" if an unload+reload happened first.
+    // Held for the duration of a request routed to `name`. Kept as a simple
+    // name-keyed pair for direct/test use; RPCWalletRequestGuard uses the
+    // generation-safe pair below instead, since a name-only Release can't
+    // tell "the wallet I held a ref on" apart from "whatever now lives under
+    // that name" if an unload+reload happened first.
     bool AddRef(const std::string& name);
     void ReleaseRef(const std::string& name);
 
-    // No more IsDefault: the no-default-wallet redesign made every wallet a
-    // uniformly ref-countable registry entry, including whichever one is
-    // currently active -- there is no more an exempt entry that skips
-    // refcounting altogether the way the old permanently-unloadable default
-    // wallet did.
+    // Every registry entry, including whichever one is currently active, is
+    // uniformly ref-countable -- there is no exempt entry that skips
+    // refcounting.
     enum class ResolveOutcome { NotFound, Held };
     // name is populated only alongside outcome == Held, and specifically
     // matters for ResolveAndHoldActiveForRequest(): the caller there didn't
@@ -280,12 +254,10 @@ public:
 
     // Same as above but resolves whichever wallet is currently active,
     // instead of a caller-given name -- used by RPCWalletRequestGuard for an
-    // unscoped request (no /wallet/<name>/ segment). NotFound (not "IsDefault"
-    // -- that outcome no longer exists) when no wallet is currently active.
-    // Needed because, unlike the old permanently-unloadable default wallet,
-    // the active wallet can become unloadable once deactivated -- an
-    // unscoped request now has to hold the same kind of ref a scoped one
-    // does, for the same reason.
+    // unscoped request (no /wallet/<name>/ segment). Returns NotFound when
+    // no wallet is currently active. An unscoped request holds a ref for the
+    // same reason a scoped one does: the active wallet can be unloaded once
+    // deactivated.
     ResolvedWallet ResolveAndHoldActiveForRequest();
 
     // Releases a ref taken by ResolveAndHoldForRequest, but only if `name`
@@ -299,7 +271,7 @@ public:
     void FlushAndUnloadAllExceptActiveWallet();
     void Reset();
 
-    // Reused by the new multiwallet RPCs and by multi-`-wallet=` startup
+    // Shared by the multiwallet RPCs and by multi-`-wallet=` startup
     // parsing. Whitelists letters/digits/'.'/'_'/'-' (a superset of
     // SanitizeFilename()'s alphanumeric-only charset, so conventional names
     // like "wallet.dat" remain loadable) and separately rejects "." and "..";
@@ -323,31 +295,26 @@ public:
     // wallet resolves. Exists specifically for callers like
     // z_buildrawtransaction (rpc/rawtransaction.cpp) that need to tell "the
     // caller explicitly picked one wallet" apart from "nothing was picked,
-    // search every loaded wallet" -- a distinction GetRequestedWalletName()
-    // alone stopped being able to make once it started pinning the resolved
-    // name for the unscoped case too (see that method's own history: an
-    // earlier version left it empty for an unscoped request, which broke the
-    // moment pwalletMain could move mid-request instead of just being
-    // deleted-and-refused).
+    // search every loaded wallet", a distinction GetRequestedWalletName()
+    // alone can't make once it pins the resolved name for the unscoped case
+    // too.
     static bool WasWalletExplicitlySelected();
 
     // Resolves the current thread's selected wallet (via
     // GetRequestedWalletName(), a name-keyed registry lookup) to an actual
-    // CWallet* for a rewired RPC to operate on. Opus-audit-caught stale
-    // comment, fixed: this does NOT fall back to GetActiveWallet() "when no
-    // wallet was explicitly selected" -- GetRequestedWalletName() is pinned
-    // to the *resolved* wallet's name for an unscoped request too (see its
-    // own doc comment), so the lookup here finds the same object
-    // GetActiveWallet() would currently return, by name rather than by
-    // re-resolving live. GetActiveWallet() is only the fallback for the two
-    // cases where GetRequestedWalletName() is empty: nothing resolved at all
-    // (an unscoped request with no wallet active), or -- should not happen in
+    // CWallet* for a multiwallet-aware RPC to operate on. GetRequestedWalletName()
+    // is pinned to the *resolved* wallet's name for an unscoped request too,
+    // so the lookup here finds the same object GetActiveWallet() would
+    // currently return, by name rather than by re-resolving live.
+    // GetActiveWallet() is only the fallback for the two cases where
+    // GetRequestedWalletName() is empty: nothing resolved at all (an
+    // unscoped request with no wallet active), or -- should not happen in
     // practice, the gate and RPCWalletRequestGuard::IsResolved() already
-    // guarantee otherwise by the time a rewired RPC runs -- a resolved name
-    // that somehow isn't found in the registry. Only meaningful to call from
-    // an RPC that IsMultiWalletAwareRPC() has already let through the
-    // dispatch gate in CRPCTable::execute() -- it does not itself
-    // re-validate the selection.
+    // guarantee otherwise by the time this runs -- a resolved name that
+    // somehow isn't found in the registry. Only meaningful to call from an
+    // RPC that IsMultiWalletAwareRPC() has already let through the dispatch
+    // gate in CRPCTable::execute() -- it does not itself re-validate the
+    // selection.
     static CWallet* GetWalletForRequest();
 
 private:
@@ -422,9 +389,9 @@ public:
     RPCWalletRequestGuard& operator=(const RPCWalletRequestGuard&) = delete;
 
     // False when a non-empty `name` didn't resolve to any currently-loaded
-    // wallet (unknown or unloaded-in-the-meantime), or -- no-default-wallet
-    // redesign -- when `name` was empty (no wallet segment in the URI) and
-    // no wallet is currently active. The caller is expected to throw
+    // wallet (unknown or unloaded-in-the-meantime), or when `name` was empty
+    // (no wallet segment in the URI) and no wallet is currently active. The
+    // caller is expected to throw
     // RPC_WALLET_NOT_FOUND itself so it can word the error the way the rest
     // of that call site does; httprpc.cpp deliberately does NOT do this for
     // the empty-name case (a zero-wallet node must still be able to serve

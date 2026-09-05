@@ -138,16 +138,9 @@ private:
     QMenu *walletsMenu;
     // Per-wallet WalletModel instances for every wallet currently shown in
     // this window, keyed by its real CWalletManager registry name -- same
-    // key WalletFrame's own mapWalletViews uses. No-default-wallet redesign:
-    // this used to key whichever wallet was active under a fixed
-    // "~Default" GUI-internal alias instead of its real name, which caused a
-    // real, Opus-audit-caught bug once "active" became reassignable outside
-    // this window's own control (via setactivewallet, RPC/CLI): a tab's
-    // fixed alias and "whichever wallet is active" could diverge after the
-    // tab was opened, producing duplicate-labeled menu entries or spurious
-    // "already loaded" refusals. Every tab is now keyed by, and always
-    // displays, its own real, stable name; "is this tab the active wallet"
-    // is answered fresh each time it's asked (CWalletManager::
+    // key WalletFrame's own mapWalletViews uses. Every tab is keyed by, and
+    // always displays, its own real, stable name; "is this tab the active
+    // wallet" is answered fresh each time it's asked (CWalletManager::
     // GetActiveWalletName()), never baked into a map key.
     QMap<QString, WalletModel*> mapWalletModels;
     // The real CWalletManager registry name of whichever wallet is currently

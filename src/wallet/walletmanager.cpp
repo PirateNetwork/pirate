@@ -51,11 +51,8 @@ void CloseWalletDbFile(const std::string& name)
         bitdb->mapFileUseCount.erase(name);
     }
     // If some other in-flight CDB handle still has it open, leave it alone.
-    // In phase 1 this branch is unreachable in practice: UnloadWallet only
-    // gets here once its own refcount check has passed (walletmanager.cpp),
-    // and no code path exists yet that opens a second CDB against a
-    // secondary wallet's file. Left as a no-op rather than an assert so it
-    // fails safe if that stops being true later, instead of crashing.
+    // Left as a no-op rather than an assert so it fails safe rather than
+    // crashing if that ever happens.
 }
 
 // Runs `f` when the returned object goes out of scope, on every exit path
@@ -150,31 +147,17 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
     return true;
 }
 
-// Historical note: earlier phases left this function's secondary-wallet load
-// path without any ChainTip() registration at all -- a permanently frozen
-// snapshot as of load time, with getbalance/z_getbalance/listunspent/
-// listtransactions/getwalletinfo on it reporting stale data indefinitely.
-// Phase 4 added RegisterValidationInterface() plus the synchronous catch-up
-// below (mirroring init.cpp's own startup sequence), and Phase 5 finished
-// retargeting the consolidation/sweep/delete-transaction dispatch this
-// triggers (RunSaplingConsolidation/RunIronwoodConsolidation/RunSaplingSweep/
-// DeleteWalletTransactions, and the settings that control them) to operate on
-// `wallet` specifically rather than the process-global pwalletMain -- so a
-// secondary wallet's own chain-tip notifications now drive its own funds and
-// its own configuration, not the default wallet's.
-//
-// Two gaps this left, both since closed: fBuilingWitnessCache (wallet.cpp)
-// used to be a single process-global flag checked by CRPCTable::execute()
-// (rpc/server.cpp) for every RPC on the node, so a secondary wallet's own
-// witness-cache rebuild stalled the whole RPC interface for its duration --
-// it's now a per-CWallet member, checked against whichever wallet a request
-// actually resolves to. And a secondary wallet used to receive no
-// notification for a *transaction* it didn't cause itself beyond what
-// ChainTip()'s own block-level scan surfaces, which risked a retried send
-// double-spending by reselecting an already-broadcast note -- confirmed (via
-// a real gtest, not just re-derived) that validation-interface registration
-// already covers this correctly, once a real, unrelated CTxMemPool::clear()
-// use-after-free that the investigation surfaced was fixed (txmempool.cpp).
+// Registers the loaded wallet for ChainTip() notifications and runs a
+// synchronous catch-up (mirroring init.cpp's own startup sequence), so a
+// secondary wallet's balance/transaction RPCs stay live instead of reporting
+// a frozen snapshot as of load time. Chain-tip notifications also drive that
+// wallet's own consolidation/sweep/delete-transaction settings
+// (RunSaplingConsolidation/RunIronwoodConsolidation/RunSaplingSweep/
+// DeleteWalletTransactions) against `wallet` specifically, not whichever
+// wallet is active. fBuilingWitnessCache (wallet.cpp) is a per-CWallet
+// member, checked in CRPCTable::execute() (rpc/server.cpp) against whichever
+// wallet a request resolves to, so one wallet's witness-cache rebuild
+// doesn't stall RPCs against every other wallet.
 bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                                  bool fRescan, int nRescanHeight, bool fSalvage, bool fZapWalletTxes,
                                  bool fAllowCreate, const SecureString& strPassphrase,
@@ -587,11 +570,10 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
                     // changes which HD derivation scheme
                     // SaplingExtendedSpendingKey::Master()/the Ironwood
                     // equivalent use (zcash/address/zip32.cpp) for every new
-                    // address generated from this point on -- a real, opus-
-                    // audit-caught gap: an already-loaded-once wallet reloaded
-                    // via loadwallet/-wallet=/the GUI's open action would start
-                    // deriving new addresses under a different scheme than its
-                    // existing ones the moment this went unread.
+                    // address generated from this point on, so an
+                    // already-loaded-once wallet reloaded via loadwallet/
+                    // -wallet=/the GUI's open action would otherwise derive new
+                    // addresses under a different scheme than its existing ones.
                     {
                         CWalletDB walletdb(name);
                         walletdb.ReadWalletBirthday(wallet->nBirthday);
@@ -672,9 +654,9 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
         // two *different* names that happen to be aliases of each other could
         // in principle both pass their own equivalence check above (each ran
         // before the other's entry existed) and both get here -- vanishingly
-        // unlikely for phase 1's admin-only, low-frequency use of this RPC,
-        // and the existing "already loaded"/"already loaded as" checks still
-        // catch it on the next load attempt of either name either way.
+        // unlikely given this RPC's admin-only, low-frequency use, and the
+        // existing "already loaded"/"already loaded as" checks still catch
+        // it on the next load attempt of either name either way.
         {
             LOCK(cs_wallets);
             // .second, not just calling try_emplace() and assuming success:
@@ -688,8 +670,8 @@ bool CWalletManager::LoadWallet(const std::string& name, std::string& strError,
             // zombie this guard exists to prevent, arrived at from the
             // commit side instead of an exception.
             fCommitted = mapWallets.try_emplace(name, wallet, nextGeneration.fetch_add(1, std::memory_order_relaxed)).second;
-            // No-default-wallet redesign: the first wallet ever loaded into an
-            // empty registry becomes active automatically, still under this
+            // The first wallet ever loaded into an empty registry becomes
+            // active automatically, still under this
             // same lock so no other thread can observe a committed entry with
             // no wallet active. A later load never steals active status this
             // way -- mapWallets.size() is already >= 2 by the time any
@@ -735,9 +717,7 @@ bool CWalletManager::CreateWallet(const std::string& name, std::string& strError
     // per-instance DB open, not this function) already auto-creates a file
     // that doesn't exist and reports fFirstRun=true, which LoadWallet()'s
     // own registration/catch-up tail already special-cases (pins the
-    // checkpoint at the current tip, nothing to rescan). Reusing it here
-    // avoids duplicating that already-audited locking/exception-safety
-    // sequence for what is otherwise an identical code path.
+    // checkpoint at the current tip, nothing to rescan).
     if (!LoadWallet(name, strError, /*fRescan=*/false, /*nRescanHeight=*/0,
                      /*fSalvage=*/false, /*fZapWalletTxes=*/false, /*fAllowCreate=*/true))
         return false;
@@ -777,40 +757,23 @@ bool CWalletManager::CreateWallet(const std::string& name, std::string& strError
         } else {
             wallet->GenerateNewSeed();
         }
-        // Matches init.cpp's own fresh-HD-seed setup exactly (both its RANDOM
-        // and RECOVERY branches set this unconditionally, outside the
-        // create-type check) -- without this, every wallet this function ever
-        // created derived Sapling/Ironwood keys with bip39Enabled=false
-        // (CWallet::SetNull()'s default), a real, opus-audit-caught bug: a
-        // recovered wallet would derive under a *different* scheme than
-        // whatever generated its phrase, landing on addresses with no funds
-        // and no way to reach the real ones; a random-seed wallet would hand
-        // back a phrase that doesn't actually match its own derivation.
+        // Must be set before any key derivation: bip39Enabled=false (the
+        // CWallet::SetNull() default) would derive Sapling/Ironwood keys
+        // under the wrong scheme -- a recovered wallet would land on
+        // addresses with no funds and no way to reach the real ones; a
+        // random-seed wallet would hand back a phrase that doesn't match its
+        // own derivation. Matches init.cpp's fresh-HD-seed setup.
         wallet->bip39Enabled = true;
         CWalletDB(name).WriteWalletBip39Enabled(true);
-        // Matches init.cpp's own fresh-default-wallet behavior too: a
-        // brand-new default wallet is unconditionally upgraded to
-        // FEATURE_LATEST at creation (GetBoolArg("-upgradewallet", fFirstRun)
-        // defaults true whenever -upgradewallet itself isn't given, since
-        // fFirstRun is true for it). CreateWallet() never had an equivalent
-        // -- every secondary wallet it ever produced was left at
-        // CWallet::SetNull()'s un-upgraded default version instead, a
-        // Phase 11-audit-flagged, previously-deferred gap. There is no
-        // "explicit -upgradewallet=<N>" partial-upgrade equivalent to
-        // replicate here (that variant only makes sense for an *existing*
-        // wallet being brought forward from an old version at startup); a
-        // brand-new wallet has nothing to preserve compatibility with, so it
-        // always gets the unconditional full-upgrade branch instead.
-        //
-        // Real behavior change, not just a version-number bump (audit
-        // finding): FEATURE_LATEST == FEATURE_COMPRPUBKEY, so from here on
-        // GenerateNewKey() emits compressed transparent pubkeys for every
-        // wallet this method creates, instead of uncompressed ones. Every
-        // secondary wallet created by an older build of this method, before
-        // this line existed, stays at FEATURE_BASE forever unless the
-        // operator runs the upgradewallet RPC against it explicitly -- this
-        // only changes what newly created wallets get, it does not reach
-        // back and upgrade anything already on disk.
+        // Every brand-new wallet is unconditionally upgraded to
+        // FEATURE_LATEST at creation, matching init.cpp's own
+        // fresh-default-wallet behavior -- a brand-new wallet has nothing to
+        // preserve compatibility with, so it always gets the full upgrade
+        // rather than the partial "-upgradewallet=<N>" path meant for an
+        // *existing* wallet brought forward from an old version. This only
+        // changes what newly created wallets get; FEATURE_LATEST ==
+        // FEATURE_COMPRPUBKEY, so GenerateNewKey() emits compressed
+        // transparent pubkeys for every wallet this method creates.
         wallet->SetMinVersion(FEATURE_LATEST);
         if (fRecovering) {
             // Restoring from a known phrase can surface existing on-chain
@@ -855,8 +818,8 @@ bool CWalletManager::CreateWallet(const std::string& name, std::string& strError
 
 bool CWalletManager::UnloadWallet(const std::string& name, std::string& strError)
 {
-    // Phase 4: cs_main is taken here, *before* cs_wallets, not nested inside
-    // it -- this function needs both because ChainTip() is always invoked by
+    // cs_main is taken here, *before* cs_wallets, not nested inside it --
+    // this function needs both because ChainTip() is always invoked by
     // main.cpp's block-(dis)connection code while it already holds cs_main
     // (a recursive mutex), across every registered wallet's callback in one
     // synchronous dispatch, and this function must not delete a wallet that
@@ -1136,17 +1099,14 @@ void CWalletManager::FlushAndUnloadAllExceptActiveWallet()
     // eventually runs) already no-ops safely against a name this function
     // has erased, and nothing re-reads that operation's CWallet* afterwards
     // (main() already ran; only stored result/error/status values are read
-    // from then on) -- the same "pwalletMain deleted out from under a
-    // finished operation still sitting in the map" exposure already existed
-    // for every wallet RPC operation before this class had its own wallet
-    // pointer at all.
-    // Phase 4 addendum: this shutdown-time deletion loop now also races a
-    // possible in-flight ChainTip() dispatch, for the same reason and with
-    // the same fix as UnloadWallet() -- see the comment there, including why
-    // cs_main must be taken *before* cs_wallets (this codebase's established
-    // order is cs_main -> cs_wallet -> cs_wallets; nesting it the other way
-    // around deadlocks against anything that takes cs_wallets while already
-    // holding cs_main, which includes ChainTip() itself via
+    // from then on).
+    // This shutdown-time deletion loop also races a possible in-flight
+    // ChainTip() dispatch, for the same reason and with the same fix as
+    // UnloadWallet() -- see the comment there, including why cs_main must be
+    // taken *before* cs_wallets (this codebase's established order is
+    // cs_main -> cs_wallet -> cs_wallets; nesting it the other way around
+    // deadlocks against anything that takes cs_wallets while already holding
+    // cs_main, which includes ChainTip() itself via
     // RunSaplingConsolidation's AsyncRPCOperation construction). Interrupt()
     // (bitcoind.cpp) deliberately does not join the thread group before
     // Shutdown() runs (its own comment: "was left out intentionally...
@@ -1185,9 +1145,7 @@ void CWalletManager::Reset()
     // The active wallet's CWallet* itself is deleted by whoever owns it
     // (Shutdown(), or a gtest fixture's own TearDown()) -- this only drops
     // the registry's own bookkeeping, never touching any CWallet object
-    // directly (pwalletMain-elimination effort: GetActiveWallet() resolves
-    // fresh from activeWalletName/mapWallets on every call, so there is no
-    // separate mirror pointer here left to null).
+    // directly.
     mapWallets.clear();
     activeWalletName.clear();
     // Not expected to be non-empty here (Reset() isn't meant to run
@@ -1238,13 +1196,11 @@ RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
     // AddRef -- a lookup-then-add split would leave a window for
     // unloadwallet/setactivewallet to remove or move the entry in between.
     //
-    // No-default-wallet redesign: an empty name (unscoped request) now
-    // resolves against the *active* wallet and holds a ref on it too, rather
-    // than always trivially succeeding with no ref the way it did when the
-    // unscoped target was the permanently-unloadable default wallet. The
-    // active wallet is ordinarily unloadable once deactivated, so an
-    // unscoped request needs the same protection a scoped one already has --
-    // and reports fResolved = false when no wallet is currently active,
+    // An empty name (unscoped request) resolves against the *active* wallet
+    // and holds a ref on it too: the active wallet is unloadable once
+    // deactivated, so an unscoped request needs the same protection a
+    // scoped one has. Reports fResolved = false when no wallet is currently
+    // active,
     // giving IsResolved()'s few callers (this doesn't self-enforce; see its
     // own comment) a way to tell "nothing is active" from "resolved fine"
     // before falling through to whatever GetActiveWallet()-reading code runs
@@ -1263,12 +1219,11 @@ RPCWalletRequestGuard::RPCWalletRequestGuard(const std::string& name)
         break;
     }
     // Pin the thread-local to the *resolved* name, not the caller's original
-    // (possibly empty) one -- Opus-audit-caught: leaving it as `name` meant
-    // an unscoped request's later GetWalletForRequest() calls kept
-    // re-resolving the live active wallet instead of the specific wallet
-    // this guard's own ref protects, so a setactivewallet landing mid-request
-    // could silently redirect the rest of this request's handler to a
-    // different wallet than the one that was active when it resolved. Safe
+    // (possibly empty) one: an unscoped request's later GetWalletForRequest()
+    // calls must target the specific wallet this guard's ref protects, not
+    // whatever's active now -- otherwise a setactivewallet landing
+    // mid-request could redirect the rest of the request to a different
+    // wallet than the one that was active when it resolved. Safe
     // to look up by name for the rest of the request: holding a ref on
     // strResolvedName is exactly what prevents unloadwallet from erasing-
     // and-replacing that entry while this guard is alive, so a plain

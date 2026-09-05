@@ -100,14 +100,13 @@ const QStringList historyFilter = QStringList()
     // argument (wallet/rpcwallet.cpp) -- always belonged here, just never
     // added.
     << "z_setprimaryspendingkey"
-    // loadwallet gained a passphrase argument (backlog item 9's per-wallet-
-    // unlock design, wallet/rpcmultiwallet.cpp) -- needs the exact same
-    // recall protection walletpassphrase/walletpassphrasechange already get.
+    // loadwallet's passphrase argument (wallet/rpcmultiwallet.cpp) needs the
+    // exact same recall protection walletpassphrase/walletpassphrasechange
+    // already get.
     << "loadwallet"
     // createwallet's optional second argument is a full BIP-39 recovery
-    // phrase (backlog item 4's no-default-wallet redesign,
-    // wallet/rpcmultiwallet.cpp) -- Opus-audit-caught, same shape and same
-    // recall protection as loadwallet's passphrase above.
+    // phrase (wallet/rpcmultiwallet.cpp) -- same shape and same recall
+    // protection as loadwallet's passphrase above.
     << "createwallet"
     // openwallet's one argument is the passphrase itself (wallet/rpcwallet.cpp,
     // the special RPC allowed during the default wallet's own encrypted-load

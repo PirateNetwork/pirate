@@ -26,11 +26,9 @@
 
 // Default fee used for sweep transactions
 static const CAmount DEFAULT_SWEEP_FEE = 10000;
-// fSweepTxFee, fSweepMapUsed, rpcSaplingSweepAddress, and
-// rpcIronwoodSweepAddress used to live here as process-globals shared by
-// every wallet. Phase 5 of the multiwallet effort promoted them to
-// per-CWallet fields (sweepTxFee, saplingSweepAddress, ironwoodSweepAddress
-// -- wallet.h), so this operation now reads them off wallet_ instead.
+// This operation reads its fee/address settings (sweepTxFee,
+// saplingSweepAddress, ironwoodSweepAddress -- wallet.h) off wallet_, its
+// per-CWallet fields.
 
 /**
  * @class AsyncRPCOperation_sweeptoaddress

@@ -47,13 +47,13 @@ protected:
         CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
         CWallet* defaultWallet = CWalletManager::Get().GetWallet(CWalletManager::Get().GetActiveWalletName());
         CWalletManager::Get().Reset();
-        // Every other test in this fixture leaves a RegisterInitialWallet()-
+        // Some tests in this fixture leave a RegisterInitialWallet()-
         // registered wallet active -- that path never calls
         // RegisterValidationInterface() at all (production's equivalent,
-        // init.cpp, does so separately, itself), so deleting it directly was
-        // always safe. The no-default-wallet redesign's own tests instead
-        // exercise LoadWallet()/CreateWallet() ending up as the sole/active
-        // wallet -- that path DOES register with the validation interface,
+        // init.cpp, does so separately, itself), so deleting it directly is
+        // always safe. Others exercise LoadWallet()/CreateWallet() ending up
+        // as the sole/active wallet -- that path DOES register with the
+        // validation interface,
         // and FlushAndUnloadAllExceptActiveWallet() deliberately skips
         // unregistering the active entry (see its own UnloadWallet()-mirrors
         // comment). Without this, the next test anywhere in this binary that
@@ -107,10 +107,7 @@ protected:
 
 TEST_F(WalletManagerTest, GetNameReturnsTheWalletsOwnFileName)
 {
-    // Regression test: CWallet::GetName() was a hardcoded "dummy" stub until
-    // Phase 7 of the multiwallet effort (WalletModel::getWalletName(), used
-    // to attribute the passphrase-unlock dialog to a specific wallet) became
-    // its first real caller and the audit caught the stub still in place.
+    // Regression test: CWallet::GetName() returns the wallet's own file name.
     CWallet wallet("attributed_test.dat");
     EXPECT_EQ("attributed_test.dat", wallet.GetName());
 }
@@ -344,10 +341,9 @@ TEST_F(WalletManagerTest, ResolveAndHoldForRequestIsAtomicWithLookupAndTracksOut
     auto notFound = CWalletManager::Get().ResolveAndHoldForRequest("neverloadedwallet");
     EXPECT_EQ(CWalletManager::ResolveOutcome::NotFound, notFound.outcome);
 
-    // No-default-wallet redesign: "default_test.dat" is just the first wallet
-    // registered (via RegisterInitialWallet() above), an ordinary registry
-    // entry like any other -- resolving it now takes a real ref like
-    // everything else does (there is no more an exempt "IsDefault" outcome).
+    // "default_test.dat" is just the first wallet registered (via
+    // RegisterInitialWallet() above), an ordinary registry entry like any
+    // other -- resolving it takes a real ref like everything else does.
     auto activeWalletHeld = CWalletManager::Get().ResolveAndHoldForRequest("default_test.dat");
     EXPECT_EQ(CWalletManager::ResolveOutcome::Held, activeWalletHeld.outcome);
     // Unloading it is still refused, but now specifically because it's the
@@ -444,12 +440,8 @@ TEST_F(WalletManagerTest, FlushAndUnloadAllExceptActiveWalletLeavesActiveWalletA
 
 TEST_F(WalletManagerTest, CheckpointAllWalletsWritesToEveryLoadedWallet)
 {
-    // Regression test for Phase 11 of the multiwallet effort: StartShutdown()
-    // (init.cpp) used to write its best-chain checkpoint straight to
-    // pwalletMain only, so a secondary wallet's on-disk record could be many
-    // blocks stale by however long it had been since its own last periodic
-    // flush. CheckpointAllWallets() generalizes that write to every currently
-    // loaded wallet.
+    // CheckpointAllWallets() writes StartShutdown()'s (init.cpp) best-chain
+    // checkpoint to every currently loaded wallet, not just the active one.
     // Unlike most other tests in this file, this one actually needs the
     // default wallet's file to exist on disk (SetBestChain()'s own
     // CWalletDB open uses mode "r+", which doesn't auto-create), since it's
@@ -475,9 +467,9 @@ TEST_F(WalletManagerTest, CheckpointAllWalletsWritesToEveryLoadedWallet)
     CBlockLocator locator(std::vector<uint256>{uint256S(std::string(63, '0') + "1")});
     // height is deliberately not asserted on below: SetBestChainINTERNAL()
     // (wallet.h) takes a height parameter but never actually persists it
-    // anywhere -- pre-existing, unrelated to Phase 11 -- so there is nothing
-    // on disk to read back for it. The locator round trip below is the only
-    // observable effect of CheckpointAllWallets() there is to verify.
+    // anywhere, so there is nothing on disk to read back for it. The locator
+    // round trip below is the only observable effect of
+    // CheckpointAllWallets() there is to verify.
     CWalletManager::Get().CheckpointAllWallets(locator, 123);
 
     nMaxConnections = savedMaxConnections;
@@ -565,12 +557,11 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardSetsAndClearsThreadLocal)
         EXPECT_TRUE(CWalletManager::WasWalletExplicitlySelected());
     }
     {
-        // No-default-wallet redesign: an unscoped guard now pins
-        // GetRequestedWalletName() to whichever wallet it actually resolved
-        // and ref'd (here, "default_test.dat", the active wallet) rather
-        // than leaving it empty -- Opus-audit-caught, see the constructor's
-        // own comment. WasWalletExplicitlySelected() is what still
-        // distinguishes this from a genuinely scoped request.
+        // An unscoped guard pins GetRequestedWalletName() to whichever
+        // wallet it actually resolved and ref'd (here, "default_test.dat",
+        // the active wallet) rather than leaving it empty -- see the
+        // constructor's own comment. WasWalletExplicitlySelected() is what
+        // still distinguishes this from a genuinely scoped request.
         RPCWalletRequestGuard guard2("");
         EXPECT_EQ("default_test.dat", CWalletManager::GetRequestedWalletName());
         EXPECT_FALSE(CWalletManager::WasWalletExplicitlySelected());
@@ -582,11 +573,9 @@ TEST_F(WalletManagerTest, RPCWalletRequestGuardSetsAndClearsThreadLocal)
 TEST_F(WalletManagerTest, GetWalletForRequestResolvesActiveAndSecondary)
 {
     // GetWalletForRequest() falls back to the active wallet for the
-    // no-selection case (GetActiveWallet(), pwalletMain-elimination effort)
-    // -- RegisterInitialWallet() below makes defaultWallet active, so
-    // nothing needs saving/restoring here anymore; TearDown() already
-    // resolves and cleans up whatever's active via the registry, not a
-    // global.
+    // no-selection case (GetActiveWallet()) -- RegisterInitialWallet() below
+    // makes defaultWallet active, and TearDown() resolves and cleans up
+    // whatever's active via the registry.
     CWallet* defaultWallet = new CWallet("default_test.dat");
     CWalletManager::Get().RegisterInitialWallet("default_test.dat", defaultWallet);
 
@@ -608,14 +597,13 @@ TEST_F(WalletManagerTest, GetWalletForRequestResolvesActiveAndSecondary)
 
 TEST_F(WalletManagerTest, AsyncOperationPinsWalletUnloadableForItsLifetime)
 {
-    // Phase 3: AsyncRPCOperation(CWallet*) is what z_sendmany/z_shieldcoinbase/
-    // z_mergetoaddress/consolidateaddress hand their operations to instead of
-    // reading pwalletMain directly (asyncrpcoperation.h/.cpp). Exercised here
-    // via the base class directly -- it's concrete (main() has a default
-    // body, not pure virtual), so no subclass or funded transaction is
-    // needed to test the wallet-pinning mechanism itself in isolation.
-    // Registered first (no-default-wallet redesign) so "asyncopwallet" below
-    // is a genuine secondary, not the first-loaded-into-empty-registry
+    // AsyncRPCOperation(CWallet*) is what z_sendmany/z_shieldcoinbase/
+    // z_mergetoaddress/consolidateaddress hand their operations
+    // (asyncrpcoperation.h/.cpp). Exercised here via the base class directly
+    // -- it's concrete (main() has a default body, not pure virtual), so no
+    // subclass or funded transaction is needed to test the wallet-pinning
+    // mechanism itself in isolation. Registered first so "asyncopwallet"
+    // below is a genuine secondary, not the first-loaded-into-empty-registry
     // wallet that would otherwise become active (and therefore itself
     // unloadable-refused for an unrelated reason from the one under test).
     CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
@@ -664,7 +652,7 @@ TEST_F(WalletManagerTest, AsyncOperationBuiltWithoutAWalletDoesNotPinAnything)
     EXPECT_TRUE(CWalletManager::Get().UnloadWallet("unrelatedwallet", strError)) << strError;
 }
 
-// ─── Phase 5: per-wallet config persistence ────────────────────────────────
+// ─── Per-wallet config persistence ─────────────────────────────────────────
 // Consolidation/sweep/fee/pruning settings are per-CWallet fields, each
 // changed only through a CWallet::Set*() method that also persists it via
 // CWalletDB. These tests exercise that mechanism directly (bypassing the RPC
@@ -831,16 +819,12 @@ TEST_F(WalletManagerTest, CreateWalletSucceedsOnANewNameAndReturnsASeedPhrase)
     CWallet* wallet = CWalletManager::Get().GetWallet("brandnewwallet.dat");
     ASSERT_NE(nullptr, wallet);
     EXPECT_FALSE(CWalletManager::Get().IsActiveWallet("brandnewwallet.dat"));
-    // Opus-audit-caught regression: bip39Enabled was never set for a wallet
-    // created via this RPC, unlike init.cpp's own fresh-HD-seed setup --
-    // every address this wallet ever derives would have used a different
-    // scheme than the one its own returned seed phrase actually implies.
+    // bip39Enabled matches init.cpp's own fresh-HD-seed setup -- every
+    // address this wallet derives uses the scheme its own returned seed
+    // phrase implies.
     EXPECT_TRUE(wallet->bip39Enabled);
-    // Backlog item (Phase 11 audit, deferred): a fresh secondary wallet
-    // never got the same unconditional FEATURE_LATEST upgrade a fresh
-    // default wallet gets from init.cpp's own
-    // GetBoolArg("-upgradewallet", fFirstRun) default-true-on-first-run
-    // behavior. CreateWallet() now does this itself.
+    // A fresh wallet gets the same unconditional FEATURE_LATEST upgrade
+    // init.cpp gives a fresh default wallet.
     EXPECT_EQ((int)FEATURE_LATEST, wallet->GetVersion());
 
     std::vector<std::string> names = CWalletManager::Get().ListWalletNames();
@@ -978,7 +962,7 @@ TEST_F(WalletManagerTest, DiscardWalletAfterFailedEncryptionRefusesTheActiveWall
     EXPECT_NE(std::string::npos, strError.find("not found")) << strError;
 }
 
-// ─── No-default-wallet redesign: zero-wallet startup + active-wallet cursor ─
+// ─── Zero-wallet startup + active-wallet cursor ────────────────────────────
 
 TEST_F(WalletManagerTest, RegistryStartsEmptyAndFirstLoadedWalletBecomesActiveAutomatically)
 {
@@ -1104,15 +1088,13 @@ TEST_F(WalletManagerTest, UnscopedRequestGuardResolvesToWhicheverWalletIsActive)
 
 TEST_F(WalletManagerTest, UnscopedRequestStaysPinnedToItsResolvedWalletEvenIfActiveStatusMovesMidRequest)
 {
-    // Opus-audit-caught race, now closed: an unscoped request used to leave
-    // GetRequestedWalletName() empty, so GetWalletForRequest() re-read the
-    // *live* pwalletMain for the whole request -- a setactivewallet landing
-    // mid-request (another thread, or a nested call on this one) could
-    // silently redirect an in-flight handler to a different wallet than the
-    // one that was active when the request actually resolved. The guard now
-    // pins GetRequestedWalletName() to the resolved name up front, so
-    // GetWalletForRequest() keeps returning the *same* wallet for the whole
-    // guard's lifetime regardless of what setactivewallet does afterward.
+    // A setactivewallet landing mid-request (another thread, or a nested
+    // call on this one) must not redirect an in-flight handler to a
+    // different wallet than the one that was active when the request
+    // actually resolved. The guard pins GetRequestedWalletName() to the
+    // resolved name up front, so GetWalletForRequest() keeps returning the
+    // *same* wallet for the whole guard's lifetime regardless of what
+    // setactivewallet does afterward.
     CreateWalletFileOnDisk("firstwallet.dat");
     CreateWalletFileOnDisk("secondwallet.dat");
     std::string strError;
@@ -1131,7 +1113,7 @@ TEST_F(WalletManagerTest, UnscopedRequestStaysPinnedToItsResolvedWalletEvenIfAct
     EXPECT_EQ(CWalletManager::Get().GetWallet("secondwallet.dat"), CWalletManager::Get().GetActiveWallet());
 
     // GetWalletForRequest() must still return the wallet this guard actually
-    // pinned, not the new live pwalletMain -- the whole point of the fix.
+    // pinned, not whatever is active now.
     EXPECT_EQ(resolvedAtStart, CWalletManager::GetWalletForRequest());
     EXPECT_EQ("firstwallet.dat", CWalletManager::GetRequestedWalletName());
 }
@@ -1167,22 +1149,17 @@ TEST_F(WalletManagerTest, CreateWalletWithARecoveryPhraseRestoresInsteadOfGenera
     ASSERT_TRUE(recovered->GetSeedPhrase(phraseFromRecovered));
     EXPECT_EQ(sourcePhrase, phraseFromRecovered);
 
-    // Opus-audit-caught regressions, both now fixed in CreateWallet()'s own
-    // recovery-phrase branch:
-    // (1) bip39Enabled was never set (CWallet::SetNull()'s default is
-    // false), unlike init.cpp's own fresh-HD-seed setup which always sets it
-    // true -- SaplingExtendedSpendingKey::Master()/the Ironwood equivalent
-    // (zcash/address/zip32.cpp) derive under a completely different scheme
-    // depending on this flag, so a recovered wallet would land on addresses
-    // with no funds and no way to reach the real ones.
+    // bip39Enabled must be set (CWallet::SetNull()'s default is false), same
+    // as init.cpp's own fresh-HD-seed setup: SaplingExtendedSpendingKey::
+    // Master()/the Ironwood equivalent (zcash/address/zip32.cpp) derive
+    // under a completely different scheme depending on this flag, so a
+    // recovered wallet would otherwise land on addresses with no funds and
+    // no way to reach the real ones.
     EXPECT_TRUE(recovered->bip39Enabled);
-    // (2) recovery never rescanned -- LoadWallet()'s own fFirstRun handling
-    // (which runs before a recovered wallet even has a seed) pins the
-    // checkpoint at the current tip, appropriate for a brand-new random seed
-    // but wrong for a phrase that may have existing on-chain history.
-    // nBirthday == 0 is CreateWallet()'s own signal that it forced this the
-    // same way LoadWallet()'s explicit-fRescan branch and the old, removed
-    // -seedphrase= startup path both already did.
+    // A recovered wallet must rescan from genesis, since it may have
+    // existing on-chain history a brand-new random seed wouldn't. nBirthday
+    // == 0 is CreateWallet()'s signal to force that, same as LoadWallet()'s
+    // explicit-fRescan branch.
     EXPECT_EQ(0, recovered->nBirthday);
 }
 

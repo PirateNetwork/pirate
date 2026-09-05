@@ -4842,10 +4842,8 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
 #ifdef ENABLE_WALLET
              // new staking tx cannot be accepted to mempool and expires in 1 block, so no need for this! :D
              // EraseFromWallets() (validationinterface.cpp) broadcasts to every
-             // loaded wallet's own EraseFromWallet(), not just pwalletMain --
-             // matches the else branch below (SyncWithWallets()), which was
-             // already registry-wide; this direct pwalletMain-only call was the
-             // one place in this loop that wasn't.
+             // loaded wallet's own EraseFromWallet(), matching the else branch
+             // below (SyncWithWallets()).
              if ( !GetBoolArg("-disablewallet", false) && KOMODO_NSPV_FULLNODE )
                  EraseFromWallets(tx.GetHash());
 #endif

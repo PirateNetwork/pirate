@@ -38,10 +38,10 @@ public:
     explicit SplashScreen(const NetworkStyle *networkStyle);
     ~SplashScreen();
 
-    // No-default-wallet redesign: entry point for true zero-wallet startup
-    // (init.cpp's fAutoLoadWalletAtStartup was false, so AppInit2() returned
-    // with no wallet active and never fired InitCreateWallet() -- there
-    // is no wallet object yet for this dialog to merely configure). Shows the
+    // Entry point for true zero-wallet startup (init.cpp's
+    // fAutoLoadWalletAtStartup was false, so AppInit2() returned with no
+    // wallet active and never fired InitCreateWallet() -- there is no
+    // wallet object yet for this dialog to merely configure). Shows the
     // same create/restore widgets as the pre-existing InitCreateWallet()
     // signal path, but every handler below creates/loads walletName via
     // CWalletManager directly instead of touching a pre-existing active wallet

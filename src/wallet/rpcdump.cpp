@@ -41,11 +41,11 @@
 
 using namespace std;
 
-// Every RPC in this file now resolves its own wallet, so only the
-// wallet-taking overloads are declared. Keeping the pwalletMain ones visible
-// would let a future `EnsureWalletIsUnlocked()` compile and silently guard
-// the default wallet while the surrounding code writes to a secondary one;
-// without them, that mistake is a compile error.
+// Every RPC in this file resolves its own wallet, so only the
+// wallet-taking overloads are declared. A zero-arg `EnsureWalletIsUnlocked()`
+// call would silently guard the active wallet while the surrounding code
+// writes to a secondary one; without a zero-arg overload declared, that
+// mistake is a compile error.
 void EnsureWalletIsUnlocked(CWallet* pwallet);
 void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
 bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException);
@@ -254,13 +254,10 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 }
 
 
-// ImportScript()/ImportAddress() were removed here (rpcpiratewallet/rpcdump
-// plumbing phase, 2026-08-31): a mutually-recursive pair, never called from
-// importaddress (which already reimplements the same logic inline against
-// the request-resolved pwallet, below) or from anywhere else in the
-// codebase -- confirmed genuinely dead, and would otherwise have kept
-// silently importing into pwalletMain regardless of which wallet a caller
-// selected, had anything actually called them.
+// ImportScript()/ImportAddress() are gone: a mutually-recursive pair, never
+// called from importaddress (which reimplements the same logic inline
+// against the request-resolved pwallet, below) or from anywhere else in the
+// codebase.
 
 UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

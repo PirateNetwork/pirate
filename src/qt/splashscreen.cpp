@@ -428,11 +428,10 @@ void SplashScreen::on_btnRestore_clicked()
               securePhrase.reserve(phrase.size() + 1);
               securePhrase = phrase.c_str();
               if (!CWalletManager::Get().CreateWallet(zeroWalletName, strError, seedPhraseOut, securePhrase, langCode)) {
-                  // Opus-audit-caught: LoadWallet() (which CreateWallet()
-                  // delegates to) already created and committed the file
-                  // before this failure -- CreateWallet()'s own
-                  // "file already exists" check means simply letting the
-                  // user retry, as this used to, fails identically forever.
+                  // LoadWallet() (which CreateWallet() delegates to) already
+                  // created and committed the file before this failure --
+                  // CreateWallet()'s own "file already exists" check means
+                  // simply letting the user retry fails identically forever.
                   // Discard the failed attempt (deactivate it -- it became
                   // active automatically as the first wallet loaded --
                   // unload it, then delete the now-orphaned, seedless file)

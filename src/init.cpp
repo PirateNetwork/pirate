@@ -127,12 +127,10 @@ ZCJoinSplit* pzcashParams = NULL;
 
 assetchain chainName;
 
-// The process-global pwalletMain pointer itself is gone (pwalletMain-
-// elimination effort) -- AppInit2()'s Step 8 and Shutdown() below each
-// declare their own genuinely local `CWallet* pwallet` instead (deliberately
-// not reusing the old global's name, so it can't be mistaken for one); every
-// external reader goes through CWalletManager::Get().GetActiveWallet() or a
-// request-scoped CWalletManager::GetWalletForRequest() instead.
+// There is no global CWallet* -- AppInit2()'s Step 8 and Shutdown() below
+// each declare their own local `CWallet* pwallet`. Every other caller
+// resolves a wallet through CWalletManager::Get().GetActiveWallet() or the
+// request-scoped CWalletManager::GetWalletForRequest().
 bool fFeeEstimatesInitialized = false;
 
 #if ENABLE_ZMQ
@@ -197,12 +195,10 @@ void StartShutdown()
       //Flush wallet on exit
       //Write all transactions and block locator to the wallet
 #ifdef ENABLE_WALLET
-    // Checks the registry directly, not "is a wallet active" -- pwalletMain
-    // elimination effort, audit finding: the registry can hold wallets
-    // (still loaded, still synced) with none of them active (setactivewallet
-    // ""), and the old pwalletMain-non-null guard skipped every checkpoint
-    // in that state even though CheckpointAllWallets() below always covers
-    // every loaded wallet, not just the active one.
+    // Checks whether any wallet is loaded, not whether one is active: the
+    // registry can hold wallets (still loaded, still synced) with none of
+    // them active (setactivewallet ""), and CheckpointAllWallets() below
+    // covers every loaded wallet regardless of active status.
     if ( !CWalletManager::Get().ListWalletNames().empty() && (loadComplete) && (nMaxConnections>0) ) {
         LOCK(cs_main);
         CBlockLocator currentBlock = chainActive.GetLocator();
@@ -275,17 +271,13 @@ void Shutdown()
     StopRPC();
     StopHTTPServer();
 #ifdef ENABLE_MINING
-    // Moved ahead of FlushAndUnloadAllExceptActiveWallet() below (Opus-audit
-    // finding, no-default-wallet redesign): that call deletes every loaded
-    // wallet except whichever is active, with no check against
-    // GetMiningWallet() (miner.h) -- only UnloadWallet() got that check. A
-    // still-running miner thread holds the CWallet* it was started with
-    // (BitcoinMiner(pwallet), and CReserveKey reservekey(pwallet) alongside
-    // it) for its entire lifetime and never re-resolves the active wallet, so joining
-    // every miner thread here, before any wallet this shutdown path deletes
-    // could possibly be one they're using, closes that use-after-free at the
-    // one call site that matters instead of teaching the flush sweep about
-    // mining at all.
+    // Must run ahead of FlushAndUnloadAllExceptActiveWallet() below: that
+    // call deletes every loaded wallet except whichever is active, with no
+    // check against GetMiningWallet() (miner.h). A still-running miner
+    // thread holds the CWallet* it was started with (BitcoinMiner(pwallet),
+    // CReserveKey reservekey(pwallet)) for its entire lifetime, so joining
+    // every miner thread here first, before any wallet could be deleted out
+    // from under one, avoids a use-after-free.
  #ifdef ENABLE_WALLET
     GenerateBitcoins(false, NULL, 0);
  #else
@@ -309,10 +301,9 @@ void Shutdown()
     // Secondary wallets first: nothing routes a request to one after this point,
     // and they must be gone before Reset() clears the registry at the end of Shutdown().
     CWalletManager::Get().FlushAndUnloadAllExceptActiveWallet();
-    // Resolved once here, as a plain local named `pwallet` (pwalletMain-
-    // elimination effort removed the global of that name entirely) -- and
-    // reused for the rest of this function -- nothing else can change which
-    // wallet is active during a single-threaded shutdown sequence.
+    // Resolved once here and reused for the rest of this function -- nothing
+    // else can change which wallet is active during a single-threaded
+    // shutdown sequence.
     CWallet* pwallet = CWalletManager::Get().GetActiveWallet();
     if (pwallet)
         pwallet->Flush(false);
@@ -577,28 +568,22 @@ std::string HelpMessage(HelpMessageMode mode)
 
 #ifdef ENABLE_WALLET
     strUsage += HelpMessageGroup(_("Wallet options:"));
-    // -seedphrase=<phrase> was removed as a startup flag (no-default-wallet
-    // redesign, Opus-audit-caught: this help text was left advertising a flag
-    // whose reader had already been deleted, which would have silently
-    // generated a brand-new random seed instead of restoring the named
-    // phrase -- exactly backwards from what an operator relying on it would
-    // expect). Restoring from a known phrase is now always an explicit
-    // createwallet RPC call ("recoveryphrase" parameter) against an
-    // already-running node.
+    // Restoring a wallet from a known seed phrase is a createwallet RPC call
+    // ("recoveryphrase" parameter) against an already-running node; there is
+    // no -seedphrase= startup flag.
     strUsage += HelpMessageOpt("-disablewallet", _("Do not load the wallet and disable wallet RPC calls"));
     // Consolidation, sweep, fee/behavior, and transaction-deletion/pruning
-    // settings used to be configurable here as CLI/pirate.conf flags. Phase 5
-    // of the multiwallet effort made every one of them a per-wallet RPC
-    // setting instead (enablesaplingconsolidation, enableironwoodconsolidation,
-    // consolidationaddresses, setconsolidationtarget/fee/interval and their
-    // Ironwood counterparts, enablesweep, setsweepfee/interval/address,
-    // setchangeaddress, settxfee, setmintxfee, settxconfirmtarget,
-    // setspendzeroconfchange, setmintxvalue, setkeypoolsize, setwalletnotify,
-    // setdeletetx, setdeleteconflicttx, setdeleteinterval, setkeeptxnum,
+    // settings are per-wallet RPC settings (enablesaplingconsolidation,
+    // enableironwoodconsolidation, consolidationaddresses,
+    // setconsolidationtarget/fee/interval and their Ironwood counterparts,
+    // enablesweep, setsweepfee/interval/address, setchangeaddress, settxfee,
+    // setmintxfee, settxconfirmtarget, setspendzeroconfchange,
+    // setmintxvalue, setkeypoolsize, setwalletnotify, setdeletetx,
+    // setdeleteconflicttx, setdeleteinterval, setkeeptxnum,
     // setkeeptxfornblocks), persisted in each wallet's own file -- see their
     // RPC help text, or getwalletinfo/consolidationstatus/sweepstatus for
-    // reporting. The flags themselves are rejected explicitly below, not
-    // silently ignored, if still set.
+    // reporting. The equivalent CLI/pirate.conf flags are rejected
+    // explicitly below, not silently ignored, if still set.
     strUsage += HelpMessageOpt("-usedpowconfs", _("Use dPoW confirmation count instead of raw chain depth when filtering notes (default: true)"));
     strUsage += HelpMessageOpt("-rescan", _("Rescan the block chain for missing wallet transactions") + " " + _("on startup"));
     strUsage += HelpMessageOpt("-rescanheight", _("Start block height for rescanning (works with -rescan, -zapwallettxes, or GUI rescan). Default: 0 (genesis)"));
@@ -1558,10 +1543,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
 
 #ifdef ENABLE_WALLET
-    // -mintxfee and -paytxfee were validated and applied here, against the
-    // process-global CWallet::minTxFee/payTxFee. Phase 5 of the multiwallet
-    // effort made both per-wallet fields instead (setmintxfee/settxfee RPCs);
-    // the flags themselves are rejected explicitly further down, once
+    // -mintxfee and -paytxfee are per-wallet fields (setmintxfee/settxfee
+    // RPCs), not startup flags; rejected explicitly further down, once
     // `pwallet` exists, rather than silently accepted and ignored here.
     if (mapArgs.count("-maxtxfee"))
     {
@@ -1577,27 +1560,22 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                                        mapArgs["-maxtxfee"], ::minRelayTxFee.ToString()));
         }
     }
-    // -txconfirmtarget and -spendzeroconfchange were applied here, against the
-    // process-global nTxConfirmTarget/bSpendZeroConfChange. Phase 5 made both
-    // per-wallet fields instead (settxconfirmtarget/setspendzeroconfchange
-    // RPCs); rejected explicitly further down if still set.
+    // -txconfirmtarget and -spendzeroconfchange are per-wallet fields
+    // (settxconfirmtarget/setspendzeroconfchange RPCs), not startup flags;
+    // rejected explicitly further down if still set.
     expiryDelta = GetArg("-txexpirydelta", DEFAULT_TX_EXPIRY_DELTA);
     fSendFreeTransactions = GetBoolArg("-sendfreetransactions", false);
 
-    // Phase 5 of the multiwallet effort removed all of the following as
-    // CLI/pirate.conf flags entirely, in favor of per-wallet RPC
-    // configuration persisted in each wallet's own file -- rejected
-    // explicitly here, rather than silently ignored, so an operator
-    // upgrading with one of these still set finds out immediately instead
-    // of wondering why it stopped having any effect. The wallet's own
-    // settings now come from whatever's persisted in its file (nothing, for
-    // a pre-existing wallet, until the RPC is run once), defaulting to the
-    // same compiled-in values these flags used to default to. Checked here,
-    // before any wallet object exists or any startup work has run (an
-    // earlier audit pass flagged the original placement -- deep inside
-    // wallet construction, after a first-run wallet could already have
-    // generated a seed and a first Sapling address -- as failing later than
-    // necessary for a check that only ever needs mapArgs/mapMultiArgs).
+    // None of the following are valid CLI/pirate.conf flags -- each is now
+    // per-wallet RPC configuration, persisted in each wallet's own file.
+    // Rejected explicitly here, rather than silently ignored, so an operator
+    // with one of these still set finds out immediately instead of
+    // wondering why it stopped having any effect. A wallet's settings come
+    // from whatever's persisted in its file (nothing, for a pre-existing
+    // wallet, until the RPC is run once), defaulting to the same
+    // compiled-in values these flags used to default to. Checked here,
+    // before any wallet object exists, since the check only needs
+    // mapArgs/mapMultiArgs.
     {
         static const std::vector<std::pair<std::string, std::string>> removedWalletFlags = {
             {"-consolidation", "enablesaplingconsolidation / enableironwoodconsolidation"},
@@ -1631,12 +1609,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             {"-spendzeroconfchange", "setspendzeroconfchange"},
             {"-keypool", "setkeypoolsize"},
             {"-walletnotify", "setwalletnotify"},
-            // No-default-wallet redesign: -seedphrase= used to recover a
-            // wallet from a known phrase at startup when the default wallet's
-            // file didn't exist yet. Silently ignoring it now (rather than
-            // rejecting it here) would generate a brand-new random seed
-            // instead -- exactly backwards from what an operator relying on
-            // it would expect (Opus-audit-caught).
+            // Silently ignoring this would generate a brand-new random seed
+            // instead of restoring the named phrase -- exactly backwards
+            // from what an operator relying on it would expect.
             {"-seedphrase", "createwallet ... \"recoveryphrase\""},
         };
         for (const auto& flag : removedWalletFlags) {
@@ -1650,15 +1625,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     std::string strWalletFile = GetArg("-wallet", "wallet.dat");
 
-    // No-default-wallet redesign: an existing deployment (a wallet file
-    // already sits at strWalletFile) or an explicit -wallet= (single or
-    // multiple) keeps today's unconditional auto-load behavior, unchanged --
+    // An existing deployment (a wallet file already sits at strWalletFile)
+    // or an explicit -wallet= (single or multiple) auto-loads unconditionally;
     // only a genuinely fresh data directory with neither goes through the
-    // true zero-wallet startup path below (Step 5/Step 8). Restoring a
-    // wallet from a known seed phrase is no longer a startup-time decision at
-    // all (the removed -seedphrase= flag): that's now always an explicit
-    // createwallet RPC call against an already-running node, so it plays no
-    // part in this computation.
+    // zero-wallet startup path below (Step 5/Step 8). Restoring a wallet
+    // from a known seed phrase is always an explicit createwallet RPC call
+    // against an already-running node, so it plays no part here.
     bool fAutoLoadWalletAtStartup = !fDisableWallet &&
         (mapArgs.count("-wallet") || boost::filesystem::exists(GetDataDir() / strWalletFile));
 #endif // ENABLE_WALLET
@@ -2096,11 +2068,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         InitBlockIndex();
         SetRPCWarmupFinished();
         uiInterface.InitMessage(_("Done loading"));
-        // Registered with CWalletManager (previously left as a bare
-        // unregistered global, an invariant violation relative to
-        // activeWalletName's own documented contract -- audit finding,
-        // pwalletMain-elimination effort; inert in practice since Pirate
-        // itself never runs NSPV superlite, fixed for consistency anyway).
         CWalletManager::Get().RegisterInitialWallet("tmptmp.wallet", new CWallet("tmptmp.wallet"));
         return !ShutdownRequested();
     }
@@ -2358,32 +2325,25 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // ********************************************************* Step 8: load wallet
 #ifdef ENABLE_WALLET
-    // pwalletMain-elimination effort: `pwallet` is a genuinely local
-    // variable here (no more a process-wide global other translation units
-    // could read directly), scoped to the rest of this function -- every
-    // RPC handler, the mining thread, the CC framework, and the Qt GUI now
-    // resolve CWalletManager::GetWalletForRequest()/GetActiveWallet()
-    // instead. Registered with CWalletManager immediately after each
-    // construction below (not just once at the end), so those call sites --
-    // in particular the openwallet RPC and qt/splashscreen.cpp's
-    // pre-existing create/restore/unlock flow, both of which need to see
-    // the wallet this function is still busy constructing, from a
-    // different thread, during the encrypted-wallet unlock busy-wait below
-    // -- resolve it correctly for the whole duration of this sequence, not
-    // only once it finishes.
+    // `pwallet` is local to this function; every other caller resolves a
+    // wallet through CWalletManager::GetWalletForRequest()/GetActiveWallet().
+    // Registered with CWalletManager immediately after each construction
+    // below (not just once at the end), so the openwallet RPC and
+    // qt/splashscreen.cpp's create/restore/unlock flow -- both running on a
+    // different thread -- can see the wallet this function is still busy
+    // constructing during the encrypted-wallet unlock busy-wait below.
     CWallet* pwallet = nullptr;
     if (fDisableWallet) {
         pwallet = NULL;
         LogPrintf("Wallet disabled!\n");
     } else if (!fAutoLoadWalletAtStartup) {
-        // True zero-wallet startup (no-default-wallet redesign): a genuinely
-        // fresh data directory, no -wallet= given and no existing file at the
-        // conventional default location. Nothing is constructed, verified,
-        // or registered here -- CWalletManager's registry stays exactly as
-        // empty as -disablewallet already leaves it above. An operator must
-        // explicitly run loadwallet or createwallet (or use the GUI's
-        // first-run flow, see qt/splashscreen.cpp) before any wallet RPC, or
-        // mining against wallet funds, becomes usable.
+        // A genuinely fresh data directory: no -wallet= given and no
+        // existing file at the conventional default location. Nothing is
+        // constructed, verified, or registered here -- CWalletManager's
+        // registry stays empty, same as -disablewallet leaves it above. An
+        // operator must explicitly run loadwallet or createwallet (or use
+        // the GUI's first-run flow, see qt/splashscreen.cpp) before any
+        // wallet RPC, or mining against wallet funds, becomes usable.
         pwallet = NULL;
         LogPrintf("No wallet loaded at startup (fresh data directory) -- run loadwallet or createwallet to load or create one.\n");
     } else {
@@ -2761,11 +2721,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                     }
                 }
             } else {
-                // -seedphrase= was removed as a startup flag (no-default-wallet
-                // redesign): restoring from a known phrase is now always an
-                // explicit createwallet RPC call against an already-running
-                // node, not a boot-time decision, so a headless launch always
-                // generates a fresh random seed here.
+                // Restoring from a known phrase is a createwallet RPC call
+                // against an already-running node, not a boot-time decision,
+                // so a headless launch always generates a fresh random seed
+                // here.
                 pwallet->createType = RANDOM;
             }
 
@@ -2948,15 +2907,13 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // the rest. Unlike the default wallet, a failure here doesn't abort startup.
         //
         // -rescan/-rescanheight/-salvagewallet/-zapwallettxes are applied to
-        // every secondary wallet too, same as the default wallet above --
-        // LoadWallet() already accepts these as parameters (Phase 5), they
-        // were just never fed the CLI values before this. -upgradewallet and
-        // -rederiverironwoodscopes are deliberately not threaded through here:
-        // the former has its own per-wallet `upgradewallet` RPC (Phase 5), and
-        // the latter is a rare manual-recovery flag not worth the extra
-        // LoadWallet() parameters for a startup-only, all-wallets-at-once path.
-        // (fSecondary* were snapshotted at the top of this block, not read
-        // here -- see the comment there for why.)
+        // every secondary wallet too, same as the default wallet above.
+        // -upgradewallet and -rederiverironwoodscopes are deliberately not
+        // threaded through here: the former has its own per-wallet
+        // `upgradewallet` RPC, and the latter is a rare manual-recovery flag
+        // not worth the extra LoadWallet() parameters for a startup-only,
+        // all-wallets-at-once path. (fSecondary* were snapshotted at the top
+        // of this block, not read here -- see the comment there for why.)
         for (const std::string& strSecondaryWallet : mapMultiArgs["-wallet"]) {
             if (strSecondaryWallet == strWalletFile)
                 continue;
@@ -3177,17 +3134,12 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     uiInterface.InitMessage(_("Done loading"));
 
 #ifdef ENABLE_WALLET
-    // Started unconditionally, not gated on pwalletMain -- audit finding
-    // (pwalletMain-elimination effort): a genuinely fresh datadir (true
-    // zero-wallet startup) or every wallet deactivated left this thread
-    // never started at all, so every wallet created afterward (createwallet,
-    // loadwallet, the Qt zero-wallet first-run flow) ran with no periodic
-    // BDB flush for the rest of the process. ThreadFlushWalletDB
-    // (wallet/walletdb.cpp) already flushes every wallet file currently open
-    // in the shared BDB environment on its own and, per its own comment,
-    // never actually uses the string argument below -- one thread here
-    // covers every wallet loaded now or later regardless of whether one is
-    // loaded yet at this exact point in startup.
+    // Started unconditionally, regardless of whether a wallet is loaded yet
+    // at this point in startup: ThreadFlushWalletDB (wallet/walletdb.cpp)
+    // flushes every wallet file currently open in the shared BDB environment
+    // on its own and, per its own comment, never actually uses the string
+    // argument below -- one thread here covers every wallet loaded now or
+    // later.
     threadGroup.create_thread(boost::bind(&ThreadFlushWalletDB, std::string()));
 #endif
 

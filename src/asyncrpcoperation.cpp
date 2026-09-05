@@ -120,12 +120,10 @@ AsyncRPCOperation::AsyncRPCOperation(CWallet* wallet) : AsyncRPCOperation() {
     CWalletManager::ResolvedWallet resolved = CWalletManager::Get().ResolveAndHoldForRequest(walletName_);
     walletGeneration_ = resolved.generation;
     // NotFound means "nothing to hold": some test fixtures construct a
-    // CWallet and use it as pwalletMain without ever registering it with
-    // CWalletManager -- in that environment nothing can "unload" it through
-    // this system either, so not pinning a ref doesn't leave anything
-    // reachable unprotected. No-default-wallet redesign: every resolved
-    // wallet is now uniformly ref-countable (there is no more an exempt
-    // "default" outcome the way there used to be), so Held always pins one.
+    // CWallet without ever registering it with CWalletManager -- in that
+    // environment nothing can "unload" it through this system either, so
+    // not pinning a ref doesn't leave anything reachable unprotected. Every
+    // resolved wallet is uniformly ref-countable, so Held always pins one.
     if (resolved.outcome == CWalletManager::ResolveOutcome::Held)
         walletRefHeld_ = true;
 }

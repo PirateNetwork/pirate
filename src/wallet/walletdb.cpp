@@ -1273,21 +1273,18 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 wss.nFileVersion = 300;
         }
 
-        // Per-wallet configuration settings (Phase 5 of the multiwallet
-        // effort). Deliberately part of this generic dispatch -- run
-        // automatically for every CWallet::LoadWallet() call, default or
-        // secondary -- rather than a separate explicit Read*() call a caller
-        // has to remember to make (the pattern ReadWalletBirthday()/
-        // ReadBestBlock() use below): an explicit-call design is exactly what
-        // let a previous phase's nBirthday read go missing from a second
-        // caller. Fields keep their compiled-in default (wallet.h) when no
-        // record exists yet, e.g. for a wallet file written before this
-        // phase.
+        // Per-wallet configuration settings. Deliberately part of this
+        // generic dispatch -- run automatically for every
+        // CWallet::LoadWallet() call, default or secondary -- rather than a
+        // separate explicit Read*() call a caller has to remember to make
+        // (the pattern ReadWalletBirthday()/ReadBestBlock() use below).
+        // Fields keep their compiled-in default (wallet.h) when no record
+        // exists yet, e.g. for a wallet file written before these settings
+        // existed.
         //
-        // Each plaintext key has a matching "c"-prefixed encrypted form
-        // (an audit flagged that an acquired encrypted wallet file still
-        // leaked every one of these settings in plaintext, addresses
-        // especially) -- same shape as hdchain/chdchain and destdata/
+        // Each plaintext key has a matching "c"-prefixed encrypted form, so
+        // an acquired encrypted wallet file doesn't leak these settings in
+        // plaintext -- same shape as hdchain/chdchain and destdata/
         // cdestdata above: on an encrypted wallet CWallet::Set*() writes the
         // "c..." record and erases the plaintext one, so a given setting is
         // never on disk in both forms at once. The "c..." branch decrypts

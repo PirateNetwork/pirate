@@ -100,17 +100,8 @@ static CCriticalSection cs_nWalletUnlockTime;
 std::string CCerror;
 
 // Per-wallet auto-lock deadline, guarded by cs_nWalletUnlockTime, keyed
-// uniformly by CWallet* for every loaded wallet -- getinfo (rpc/misc.cpp)
-// reads through GetWalletUnlockTimeForRequest(). pwalletMain-elimination
-// audit finding: this used to special-case "pwallet == pwalletMain reads/
-// writes a separate plain global instead of this map," which was sound only
-// while pwalletMain was fixed at startup. Once active status became
-// reassignable (setactivewallet), a deadline could be *written* to the
-// global for whichever wallet was active at unlock time and then *read*
-// from the map (or vice versa) for whichever wallet is active later --
-// misreporting a locked wallet as unlocked, or an unlocked one as locked.
-// Keying everything off this one map regardless of active status removes
-// the split entirely.
+// uniformly by CWallet* for every loaded wallet regardless of active status
+// -- getinfo (rpc/misc.cpp) reads through GetWalletUnlockTimeForRequest().
 static std::map<CWallet*, int64_t> mapWalletUnlockTime;
 
 static int64_t GetWalletUnlockTime(CWallet* pwallet)
@@ -186,15 +177,11 @@ std::string HelpRequiringPassphrase()
         : "";
 }
 
-// The zero-arg EnsureWalletIsAvailable()/EnsureWalletIsUnlocked()/
-// EnsureWalletIsUnlockedForReporting() overloads that used to read the
-// pwalletMain global directly are gone (pwalletMain-elimination effort):
-// every RPC handler now resolves its own CWallet* via
+// Every RPC handler resolves its own CWallet* via
 // CWalletManager::GetWalletForRequest() (see rpc/server.h's
-// IsMultiWalletAwareRPC) and calls one of these parameterized overloads
-// instead. fUnlockedForReporting is a single process-wide, startup-
-// configured (-unlockforreporting) mode switch, not per-wallet state, so
-// it's read as-is here.
+// IsMultiWalletAwareRPC) and calls one of these. fUnlockedForReporting is a
+// single process-wide, startup-configured (-unlockforreporting) mode
+// switch, not per-wallet state, so it's read as-is here.
 bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException)
 {
     if (!pwallet)
@@ -223,19 +210,12 @@ void EnsureWalletIsUnlockedForReporting(CWallet* pwallet)
         throw JSONRPCError(RPC_WALLET_UNLOCK_NEEDED, "Error: Please enter the wallet passphrase with walletpassphrase first.");
 }
 
-// Replaces the old Lock2NSPV(mypk)/Unlock2NSPV(mypk) manual pair (locked
-// cs_main+pwalletMain->cs_wallet only in local, non-NSPV mode, i.e. when
-// !pk.IsValid()). That pair required every early-return path in a handler to
-// remember to call Unlock2NSPV itself before returning, and at least one
-// (gatewayswithdraw, see below) got it wrong -- calling Lock2NSPV a second
-// time on its success path instead of Unlock2NSPV, permanently leaking both
-// locks (recursive CCriticalSections, so the leak is silent) on whichever
-// RPC worker thread served that call, for the rest of the process's life.
-// A stack-scoped guard makes that whole bug class structurally impossible:
-// it always unlocks on scope exit, including on an early return or a thrown
-// JSONRPCError. Also takes the resolved wallet directly, rather than always
-// pwalletMain, so gateways/oracles/channels RPCs can run against a
-// request-selected secondary wallet.
+// A stack-scoped guard for the cs_main+pwallet->cs_wallet lock pair taken in
+// local, non-NSPV mode (i.e. when !pk.IsValid()): always unlocks on scope
+// exit, including on an early return or a thrown JSONRPCError, so a handler
+// can't leak the lock by forgetting to release it on one path. Takes the
+// resolved wallet directly, so gateways/oracles/channels RPCs can run
+// against a request-selected secondary wallet.
 class CNSPVWalletLockGuard
 {
 public:
@@ -1120,12 +1100,6 @@ UniValue getreceivedbyaccount(const UniValue& params, bool fHelp, const CPubKey&
 }
 
 
-// The pwalletMain-only overloads this used to forward to (taking no CWallet*
-// at all) were removed in Phase 10: every caller across the codebase now
-// resolves its own wallet via CWalletManager::GetWalletForRequest() and calls
-// one of the two parameterized overloads below, so the unparameterized pair
-// had zero remaining callers and would have been a silent trap for the next
-// caller who copied the "obvious" no-wallet-argument overload.
 CAmount GetAccountBalance(CWallet* pwallet, CWalletDB& walletdb, const string& strAccount, int nMinDepth, const isminefilter& filter)
 {
     CAmount nBalance = 0;
@@ -1375,12 +1349,9 @@ UniValue getunconfirmedbalance(const UniValue& params, bool fHelp, const CPubKey
 }
 
 
-// movecmd (the deprecated "move" RPC) was deleted here as confirmed dead
-// code during the pwalletMain-elimination effort: no CRPCCommand table entry
-// anywhere (rpc/server.cpp), no declaration, no rpc/client.cpp argument-
-// conversion entries -- it was already unreachable before this, just never
-// removed. Removed rather than rewired, matching this project's precedent
-// from removing z_sendmany_prepare_offline/z_sign_offline.
+// movecmd (the deprecated "move" RPC) is gone: no CRPCCommand table entry
+// (rpc/server.cpp), no declaration, no rpc/client.cpp argument-conversion
+// entries -- it's unreachable.
 
 UniValue sendfrom(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -1852,7 +1823,7 @@ static void MaybePushAddress(UniValue & entry, const CTxDestination &dest)
     }
 }
 
-// Takes the target wallet explicitly (rather than always pwalletMain) so its
+// Takes the target wallet explicitly so its
 // IsMultiWalletAwareRPC() callers (listtransactions, gettransaction,
 // listsinceblock) all operate on the request's own resolved wallet.
 void ListTransactions(CWallet* pwallet, const CWalletTx& wtx, const string& strAccount, int nMinDepth, bool fLong, UniValue& ret, const isminefilter& filter)
@@ -2805,16 +2776,10 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
     // own cs_wallet lock (taken just below, in its own nested scope) is
     // released.
     std::string walletName = pwallet->strWalletFile;
-    // Opus-audit-caught stale comment, fixed: GetRequestedWalletName() no
-    // longer returns empty for an unscoped request (it's pinned to the
-    // resolved wallet's name -- see its own doc comment, walletmanager.h),
-    // so that first disjunct is effectively dead now and this really just
-    // checks IsActiveWallet(walletName) directly -- true whenever `pwallet`
-    // (the request-resolved wallet, whatever selected it) is the currently
-    // active one. Kept as an OR rather than simplified: harmless, and
-    // correct either way if GetRequestedWalletName() is ever legitimately
-    // empty here (nothing resolved at all, which EnsureWalletIsAvailable()
-    // above should already have refused).
+    // True whenever `pwallet` (the request-resolved wallet, whatever
+    // selected it) is the currently active one. The empty-name disjunct
+    // covers the case where nothing resolved at all, which
+    // EnsureWalletIsAvailable() above should already have refused.
     bool fIsActiveWallet = CWalletManager::GetRequestedWalletName().empty() ||
                             CWalletManager::Get().IsActiveWallet(walletName);
 
@@ -2837,14 +2802,11 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     auto nTime = GetTime();
     std::string walletFile = walletName;
-    // Scoped by wallet name as well as timestamp. The timestamp alone was
-    // unambiguous while only ever one wallet (pwalletMain) could reach this
-    // code; with secondary wallets it names nothing in particular, so a
-    // leftover backup from a failed attempt couldn't be matched back to the
-    // wallet it belongs to. walletName is already used unescaped as a
-    // filename just below (and is charset-restricted by
-    // CWalletManager::IsValidWalletName() for every secondary wallet), so it
-    // introduces no new path exposure.
+    // Scoped by wallet name as well as timestamp, so a leftover backup from
+    // a failed attempt can be matched back to the wallet it belongs to.
+    // walletName is already used unescaped as a filename just below (and is
+    // charset-restricted by CWalletManager::IsValidWalletName() for every
+    // secondary wallet), so it introduces no new path exposure.
     std::string fileBackup = "unencrypted_walletbackup_" + walletFile + "_" + std::to_string(nTime) + ".dat";
     boost::filesystem::path pathBackup = GetDataDir() / fileBackup;
     boost::filesystem::path pathWallet = GetDataDir() / walletFile;
@@ -2891,11 +2853,10 @@ UniValue encryptwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         std::string strDiscardError;
         bool fDiscarded = false;
         if (!fIsActiveWallet) {
-            // The default wallet is deliberately not discarded:
-            // CWalletManager refuses it unconditionally (there is no reload
-            // path for it -- see the "no-default-wallet redesign" backlog
-            // item), so a full restart stays the only way to drop whatever
-            // in-memory crypto state EncryptWallet() left behind.
+            // The active wallet is deliberately not discarded: CWalletManager
+            // refuses it unconditionally (there is no reload path for it), so
+            // a full restart stays the only way to drop whatever in-memory
+            // crypto state EncryptWallet() left behind.
             fDiscarded = CWalletManager::Get().DiscardWalletAfterFailedEncryption(walletName, strDiscardError);
         }
 
@@ -3242,10 +3203,8 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     uint256 seedFp = pwallet->GetHDChain().seedFp;
     if (!seedFp.IsNull())
          obj.push_back(Pair("seedfp", seedFp.GetHex()));
-    // No-default-wallet redesign: cheap to add since pwallet is already the
-    // resolved wallet for this request -- see getactivewallet for a
-    // registry-wide equivalent that doesn't need a request scoped to a
-    // specific wallet first.
+    // See getactivewallet for a registry-wide equivalent that doesn't need a
+    // request scoped to a specific wallet first.
     obj.push_back(Pair("isactivewallet", CWalletManager::Get().IsActiveWallet(pwallet->GetName())));
     return obj;
 }
@@ -4195,7 +4154,7 @@ UniValue z_listaddresses(const UniValue& params, bool fHelp, const CPubKey& mypk
     return ret;
 }
 
-// Takes the target wallet explicitly (rather than always pwalletMain) so its
+// Takes the target wallet explicitly so its
 // IsMultiWalletAwareRPC() callers (z_getbalance, z_gettotalbalance) both
 // operate on the request's own resolved wallet.
 CAmount getBalanceTaddr(CWallet* pwallet, std::string transparentAddress, int minDepth=1, bool ignoreUnspendable=true) {
@@ -5121,12 +5080,6 @@ UniValue z_getoperationstatus_IMPL(const UniValue& params, bool fRemoveFinishedO
 
 
 
-
-// rpcwallet__find_unspent_notes()/z_sapling_inputs_ (a file-scope mutable
-// global) were deleted here as confirmed dead code during the
-// pwalletMain-elimination effort: zero callers anywhere in the tree, left
-// behind once z_sendmany_prepare_offline/z_sign_offline (their only would-be
-// consumers) were removed in an earlier phase.
 
 //Must get it from AsyncRPCOperation_sendmany
 std::array<unsigned char, ZC_MEMO_SIZE> get_memo_from_hex_string(std::string s) {
@@ -6563,7 +6516,7 @@ UniValue rederiveironwoodscopes(const UniValue& params, bool fHelp, const CPubKe
         );
 
     LOCK(pwallet->cs_wallet);
-    // Audit finding: RederiveIronwoodAddressScopes() corrects the in-memory
+    // RederiveIronwoodAddressScopes() corrects the in-memory
     // scope first and only then tries to persist it, and its on-disk write
     // path needs the wallet unlocked (same as any other encrypted-setting
     // write) -- without this, a locked wallet would silently mutate memory,
@@ -6582,11 +6535,10 @@ UniValue rederiveironwoodscopes(const UniValue& params, bool fHelp, const CPubKe
 }
 
 // ─── Fee/behavior/pruning RPCs ─────────────────────────────────────────────────
-// These settings used to be process-wide CLI/pirate.conf flags shared by
-// every wallet; Phase 5 of the multiwallet effort made each one a per-wallet
-// setting, persisted in this wallet's own file. All follow the same shape as
-// the consolidation/sweep setters above: validate, call the CWallet::Set*()
-// method (which persists), report the new value back.
+// Each setting is per-wallet, persisted in this wallet's own file. All
+// follow the same shape as the consolidation/sweep setters above: validate,
+// call the CWallet::Set*() method (which persists), report the new value
+// back.
 
 UniValue setmintxfee(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -7891,11 +7843,7 @@ UniValue setpubkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     // Genuinely optional: this RPC sets -pubkey/notary identity, which works
     // with no wallet loaded at all -- only the "ismine" check below needs
-    // one. Audit finding (pwalletMain-elimination effort): the old zero-arg
-    // EnsureWalletIsUnlocked() unconditionally dereferenced pwalletMain,
-    // crashing whenever it was null (-disablewallet, or every wallet
-    // deactivated) despite the rest of this function already being
-    // null-tolerant.
+    // one, so every use of `pwallet` here is null-tolerant.
     CWallet* const pwallet = CWalletManager::GetWalletForRequest();
     LOCK2(cs_main, pwallet ? &pwallet->cs_wallet : NULL);
     if (pwallet)
@@ -8884,12 +8832,8 @@ UniValue gatewayswithdraw(const UniValue& params, bool fHelp, const CPubKey& myp
     {
         throw runtime_error("invalid destination pubkey");
     }
-    // Was previously "Lock2NSPV(mypk);" here on the success path -- should
-    // have been Unlock2NSPV, permanently leaking cs_main+cs_wallet on this
-    // RPC worker thread every time this call succeeded (found during Phase 9
-    // of the multiwallet effort). The RAII guard above makes this whole bug
-    // class impossible: it always unlocks on scope exit, so nothing at all
-    // is needed here now.
+    // The RAII guard constructed above always unlocks on scope exit; nothing
+    // needed here.
     result = GatewaysWithdraw(mypk,0,bindtxid,coin,pubkey2pk(withdrawpub),amount,pwallet);
     if ( result[JSON_HEXTX].getValStr().size() > 0  )
     {
@@ -9849,12 +9793,10 @@ UniValue tokenask(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return(result);
 }
 
-// tokenswapask was deleted here as confirmed dead code during the
-// pwalletMain-elimination effort: its CRPCCommand table entry (rpc/server.cpp)
-// and its declaration (rpc/server.h) were already commented out before this,
-// and its one CC helper (CreateSwap(), cc/CCassetstx.cpp) is correspondingly
-// the only function in that file never given a CWallet* param -- consistent,
-// unreachable via any live dispatch path.
+// tokenswapask is gone: its CRPCCommand table entry (rpc/server.cpp) and
+// declaration (rpc/server.h) are commented out, and its one CC helper
+// (CreateSwap(), cc/CCassetstx.cpp) is correspondingly the only function in
+// that file with no CWallet* param -- unreachable via any live dispatch path.
 
 UniValue tokencancelask(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
@@ -9924,10 +9866,9 @@ UniValue tokenfillask(const UniValue& params, bool fHelp, const CPubKey& mypk)
     return(result);
 }
 
-// tokenfillswap was deleted here as confirmed dead code during the
-// pwalletMain-elimination effort: its CRPCCommand table entry (rpc/server.cpp)
-// and its declaration (rpc/server.h) were already commented out before this,
-// unreachable via any live dispatch path.
+// tokenfillswap is gone: its CRPCCommand table entry (rpc/server.cpp) and
+// declaration (rpc/server.h) are commented out -- unreachable via any live
+// dispatch path.
 
 UniValue getbalance64(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {

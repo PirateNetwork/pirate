@@ -204,11 +204,11 @@ TEST(WalletEncryptionTests, ZkeymetaPurgeRoutingErasesRecord)
     }
 }
 
-// Phase 5 follow-up: the consolidation/sweep/fee/pruning/change-address
-// settings added in Phase 5 were originally always written in plaintext,
-// regardless of whether the wallet itself was encrypted -- an acquired
-// encrypted wallet.dat still fully disclosed them, address-filter lists and
-// sweep/change addresses especially. This is the same class of fix as
+// Regression coverage: the consolidation/sweep/fee/pruning/change-address
+// settings must not be written in plaintext regardless of whether the
+// wallet itself is encrypted -- an acquired encrypted wallet.dat must not
+// disclose them, address-filter lists and sweep/change addresses
+// especially. This is the same class of fix as
 // DestDataRoundTripsThroughEncryption/HDChainRoundTripsThroughEncryption
 // above, applied uniformly to every one of those settings via
 // CWallet::WriteEncryptableSetting()/CWalletDB::ReadKeyValue()'s "c"-prefixed
@@ -290,8 +290,8 @@ TEST(WalletEncryptionTests, ConfigSettingsRoundTripThroughEncryptionAndPlaintext
     EXPECT_TRUE(wallet2.ironwoodSweepAddress.empty());
 }
 
-// Audit follow-up on the fix above: chash must be bound to the record's own
-// key name, not just its serialized content. These settings have tiny value
+// chash must be bound to the record's own key name, not just its serialized
+// content. These settings have tiny value
 // domains (a bool is one byte; an empty string and an empty address list
 // both serialize to a single zero byte), so a content-only chash would make
 // two different settings' encrypted records byte-identical whenever their
@@ -341,7 +341,7 @@ TEST(WalletEncryptionTests, ConfigSettingsChashIsBoundToKeyNotJustContent)
         << "a genuine record for one setting must not decrypt successfully under a different setting's key";
 }
 
-// Audit follow-up: WriteEncryptableSetting() must fail closed (persist
+// WriteEncryptableSetting() must fail closed (persist
 // nothing, in either form) when the wallet is encrypted but locked, rather
 // than falling back to plaintext -- that fallback is exactly the leak this
 // whole feature exists to close.

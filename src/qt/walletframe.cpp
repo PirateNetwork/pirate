@@ -240,14 +240,11 @@ void WalletFrame::resetUnlockTimer()
 }
 
 // gotoOverviewPage/gotoHistoryPage/gotoReceiveCoinsPage/gotoZSendCoinsPage/
-// gotoZSignPage used to iterate every entry in mapWalletViews and switch its
-// internal page, rather than routing through currentWalletView() the way
-// gotoSignMessageTab/encryptWallet/backupWallet/etc. below already correctly
-// do -- invisible with exactly one wallet loaded (the only case that existed
-// before Phase 6), but with a second wallet loaded this would silently flip
-// every background wallet's page too every time the visible one navigates,
-// so switching back to it later would land on the wrong page. Fixed to match
-// the single-target pattern every other navigation slot in this file uses.
+// gotoZSignPage must route through currentWalletView(), matching the
+// single-target pattern gotoSignMessageTab/encryptWallet/backupWallet/etc.
+// below already use -- iterating every entry in mapWalletViews instead would
+// silently flip every background wallet's page too every time the visible
+// one navigates, so switching back to it later would land on the wrong page.
 void WalletFrame::gotoOverviewPage()
 {
     WalletView *walletView = currentWalletView();

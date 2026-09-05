@@ -412,10 +412,7 @@ void BitcoinTestingSetup::SetUp()
     // Without this, CWalletManager's registry is empty for every test built
     // on this base fixture -- RPCWalletRequestGuard's real resolution path
     // (ResolveAndHoldActiveForRequest()) would report NotFound for all of
-    // them, and any test exercising the real dispatch/guard path would only
-    // ever pass because GetWalletForRequest() fell back to this
-    // registry-invisible wallet, not because resolution actually
-    // worked (audit finding, pwalletMain-elimination effort).
+    // them.
     CWalletManager::Get().RegisterInitialWallet("wallet.dat", pwallet);
 #endif
     nScriptCheckThreads = 3;
@@ -430,7 +427,7 @@ void BitcoinTestingSetup::TearDown()
     threadGroup.interrupt_all();
     threadGroup.join_all();
 #ifdef ENABLE_WALLET
-    // Audit finding: without this, a walletpassphrase call earlier in this
+    // Without this, a walletpassphrase call earlier in this
     // test left a CWallet*-keyed entry in mapWalletUnlockTime pointing at
     // the object deleted just below -- a later `new CWallet` landing on the
     // same freed address would silently inherit a bogus unlock deadline.
@@ -447,8 +444,7 @@ void BitcoinTestingSetup::TearDown()
     // order anyway to match the ordering the old global required, when
     // Reset() nulled it as a side effect of mirroring the active wallet and
     // running first would have turned the unregister/delete into no-ops --
-    // leaking this wallet as a still-validation-registered zombie (the exact
-    // class of bug found and fixed elsewhere in this test suite).
+    // leaking this wallet as a still-validation-registered zombie.
     CWalletManager::Get().Reset();
 #endif
     UnloadBlockIndex();

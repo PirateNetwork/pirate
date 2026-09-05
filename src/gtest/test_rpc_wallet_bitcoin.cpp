@@ -55,10 +55,8 @@ using namespace std;
 extern UniValue createArgs(int nRequired, const char* address1 = NULL, const char* address2 = NULL);
 extern UniValue CallRPC(string args);
 
-// No longer needs its own extern CWallet* pwalletMain -- that global is
-// gone entirely. Every reference in this file now resolves
-// BitcoinTestingSetup's own `pwallet` member (gtestutils.h), inherited by
-// the fixtures below (pwalletMain-elimination effort).
+// Every `pwallet` reference in this file resolves BitcoinTestingSetup's own
+// member (gtestutils.h), inherited by the fixtures below.
 bool find_error(const UniValue& objError, const std::string& expected) {
     return find_value(objError, "message").get_str().find(expected) != string::npos;
 }
@@ -512,10 +510,6 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_exportwallet)
     // There's no way to really delete a private key so we will read in the
     // exported wallet file and search for the spending key and payment address.
 
-    // The old zero-arg overload read the raw pwalletMain global directly;
-    // that global is gone entirely now (pwalletMain-elimination effort) --
-    // use the CWallet*-taking overload against the fixture's own wallet
-    // instead.
     EnsureWalletIsUnlocked(pwallet);
 
     ifstream file;
@@ -1985,14 +1979,11 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
             CWalletManager::Get().Reset();
             // Reset() only clears CWalletManager's own bookkeeping (the
             // registry map and the active-wallet name); it never touches
-            // pwallet itself, since that's a genuine BitcoinTestingSetup
-            // member now (pwalletMain-elimination effort), not the old
-            // global Reset() used to null as a side effect of mirroring the
-            // active wallet. So there's nothing to save/restore here --
-            // BitcoinTestingSetup::TearDown()'s own
-            // UnregisterValidationInterface(pwallet)/delete pwallet
-            // (gtestutils.cpp) finds it exactly as SetUp() left it, whether
-            // or not this destructor has run yet.
+            // pwallet itself, a BitcoinTestingSetup member. So there's
+            // nothing to save/restore here -- BitcoinTestingSetup::
+            // TearDown()'s own UnregisterValidationInterface(pwallet)/
+            // delete pwallet (gtestutils.cpp) finds it exactly as SetUp()
+            // left it, whether or not this destructor has run yet.
         }
     } walletManagerCleanup;
 
@@ -2069,10 +2060,9 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructions_operates_on_s
 
 TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_operates_on_selected_wallet_not_default)
 {
-    // Regression coverage for the multiwallet effort, closing the one gap left
-    // by the test above: z_createbuildinstructionscoincontrol was never given
-    // its own dedicated test (backlog item 11, Phase 12 entry). Unlike
-    // z_createbuildinstructions, this RPC takes explicit txid/index coin
+    // Regression coverage complementing the test above:
+    // z_createbuildinstructionscoincontrol needs its own dedicated test.
+    // Unlike z_createbuildinstructions, this RPC takes explicit txid/index coin
     // control and resolves each input via pwallet->GetWalletTx(txid) --
     // an upfront, per-wallet lookup that throws "Wallet transaction does not
     // exist" outright when the resolved wallet doesn't hold that tx, rather
@@ -2128,14 +2118,11 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_op
             CWalletManager::Get().Reset();
             // Reset() only clears CWalletManager's own bookkeeping (the
             // registry map and the active-wallet name); it never touches
-            // pwallet itself, since that's a genuine BitcoinTestingSetup
-            // member now (pwalletMain-elimination effort), not the old
-            // global Reset() used to null as a side effect of mirroring the
-            // active wallet. So there's nothing to save/restore here --
-            // BitcoinTestingSetup::TearDown()'s own
-            // UnregisterValidationInterface(pwallet)/delete pwallet
-            // (gtestutils.cpp) finds it exactly as SetUp() left it, whether
-            // or not this destructor has run yet.
+            // pwallet itself, a BitcoinTestingSetup member. So there's
+            // nothing to save/restore here -- BitcoinTestingSetup::
+            // TearDown()'s own UnregisterValidationInterface(pwallet)/
+            // delete pwallet (gtestutils.cpp) finds it exactly as SetUp()
+            // left it, whether or not this destructor has run yet.
         }
     } walletManagerCleanup;
 
@@ -2203,8 +2190,8 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_op
     }
     ASSERT_FALSE(secondaryTb.vSaplingSpends.empty());
     // Confirms coin control actually selected the requested outpoint, not
-    // just some non-empty spend list (audit follow-up: SaplingSpendDescriptionInfo::op
-    // is public, cheap to check directly).
+    // just some non-empty spend list (SaplingSpendDescriptionInfo::op is
+    // public, cheap to check directly).
     EXPECT_EQ(fundingOp, secondaryTb.vSaplingSpends[0].op);
 
     // pwallet (the default wallet, no RPCWalletRequestGuard in scope)
@@ -2224,40 +2211,19 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, z_createbuildinstructionscoincontrol_op
 
 TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItselfBeforeConfirmation)
 {
-    // Backlog item 8 ("stale-secondary-wallet fund safety"): before this test
-    // existed, the claim that a secondary wallet "receives no block/mempool
-    // notifications for transactions it didn't cause itself" and that "a
-    // shielded spend from a secondary wallet never gets its own change note
-    // recorded back into that wallet's file in a way distinguishable from an
-    // unrelated incoming tx" had never been checked against the real code --
-    // only re-derived from Phase 4's own description of what it fixed
-    // (registering secondary wallets for ChainTip() specifically).
+    // Proves fund safety across wallets: a secondary wallet spending its own
+    // note to itself must (a) mark that note's nullifier spent, and (b)
+    // record the resulting change tx, using its own state -- both before
+    // any block confirms it -- and pwallet must see neither, proving no
+    // cross-wallet leakage either direction.
     //
-    // Reading CWalletManager::LoadWallet()/RegisterInitialWallet() and
-    // RegisterValidationInterface() (validationinterface.cpp) directly shows
-    // registration is actually all-or-nothing -- one call wires a CWallet*
-    // into every CValidationInterface signal (SyncTransactions/ChainTip/
-    // UpdatedTransaction/EraseTransaction/Inventory/BlockChecked/Broadcast),
-    // not just ChainTip -- and CWallet::SyncTransactions()/
-    // AddToWalletIfInvolvingMe()/IsSaplingSpent() are all `this`-based with
-    // zero remaining pwallet references, so a secondary wallet is exactly
-    // as capable of tracking its own spend as pwallet is. This first
-    // version of this test (built on that reading alone) failed empirically,
-    // for a reason that has nothing to do with which wallet is involved: the
-    // wallet-facing SyncWithWallets() call for a mempool-accepted (not yet
-    // mined) tx isn't made synchronously by AcceptToMemoryPool() -- it's made
-    // by CTxMemPool::NotifyRecentlyAdded(), which production only calls from
-    // a dedicated once-a-second background thread (ThreadNotifyRecentlyAdded(),
-    // init.cpp) that gtest's BitcoinTestingSetup never starts. This is a
-    // pre-existing, single-wallet-and-all mempool-sync latency characteristic,
-    // not a multiwallet-specific gap -- the test below drives
+    // The wallet-facing SyncWithWallets() call for a mempool-accepted (not
+    // yet mined) tx isn't made synchronously by AcceptToMemoryPool() -- it's
+    // made by CTxMemPool::NotifyRecentlyAdded(), which production only calls
+    // from a dedicated once-a-second background thread
+    // (ThreadNotifyRecentlyAdded(), init.cpp) that gtest's
+    // BitcoinTestingSetup never starts, so the test below drives
     // mempool.NotifyRecentlyAdded() directly to stand in for that thread.
-    //
-    // With that accounted for, this test proves the actual item-8 question:
-    // a secondary wallet spending its own note to itself must (a) mark that
-    // note's nullifier spent, and (b) record the resulting change tx, using
-    // its own state -- both before any block confirms it -- and pwallet
-    // must see neither, proving no cross-wallet leakage either direction.
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     struct UpgradeReverter {
@@ -2305,14 +2271,11 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
             CWalletManager::Get().Reset();
             // Reset() only clears CWalletManager's own bookkeeping (the
             // registry map and the active-wallet name); it never touches
-            // pwallet itself, since that's a genuine BitcoinTestingSetup
-            // member now (pwalletMain-elimination effort), not the old
-            // global Reset() used to null as a side effect of mirroring the
-            // active wallet. So there's nothing to save/restore here --
-            // BitcoinTestingSetup::TearDown()'s own
-            // UnregisterValidationInterface(pwallet)/delete pwallet
-            // (gtestutils.cpp) finds it exactly as SetUp() left it, whether
-            // or not this destructor has run yet.
+            // pwallet itself, a BitcoinTestingSetup member. So there's
+            // nothing to save/restore here -- BitcoinTestingSetup::
+            // TearDown()'s own UnregisterValidationInterface(pwallet)/
+            // delete pwallet (gtestutils.cpp) finds it exactly as SetUp()
+            // left it, whether or not this destructor has run yet.
         }
     } walletManagerCleanup;
 
@@ -2450,23 +2413,12 @@ TEST_F(rpc_wallet_tests_bitcoin_regtest, SecondaryWalletOwnSpendIsTrackedByItsel
 // removed TEST_FRIEND perform_joinsplit()/ShieldCoinbaseJSInfo Sprout-era
 // internals; this fork's shielding is TransactionBuilder-only now.
 
-// Phase 4 protocol-coverage audit: the consolidation/sweep RPC family
-// (enablesaplingconsolidation, enableironwoodconsolidation,
-// consolidationstatus, enablesweep, sweepstatus, consolidateaddress) and
-// their backing AsyncRPCOperation_*consolidation*/_sweeptoaddress classes had
-// zero test coverage anywhere in the suite. The enable*/consolidationstatus/
-// enablesweep/sweepstatus RPCs are plain synchronous flag-toggle RPCs (not
-// async operations themselves - the actual background consolidation/sweep
-// runs are triggered elsewhere on a timer), so a direct round-trip is cheap
-// and doesn't need any async-operation mocking.
-//
-// enableironwoodconsolidation was added alongside this test: previously only
-// Sapling had an RPC toggle (the original RPC was named "enableconsolidation"
-// with no pool qualifier) even though fIronwoodConsolidationEnabled and the
-// full AsyncRPCOperation_ironwoodconsolidation* machinery already existed -
-// it was only reachable via the -consolidateironwoodaddress startup arg. The
-// Sapling RPC was renamed to enablesaplingconsolidation to keep the pair
-// symmetric.
+// The enable*/consolidationstatus/enablesweep/sweepstatus RPCs are plain
+// synchronous flag-toggle RPCs (not async operations themselves -- the
+// actual background consolidation/sweep runs are triggered elsewhere on a
+// timer), so a direct round-trip is cheap and doesn't need any
+// async-operation mocking. enablesaplingconsolidation/
+// enableironwoodconsolidation are named per-pool to keep the pair symmetric.
 TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesaplingconsolidation_roundtrips)
 {
     SelectParams(CBaseChainParams::TESTNET);
@@ -2918,7 +2870,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructionscoincontrol_bakes_
         // A local struct's own methods don't inherit BitcoinTestingSetup's
         // member scope the way this TEST_F body's own statements do, so
         // pwallet has to be captured explicitly here rather than read
-        // unqualified (pwalletMain-elimination effort).
+        // unqualified.
         CWallet* wallet;
         std::optional<libzcash::PaymentAddress> saved;
         ~Reverter() { wallet->configuredChangeAddress = saved; }
@@ -2969,7 +2921,7 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_configur
         // See the Reverter struct above (same file, earlier test): a local
         // struct's own methods don't inherit BitcoinTestingSetup's member
         // scope, so pwallet has to be captured explicitly here rather
-        // than read unqualified (pwalletMain-elimination effort).
+        // than read unqualified.
         CWallet* wallet;
         std::optional<libzcash::PaymentAddress> saved;
         ~ChangeAddrReverter() { wallet->configuredChangeAddress = saved; }

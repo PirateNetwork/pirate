@@ -2218,26 +2218,21 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
     int32_t PoSperc = 0, newStakerActive;
     std::set<CBitcoinAddress> setAddress; int32_t winners,segid,minage,nHeight,counter=0,i,m,siglen=0,nMinDepth = 1,nMaxDepth = 99999999; std::vector<COutput> vecOutputs; uint32_t block_from_future_rejecttime,besttime,eligible,earliest = 0; CScript best_scriptPubKey; arith_uint256 mindiff,ratio,bnTarget,tmpTarget; CBlockIndex *pindex; CTxDestination address; bool fNegative,fOverflow; uint8_t hashbuf[256]; CTransaction tx; uint256 hashBlock;
     uint64_t cbPerc = *utxovaluep, tocoinbase = 0;
-    // No-default-wallet redesign, Opus-audit-caught: this function is only
-    // ever called from CreateNewBlockWithKey() (miner.cpp), the same
-    // mining/staking codepath whose CReserveKey -- and therefore whose
-    // BitcoinMiner(pwallet) thread -- is bound to GetMiningWallet() (miner.h),
-    // not necessarily whichever wallet is currently active. Reading
-    // pwalletMain directly here (as this function always used to) meant that,
-    // once "active" became reassignable, a setactivewallet mid-mining could
-    // make this function select and spend a *different* wallet's UTXOs than
-    // the one the coinbase reward's reserve key actually belongs to --
-    // unreachable before this redesign (there was only ever one wallet to
-    // read), and specific to ASSETCHAINS_STAKED chains (Pirate does not run
-    // one), but wrong regardless of how narrow the trigger is. Falls back to
-    // the active wallet if mining isn't bound to a specific wallet for some
-    // reason (shouldn't happen given the call site, but matches this
-    // codebase's existing pwallet-or-active-wallet fallback convention
-    // elsewhere -- pwalletMain-elimination effort: this used to read the raw
-    // pwalletMain global here, which no longer mirrors anything live).
+    // This function is only ever called from CreateNewBlockWithKey()
+    // (miner.cpp), the same mining/staking codepath whose CReserveKey --
+    // and therefore whose BitcoinMiner(pwallet) thread -- is bound to
+    // GetMiningWallet() (miner.h), not necessarily whichever wallet is
+    // currently active. Reading the active wallet directly here instead
+    // would let a setactivewallet mid-mining select and spend a *different*
+    // wallet's UTXOs than the one the coinbase reward's reserve key
+    // actually belongs to -- specific to ASSETCHAINS_STAKED chains (Pirate
+    // does not run one), but wrong regardless of how narrow the trigger is.
+    // Falls back to the active wallet if mining isn't bound to a specific
+    // wallet for some reason (shouldn't happen given the call site, but
+    // matches this codebase's existing pwallet-or-active-wallet fallback
+    // convention elsewhere).
     //
-    // Resolved BEFORE the availability gate just below (a second Opus-audit
-    // finding, on the first fix's own first draft): the gate must check
+    // Resolved BEFORE the availability gate just below: the gate must check
     // *this* wallet, not whatever's active -- otherwise a setactivewallet/
     // deactivation would silently stop staking even while the actually-
     // mining-bound wallet is still loaded and valid.
@@ -2247,14 +2242,12 @@ int32_t komodo_staked(CMutableTransaction &txNew,uint32_t nBits,uint32_t *blockt
 
     // avoidException=true: this runs on a worker thread, not an RPC dispatch
     // context -- a thrown JSONRPCError here would propagate out of nowhere
-    // that catches it and std::terminate() the whole process. The guard's
-    // own `if (!...) return 0;` branch already implied this was the intent;
-    // it just never actually took effect before. Currently unreachable in
-    // practice (GenerateBitcoins() itself already gates out calling this
-    // with no wallet), but the no-default-wallet redesign makes "no wallet
-    // loaded" reachable through more paths than -disablewallet alone, so
-    // this is closed defensively rather than left relying on an upstream
-    // gate never loosening. The pwallet-taking overload, not a zero-arg
+    // that catches it and std::terminate() the whole process. Currently
+    // unreachable in practice (GenerateBitcoins() itself already gates out
+    // calling this with no wallet), but "no wallet loaded" is reachable
+    // through more paths than just -disablewallet, so this is closed
+    // defensively rather than left relying on an upstream gate never
+    // loosening. The pwallet-taking overload, not a zero-arg
     // one: checking availability of a different wallet than the one this
     // function goes on to use would defeat the whole point of resolving
     // `pwallet` above.

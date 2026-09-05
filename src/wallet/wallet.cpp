@@ -117,10 +117,6 @@ bool fWalletRbf = DEFAULT_WALLET_RBF;
 /** Progress percentage for blockchain scanning operations */
 int scanperc;
 
-// recoverySeedPhrase/recoverySeedLangCode moved to CWallet member fields
-// (wallet.h, next to createType) as part of the no-default-wallet redesign --
-// see the comment there.
-
 /** Flag indicating if GUI is being used */
 bool usingGUI = false;
 
@@ -2851,26 +2847,25 @@ bool CWallet::OpenWallet(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
             if (CCryptoKeyStore::OpenWallet(vMasterKey)) {
-                // strOpeningWalletPassphrase is deliberately NOT captured here
-                // anymore -- it's a single, process-global scratch slot
-                // (wallet.h) that only ever meant "the passphrase that just
-                // opened pwalletMain at startup", read back by exactly two
-                // pwalletMain-specific startup steps in init.cpp (the
-                // automatic KDF-upgrade check, and the -zapwallettxes
-                // reopen). This function is called on any CWallet now, not
-                // just pwalletMain (CWalletManager::LoadWallet()'s per-wallet
-                // unlock path); capturing every caller's passphrase into that
+                // strOpeningWalletPassphrase is deliberately NOT captured
+                // here -- it's a single, process-global scratch slot
+                // (wallet.h) that only ever means "the passphrase that just
+                // opened init.cpp's startup wallet", read back by exactly two
+                // startup steps there (the automatic KDF-upgrade check, and
+                // the -zapwallettxes reopen). This function is called on any
+                // CWallet (CWalletManager::LoadWallet()'s per-wallet unlock
+                // path too); capturing every caller's passphrase into that
                 // one global here would let a secondary wallet's passphrase
-                // silently clobber it and get reused against pwalletMain by
-                // those two init.cpp steps. The two call sites that actually
-                // need the old behavior (both because they operate on
-                // pwalletMain specifically) set it themselves right after
-                // calling this: wallet/rpcwallet.cpp's openwallet RPC and
-                // qt/splashscreen.cpp's startup passphrase dialog. Every
-                // other caller -- CWalletManager::LoadWallet()'s per-wallet
-                // unlock, init.cpp's own -zapwallettxes reopen (which only
-                // reads the global), and the gtests -- correctly leaves it
-                // alone.
+                // silently clobber it and get reused against the startup
+                // wallet by those two init.cpp steps. The two call sites
+                // that actually need the old behavior (both because they
+                // operate on the startup wallet specifically) set it
+                // themselves right after calling this: wallet/rpcwallet.cpp's
+                // openwallet RPC and qt/splashscreen.cpp's startup passphrase
+                // dialog. Every other caller -- CWalletManager::LoadWallet()'s
+                // per-wallet unlock, init.cpp's own -zapwallettxes reopen
+                // (which only reads the global), and the gtests -- correctly
+                // leaves it alone.
                 return true;
             }
         }
@@ -3796,8 +3791,8 @@ void CWallet::SetKeypoolSizeTarget(int64_t size)
 void CWallet::SetWalletNotifyCommand(const std::string& command)
 {
     // Deliberately NOT persisted to CWalletDB, unlike every other setting in
-    // this section (audit finding, Phase 5): this command runs via system()
-    // on every wallet-tx change (AddToWallet(), below). Writing it into the
+    // this section: this command runs via system() on every wallet-tx
+    // change (AddToWallet(), below). Writing it into the
     // wallet file would turn that file into a portable code-execution
     // payload -- loadwallet on a wallet.dat received from someone else would
     // silently install and later run their command. Session-only, exactly
@@ -6084,7 +6079,7 @@ bool CWallet::EncryptWallet(const SecureString& strWalletPassphrase)
             }
         }
 
-        //Encrypt Phase 5 config settings (consolidation/sweep/fee/pruning/change-address).
+        //Encrypt the consolidation/sweep/fee/pruning/change-address config settings.
         //Same reasoning as destdata just above: this is the point in the actual encryptwallet
         //transition where the master key is genuinely available (UnlockUnchecked() ran earlier
         //in this function) -- the separate MigrateSettingsToEncrypted() calls at wallet load

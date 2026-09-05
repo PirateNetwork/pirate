@@ -258,9 +258,9 @@ public Q_SLOTS:
     /// Handle runaway exceptions. Shows a message box with the problem and quits the program.
     void handleRunawayException(const QString &message);
 #ifdef ENABLE_WALLET
-    /// No-default-wallet redesign: true zero-wallet startup (a fresh data
-    /// directory, nothing auto-loaded) leaves no wallet active when
-    /// AppInit2() returns. initializeResult() detects that and, instead of
+    /// A true zero-wallet startup (a fresh data directory, nothing
+    /// auto-loaded) leaves no wallet active when AppInit2() returns.
+    /// initializeResult() detects that and, instead of
     /// finishing startup immediately, keeps the splash screen up and drives
     /// SplashScreen's create/restore flow directly against CWalletManager --
     /// this slot is what it connects to once that flow produces a wallet, to
@@ -289,13 +289,13 @@ private:
     // which is what removeAllWallets()/removeWallet() actually delete --
     // keeping a second owning pointer here would double-free it at shutdown.
 #endif
-    // Snapshot of whether the two pre-Phase-5 QSettings preferences
+    // Snapshot of whether the two legacy QSettings preferences
     // (fTxDeleteEnabled/fSaplingConsolidationEnabled) were genuinely present
     // before OptionsModel::Init() ran -- Init() unconditionally (re)writes
     // both keys with a default value if missing, so checking contains() any
     // later than createOptionsModel() would always be true, even on a
-    // brand-new installation that never had either preference (audit
-    // finding). Read once, used by finishStartup()'s migration block below.
+    // brand-new installation that never had either preference. Read once,
+    // used by finishStartup()'s migration block below.
     bool fHadLegacyTxDeleteSetting = false;
     bool fHadLegacySaplingConsolidationSetting = false;
 
@@ -521,10 +521,10 @@ void KomodoApplication::createWindow(const NetworkStyle *networkStyle)
 
 void KomodoApplication::createSplashScreen(const NetworkStyle *networkStyle)
 {
-    // Kept as splashScreenWidget (was a local before the no-default-wallet
-    // redesign) so initializeResult()/walletCreatedDuringStartup() can drive
-    // its zero-wallet-startup create/restore flow directly -- it still takes
-    // care of deleting itself when slotFinish() happens, same as before.
+    // Kept as splashScreenWidget so initializeResult()/
+    // walletCreatedDuringStartup() can drive its zero-wallet-startup
+    // create/restore flow directly -- it still takes care of deleting
+    // itself when slotFinish() happens.
     splashScreenWidget = new SplashScreen(networkStyle);
     splashScreenWidget->show();
     connect(this, SIGNAL(splashFinished(QWidget*)), splashScreenWidget, SLOT(slotFinish(QWidget*)));
@@ -629,9 +629,9 @@ void KomodoApplication::initializeResult(bool success)
     // #endif
         paymentServer->setOptionsModel(optionsModel);
 
-        // No-default-wallet redesign: true zero-wallet startup (a fresh data
-        // directory, nothing auto-loaded -- see init.cpp's
-        // fAutoLoadWalletAtStartup) leaves no wallet active here, with no
+        // A true zero-wallet startup (a fresh data directory, nothing
+        // auto-loaded -- see init.cpp's fAutoLoadWalletAtStartup) leaves no
+        // wallet active here, with no
         // uiInterface signal ever having fired (AppInit2() never blocked
         // waiting for one). Rather than finish startup with no wallet at all,
         // drive the splash screen's existing create/restore widgets directly
@@ -677,25 +677,21 @@ void KomodoApplication::finishStartup()
     CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
     if (pwallet)
     {
-        // One-time migration of two pre-Phase-5 QSettings preferences into
-        // their now-per-wallet equivalents (backlog item 1's own deferred
-        // note, flagged since 2026-08-28, actually fixed here). Before the
-        // multiwallet effort's Phase 5, "auto-delete old transactions" and
-        // "auto-consolidate Sapling notes" were single global toggles
+        // One-time migration of two legacy QSettings preferences into their
+        // per-wallet equivalents. "auto-delete old transactions" and
+        // "auto-consolidate Sapling notes" used to be single global toggles
         // (fTxDeleteEnabled/fSaplingConsolidationEnabled in QSettings,
         // defaulting to true, forwarded to -deletetx/-saplingconsolidation)
-        // -- both flags were removed and the equivalent settings promoted to
-        // real per-CWallet fields whose *compiled-in* default is false
-        // (wallet.h). Without this, every existing GUI user upgrading into a
-        // build with this effort would have both features silently disabled
-        // the moment their wallet first loads under it, with no indication
+        // -- both flags are gone now, replaced by real per-CWallet fields
+        // whose *compiled-in* default is false (wallet.h). Without this
+        // migration, an existing GUI user's wallet would have both features
+        // silently disabled the moment it first loads, with no indication
         // anything changed short of noticing consolidation/pruning stopped
         // happening. Applied once per wallet name (not once globally -- a
         // profile with more than one wallet, or a fresh wallet created via
         // the zero-wallet-startup flow with nothing to inherit, must not
         // share one process-wide marker with whichever wallet happens to
-        // load first; see audit findings on the original single-marker,
-        // always-true-contains() version of this block).
+        // load first).
         //
         // fHadLegacy*Setting (captured in createOptionsModel(), before
         // OptionsModel::Init() ever ran) is what actually distinguishes a
@@ -731,11 +727,11 @@ void KomodoApplication::finishStartup()
 
         WalletModel *walletModel = new WalletModel(platformStyle, pwallet, optionsModel);
 
-        // No-default-wallet redesign: keyed by its own real registry name
-        // now, same as every wallet loaded/created later via the File >
-        // Wallets menu -- no more a separate "~Default" GUI-internal alias
-        // for specifically whichever wallet happened to be active at
-        // startup (see PirateOceanGUI::mapWalletModels' own comment for why
+        // Keyed by its own real registry name, same as every wallet
+        // loaded/created later via the File > Wallets menu -- there is no
+        // separate "~Default" GUI-internal alias for whichever wallet
+        // happened to be active at startup (see PirateOceanGUI::
+        // mapWalletModels' own comment for why
         // that aliasing was a real bug once active status became
         // reassignable independent of this window).
         QString realName = QString::fromStdString(pwallet->GetName());

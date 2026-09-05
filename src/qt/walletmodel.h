@@ -270,8 +270,8 @@ public:
     QString getWalletName() const;
 
     // Per-wallet consolidation/sweep/fee/behavior/pruning settings -- thin,
-    // direct wrappers over the corresponding CWallet fields/Set*() methods
-    // (Phase 5), following the same no-RPC-round-trip pattern as
+    // direct wrappers over the corresponding CWallet fields/Set*() methods,
+    // following the same no-RPC-round-trip pattern as
     // getDefaultConfirmTarget() above. Setters lock internally (see the
     // CWallet::Set*() implementations); getters read the field directly,
     // same as getDefaultConfirmTarget() already does. Used by

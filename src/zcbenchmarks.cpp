@@ -41,17 +41,10 @@
 using namespace libzcash;
 // This method is based on Shutdown from init.cpp
 //
-// Rewritten during the pwalletMain-elimination effort (audit finding): the
-// previous version deleted whichever wallet was active regardless of its
-// real name and re-registered a freshly loaded one under the hardcoded name
-// "wallet.dat" in benchmark_loadwallet() below -- corrupting the registry
-// (a dangling mapWallets["<real name>"] entry pointing at freed memory)
-// whenever the active wallet actually had a different name, with no
-// cs_main protection against a concurrent ChainTip() dispatch either. Now
-// routes through CWalletManager's own UnloadWallet()/LoadWallet(), which
-// already take the right locks and keep the registry correct, instead of
-// duplicating that logic ad hoc. Returns the real wallet name discovered so
-// benchmark_loadwallet() can reload the same one.
+// Routes through CWalletManager's own UnloadWallet()/LoadWallet(), which
+// already take the right locks and keep the registry correct, rather than
+// deleting/re-registering the wallet directly. Returns the real wallet name
+// discovered so benchmark_loadwallet() can reload the same one.
 std::string pre_wallet_load()
 {
     LogPrintf("%s: In progress...\n", __func__);

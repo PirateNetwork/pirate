@@ -97,9 +97,9 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
         if (pwallet->GetKey(keyID, vchSecret))
             memcpy(myprivkey, vchSecret.begin(), sizeof(myprivkey));
     }
-    // Multiwallet fund-safety guard (found by the Phase 9 multiwallet audit,
-    // 2026-08-29): in local (non-remote) mode mypk is always the CC identity
-    // (Mypubkey()), and every vout this function creates on its own behalf --
+    // Multiwallet fund-safety guard: in local (non-remote) mode mypk is
+    // always the CC identity (Mypubkey()), and every vout this function
+    // creates on its own behalf --
     // change, token-issuance/marker vouts, etc. -- is addressed to mypk, never
     // to "whichever wallet happened to fund the tx". AddNormalinputsLocal
     // selects UTXOs from the resolved wallet without filtering by address (see
@@ -219,17 +219,16 @@ UniValue FinalizeCCTxExt(bool remote, uint64_t CCmask, struct CCcontract_info *c
                     {
                         if (SignTx(mtx, txdata, i, vintx.vout[utxovout].nValue, vintx.vout[utxovout].scriptPubKey, pwallet) == 0)
                         {
-                            // Was previously fprintf-only, falling through to still
-                            // return the (partially unsigned) tx hex as if it had
-                            // succeeded -- found by the Phase 9 multiwallet audit
-                            // (2026-08-29): under multiwallet a normal vin can be
-                            // funded from an address the resolved wallet doesn't
-                            // actually hold the key for (e.g. AddNormalinputs2/
-                            // AddNormalinputsRemote fund from the CC identity's own
-                            // address via the address index, independent of which
-                            // wallet is selected), so this failure is now reachable
-                            // in practice, not just theoretical. Match the CC-vin
-                            // signing-failure convention below: fail closed.
+                            // A normal vin can be funded from an address the
+                            // resolved wallet doesn't actually hold the key
+                            // for (e.g. AddNormalinputs2/AddNormalinputsRemote
+                            // fund from the CC identity's own address via the
+                            // address index, independent of which wallet is
+                            // selected), so this failure is reachable in
+                            // practice, not just theoretical. Match the
+                            // CC-vin signing-failure convention below: fail
+                            // closed, rather than returning the (partially
+                            // unsigned) tx hex as if it had succeeded.
                             fprintf(stderr, "signing error for vini.%d of %llx\n", i, (long long)vinimask);
                             memset(myprivkey, 0, sizeof(myprivkey));
                             return sigDataNull;
@@ -691,11 +690,11 @@ int64_t AddNormalinputsLocal(CMutableTransaction &mtx,CPubKey mypk,int64_t total
 
 #ifdef ENABLE_WALLET
     if (pwallet == nullptr) pwallet = CWalletManager::Get().GetActiveWallet();
-    // No-default-wallet redesign: the active wallet can be null outside of
-    // -disablewallet too (true zero-wallet startup, or every wallet
-    // deactivated via setactivewallet) -- an assert here would crash the
-    // whole process on what is now a normal, reachable "no wallet available"
-    // condition (e.g. a CC RPC called before any wallet is loaded/active).
+    // The active wallet can be null (true zero-wallet startup, or every
+    // wallet deactivated via setactivewallet, not just -disablewallet) --
+    // an assert here would crash the whole process on a normal, reachable
+    // "no wallet available" condition (e.g. a CC RPC called before any
+    // wallet is loaded/active).
     // Matches SignTx()'s own graceful-return pattern just above in this file,
     // and this function's own existing "insufficient funds" convention of
     // returning 0 rather than a positive total.

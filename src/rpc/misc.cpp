@@ -345,10 +345,7 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
         // guards it: this branch dereferences the tip for a height, and there
         // is no tip at all before the block index is loaded. Reachable
         // whenever -pubkey is set (that's what makes NOTARY_PUBKEY33
-        // non-zero) and something calls getinfo before the chain exists --
-        // caught for real by the gtest suite under --gtest_shuffle, where a
-        // chainless fixture's getinfo inherits NOTARY_PUBKEY33 from an
-        // earlier chain-building test and segfaults here.
+        // non-zero) and something calls getinfo before the chain exists.
         } else if( chainActive.Tip() != 0 && (notaryid= komodo_whoami(pubkeystr,(int32_t)chainActive.Tip()->nHeight,komodo_chainactive_timestamp())) >= 0 )  {
             obj.push_back(Pair("notaryid",        notaryid));
             if ( KOMODO_LASTMINED != 0 )

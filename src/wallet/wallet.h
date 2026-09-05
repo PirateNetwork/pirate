@@ -1135,11 +1135,9 @@ public:
     int nextSweep = 0;
     int targetSweepQty = 0;
 
-    // Fee/address-filter settings for consolidation and sweep. These used to
-    // be process-global (declared in the async-op headers, shared by every
-    // wallet regardless of which one an RPC targeted); Phase 5 made them
-    // per-wallet fields, persisted via CWalletDB so each wallet's own choices
-    // survive a restart independently of any other loaded wallet. An empty
+    // Fee/address-filter settings for consolidation and sweep: per-wallet
+    // fields, persisted via CWalletDB so each wallet's own choices survive a
+    // restart independently of any other loaded wallet. An empty
     // *Addresses list means "consolidate all wallet addresses" (no filter);
     // a non-empty list means only those addresses are eligible -- there's no
     // separate "map used" flag, since that's exactly what emptiness already
@@ -1152,14 +1150,8 @@ public:
     std::string saplingSweepAddress;
     std::string ironwoodSweepAddress;
 
-    // Per-wallet fee/transaction-behavior and pruning settings. Phase 5
-    // promoted these from process-wide globals (wallet.cpp) -- shared by
-    // every wallet regardless of which one an RPC or CreateTransaction() call
-    // was actually operating on -- to real per-instance fields, persisted via
-    // CWalletDB the same way as the consolidation/sweep settings above.
-    // nKeypoolSizeTarget and strWalletNotifyCommand replace what used to be a
-    // bare GetArg("-keypool"/"-walletnotify", ...) call re-read from the
-    // global CLI arg map on every use, with no storage at all.
+    // Per-wallet fee/transaction-behavior and pruning settings, persisted
+    // via CWalletDB the same way as the consolidation/sweep settings above.
     CFeeRate payTxFee = CFeeRate(DEFAULT_TRANSACTION_FEE);
     unsigned int nTxConfirmTarget = DEFAULT_TX_CONFIRM_TARGET;
     bool bSpendZeroConfChange = true;
@@ -1183,15 +1175,13 @@ public:
     // Cross-thread hand-off for the in-startup interactive create/restore
     // flow only (init.cpp's !HaveHDSeed() busy-wait: the GUI thread sets
     // createType and, for a restore, these two, then the blocked init thread
-    // polls createType and consumes them once it changes). Moved here from a
-    // pair of process globals (recoverySeedPhrase/recoverySeedLangCode) as
-    // part of the no-default-wallet redesign, matching createType's own
-    // existing per-instance-not-process-global shape -- there is now more
-    // than one CWallet that could plausibly be mid-creation (though in
-    // practice only ever pwalletMain reaches this specific flow; the new
-    // createwallet RPC and Qt's post-startup first-run flow, see
-    // CWalletManager::CreateWallet(), pass a recovery phrase as an ordinary
-    // parameter instead and never touch these).
+    // polls createType and consumes them once it changes). Per-instance,
+    // matching createType's own shape, since more than one CWallet could
+    // plausibly be mid-creation (though in practice only init.cpp's startup
+    // wallet reaches this specific flow; the createwallet RPC and Qt's
+    // post-startup first-run flow, see CWalletManager::CreateWallet(), pass
+    // a recovery phrase as an ordinary parameter instead and never touch
+    // these).
     std::string recoverySeedPhrase;
     uint32_t recoverySeedLangCode = 0;
 
@@ -1698,9 +1688,7 @@ public:
     unsigned int nMasterKeyMaxID;
 
     // strWalletFile is immutable after construction (see the comment on
-    // cs_wallet above), so this needs no lock. Was a hardcoded "dummy" stub
-    // until Phase 7 of the multiwallet effort (WalletModel::getWalletName())
-    // became the first real caller.
+    // cs_wallet above), so this needs no lock.
     std::string GetName() const
     {
         return strWalletFile;
@@ -1739,12 +1727,10 @@ public:
         nSetChainUpdates = 0;
         nTimeFirstKey = 0;
         fBroadcastTransactions = false;
-        // Left uninitialized before this fix: only ever populated by
-        // init.cpp's own ReadWalletBirthday() call for pwalletMain, so any
-        // other CWallet instance (e.g. one loaded via
-        // CWalletManager::LoadWallet(), or a gtest fixture) read garbage
-        // here -- found via ScanForWalletTransactions()'s birthday-skip loop
-        // comparing pindex->nHeight against this.
+        // Must default to a known value: ReadWalletBirthday() (init.cpp,
+        // CWalletManager::LoadWallet()) overwrites it once loaded, but
+        // ScanForWalletTransactions()'s birthday-skip loop compares
+        // pindex->nHeight against this before that ever runs.
         nBirthday = 0;
     }
 
@@ -2242,8 +2228,6 @@ public:
                            std::string& strFailReason, CAmount& nMinFeeOverride, const CCoinControl *coinControl = NULL, bool sign = true);
     bool CommitTransaction(CWalletTx& wtxNew, CReserveKey& reservekey);
 
-    // Per-wallet (Phase 5): used to be a static CWallet member -- shared by
-    // every wallet instance despite the CWallet:: scope, not really per-object.
     CFeeRate minTxFee = CFeeRate(1000);
     static CFeeRate fallbackFee;
 
@@ -2411,19 +2395,19 @@ public:
     void SetBroadcastTransactions(bool broadcast) { fBroadcastTransactions = broadcast; }
 
     /**
-     * Per-wallet configuration setters (Phase 5 of the multiwallet effort).
-     * Each one follows SetMinVersion()'s shape: update the in-memory field,
-     * then -- if this wallet is file-backed -- persist it immediately via a
-     * CWalletDB constructed for this wallet's own file, so the setting
-     * survives independently of whatever any other loaded wallet has. RPC
-     * handlers call these rather than assigning the fields directly, so a
-     * setting can never be changed in memory without also being persisted.
+     * Per-wallet configuration setters. Each one follows SetMinVersion()'s
+     * shape: update the in-memory field, then -- if this wallet is
+     * file-backed -- persist it immediately via a CWalletDB constructed for
+     * this wallet's own file, so the setting survives independently of
+     * whatever any other loaded wallet has. RPC handlers call these rather
+     * than assigning the fields directly, so a setting can never be changed
+     * in memory without also being persisted.
      */
-    // Return WriteEncryptableSetting()'s own result (false if this wallet is
-    // encrypted and still locked -- audit finding: a caller that needs to
-    // know whether the new value actually reached disk, rather than only
-    // taking effect in memory for this session, must check this instead of
-    // assuming success the way every other setter's void return implied.
+    // Returns WriteEncryptableSetting()'s own result (false if this wallet
+    // is encrypted and still locked): a caller that needs to know whether
+    // the new value actually reached disk, rather than only taking effect
+    // in memory for this session, must check this instead of assuming
+    // success the way every other setter's void return implies.
     bool SetSaplingConsolidationEnabled(bool enabled);
     void SetIronwoodConsolidationEnabled(bool enabled);
     void SetSaplingConsolidationInterval(int interval);
@@ -2588,8 +2572,8 @@ public:
         ReturnKey();
     }
 
-    // No locking, same accepted-risk class as reading pwalletMain itself --
-    // used by miner.cpp to tell "this reserve key was constructed against a
+    // No locking, an accepted lockless-read tradeoff -- used by miner.cpp to
+    // tell "this reserve key was constructed against a
     // real wallet" apart from "constructed against a null one" without
     // needing to separately track which wallet CreateNewBlockWithKey() was
     // given.

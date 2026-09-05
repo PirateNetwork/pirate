@@ -19,10 +19,10 @@
 using namespace std;
 using namespace libzcash;
 
-// Only the wallet-taking overloads are declared here. Leaving the pwalletMain
-// ones visible would let a future `EnsureWalletIsAvailable(fHelp)` compile and
-// silently check the default wallet again in a file where every RPC now
-// resolves its own; without them, that mistake is a compile error.
+// Only the wallet-taking overloads are declared here. A zero-arg
+// `EnsureWalletIsAvailable(fHelp)` call would silently check the active
+// wallet again in a file where every RPC resolves its own; without a
+// zero-arg overload declared, that mistake is a compile error.
 bool EnsureWalletIsAvailable(CWallet* pwallet, bool avoidException);
 void EnsureWalletIsUnlockedForReporting(CWallet* pwallet);
 int32_t komodo_dpowconfs(int32_t height, int32_t numconfs);

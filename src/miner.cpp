@@ -1065,12 +1065,11 @@ CBlockTemplate* CreateNewBlockWithKey(CReserveKey& reservekey, int32_t nHeight, 
         else if (reservekey.GetWallet() == nullptr) {
             // No wallet available and no valid mineraddress -- checked via
             // the actual reserve-key's wallet pointer, not the -disablewallet
-            // flag: under the no-default-wallet redesign that flag is no
-            // longer the only way to have zero wallets loaded (true
-            // zero-wallet startup, or every wallet deactivated via
-            // setactivewallet), so checking it instead of the real pointer
-            // would let this fall through to GetReservedKey() below and
-            // dereference a null wallet.
+            // flag: -disablewallet is not the only way to have zero wallets
+            // loaded (true zero-wallet startup, or every wallet deactivated
+            // via setactivewallet), so checking it instead of the real
+            // pointer would let this fall through to GetReservedKey() below
+            // and dereference a null wallet.
             return NULL;
         }
         else {
@@ -1775,16 +1774,16 @@ void static BitcoinMiner()
     }
 
 #ifdef ENABLE_WALLET
-    // No-default-wallet redesign: tracks which wallet (if any) the miner
-    // threads below are currently bound to -- see GetMiningWallet()'s own
-    // comment (miner.h) for why this exists and what it protects against.
-    // Plain (non-atomic) is enough: GenerateBitcoins() is only ever called
-    // from init.cpp's startup thread and RPC/async-operation threads that
-    // already serialize mining start/stop against each other the same way
-    // the pre-existing minerThreads pointer above does (no lock protects that
-    // either), and UnloadWallet()'s read of it is a benign torn-read
-    // non-issue -- a pointer-sized aligned store is atomic on every target
-    // platform, the same accepted-risk class as reading pwalletMain itself.
+    // Tracks which wallet (if any) the miner threads below are currently
+    // bound to -- see GetMiningWallet()'s own comment (miner.h) for why this
+    // exists and what it protects against. Plain (non-atomic) is enough:
+    // GenerateBitcoins() is only ever called from init.cpp's startup thread
+    // and RPC/async-operation threads that already serialize mining
+    // start/stop against each other the same way the pre-existing
+    // minerThreads pointer above does (no lock protects that either), and
+    // UnloadWallet()'s read of it is a benign torn-read non-issue -- a
+    // pointer-sized aligned store is atomic on every target platform, an
+    // accepted lockless-read tradeoff.
     static CWallet* g_miningWallet = nullptr;
 
     CWallet* GetMiningWallet()

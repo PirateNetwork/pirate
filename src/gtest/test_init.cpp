@@ -20,12 +20,11 @@
 // `stop` command did, which is why the crash was reported specifically on
 // exit rather than on every shutdown.
 //
-// pwalletMain-elimination effort: StartShutdown()'s guard now checks the
-// registry directly (an empty registry, not a null pointer, is what
-// -disablewallet -- and true zero-wallet startup, and every wallet
-// deactivated -- actually look like now), so this simulates the same
-// "nothing loaded" condition via CWalletManager::Reset() instead of nulling
-// a global that no longer exists.
+// StartShutdown()'s guard now checks the registry directly (an empty
+// registry, not a null pointer, is what -disablewallet -- and true
+// zero-wallet startup, and every wallet deactivated -- actually look like),
+// so this simulates the same "nothing loaded" condition via
+// CWalletManager::Reset().
 
 extern bool loadComplete;
 extern std::atomic<bool> fRequestShutdown;

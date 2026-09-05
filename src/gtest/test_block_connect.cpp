@@ -1950,10 +1950,10 @@ TEST(test_block, TestProcessBadBlock)
     EXPECT_EQ(mempool.size(), 1);
 }
 
-// Phase 4 of the multiwallet effort: CWalletManager::LoadWallet() now
-// registers a secondary wallet for ChainTip() notifications and catches it
-// up to the current tip, instead of leaving it a permanently frozen
-// snapshot. This drives a real TestChain rather than a synthetic
+// CWalletManager::LoadWallet() registers a secondary wallet for ChainTip()
+// notifications and catches it up to the current tip, instead of leaving it
+// a permanently frozen snapshot. This drives a real TestChain rather than a
+// synthetic
 // CBlockIndex, because CWallet::ChainTip() (via IncrementSaplingWallet etc.)
 // reads chainActive/pcoinsTip for real -- a fake index would crash inside
 // that machinery rather than exercise it.
@@ -1975,9 +1975,9 @@ TEST(test_block, SecondaryWalletReceivesChainTipNotificationsAfterLoad)
     // runs next.
     struct GlobalStateCleanup {
         std::shared_ptr<CDBEnv> previousBitdb;
-        // No-default-wallet redesign: this test now registers a
-        // RegisterInitialWallet()-based "default_test.dat" (see below) so
-        // "secondarytestwallet" is a genuine secondary rather than the
+        // This test registers a RegisterInitialWallet()-based
+        // "default_test.dat" (see below) so "secondarytestwallet" is a
+        // genuine secondary rather than the
         // first-loaded-into-empty-registry wallet that would otherwise become
         // active. RegisterInitialWallet() never calls
         // RegisterValidationInterface() (production's equivalent, init.cpp,
@@ -1988,7 +1988,7 @@ TEST(test_block, SecondaryWalletReceivesChainTipNotificationsAfterLoad)
         // fixture, which owns the identical object lifetime).
         CWallet* defaultWallet = nullptr;
         ~GlobalStateCleanup() {
-            // Opus-audit-caught: on the happy path the in-test UnloadWallet()
+            // On the happy path the in-test UnloadWallet()
             // call below already removes "secondarytestwallet" (a
             // LoadWallet()-registered, and therefore validation-interface-
             // registered, wallet) before this destructor runs -- but on an
@@ -2043,10 +2043,9 @@ TEST(test_block, SecondaryWalletReceivesChainTipNotificationsAfterLoad)
 
     // Advance the chain: this is where chainHeight becomes the right check
     // -- it's set inside ChainTip() itself, so this is the actual regression
-    // guard for "does ChainTip() now fire at all for a registered secondary
-    // wallet." Before Phase 4 this wallet was never registered, so
-    // chainHeight would stay 0 forever regardless of how many more blocks
-    // connect.
+    // guard for "does ChainTip() fire for a registered secondary wallet."
+    // If this wallet were never registered, chainHeight would stay 0
+    // forever regardless of how many more blocks connect.
     chain.generateBlock(notary);
     EXPECT_EQ(chain.GetIndex()->nHeight, secondaryWallet->chainHeight);
 

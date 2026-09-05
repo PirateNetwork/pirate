@@ -2,10 +2,9 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-// Talks only to CWalletManager, never to pwalletMain -- deliberately not one
-// of the files that reaches into the global default wallet directly, so a
-// second loaded wallet can be listed/loaded/unloaded without any of this
-// file needing to know how to run a request against a non-default wallet.
+// Talks only to CWalletManager, never to a specific wallet directly, so a
+// second loaded wallet can be listed/loaded/unloaded without this file
+// needing to know how to run a request against a non-active wallet.
 
 #include "rpc/server.h"
 #include "util.h"
@@ -298,109 +297,72 @@ void RegisterMultiWalletRPCCommands(CRPCTable &tableRPC)
 bool IsMultiWalletAwareRPC(const std::string& name)
 {
     // Kept next to the registry RPCs themselves (rather than inline in
-    // CRPCTable::execute()) so it's obvious, when a future phase rewires
-    // more of rpcwallet.cpp/rpcdump.cpp to resolve
-    // CWalletManager::GetWalletForRequest(), exactly which names need adding
-    // here too -- this set and the actual rewiring must move together.
-    //
-    // (An earlier note here claimed encryptwallet calls StartShutdown() on
-    // success. Reading it shows that was wrong: only its *failure* path ever
-    // restarted the node, to safely restore the pre-encryption backup. The
-    // real blocker turned out to be the other end -- see its entry in the set
-    // below and the refusal in the handler itself.)
-    //
-    // settxfee (and the whole consolidation/sweep/fee/pruning settings
-    // family) was in the original phase-2 scope but got dropped once its code
-    // was actually read: it assigned the process-global `payTxFee` (confirmed
-    // read directly by CWallet::CreateTransaction() via wallet_fees.cpp,
-    // documented there as "user-set global variable") -- rewiring it to take
-    // a wallet parameter would still have changed every wallet's fee
-    // behavior, not just the selected one. Phase 5 promoted payTxFee (and the
-    // rest of that settings family) to genuine per-CWallet fields, so these
-    // are now safe to include below.
+    // CRPCTable::execute()) so it's obvious exactly which names need adding
+    // here whenever a handler is rewired to resolve
+    // CWalletManager::GetWalletForRequest() -- this set and the actual
+    // rewiring must move together.
     static const std::set<std::string> aware = {
         "loadwallet", "unloadwallet", "listwallets", "createwallet",
-        // No-default-wallet redesign: same reasoning as loadwallet/unloadwallet
-        // above -- these ignore any URI-selected wallet by design, but a
-        // /wallet/x/setactivewallet call shouldn't be refused outright by the
-        // dispatch gate just because it isn't yet rewired the way ordinary
-        // wallet-operating RPCs are.
+        // getactivewallet/setactivewallet ignore any URI-selected wallet by
+        // design, but a /wallet/x/setactivewallet call shouldn't be refused
+        // outright by the dispatch gate for that.
         "getactivewallet", "setactivewallet",
         "getbalance", "getnewaddress", "sendtoaddress",
         "listtransactions", "listunspent", "gettransaction",
         "getwalletinfo", "listaddressgroupings", "z_getbalance",
         "backupwallet", "dumpprivkey", "importprivkey",
         "walletpassphrase", "walletlock", "keypoolrefill",
-        // Phase 3: async operations, constructed on the HTTP thread and
-        // executed later against the wallet they were built with (see
-        // AsyncRPCOperation's wallet-aware constructor, asyncrpcoperation.h) --
-        // not the automatic ChainTip()-triggered sweep/consolidation classes,
-        // which stay pwalletMain-only (see walletmanager.cpp's documented
-        // limitation on why secondary wallets never receive ChainTip() at all).
+        // Async operations, constructed on the HTTP thread and executed
+        // later against the wallet they were built with (see
+        // AsyncRPCOperation's wallet-aware constructor, asyncrpcoperation.h)
+        // -- not the automatic ChainTip()-triggered sweep/consolidation
+        // classes, which only ever run against the active wallet.
         "z_sendmany", "z_shieldcoinbase", "z_mergetoaddress", "consolidateaddress",
-        // Scoped by requesting wallet (OperationBelongsToWallet(), rpcwallet.cpp)
-        // rather than refused outright, now that the operations they report on
-        // can genuinely belong to a secondary wallet.
+        // Scoped by requesting wallet (OperationBelongsToWallet(), rpcwallet.cpp).
         "z_getoperationstatus", "z_getoperationresult", "z_listoperationids",
-        // Phase 5: consolidation/sweep settings, now genuine per-CWallet
-        // fields (wallet.h) rather than process-globals or pwalletMain-only
-        // fields, persisted per wallet via CWalletDB.
+        // Consolidation/sweep settings: per-CWallet fields (wallet.h),
+        // persisted per wallet via CWalletDB.
         "enablesaplingconsolidation", "enableironwoodconsolidation", "enableconsolidation",
         "consolidationaddresses", "consolidationstatus",
         "setconsolidationtarget", "setconsolidationfee", "setconsolidationinterval",
         "setironwoodconsolidationtarget", "setironwoodconsolidationfee", "setironwoodconsolidationinterval",
         "enablesweep", "sweepstatus", "setsweepfee", "setsweepinterval", "setsweepaddress",
-        // Phase 5: fee/behavior/pruning settings and change-address/upgrade,
-        // same promotion.
+        // Fee/behavior/pruning settings and change-address/upgrade: same, per
+        // wallet.
         "settxfee", "setmintxfee", "settxconfirmtarget", "setspendzeroconfchange",
         "setmintxvalue", "setkeypoolsize", "setwalletnotify",
         "setdeletetx", "setdeleteconflicttx", "setdeleteinterval",
         "setkeeptxnum", "setkeeptxfornblocks",
         "setchangeaddress", "upgradewallet",
         // rederiveironwoodscopes: the per-wallet equivalent of
-        // -rederiverironwoodscopes, previously only reachable for whichever
-        // wallet was the default one (Phase 11 audit backlog item, fixed).
+        // -rederiverironwoodscopes.
         "rederiveironwoodscopes",
-        // setpubkey: rewired as part of the pwalletMain-elimination effort
-        // (it now resolves GetWalletForRequest() -- optionally, since its
-        // core -pubkey/notary-identity function works with no wallet loaded
-        // at all -- for its "ismine" check instead of always pwalletMain).
         "setpubkey",
-        // kvupdate, addmultisigaddress, fundrawtransaction, nn_split,
-        // nn_makenota: rewired as part of the pwalletMain-elimination
-        // effort's mechanical RPC pass (rpc/notaries.cpp's nn_getwalletinfo
-        // was already done; these two siblings had been missed).
         "kvupdate", "addmultisigaddress", "fundrawtransaction",
         "nn_split", "nn_makenota", "opreturn_burn",
-        // Backlog item 9: encryptwallet now resolves GetWalletForRequest()
-        // instead of always pwalletMain, and a failed attempt against a
-        // secondary wallet recovers in-process (CWalletManager::
-        // DiscardWalletAfterFailedEncryption() + LoadWallet(), rpcwallet.cpp)
-        // instead of restarting the whole node -- only the default wallet's
-        // own failure path still does that, since it has no unload/reload
-        // route at all (see the "no-default-wallet redesign" backlog item).
-        // Encrypting a secondary wallet is now fully supported end to end:
-        // the resulting file can be loaded again with its own passphrase,
-        // via loadwallet's passphrase argument, -secondarywalletpassphrase=
-        // at startup, or the GUI's open-wallet prompt (CWalletManager::
-        // LoadWallet()'s per-wallet unlock path). The temporary refusal that
-        // used to live in the handler -- added while that reload path did
-        // not yet exist, so that a successful encryption could not brick the
-        // wallet -- has been removed.
+        // encryptwallet resolves GetWalletForRequest(); a failed attempt
+        // against a secondary wallet recovers in-process
+        // (CWalletManager::DiscardWalletAfterFailedEncryption() +
+        // LoadWallet(), rpcwallet.cpp) instead of restarting the node --
+        // only the default wallet's own failure path still does that, since
+        // it has no unload/reload route. Encrypting a secondary wallet is
+        // fully supported end to end: the resulting file can be loaded
+        // again with its own passphrase, via loadwallet's passphrase
+        // argument, -secondarywalletpassphrase= at startup, or the GUI's
+        // open-wallet prompt (CWalletManager::LoadWallet()'s per-wallet
+        // unlock path).
         "encryptwallet",
-        // Phase 9: the Crypto-Conditions (CC) smart-contract RPCs. These now
-        // resolve CWalletManager::GetWalletForRequest() instead of always
-        // pwalletMain (see CCtx.cpp/CCutils.cpp for the choke-point threading,
-        // and rpcwallet.cpp's CNSPVWalletLockGuard for the former
-        // Lock2NSPV/Unlock2NSPV pair). Read-only RPCs in the same modules are
-        // included too even where they never touch pwalletMain at all -- they're
-        // chain-derived and wallet-independent, so allowlisting them is a
-        // formality that stops them being refused against a secondary wallet
-        // for no reason. Left out (see cc/ and rpc/crosschain.cpp comments for
+        // The Crypto-Conditions (CC) smart-contract RPCs (see
+        // CCtx.cpp/CCutils.cpp for the choke-point threading, and
+        // rpcwallet.cpp's CNSPVWalletLockGuard for Lock2NSPV/Unlock2NSPV).
+        // Read-only RPCs in the same modules are included too even where
+        // they touch no wallet -- they're chain-derived and
+        // wallet-independent, so allowlisting them is a formality that
+        // stops them being refused against a secondary wallet for no
+        // reason. Left out (see cc/ and rpc/crosschain.cpp comments for
         // why): tokenswapask/tokenfillswap (commented out of the command
-        // table), importgatewaydumpprivkey (not registered; its
-        // pwalletMain->GetKey() call is itself already commented out), lotto/
-        // auction (only lottoaddress/auctionaddress are live, no wallet touch),
+        // table), importgatewaydumpprivkey (not registered), lotto/auction
+        // (only lottoaddress/auctionaddress are live, no wallet touch),
         // musig (not part of the node build at all).
         "assetsaddress", "tokeninfo", "tokenlist", "tokenorders", "mytokenorders",
         "tokenaddress", "tokenbalance", "tokencreate", "tokentransfer",
@@ -427,25 +389,17 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "oraclessample", "oraclessamples",
         "channelsaddress", "channelslist", "channelsinfo", "channelsopen",
         "channelspayment", "channelsclose", "channelsrefund",
-        // Phase 9: the crosschain.cpp import/self-import/migrate RPCs.
-        // importdual and importgatewaydeposit never touch pwalletMain (they
-        // build unsigned proof transactions, not wallet-signed ones) but are
+        // rpc/crosschain.cpp's import/self-import/migrate RPCs. importdual
+        // and importgatewaydeposit touch no wallet directly (they build
+        // unsigned proof transactions, not wallet-signed ones) but are
         // included for the same read-only-consistency reason as above.
         "migrate_checkburntransactionsource", "migrate_createnotaryapprovaltransaction",
-        // No-default-wallet redesign: migrate_createburntransaction was
-        // conspicuously missing from this list despite being wallet-aware
-        // like its siblings just above -- it had no EnsureWalletIsAvailable
-        // guard at all until this phase (rpc/crosschain.cpp).
         "migrate_createburntransaction",
         "selfimport", "importdual", "importgatewayddress", "importgatewayinfo",
         "importgatewaybind", "importgatewaydeposit", "importgatewaywithdraw",
         "importgatewaypartialsign", "importgatewaycompletesigning",
         "importgatewaymarkdone", "importgatewaypendingwithdraws",
         "importgatewayprocessed",
-        // Phase 10: the 46 mechanical NEEDS-REWIRING functions from Phase 8's
-        // census (wallet/rpcwallet.cpp, wallet/rpcdump.cpp, and a handful of
-        // misc RPC files) -- plain pwalletMain -> GetWalletForRequest() swaps,
-        // same shape as Phases 2/5's original rewiring.
         "getaccountaddress", "getrawchangeaddress", "setaccount", "getaccount",
         "getaddressesbyaccount", "signmessage", "getreceivedbyaddress",
         "getreceivedbyaccount", "cleanwallettransactions", "getunconfirmedbalance",
@@ -460,22 +414,19 @@ bool IsMultiWalletAwareRPC(const std::string& name)
         "z_exportkey", "z_exportviewingkey", "z_setaddressbook",
         "getinfo", "validateaddress", "z_validateaddress", "nn_getwalletinfo",
         "getwalletburntransactions", "signrawtransaction",
-        // rpcpiratewallet/rpcdump plumbing phase: the 6 zs_*/getalldata RPCs
-        // (wallet/rpcpiratewallet.cpp) whose shared getRpcArcTx()/getAll*VKs()
-        // helper layer previously hardcoded pwalletMain, and the 5
-        // wallet/rpcdump.cpp RPCs blocked on importwallet_impl()/
-        // dumpwallet_impl() (shared by the t-only and z-inclusive variants of
-        // each) plus z_exportseedphrase, which was simply missed by Phase 10.
+        // The zs_*/getalldata RPCs (wallet/rpcpiratewallet.cpp), sharing a
+        // getRpcArcTx()/getAll*VKs() helper layer, and the
+        // importwallet/dumpwallet family (wallet/rpcdump.cpp), sharing
+        // importwallet_impl()/dumpwallet_impl() between their t-only and
+        // z-inclusive variants.
         "zs_listtransactions", "zs_gettransaction", "zs_listspentbyaddress",
         "zs_listreceivedbyaddress", "zs_listsentbyaddress", "getalldata",
         "importwallet", "z_importwallet", "dumpwallet", "z_exportwallet",
         "z_exportseedphrase",
-        // decoderawtransaction (rpc/rawtransaction.cpp) optionally annotates a
-        // raw transaction with whatever the resolved wallet can decrypt --
-        // was unconditionally pwalletMain via decrypttransaction() until this
-        // phase resolved it per-request too, for the same reason.
+        // decoderawtransaction (rpc/rawtransaction.cpp) optionally annotates
+        // a raw transaction with whatever the resolved wallet can decrypt.
         "decoderawtransaction",
-        // Phase 12: the offline-signing trio (rpc/rawtransaction.cpp).
+        // The offline-signing trio (rpc/rawtransaction.cpp).
         // z_createbuildinstructions/z_createbuildinstructionscoincontrol are
         // rewired the standard way (GetWalletForRequest()). z_buildrawtransaction
         // is listed here purely so selecting a wallet in its request URI doesn't
