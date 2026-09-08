@@ -271,13 +271,16 @@ public:
     void FlushAndUnloadAllExceptActiveWallet();
     void Reset();
 
-    // Shared by the multiwallet RPCs and by multi-`-wallet=` startup
-    // parsing. Whitelists letters/digits/'.'/'_'/'-' (a superset of
-    // SanitizeFilename()'s alphanumeric-only charset, so conventional names
-    // like "wallet.dat" remain loadable) and separately rejects "." and "..";
-    // '/' and '\\' are never in the allowed set, so a name containing "../"
-    // or an absolute path can't even be constructed, let alone slip past a
-    // check.
+    // Shared by the multiwallet RPCs, by multi-`-wallet=` startup parsing,
+    // and by the GUI's file-dialog-driven Load/New Wallet flow
+    // (qt/pirateoceangui.cpp). Rejects '/' and '\\' (so a name can never
+    // introduce a second path component, and "../" or an absolute path
+    // can't even be constructed), the literal strings "." and ".."
+    // separately (boost::filesystem resolves those as directory components,
+    // not literal filenames), NUL/other control characters, and ':' (so
+    // -secondarywalletpassphrase=<name>:<passphrase>'s split-on-first-colon
+    // parsing in init.cpp stays unambiguous) -- otherwise accepts any
+    // valid-for-the-OS filename, including spaces and ordinary punctuation.
     static bool IsValidWalletName(const std::string& name, std::string& strError);
 
     // Thread-local read: the wallet this request has resolved to and pinned

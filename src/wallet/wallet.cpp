@@ -6997,9 +6997,59 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
     if (fFromLoadWallet)
     {
         mapWallet[hash] = wtxIn;
-        mapWallet[hash].BindWallet(this);
-        UpdateNullifierNoteMapWithTx(mapWallet[hash]);
+        CWalletTx& wtx = mapWallet[hash];
+        wtx.BindWallet(this);
+        UpdateNullifierNoteMapWithTx(wtx);
         AddToSpends(hash);
+
+        // SaplingNoteData::value/address (and the Ironwood equivalent) are
+        // in-memory-only fields -- SerializationOp only persists ivk/
+        // nullifier/position -- so a tx read straight from wallet.dat (as
+        // opposed to one built by AddToWalletIfInvolvingMe's own decrypt
+        // step, which populates these before ever reaching the non-load
+        // branch below) carries SaplingNoteData/IronwoodNoteData whose
+        // value/address are still their default-constructed zero/empty
+        // state. That's the regression this closes: nothing else re-derives
+        // them for an already-known, still-active transaction on an
+        // ordinary reload, so getZAddressBalances() (the GUI's Overview/
+        // Receive-tab/Z-Send balance source) silently saw zero for every
+        // note that predated the wallet's last rescan. Decrypt each one
+        // here using its own already-deserialized ivk (no brute-force IVK
+        // trial needed, unlike initalizeArcTx()'s archived-transaction
+        // repair, which exists specifically for an older, more minimal
+        // on-disk format that predates ivk being serialized at all).
+        auto vOutputs = wtx.GetSaplingOutputs();
+        for (auto& pair : wtx.mapSaplingNoteData) {
+            SaplingOutPoint op = pair.first;
+            SaplingNoteData& nd = pair.second;
+            if (nd.fNoteDataInitialized)
+                continue;
+            auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+            if (!optPlaintext)
+                continue;
+            auto notePt = optPlaintext.value();
+            SaplingPaymentAddress addr;
+            if (!nd.ivk.DeriveAddress(&addr, notePt.d))
+                continue;
+            nd.value = CAmount(notePt.note(nd.ivk).value().value());
+            nd.address = addr;
+            nd.fNoteDataInitialized = true;
+        }
+
+        auto vActions = wtx.GetIronwoodActions();
+        for (auto& pair : wtx.mapIronwoodNoteData) {
+            IronwoodOutPoint op = pair.first;
+            IronwoodNoteData& nd = pair.second;
+            if (nd.fNoteDataInitialized)
+                continue;
+            auto optDeserialized = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], nd.ivk);
+            if (!optDeserialized)
+                continue;
+            auto notePt = optDeserialized.value();
+            nd.value = CAmount(notePt.note().value().value());
+            nd.address = notePt.GetAddress();
+            nd.fNoteDataInitialized = true;
+        }
     }
     else
     {

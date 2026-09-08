@@ -25,16 +25,29 @@ thread_local std::string g_requestedWalletName;
 // non-empty.
 thread_local bool g_explicitWalletSelected = false;
 
-// Deliberately narrower than SanitizeFilename() (util/strencodings.cpp),
-// which is alphanumeric-only and would reject "wallet.dat" itself -- the
-// conventional on-disk name a node's first-ever wallet has always used
-// (still the auto-loaded name on any upgraded deployment), and the plan's
-// own worked example for a secondary wallet. '.', '_' and '-' are added on
-// top of that; '/' and '\\' stay structurally excluded either way, so a name
-// still can't escape the datadir no matter what letters/digits/./-/_ it's
-// paired with.
-const std::string SAFE_WALLET_NAME_CHARS =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-";
+// What actually keeps a wallet name from escaping the data directory is
+// excluding '/' and '\\' (so a name can never introduce a second path
+// component) plus rejecting the literal strings "." and ".." separately
+// (IsValidWalletName() below -- boost::filesystem resolves those as
+// directory components, not literal filenames, even though neither is a
+// path separator itself). Restricting the character set any further than
+// that -- e.g. to alnum/'.'/'_'/'-' -- adds no additional safety, just
+// friction: it rejected any file a user picked via the GUI's native file
+// dialog (qt/pirateoceangui.cpp) whose real, valid-for-the-OS name
+// happened to contain a space or other ordinary punctuation. NUL and the
+// other C0 control characters (0x00-0x1F) plus DEL (0x7F) are excluded too,
+// since they have no legitimate place in a filename and could otherwise
+// corrupt a log line or a terminal displaying one. ':' is excluded for a
+// different reason, not path safety: -secondarywalletpassphrase=<name>:<pass>
+// (init.cpp's ParseSecondaryWalletPassphraseEntry()) splits on the first ':'
+// only, which is unambiguous solely because a wallet name can never itself
+// contain one -- letting ':' through here would make that split
+// misinterpret part of the wallet name as the start of the passphrase.
+bool IsSafeWalletNameChar(char c)
+{
+    unsigned char uc = static_cast<unsigned char>(c);
+    return c != '/' && c != '\\' && c != ':' && uc >= 0x20 && uc != 0x7F;
+}
 
 // Closes and checkpoints exactly this wallet's own file within the shared
 // BerkeleyDB environment. Deliberately NOT CWallet::Flush(true)/
@@ -139,8 +152,9 @@ bool CWalletManager::IsValidWalletName(const std::string& name, std::string& str
         return false;
     }
     for (char c : name) {
-        if (SAFE_WALLET_NAME_CHARS.find(c) == std::string::npos) {
-            strError = strprintf("Wallet name contains an invalid character: '%c'. Only letters, digits, '.', '_' and '-' are allowed.", c);
+        if (!IsSafeWalletNameChar(c)) {
+            strError = strprintf("Wallet name contains an invalid character (0x%02x): '/', '\\', ':' and control characters are not allowed.",
+                                  (unsigned char)c);
             return false;
         }
     }

@@ -7,7 +7,6 @@
 #define KOMODO_QT_SPLASHSCREEN_H
 
 #include <functional>
-#include <string>
 #include <QSplashScreen>
 
 class CWallet;
@@ -38,44 +37,13 @@ public:
     explicit SplashScreen(const NetworkStyle *networkStyle);
     ~SplashScreen();
 
-    // Entry point for true zero-wallet startup (init.cpp's
-    // fAutoLoadWalletAtStartup was false, so AppInit2() returned with no
-    // wallet active and never fired InitCreateWallet() -- there is no
-    // wallet object yet for this dialog to merely configure). Shows the
-    // same create/restore widgets as the pre-existing InitCreateWallet()
-    // signal path, but every handler below creates/loads walletName via
-    // CWalletManager directly instead of touching a pre-existing active wallet
-    // -- see fZeroWalletStartup's own comment. Emits walletCreated() once a
-    // wallet exists (KomodoApplication::walletCreatedDuringStartup() resumes
-    // the rest of Qt startup from there).
-    void startZeroWalletFlow(const std::string& walletName);
-
-    // True once startZeroWalletFlow() has been called -- selects, in each of
-    // on_btnTypeSelected_clicked()/on_btnRestore_clicked()/on_btnDone_clicked()
-    // and the free function showNewPhrase() below, between the pre-existing
-    // active-wallet-based logic (an already-constructed wallet this dialog is
-    // merely configuring, driven by init.cpp's own busy-wait) and the new
-    // CWalletManager-based logic (no wallet exists yet, this dialog is what
-    // creates one). Public alongside this class's other UI-state members
-    // (seed, newSeed, ...) for the same reason: the free functions further
-    // down splashscreen.cpp (showCreateWallet(), showNewPhrase(), ...) read
-    // and write a SplashScreen's fields directly rather than through member
-    // functions of their own. on_btnOpen_clicked() needs no such branch: it
-    // is only ever shown via the pre-existing InitNeedUnlockWallet() signal,
-    // which requires an already-loaded, already-encrypted wallet to fire at
-    // all -- structurally unreachable during true zero-wallet startup, since
-    // there is no such wallet yet.
-    bool fZeroWalletStartup;
-    // The name to create/load under (zero-wallet mode only) -- what
-    // GetArg("-wallet", "wallet.dat") resolved to at the point
-    // startZeroWalletFlow() was called.
-    std::string zeroWalletName;
-    // Set by CWalletManager::CreateWallet() on success (zero-wallet mode
-    // only) -- this dialog's own stand-in for what the pre-existing flow
-    // stores on the active wallet's recoverySeedPhrase, since there is no wallet
-    // object to hang it on until CreateWallet() itself returns.
-    std::string zeroWalletSeedPhrase;
-
+    // This dialog's own UI-state fields are public (rather than behind member
+    // functions) since the free functions in splashscreen.cpp
+    // (showCreateWallet(), showNewPhrase(), ...) read and write them
+    // directly. This flow is driven by init.cpp's own busy-wait: the active
+    // wallet under construction has already been registered with
+    // CWalletManager before any of these signals can fire, so it always
+    // resolves as the active wallet throughout.
     QWidget* seed;
     QVBoxLayout* layout;
     QLabel* pirateIcon;
@@ -97,15 +65,6 @@ public Q_SLOTS:
 
     /** Show message and progress */
     void showMessage(const QString &message, int alignment, const QColor &color);
-
-Q_SIGNALS:
-    // Emitted once startZeroWalletFlow() has produced a loaded wallet (a
-    // brand-new random seed, or one restored from a phrase). Never emitted
-    // for the pre-existing InitCreateWallet()-signal-driven flow (an
-    // an already-active wallet), which has no equivalent completion
-    // signal of its own -- init.cpp's own busy-wait loop notices that case
-    // directly by polling createType.
-    void walletCreated();
 
 protected:
     bool eventFilter(QObject * obj, QEvent * ev);

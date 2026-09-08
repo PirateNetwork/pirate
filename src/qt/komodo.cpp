@@ -257,17 +257,6 @@ public Q_SLOTS:
     void shutdownResult();
     /// Handle runaway exceptions. Shows a message box with the problem and quits the program.
     void handleRunawayException(const QString &message);
-#ifdef ENABLE_WALLET
-    /// A true zero-wallet startup (a fresh data directory, nothing
-    /// auto-loaded) leaves no wallet active when AppInit2() returns.
-    /// initializeResult() detects that and, instead of
-    /// finishing startup immediately, keeps the splash screen up and drives
-    /// SplashScreen's create/restore flow directly against CWalletManager --
-    /// this slot is what it connects to once that flow produces a wallet, to
-    /// resume the rest of startup (window/tab setup) that finishInitialize()
-    /// normally does right away.
-    void walletCreatedDuringStartup();
-#endif
 
 Q_SIGNALS:
     void requestedInitialize();
@@ -304,19 +293,12 @@ private:
     std::unique_ptr<QWidget> shutdownWindow;
     // Not owned in the sense of deletion (the splash screen deletes itself
     // via slotFinish(), same as before this member existed -- see
-    // createSplashScreen()'s own comment) -- kept so initializeResult() can
-    // drive its zero-wallet-startup create/restore flow directly instead of
-    // only ever reacting to uiInterface signals fired from the (in that case,
-    // never blocked) init thread.
+    // createSplashScreen()'s own comment).
     SplashScreen *splashScreenWidget = nullptr;
 
     void startThread();
     /// Shared tail of initializeResult(): wallet tab setup (if any), showing
-    /// the main window, and tearing down the splash screen. Called either
-    /// immediately (a wallet was already auto-loaded at startup, or wallet
-    /// support isn't compiled in) or later, from walletCreatedDuringStartup()
-    /// (true zero-wallet startup, once the splash screen's own create/restore
-    /// flow produces one).
+    /// the main window, and tearing down the splash screen.
     void finishStartup();
 };
 
@@ -521,17 +503,12 @@ void KomodoApplication::createWindow(const NetworkStyle *networkStyle)
 
 void KomodoApplication::createSplashScreen(const NetworkStyle *networkStyle)
 {
-    // Kept as splashScreenWidget so initializeResult()/
-    // walletCreatedDuringStartup() can drive its zero-wallet-startup
-    // create/restore flow directly -- it still takes care of deleting
-    // itself when slotFinish() happens.
+    // Kept as splashScreenWidget so the connect() calls below have a target
+    // -- it still takes care of deleting itself when slotFinish() happens.
     splashScreenWidget = new SplashScreen(networkStyle);
     splashScreenWidget->show();
     connect(this, SIGNAL(splashFinished(QWidget*)), splashScreenWidget, SLOT(slotFinish(QWidget*)));
     connect(this, SIGNAL(requestedShutdown()), splashScreenWidget, SLOT(close()));
-#ifdef ENABLE_WALLET
-    connect(splashScreenWidget, SIGNAL(walletCreated()), this, SLOT(walletCreatedDuringStartup()));
-#endif
 }
 
 void KomodoApplication::startThread()
@@ -631,20 +608,15 @@ void KomodoApplication::initializeResult(bool success)
 
         // A true zero-wallet startup (a fresh data directory, nothing
         // auto-loaded -- see init.cpp's fAutoLoadWalletAtStartup) leaves no
-        // wallet active here, with no
-        // uiInterface signal ever having fired (AppInit2() never blocked
-        // waiting for one). Rather than finish startup with no wallet at all,
-        // drive the splash screen's existing create/restore widgets directly
-        // -- walletCreatedDuringStartup() resumes the rest of this function
-        // once that flow produces a wallet. Mirrors init.cpp's own
-        // fDisableWallet computation; if wallet support isn't usable at all,
-        // fall through to finishStartup() below exactly as before, with no
-        // wallet tab, same as -disablewallet already behaved.
-        bool fDisableWallet = GetBoolArg("-disablewallet", false) || KOMODO_NSPV_SUPERLITE;
-        if (!CWalletManager::Get().GetActiveWallet() && !fDisableWallet && splashScreenWidget) {
-            splashScreenWidget->startZeroWalletFlow(GetArg("-wallet", "wallet.dat"));
-            return;
-        }
+        // wallet active here, with no uiInterface signal ever having fired
+        // (AppInit2() never blocked waiting for one). Rather than force the
+        // splash screen's create/restore flow before the main window can
+        // even appear, fall straight through to finishStartup() -- it's
+        // already null-tolerant for exactly this case (see its own comment),
+        // opening with no wallet tab and every wallet-related action
+        // disabled (setWalletActionsEnabled(false), the constructor's own
+        // default). The user creates or loads one afterward via File >
+        // Wallets, the same path used for every secondary wallet.
 #endif
         finishStartup();
     } else {
@@ -652,28 +624,17 @@ void KomodoApplication::initializeResult(bool success)
     }
 }
 
-#ifdef ENABLE_WALLET
-void KomodoApplication::walletCreatedDuringStartup()
-{
-    finishStartup();
-}
-#endif
-
 void KomodoApplication::finishStartup()
 {
     clientModel = new ClientModel(optionsModel);
     window->setClientModel(clientModel);
 
 #ifdef ENABLE_WALLET
-    // finishStartup() always runs strictly after a wallet is fully loaded
-    // and active -- either init.cpp's own Step 8 sequence completed
-    // normally, or (true zero-wallet startup) startZeroWalletFlow()'s
-    // CreateWallet()/LoadWallet() call already registered and activated one
-    // before walletCreatedDuringStartup() got here -- so resolving the
-    // active wallet fresh here is always correct. Secondary wallets loaded/
-    // created later via the File > Wallets menu are added straight to
-    // window's own wallet-model map (see PirateOceanGUI), not through this
-    // startup path.
+    // Resolves whatever wallet, if any, init.cpp's Step 8 sequence left
+    // active -- there may be none at all (true zero-wallet startup).
+    // Secondary wallets loaded/created later via the File > Wallets menu are
+    // added straight to window's own wallet-model map (see PirateOceanGUI),
+    // not through this startup path.
     CWallet* const pwallet = CWalletManager::Get().GetActiveWallet();
     if (pwallet)
     {

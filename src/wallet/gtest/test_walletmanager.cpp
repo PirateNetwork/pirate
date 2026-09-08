@@ -188,8 +188,8 @@ TEST_F(WalletManagerTest, InvalidWalletNamesAreRejectedStructurally)
         "..",
         ".",
         "sub/dir",
-        "name with spaces",
         "..\\..\\windows_style_traversal",
+        "second.dat:passphrase", // ':' reserved for -secondarywalletpassphrase=<name>:<passphrase> parsing
         std::string(129, 'a'), // one past the length cap
     };
 
@@ -214,6 +214,23 @@ TEST_F(WalletManagerTest, ConventionalDotWalletNamesAreAccepted)
     std::string strError;
     EXPECT_TRUE(CWalletManager::Get().LoadWallet("second.dat", strError)) << strError;
     EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("second.dat"));
+}
+
+TEST_F(WalletManagerTest, OSValidNamesWithSpacesAndPunctuationAreAccepted)
+{
+    // The GUI's Load/New Wallet dialogs (qt/pirateoceangui.cpp) are native
+    // file-browser dialogs -- a user can pick or type any real, valid-for-
+    // the-OS filename, including one with a space or ordinary punctuation.
+    // IsValidWalletName() only needs to reject '/', '\\', ':', the literal
+    // "."/"..", and control characters (none of those threaten datadir-
+    // escape safety or the -secondarywalletpassphrase= parser otherwise);
+    // anything else a real filesystem accepts must be loadable too.
+    CWalletManager::Get().RegisterInitialWallet("default_test.dat", new CWallet("default_test.dat"));
+    CreateWalletFileOnDisk("my wallet (backup) #2.dat");
+
+    std::string strError;
+    EXPECT_TRUE(CWalletManager::Get().LoadWallet("my wallet (backup) #2.dat", strError)) << strError;
+    EXPECT_NE(nullptr, CWalletManager::Get().GetWallet("my wallet (backup) #2.dat"));
 }
 
 TEST_F(WalletManagerTest, LoadWalletRunsVerifyOnAFileNeverTouchedInThisProcess)

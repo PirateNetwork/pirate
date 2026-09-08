@@ -43,7 +43,9 @@
 #include <QProgressDialog>
 #include <QDateTime>
 #include <QDesktopWidget>
+#include <QDir>
 #include <QDragEnterEvent>
+#include <QFileInfo>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QListWidget>
@@ -170,7 +172,6 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     walletSettingsAction(0),
     loadWalletAction(0),
     newWalletAction(0),
-    closeWalletAction(0),
     walletsMenu(0),
 #endif
     trayIcon(0),
@@ -483,15 +484,17 @@ void PirateOceanGUI::createActions()
     loadWalletAction->setStatusTip(tr("Load an existing wallet file as a secondary wallet"));
     newWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/filesave"), tr("&New Wallet..."), this);
     newWalletAction->setStatusTip(tr("Create a brand-new, freshly-seeded secondary wallet"));
-    closeWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/remove"), tr("&Close Wallet"), this);
-    closeWalletAction->setStatusTip(tr("Unload the currently-active secondary wallet"));
-    closeWalletAction->setEnabled(false); // starts pointed at the default wallet, which can't be closed
+    // No standalone "Close Wallet" action: closing targets one specific
+    // wallet by name, not "whichever tab is current" -- viewing a tab always
+    // makes it active now (see setCurrentWallet()), and the active wallet can
+    // never be closed (CWalletManager::UnloadWallet()'s own invariant), so a
+    // single current-tab-scoped action could never be enabled for anything.
+    // rebuildWalletsMenu() instead adds one "Close" action per loaded wallet.
 
     walletsMenu = new QMenu(tr("&Wallets"), this);
     connect(walletsMenu, SIGNAL(aboutToShow()), this, SLOT(rebuildWalletsMenu()));
     connect(loadWalletAction, SIGNAL(triggered()), this, SLOT(loadWalletClicked()));
     connect(newWalletAction, SIGNAL(triggered()), this, SLOT(newWalletClicked()));
-    connect(closeWalletAction, SIGNAL(triggered()), this, SLOT(closeWalletClicked()));
 
 #endif // ENABLE_WALLET
 
@@ -769,6 +772,14 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
         {
             walletFrame->setClientModel(_clientModel);
         }
+        // Piggybacks on ClientModel's existing ~250ms poll tick (it already
+        // fires this signal unconditionally every tick -- see
+        // ClientModel::updateTimer()) rather than a dedicated timer, purely
+        // to notice an active-wallet change made from outside this window
+        // (setactivewallet via RPC or another session) and pull the
+        // displayed tab back into sync with it -- see
+        // syncCurrentWalletWithActive()'s own doc comment.
+        connect(_clientModel, SIGNAL(mempoolSizeChanged(long,size_t)), this, SLOT(syncCurrentWalletWithActive()));
 #endif // ENABLE_WALLET
         unitDisplayControl->setOptionsModel(_clientModel->getOptionsModel());
 
@@ -834,14 +845,17 @@ bool PirateOceanGUI::setCurrentWallet(const QString& name)
     bool fOk = walletFrame->setCurrentWallet(name);
     if (fOk) {
         currentWalletName = name;
-        // closeWalletClicked() refuses to unload whichever wallet is
-        // currently active -- keep its menu action in sync with which tab is
-        // actually selected. Approximate: the real enforcement is
-        // UnloadWallet()'s own active-wallet/mining-pin refusal regardless of
-        // what this menu state shows, since which wallet is active can move
-        // via setactivewallet independent of which GUI tab is selected.
-        if (closeWalletAction)
-            closeWalletAction->setEnabled(name.toStdString() != CWalletManager::Get().GetActiveWalletName());
+        // The displayed tab and the wallet RPCs default to are meant to
+        // always be the same wallet (see syncCurrentWalletWithActive()'s own
+        // doc comment for the reverse direction) -- switching tabs here
+        // makes this one active too, so an unscoped RPC/CLI call (or this
+        // window's own console, which already scopes explicitly to
+        // currentWalletName regardless) sees the same balance/history the
+        // user is currently looking at. Can only fail if `name` somehow
+        // isn't in the registry, which can't happen: every tab is added
+        // (addWallet()) only after CWalletManager already has it loaded.
+        std::string strError;
+        CWalletManager::Get().SetActiveWallet(name.toStdString(), strError);
         if (rpcConsole) {
             // Always the real CWalletManager name now -- every tab is keyed
             // by one directly (see mapWalletModels' own comment,
@@ -875,7 +889,7 @@ bool PirateOceanGUI::removeWallet(const QString& name)
     CWalletManager::Get().ReleaseRef(walletManagerName);
     if (currentWalletName == name) {
         currentWalletName.clear();
-        // closeWalletClicked()'s own post-close fallback already re-selects
+        // closeWallet()'s own post-close fallback already re-selects
         // a new current tab when one remains, which in
         // turn re-binds the console via setCurrentWallet() -- but when this
         // was the last tab, nothing calls setCurrentWallet() at all, and
@@ -940,12 +954,14 @@ void PirateOceanGUI::setWalletActionsEnabled(bool enabled)
     openAction->setEnabled(enabled);
 #ifdef ENABLE_WALLET
     walletSettingsAction->setEnabled(enabled);
-    loadWalletAction->setEnabled(enabled);
-    newWalletAction->setEnabled(enabled);
-    // closeWalletAction's enabled state otherwise tracks which wallet is
-    // selected (see setCurrentWallet) -- only force it off here, never on.
-    if (!enabled)
-        closeWalletAction->setEnabled(false);
+    // loadWalletAction/newWalletAction deliberately not tied to `enabled`:
+    // they're the only way to escape a zero-wallets-loaded state (including
+    // at startup, before any wallet has ever been added), so they must stay
+    // enabled regardless of whether one is currently loaded. Per-wallet
+    // Close actions need no equivalent handling: rebuildWalletsMenu() only
+    // ever creates one for a wallet that's actually loaded, so there is
+    // nothing to force off when `enabled` is false (mapWalletModels is empty
+    // in exactly that case).
 #endif
 }
 
@@ -1226,26 +1242,43 @@ void PirateOceanGUI::rebuildWalletsMenu()
     // wallet through Load Wallet below is the only way to actually attach
     // one to this window right now.
     // Each tab displays under its own real, stable name always. "(active)"
-    // is recomputed fresh on every rebuild
-    // against whichever tab's real name currently matches
-    // GetActiveWalletName(), so it always reflects reality even if active
-    // status moved via setactivewallet from outside this window entirely.
+    // is recomputed fresh on every rebuild against whichever tab's real name
+    // currently matches GetActiveWalletName(), so it always reflects reality
+    // even if active status moved via setactivewallet from outside this
+    // window entirely -- though in steady state it always matches the
+    // checked entry too, since setCurrentWallet() makes a switched-to tab
+    // active and syncCurrentWalletWithActive() pulls the reverse case back
+    // into sync; "(active)"/checked can only differ for the brief window
+    // (up to one ~250ms poll tick) between an external setactivewallet call
+    // and this window noticing it.
     const std::string activeWalletName = CWalletManager::Get().GetActiveWalletName();
     for (auto it = mapWalletModels.constBegin(); it != mapWalletModels.constEnd(); ++it) {
         QString guiKey = it.key();
-        QString displayName = (guiKey.toStdString() == activeWalletName)
-            ? tr("%1 (active)").arg(guiKey)
-            : guiKey;
+        bool fIsActive = (guiKey.toStdString() == activeWalletName);
+        QString displayName = fIsActive ? tr("%1 (active)").arg(guiKey) : guiKey;
         QAction *action = walletsMenu->addAction(displayName);
         action->setCheckable(true);
         action->setChecked(guiKey == currentWalletName);
         action->setData(guiKey);
         connect(action, SIGNAL(triggered()), this, SLOT(switchWalletActionTriggered()));
+
+        // Targets this specific wallet by name rather than "whichever tab is
+        // current": viewing a tab always makes it active now, so a close
+        // action scoped to the current tab could never apply to anything
+        // else -- closing a wallet means picking it here without first
+        // switching to it. Enabled even for the active wallet: closeWallet()
+        // deactivates it first (UnloadWallet()'s own suggested recipe), since
+        // otherwise the active wallet -- always the only one, when just one
+        // is loaded -- could never be closed at all, leaving no way back to
+        // a zero-wallet state through the GUI.
+        QAction *closeAction = walletsMenu->addAction(platformStyle->TextColorIcon(":/icons/remove"),
+                                                       tr("Close \"%1\"").arg(guiKey));
+        closeAction->setData(guiKey);
+        connect(closeAction, SIGNAL(triggered()), this, SLOT(closeWalletActionTriggered()));
     }
     walletsMenu->addSeparator();
     walletsMenu->addAction(loadWalletAction);
     walletsMenu->addAction(newWalletAction);
-    walletsMenu->addAction(closeWalletAction);
 }
 
 void PirateOceanGUI::switchWalletActionTriggered()
@@ -1258,14 +1291,55 @@ void PirateOceanGUI::switchWalletActionTriggered()
         setCurrentWallet(guiKey);
 }
 
+void PirateOceanGUI::syncCurrentWalletWithActive()
+{
+    if (!walletFrame || mapWalletModels.isEmpty())
+        return;
+    QString activeGuiKey = QString::fromStdString(CWalletManager::Get().GetActiveWalletName());
+    // Nothing to do if this window has no idea what's active (disablewallet-
+    // adjacent edge case, shouldn't reach here with wallets loaded), if it's
+    // already the displayed tab, or if the newly-active wallet has no tab
+    // open in this window at all (loaded via RPC only, or open in a
+    // different window) -- there is no tab to switch to in that case.
+    if (activeGuiKey.isEmpty() || activeGuiKey == currentWalletName || !mapWalletModels.contains(activeGuiKey))
+        return;
+    setCurrentWallet(activeGuiKey);
+}
+
+// Every wallet name CWalletManager deals with is a bare filename resolved
+// against GetDataDir() (CWalletManager::IsValidWalletName() rejects '/'/'\\'
+// outright) -- a native file dialog otherwise lets the user browse anywhere
+// on disk, so this is the one check standing between "picked a file" and
+// silently doing the wrong thing (loading/creating some unrelated,
+// same-named file actually inside the data directory instead of the one the
+// user just selected, or -- for a save dialog -- writing outside it where
+// nothing this process resolves will ever find it again). Returns the bare
+// filename on success, empty on rejection (having already shown why).
+static QString ResolveWalletNameInDataDir(QWidget *parent, const QString &title, const QString &filePath)
+{
+    QDir dataDir(QString::fromStdString(GetDataDir().string()));
+    QFileInfo info(filePath);
+    if (QDir(info.absolutePath()) != dataDir) {
+        QMessageBox::critical(parent, title,
+            QObject::tr("Wallet files must be located directly in the data directory:\n%1")
+                .arg(QDir::toNativeSeparators(dataDir.absolutePath())));
+        return QString();
+    }
+    return info.fileName();
+}
+
 void PirateOceanGUI::loadWalletClicked()
 {
     if (walletFrame) walletFrame->resetUnlockTimer();
 
-    bool ok = false;
-    QString name = QInputDialog::getText(this, tr("Load Wallet"),
-        tr("Wallet file name (in the data directory):"), QLineEdit::Normal, QString(), &ok);
-    if (!ok || name.isEmpty())
+    QString filePath = GUIUtil::getOpenFileName(this, tr("Load Wallet"),
+        QString::fromStdString(GetDataDir().string()),
+        tr("Wallet files (*.dat);;All files (*)"), nullptr);
+    if (filePath.isEmpty())
+        return;
+
+    QString name = ResolveWalletNameInDataDir(this, tr("Load Wallet"), filePath);
+    if (name.isEmpty())
         return;
 
     if (mapWalletModels.contains(name)) {
@@ -1280,10 +1354,14 @@ void PirateOceanGUI::newWalletClicked()
 {
     if (walletFrame) walletFrame->resetUnlockTimer();
 
-    bool ok = false;
-    QString name = QInputDialog::getText(this, tr("New Wallet"),
-        tr("New wallet file name (in the data directory):"), QLineEdit::Normal, QString(), &ok);
-    if (!ok || name.isEmpty())
+    QString filePath = GUIUtil::getSaveFileName(this, tr("New Wallet"),
+        QString::fromStdString(GetDataDir().string()),
+        tr("Wallet files (*.dat)"), nullptr);
+    if (filePath.isEmpty())
+        return;
+
+    QString name = ResolveWalletNameInDataDir(this, tr("New Wallet"), filePath);
+    if (name.isEmpty())
         return;
 
     startWalletLoadOrCreate(name, /*fCreate=*/true);
@@ -1451,62 +1529,108 @@ void PirateOceanGUI::handleWalletLoadOrCreateResult(const QString& name, bool fC
     seedBox.exec();
 }
 
-void PirateOceanGUI::closeWalletClicked()
+void PirateOceanGUI::closeWalletActionTriggered()
+{
+    QAction *action = qobject_cast<QAction*>(sender());
+    if (!action)
+        return;
+    closeWallet(action->data().toString());
+}
+
+void PirateOceanGUI::closeWallet(const QString& guiKey)
 {
     if (walletFrame) walletFrame->resetUnlockTimer();
 
-    if (currentWalletName.isEmpty() || currentWalletName.toStdString() == CWalletManager::Get().GetActiveWalletName())
-        return; // the active wallet can never be closed
+    if (guiKey.isEmpty())
+        return;
 
-    QString guiKey = currentWalletName;
     if (QMessageBox::question(this, tr("Close Wallet"),
             tr("Close wallet \"%1\"? It will stop being loaded until you load it again.").arg(guiKey),
             QMessageBox::Yes | QMessageBox::No, QMessageBox::No) != QMessageBox::Yes)
         return;
 
-    // guiKey and CWalletManager's own name are always identical now -- every
+    // guiKey and CWalletManager's own name are always identical -- every
     // tab is keyed by its own real registry name (see mapWalletModels' own
     // comment, pirateoceangui.h).
     std::string managerName = guiKey.toStdString();
 
-    // addWallet() took a ref on this wallet specifically so an *external*
-    // unload (RPC, another session) can't free the CWallet* out from under
-    // this GUI's WalletModel/WalletView -- release it here first, since this
-    // close is the GUI's own deliberate hand-off, not the race that ref
-    // exists to prevent. Held past this point, it would make the
-    // UnloadWallet() call below always fail on the GUI's own ref.
-    CWalletManager::Get().ReleaseRef(managerName);
+    // UnloadWallet() below refuses outright to unload whichever wallet is
+    // currently active -- its own error text says exactly what to do about
+    // it: "call setactivewallet with a different name (or \"\") first".
+    // Closing the active wallet is precisely how a user gets back to a
+    // valid zero-wallet state (or hands off to another loaded wallet), so
+    // do that "first" automatically here rather than making the whole
+    // active wallet permanently unclosable through the GUI -- with only one
+    // wallet loaded, it's always the active one, and there would otherwise
+    // be no way to ever reach zero wallets again short of the console.
+    bool fWasActive = (managerName == CWalletManager::Get().GetActiveWalletName());
+    if (fWasActive) {
+        std::string deactivateError;
+        CWalletManager::Get().SetActiveWallet("", deactivateError);
+    }
+
+    // Every GUI-side subscriber onto this wallet's own boost::signals2
+    // notification signals -- WalletModel itself
+    // (subscribeToCoreSignals()/unsubscribeFromCoreSignals(),
+    // qt/walletmodel.cpp), plus the TransactionTableModel and
+    // ZAddressTableModel it owns as QObject children (each keeps its own
+    // independent subscription, torn down by Qt's normal parent-child
+    // destruction cascade when the WalletModel itself is deleted) -- has to
+    // be fully disconnected before UnloadWallet() below deletes the CWallet
+    // object, not after: each destructor dereferences the raw CWallet* to
+    // disconnect, and doing that against an already-freed object corrupts
+    // the boost::signals2::mutex embedded in its signal members. That is
+    // exactly what crashed here ("Assertion `pthread_mutex_lock(&m_) == 0'
+    // failed", deep inside boost::signals2) under the previous ordering
+    // (unload the backend first, detach the GUI after) -- the first time
+    // Close Wallet was ever actually reachable through a full UAT pass, this
+    // pre-existing ordering bug finally got exercised. removeWallet() below
+    // does exactly that teardown -- including releasing this window's own
+    // protective ref taken back in addWallet() -- so it now has to run
+    // *before* UnloadWallet(), not after.
+    removeWallet(guiKey);
 
     std::string strError;
     if (!CWalletManager::Get().UnloadWallet(managerName, strError)) {
-        // Still in use by something else (an unpolled async operation, or a
-        // ref held by a concurrent RPC request) -- restore the protective
-        // ref and leave the GUI side untouched. Detaching here anyway would
-        // strand a wallet that's still actually loaded, with no way back
-        // into the GUI short of a restart.
-        CWalletManager::Get().AddRef(managerName);
+        // Still in use by something else (an unpolled async operation, a ref
+        // held by a concurrent RPC request, or mining-pinned) -- restore
+        // whatever this call changed and rebuild an equivalent tab, rather
+        // than leaving the wallet loaded with no way back into this window
+        // short of a restart. Re-resolves the CWallet* fresh from the
+        // registry rather than trusting a pointer captured before the call
+        // above, in case it was concurrently unloaded by something else in
+        // this same narrow window -- null means it genuinely isn't loaded
+        // anymore, so there is nothing left to rebuild.
+        if (fWasActive) {
+            std::string reactivateError;
+            CWalletManager::Get().SetActiveWallet(managerName, reactivateError);
+        }
+        CWallet *wallet = CWalletManager::Get().GetWallet(managerName);
+        if (wallet) {
+            WalletModel *model = new WalletModel(platformStyle, wallet, clientModel ? clientModel->getOptionsModel() : nullptr, this);
+            if (addWallet(guiKey, model)) {
+                if (fWasActive)
+                    setCurrentWallet(guiKey);
+            } else {
+                delete model;
+            }
+        }
         QMessageBox::warning(this, tr("Close Wallet"),
             tr("Could not close wallet \"%1\": %2").arg(guiKey, QString::fromStdString(strError)));
         return;
     }
 
-    // Backend unload succeeded -- the CWallet* is gone. Detaching the GUI
-    // side now is safe: nothing runs on this thread between UnloadWallet()
-    // returning and removeWallet() running (no nested event loop turn), so
-    // no queued timer tick or signal can have touched the freed wallet
-    // through the WalletModel/WalletView in between. removeWallet() below
-    // calls ReleaseRef() again for this now-already-unregistered name --
-    // harmless no-op, per ReleaseRef()'s own contract.
-    removeWallet(guiKey);
-    // No more a fixed "~Default" slot to fall back to -- prefer the active
-    // wallet's own tab if it's still open here, else whatever tab happens to
-    // remain, else leave nothing selected (removeWallet() above already
-    // cleared currentWalletName in that case).
-    QString activeGuiKey = QString::fromStdString(CWalletManager::Get().GetActiveWalletName());
-    if (mapWalletModels.contains(activeGuiKey))
-        setCurrentWallet(activeGuiKey);
-    else if (!mapWalletModels.isEmpty())
-        setCurrentWallet(mapWalletModels.constBegin().key());
+    // Closing the active wallet (the common case now) always clears
+    // currentWalletName via removeWallet() above -- hand off to another
+    // loaded wallet if one remains open in this window, or leave a genuine
+    // zero-wallet state in place if that was the last one.
+    if (currentWalletName.isEmpty() && !mapWalletModels.isEmpty()) {
+        QString activeGuiKey = QString::fromStdString(CWalletManager::Get().GetActiveWalletName());
+        if (mapWalletModels.contains(activeGuiKey))
+            setCurrentWallet(activeGuiKey);
+        else
+            setCurrentWallet(mapWalletModels.constBegin().key());
+    }
 }
 
 #endif // ENABLE_WALLET
