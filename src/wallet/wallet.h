@@ -1100,14 +1100,14 @@ public:
     // Sapling consolidation settings
     bool fSaplingConsolidationEnabled = false;
     bool fSaplingConsolidationRunning = false;
-    int saplingConsolidationInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 60 * 24 * 7; // Initialize 1 per week
+    int saplingConsolidationInterval = 10080; // 1 week, at Pirate's 1-block-per-minute target
     int nextSaplingConsolidation = 0;
     int targetSaplingConsolidationQty = 100;
-    
+
     // Ironwood consolidation settings
     bool fIronwoodConsolidationEnabled = false;
     bool fIronwoodConsolidationRunning = false;
-    int ironwoodConsolidationInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 60 * 24 * 7; // Initialize 1 per week
+    int ironwoodConsolidationInterval = 10080; // 1 week, at Pirate's 1-block-per-minute target
     int nextIronwoodConsolidation = 0;
     int targetIronwoodConsolidationQty = 100;
 
@@ -1131,7 +1131,7 @@ public:
     // Protocol-agnostic sweep configuration
     bool fSweepEnabled = false;          // Unified sweep flag supporting all protocols
     bool fSweepRunning = false;
-    int sweepInterval = (Params().GetConsensus().nPowTargetSpacing/60) * 15; //Initialize every 15 minutes
+    int sweepInterval = 60; // 1 hour, at Pirate's 1-block-per-minute target
     int nextSweep = 0;
     int targetSweepQty = 0;
 
@@ -1161,7 +1161,7 @@ public:
     // CWallet::SetWalletNotifyCommand() (wallet.cpp) for why.
     std::string strWalletNotifyCommand;
     bool fTxDeleteEnabled = false;
-    bool fTxConflictDeleteEnabled = true;
+    bool fTxConflictDeleteEnabled = false;
     int fDeleteInterval = DEFAULT_TX_DELETE_INTERVAL;
     unsigned int fDeleteTransactionsAfterNBlocks = DEFAULT_TX_RETENTION_BLOCKS;
     unsigned int fKeepLastNTransactions = DEFAULT_TX_RETENTION_LASTTX;

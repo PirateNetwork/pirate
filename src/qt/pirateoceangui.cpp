@@ -26,6 +26,7 @@
 #ifdef ENABLE_WALLET
 #include "walletframe.h"
 #include "walletmodel.h"
+#include "walletoptionspage.h"
 #include "wallet/wallet.h"
 #include "wallet/walletmanager.h"
 #include "verifypaymentdisclosuredialog.h"
@@ -169,10 +170,11 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     openAction(0),
     showHelpMessageAction(0),
 #ifdef ENABLE_WALLET
-    walletSettingsAction(0),
+    walletOptionsAction(0),
     loadWalletAction(0),
     newWalletAction(0),
     walletsMenu(0),
+    walletOptionsPage(0),
 #endif
     trayIcon(0),
     trayIconMenu(0),
@@ -239,6 +241,10 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
         walletFrame = new WalletFrame(_platformStyle, this);
         walletFrame->setObjectName("MainFrame");
         setCentralWidget(walletFrame);
+
+        // Non-modal, top-level, shown/raised like rpcConsole rather than
+        // exec()'d -- see WalletOptionsPage's own doc comment.
+        walletOptionsPage = new WalletOptionsPage(0);
     } else
 #endif // ENABLE_WALLET
     {
@@ -442,12 +448,9 @@ void PirateOceanGUI::createActions()
     tabGroup->addAction(historyAction);
 
 #ifdef ENABLE_WALLET
-    walletSettingsAction = new QAction(platformStyle->SingleColorIcon(":/icons/options"), tr("&Wallet Settings"), this);
-    walletSettingsAction->setStatusTip(tr("Configure consolidation, sweep and fee settings for this wallet"));
-    walletSettingsAction->setToolTip(walletSettingsAction->statusTip());
-    walletSettingsAction->setCheckable(true);
-    walletSettingsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_6));
-    tabGroup->addAction(walletSettingsAction);
+    walletOptionsAction = new QAction(platformStyle->SingleColorIcon(":/icons/options"), tr("&Wallet Options..."), this);
+    walletOptionsAction->setStatusTip(tr("Configure consolidation, sweep and fee settings for this wallet"));
+    walletOptionsAction->setToolTip(walletOptionsAction->statusTip());
 #endif
 
 #ifdef ENABLE_WALLET
@@ -477,8 +480,8 @@ void PirateOceanGUI::createActions()
     connect(historyAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(historyAction, SIGNAL(triggered()), this, SLOT(gotoHistoryPage()));
 
-    connect(walletSettingsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
-    connect(walletSettingsAction, SIGNAL(triggered()), this, SLOT(gotoWalletSettingsPage()));
+    connect(walletOptionsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
+    connect(walletOptionsAction, SIGNAL(triggered()), this, SLOT(showWalletOptionsWindow()));
 
     loadWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("&Load Wallet..."), this);
     loadWalletAction->setStatusTip(tr("Load an existing wallet file as a secondary wallet"));
@@ -509,7 +512,7 @@ void PirateOceanGUI::createActions()
     aboutQtAction = new QAction(platformStyle->TextColorIcon(":/icons/about_qt"), tr("About &Qt"), this);
     aboutQtAction->setStatusTip(tr("Show information about Qt"));
     aboutQtAction->setMenuRole(QAction::AboutQtRole);
-    optionsAction = new QAction(platformStyle->TextColorIcon(":/icons/options"), tr("&Options..."), this);
+    optionsAction = new QAction(platformStyle->TextColorIcon(":/icons/options"), tr("&Node Options..."), this);
     optionsAction->setStatusTip(tr("Modify configuration options for %1").arg(tr(PACKAGE_NAME)));
     optionsAction->setMenuRole(QAction::PreferencesRole);
     optionsAction->setEnabled(false);
@@ -653,6 +656,7 @@ void PirateOceanGUI::createMenuBar()
     {
         settings->addAction(encryptWalletAction);
         settings->addAction(changePassphraseAction);
+        settings->addAction(walletOptionsAction);
         settings->addSeparator();
     }
     settings->addAction(optionsAction);
@@ -682,7 +686,6 @@ void PirateOceanGUI::createToolBars()
         toolbar->addAction(zsignAction);
         toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
-        toolbar->addAction(walletSettingsAction);
         overviewAction->setChecked(true);
     }
 }
@@ -869,6 +872,12 @@ bool PirateOceanGUI::setCurrentWallet(const QString& name)
             // isn't.
             rpcConsole->setCurrentWalletName(name);
         }
+        // Same reasoning as rpcConsole above -- the Wallet Options window is
+        // a single shared instance now (not one per tab, as before), so it
+        // has to be retargeted explicitly on every switch to stay scoped to
+        // whichever wallet is actually showing.
+        if (walletOptionsPage)
+            walletOptionsPage->setWalletModel(mapWalletModels.value(name));
     }
     return fOk;
 }
@@ -901,6 +910,8 @@ bool PirateOceanGUI::removeWallet(const QString& name)
         // that obvious.
         if (rpcConsole)
             rpcConsole->setCurrentWalletName(QString());
+        if (walletOptionsPage)
+            walletOptionsPage->setWalletModel(nullptr);
     }
     if (mapWalletModels.isEmpty())
         setWalletActionsEnabled(false);
@@ -928,6 +939,8 @@ void PirateOceanGUI::removeAllWallets()
     // but correct to keep in sync regardless.
     if (rpcConsole)
         rpcConsole->setCurrentWalletName(QString());
+    if (walletOptionsPage)
+        walletOptionsPage->setWalletModel(nullptr);
 }
 #endif // ENABLE_WALLET
 
@@ -953,7 +966,7 @@ void PirateOceanGUI::setWalletActionsEnabled(bool enabled)
     usedReceivingZAddressesAction->setEnabled(enabled);
     openAction->setEnabled(enabled);
 #ifdef ENABLE_WALLET
-    walletSettingsAction->setEnabled(enabled);
+    walletOptionsAction->setEnabled(enabled);
     // loadWalletAction/newWalletAction deliberately not tied to `enabled`:
     // they're the only way to escape a zero-wallets-loaded state (including
     // at startup, before any wallet has ever been added), so they must stay
@@ -1220,12 +1233,14 @@ void PirateOceanGUI::gotoVerifyPaymentDisclosure()
     dlg.exec();
 }
 
-void PirateOceanGUI::gotoWalletSettingsPage()
+void PirateOceanGUI::showWalletOptionsWindow()
 {
     if (walletFrame) walletFrame->resetUnlockTimer();
 
-    walletSettingsAction->setChecked(true);
-    if (walletFrame) walletFrame->gotoWalletSettingsPage();
+    walletOptionsPage->showNormal();
+    walletOptionsPage->show();
+    walletOptionsPage->raise();
+    walletOptionsPage->activateWindow();
 }
 
 void PirateOceanGUI::rebuildWalletsMenu()

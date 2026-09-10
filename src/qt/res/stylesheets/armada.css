@@ -179,6 +179,11 @@ QWidget#RPCConsole {
     color: #ffffff;
 }
 
+QWidget#WalletOptionsPage {
+    background-color: #303030;
+    color: #ffffff;
+}
+
 QDialog#HelpMessageDialog {
     background-color: #303030;
     color: #ffffff;

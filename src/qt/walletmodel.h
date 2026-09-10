@@ -275,7 +275,7 @@ public:
     // getDefaultConfirmTarget() above. Setters lock internally (see the
     // CWallet::Set*() implementations); getters read the field directly,
     // same as getDefaultConfirmTarget() already does. Used by
-    // WalletSettingsPage.
+    // WalletOptionsPage.
     bool getSaplingConsolidationEnabled() const;
     void setSaplingConsolidationEnabled(bool enabled);
     int getSaplingConsolidationInterval() const;
@@ -311,14 +311,17 @@ public:
     void setSweepInterval(int interval);
     CAmount getSweepTxFee() const;
     void setSweepTxFee(CAmount fee);
-    QString getSaplingSweepAddress() const;
-    // Returns false (and does not change anything) if the address is not a
-    // decodable Sapling address, or this wallet has no spending key for it --
-    // the same two checks the setsweepaddress RPC enforces. An empty string
-    // always succeeds (clears the configured destination).
-    bool setSaplingSweepAddress(const QString &address);
-    QString getIronwoodSweepAddress() const;
-    bool setIronwoodSweepAddress(const QString &address);
+    // One field for both pools -- whichever of saplingSweepAddress/
+    // ironwoodSweepAddress is currently non-empty (they're mutually
+    // exclusive, see CWallet::SetSaplingSweepAddress()'s own comment).
+    QString getSweepAddress() const;
+    // Auto-detects which pool the address belongs to (same dispatch as the
+    // setsweepaddress RPC, wallet/rpcwallet.cpp) and routes to the matching
+    // setter -- returns false (and does not change anything) if it doesn't
+    // decode as a Sapling or Ironwood address this wallet holds the spending
+    // key for. An empty string always succeeds (clears the configured
+    // destination in both pools).
+    bool setSweepAddress(const QString &address);
     bool getSweepRunning() const;
     int getNextSweep() const;
 
@@ -328,8 +331,6 @@ public:
     void setMinTxFee(CAmount fee);
     unsigned int getTxConfirmTarget() const;
     void setTxConfirmTarget(unsigned int target);
-    bool getSpendZeroConfChange() const;
-    void setSpendZeroConfChange(bool spend);
     CAmount getMinTxValue() const;
     void setMinTxValue(CAmount value);
     int64_t getKeypoolSizeTarget() const;

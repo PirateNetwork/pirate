@@ -130,7 +130,8 @@ QT_FORMS_UI = \
   qt/forms/restoreseed.ui \
   qt/forms/openwallet.ui \
   qt/forms/unlocktimerdialog.ui \
-  qt/forms/updatedialog.ui
+  qt/forms/updatedialog.ui \
+  qt/forms/walletoptionspage.ui
 
 QT_MOC_CPP = \
   qt/moc_addressbookpage.cpp \
@@ -191,7 +192,7 @@ QT_MOC_CPP = \
   qt/moc_verifypaymentdisclosuredialog.cpp \
   qt/moc_walletframe.cpp \
   qt/moc_walletmodel.cpp \
-  qt/moc_walletsettingspage.cpp \
+  qt/moc_walletoptionspage.cpp \
   qt/moc_walletview.cpp
 
 KOMODO_MM =
@@ -285,7 +286,7 @@ KOMODO_QT_H = \
   qt/walletframe.h \
   qt/walletmodel.h \
   qt/walletmodeltransaction.h \
-  qt/walletsettingspage.h \
+  qt/walletoptionspage.h \
   qt/walletview.h \
   qt/winshutdownmonitor.h
 
@@ -415,7 +416,7 @@ KOMODO_QT_WALLET_CPP = \
   qt/walletmodel.cpp \
   qt/walletmodeltransaction.cpp \
   qt/walletmodelztransaction.cpp \
-  qt/walletsettingspage.cpp \
+  qt/walletoptionspage.cpp \
   qt/walletview.cpp
 
 

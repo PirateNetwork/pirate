@@ -29,6 +29,7 @@ class SendCoinsRecipient;
 class UnitDisplayStatusBarControl;
 class WalletFrame;
 class WalletModel;
+class WalletOptionsPage;
 class HelpMessageDialog;
 class ModalOverlay;
 
@@ -137,10 +138,16 @@ private:
     QAction *rescanAction;
     QAction *verifyPaymentDisclosureAction;
 #ifdef ENABLE_WALLET
-    QAction *walletSettingsAction;
+    QAction *walletOptionsAction;
     QAction *loadWalletAction;
     QAction *newWalletAction;
     QMenu *walletsMenu;
+    // Single non-modal, top-level window (shown/raised like rpcConsole's debug
+    // window, never exec()'d) -- retargeted via setWalletModel() every time
+    // setCurrentWallet() runs, so it always reflects whichever wallet is
+    // currently displayed, rather than one instance per wallet tab the way
+    // the embedded page it replaced worked.
+    WalletOptionsPage *walletOptionsPage;
     // Per-wallet WalletModel instances for every wallet currently shown in
     // this window, keyed by its real CWalletManager registry name -- same
     // key WalletFrame's own mapWalletViews uses. Every tab is keyed by, and
@@ -296,8 +303,9 @@ private Q_SLOTS:
     void openClicked();
     /** Show verify payment disclosure dialog */
     void gotoVerifyPaymentDisclosure();
-    /** Switch to per-wallet settings page */
-    void gotoWalletSettingsPage();
+    /** Show/raise the non-modal Wallet Options window, retargeted to whichever
+     *  wallet is currently displayed */
+    void showWalletOptionsWindow();
     /** Rebuild the File > Wallets submenu from CWalletManager's current
      *  wallet list; called each time the submenu is about to be shown so it
      *  never goes stale relative to a load/create/close since it was last

@@ -1526,23 +1526,29 @@ int WalletModel::getSweepInterval() const { return wallet->sweepInterval; }
 void WalletModel::setSweepInterval(int interval) { wallet->SetSweepInterval(interval); }
 CAmount WalletModel::getSweepTxFee() const { return wallet->sweepTxFee; }
 void WalletModel::setSweepTxFee(CAmount fee) { wallet->SetSweepTxFee(fee); }
-QString WalletModel::getSaplingSweepAddress() const { LOCK(wallet->cs_wallet); return QString::fromStdString(wallet->saplingSweepAddress); }
-bool WalletModel::setSaplingSweepAddress(const QString &address)
+QString WalletModel::getSweepAddress() const
 {
-    std::string addrStr = address.toStdString();
-    if (!addrStr.empty() && !IsSpendableSaplingAddress(wallet, addrStr))
-        return false;
-    wallet->SetSaplingSweepAddress(addrStr);
-    return true;
+    LOCK(wallet->cs_wallet);
+    return QString::fromStdString(wallet->saplingSweepAddress.empty() ? wallet->ironwoodSweepAddress : wallet->saplingSweepAddress);
 }
-QString WalletModel::getIronwoodSweepAddress() const { LOCK(wallet->cs_wallet); return QString::fromStdString(wallet->ironwoodSweepAddress); }
-bool WalletModel::setIronwoodSweepAddress(const QString &address)
+bool WalletModel::setSweepAddress(const QString &address)
 {
     std::string addrStr = address.toStdString();
-    if (!addrStr.empty() && !IsSpendableIronwoodAddress(wallet, addrStr))
-        return false;
-    wallet->SetIronwoodSweepAddress(addrStr);
-    return true;
+    if (addrStr.empty()) {
+        // SetSaplingSweepAddress("") also clears the Ironwood slot as a side
+        // effect (see its own doc comment, wallet.cpp) -- one call clears both.
+        wallet->SetSaplingSweepAddress("");
+        return true;
+    }
+    if (IsSpendableSaplingAddress(wallet, addrStr)) {
+        wallet->SetSaplingSweepAddress(addrStr);
+        return true;
+    }
+    if (IsSpendableIronwoodAddress(wallet, addrStr)) {
+        wallet->SetIronwoodSweepAddress(addrStr);
+        return true;
+    }
+    return false;
 }
 bool WalletModel::getSweepRunning() const { return wallet->fSweepRunning; }
 int WalletModel::getNextSweep() const { return wallet->nextSweep; }
@@ -1553,8 +1559,6 @@ CAmount WalletModel::getMinTxFee() const { return wallet->minTxFee.GetFeePerK();
 void WalletModel::setMinTxFee(CAmount fee) { wallet->SetMinTxFee(CFeeRate(fee)); }
 unsigned int WalletModel::getTxConfirmTarget() const { return wallet->nTxConfirmTarget; }
 void WalletModel::setTxConfirmTarget(unsigned int target) { wallet->SetTxConfirmTarget(target); }
-bool WalletModel::getSpendZeroConfChange() const { return wallet->bSpendZeroConfChange; }
-void WalletModel::setSpendZeroConfChange(bool spend) { wallet->SetSpendZeroConfChange(spend); }
 CAmount WalletModel::getMinTxValue() const { return wallet->minTxValue; }
 void WalletModel::setMinTxValue(CAmount value) { wallet->SetMinTxValue(value); }
 int64_t WalletModel::getKeypoolSizeTarget() const { return wallet->nKeypoolSizeTarget; }

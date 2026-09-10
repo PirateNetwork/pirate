@@ -333,6 +333,16 @@ QWidget#RPCConsole {
     color: #c5cad3;
 }
 
+QWidget#WalletOptionsPage {
+    background-color: #303335;
+    color: #c5cad3;
+}
+
+QDialog#AskPassphraseDialog {
+    background-color: #303335;
+    color: #c5cad3;
+}
+
 QWidget#bgWidget {
     background: rgba(0,0,0,0.8);
     color: #c5cad3;

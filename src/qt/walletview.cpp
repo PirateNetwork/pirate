@@ -25,7 +25,6 @@
 #include "transactiontablemodel.h"
 #include "transactionview.h"
 #include "walletmodel.h"
-#include "walletsettingspage.h"
 #include "importkeydialog.h"
 #include "openphrasedialog.h"
 #include "unlocktimerdialog.h"
@@ -79,7 +78,6 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     //sendCoinsPage = new SendCoinsDialog(platformStyle);
     zsendCoinsPage = new ZSendCoinsDialog(platformStyle);
     zsignPage      = new ZSignDialog(platformStyle);
-    walletSettingsPage = new WalletSettingsPage(this);
 
     usedSendingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::SendingTab, this);
     usedReceivingAddressesPage = new AddressBookPage(platformStyle, AddressBookPage::ForEditing, AddressBookPage::ReceivingTab, this);
@@ -91,7 +89,6 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     //addWidget(sendCoinsPage);
     addWidget(zsendCoinsPage);
     addWidget(zsignPage);
-    addWidget(walletSettingsPage);
 
     // Clicking on a transaction on the overview pre-selects the transaction on the transaction history page
     connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), transactionView, SLOT(focusTransaction(QModelIndex)));
@@ -208,7 +205,6 @@ void WalletView::setWalletModel(WalletModel *_walletModel)
     //sendCoinsPage->setModel(_walletModel);
     zsendCoinsPage->setModel(_walletModel);
     zsignPage->setModel(_walletModel);
-    walletSettingsPage->setWalletModel(_walletModel);
     usedReceivingAddressesPage->setModel(_walletModel->getAddressTableModel());
     // usedReceivingZAddressesPage->setModel(_walletModel->getZAddressTableModel());
     usedSendingAddressesPage->setModel(_walletModel->getAddressTableModel());
@@ -355,11 +351,6 @@ void WalletView::gotoZSignPage( )
     setCurrentWidget(zsignPage);
     //Clear the page upon enter.
     zsignPage->clear();
-}
-
-void WalletView::gotoWalletSettingsPage()
-{
-    setCurrentWidget(walletSettingsPage);
 }
 
 void WalletView::gotoSignMessageTab(QString addr)

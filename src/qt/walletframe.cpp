@@ -288,13 +288,6 @@ void WalletFrame::gotoZSignPage( )
         walletView->gotoZSignPage( );
 }
 
-void WalletFrame::gotoWalletSettingsPage()
-{
-    WalletView *walletView = currentWalletView();
-    if (walletView)
-        walletView->gotoWalletSettingsPage();
-}
-
 void WalletFrame::gotoSignMessageTab(QString addr)
 {
     WalletView *walletView = currentWalletView();

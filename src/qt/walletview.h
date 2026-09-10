@@ -24,7 +24,6 @@ class AddressBookPage;
 class ZAddressBookPage;
 class OpenSKDialog;
 class OpenVKDialog;
-class WalletSettingsPage;
 
 QT_BEGIN_NAMESPACE
 class QModelIndex;
@@ -83,7 +82,6 @@ private:
     //SendCoinsDialog *sendCoinsPage;
     ZSendCoinsDialog *zsendCoinsPage;
     ZSignDialog *zsignPage;
-    WalletSettingsPage *walletSettingsPage;
     AddressBookPage *usedSendingAddressesPage;
     AddressBookPage *usedReceivingAddressesPage;
     ZAddressBookPage *usedReceivingZAddressesPage;
@@ -117,8 +115,6 @@ public Q_SLOTS:
     void gotoZSignPage();
     /** Switch to z-send coins page */
     void gotoZSendCoinsPage(QString addr = "");
-    /** Switch to per-wallet settings page */
-    void gotoWalletSettingsPage();
 
     /** Show Sign/Verify Message dialog and switch to sign message tab */
     void gotoSignMessageTab(QString addr = "");
