@@ -89,7 +89,7 @@ jobs:
             --build-arg APP_VERSION_SUFFIX="${APP_VERSION_SUFFIX:-}" \
             --target=binaries \
             -o docker-out \
-            -f zcutil/docker/ubuntu20.04-windows-cc.Dockerfile \
+            -f zcutil/docker/ubuntu24.04-windows-cc.Dockerfile \
             .
       - name: Upload artifacts
         uses: actions/upload-artifact@v7

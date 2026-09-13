@@ -137,11 +137,15 @@ else()
     endif()
     unset(compiler_supports_g3)
 
-    try_append_cxx_flags("-ftrapv" RESULT_VAR compiler_supports_ftrapv)
-    if(compiler_supports_ftrapv)
-      string(PREPEND CMAKE_CXX_FLAGS_DEBUG "-ftrapv ")
-    endif()
-    unset(compiler_supports_ftrapv)
+    # Deliberately no -ftrapv here. It is not inherited from the autotools
+    # build -- configure.ac never set it -- and legacy consensus paths rely on
+    # signed overflow wrapping. RewardsCalc()'s pre-hardfork branch
+    # (src/cc/rewards.cpp) multiplies attacker-influenced int64_t values and is
+    # covered by GMPArithTests.RewardsTest, which asserts the wrapped result.
+    # With -ftrapv that multiply becomes a __mulvdi3 call into compiler-rt,
+    # which traps (ud2 -> SIGILL) instead. The flag cannot be enabled without
+    # either changing how those historical rewards are computed, which would
+    # alter consensus, or dropping the test.
 
     string(PREPEND CMAKE_CXX_FLAGS_DEBUG "-O0 ")
 

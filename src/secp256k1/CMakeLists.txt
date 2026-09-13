@@ -9,6 +9,15 @@
 
 include(ExternalProject)
 
+# AC_CONFIG_SUBDIRS used to hand --host down from the top-level configure. With
+# autotools retired, a cross build would otherwise leave autoconf believing it
+# is native, so it would try to *run* the target-architecture test binaries it
+# just compiled.
+set(_sub_host "")
+if(CMAKE_CROSSCOMPILING AND CMAKE_C_COMPILER_TARGET)
+  set(_sub_host --host=${CMAKE_C_COMPILER_TARGET})
+endif()
+
 set(_secp_lib ${CMAKE_CURRENT_SOURCE_DIR}/.libs/libsecp256k1.a)
 
 ExternalProject_Add(secp256k1_ep
@@ -18,7 +27,7 @@ ExternalProject_Add(secp256k1_ep
   # to run first. The retired top-level autogen.sh used to cover both this and
   # cryptoconditions via autoreconf recursing through AC_CONFIG_SUBDIRS.
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR} ./autogen.sh
-            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure ${_sub_host}
                       --disable-shared --with-pic --with-bignum=no
                       --enable-module-recovery
                       --disable-tests --disable-benchmark --disable-exhaustive-tests

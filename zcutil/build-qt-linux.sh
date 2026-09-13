@@ -49,7 +49,11 @@ EOF
 fi
 set -x
 
-BUILD_TYPE=Debug
+# RelWithDebInfo, matching every other build script: it keeps the debug info
+# the packaging step below wants while staying optimised. A full Debug build
+# also defines DEBUG, turns on assertions, and (via ProcessConfigurations.cmake)
+# adds -ftrapv, which none of these belong in a shipped artifact.
+BUILD_TYPE=RelWithDebInfo
 BUILD_GTEST=ON
 if [ "x${1:-}" = 'x--enable-lcov' ]
 then

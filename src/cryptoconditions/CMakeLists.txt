@@ -8,6 +8,13 @@
 
 include(ExternalProject)
 
+# See the note in src/secp256k1/CMakeLists.txt: --host has to be passed down
+# explicitly now that the top-level autotools configure is gone.
+set(_sub_host "")
+if(CMAKE_CROSSCOMPILING AND CMAKE_C_COMPILER_TARGET)
+  set(_sub_host --host=${CMAKE_C_COMPILER_TARGET})
+endif()
+
 set(_cc_lib ${CMAKE_CURRENT_SOURCE_DIR}/libcryptoconditions_core.a)
 
 ExternalProject_Add(cryptoconditions_ep
@@ -16,7 +23,7 @@ ExternalProject_Add(cryptoconditions_ep
   # configure is generated, not committed, so autogen.sh has to run first --
   # see the same note in src/secp256k1/CMakeLists.txt.
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR} ./autogen.sh
-            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure ${_sub_host}
                       --disable-shared --with-pic
                       CC=${CMAKE_C_COMPILER}
                       "CFLAGS=${CMAKE_C_FLAGS}"

@@ -50,11 +50,22 @@ target_include_directories(leveldb PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${CMAKE_CURRENT_SOURCE_DIR}/helpers/memenv
 )
+# Platform selection for leveldb's port layer, mirroring configure.ac's
+# LEVELDB_TARGET_FLAGS and Makefile.leveldb.include. port_posix.h keys its
+# endian header off these: OS_MACOSX picks machine/endian.h, and everything
+# else falls through to <endian.h>, which does not exist on macOS. Linux
+# deliberately defines no OS_* macro, exactly as the autotools build did.
+set(LEVELDB_PLATFORM_DEFS LEVELDB_ATOMIC_PRESENT __STDC_LIMIT_MACROS)
+if(APPLE)
+  list(APPEND LEVELDB_PLATFORM_DEFS OS_MACOSX LEVELDB_PLATFORM_POSIX)
+elseif(WIN32)
+  list(APPEND LEVELDB_PLATFORM_DEFS LEVELDB_PLATFORM_WINDOWS __USE_MINGW_ANSI_STDIO=1)
+else()
+  list(APPEND LEVELDB_PLATFORM_DEFS LEVELDB_PLATFORM_POSIX)
+endif()
+
 target_compile_definitions(leveldb PRIVATE
-  OS_LINUX
-  LEVELDB_PLATFORM_POSIX
-  LEVELDB_ATOMIC_PRESENT
-  __STDC_LIMIT_MACROS
+  ${LEVELDB_PLATFORM_DEFS}
 )
 target_link_libraries(leveldb PRIVATE core_interface Threads::Threads)
 target_include_directories(leveldb INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -66,11 +77,8 @@ target_include_directories(leveldb_sse42 PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 target_compile_definitions(leveldb_sse42 PRIVATE
-  OS_LINUX
-  LEVELDB_PLATFORM_POSIX
+  ${LEVELDB_PLATFORM_DEFS}
   LEVELDB_PLATFORM_POSIX_SSE
-  LEVELDB_ATOMIC_PRESENT
-  __STDC_LIMIT_MACROS
 )
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i[3-6]86)$")
   target_compile_options(leveldb_sse42 PRIVATE -msse4.2)
@@ -85,9 +93,6 @@ target_include_directories(memenv PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/helpers/memenv
 )
 target_compile_definitions(memenv PRIVATE
-  OS_LINUX
-  LEVELDB_PLATFORM_POSIX
-  LEVELDB_ATOMIC_PRESENT
-  __STDC_LIMIT_MACROS
+  ${LEVELDB_PLATFORM_DEFS}
 )
 target_link_libraries(memenv PRIVATE core_interface)

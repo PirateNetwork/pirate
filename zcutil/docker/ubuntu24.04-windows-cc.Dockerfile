@@ -1,13 +1,21 @@
-# Cross-compiles the Windows x86_64 CLI and QT artifacts inside a pinned
-# ubuntu:20.04 userspace - see pirate_build_all.yml's windows-x86_64-cross
-# job (--target=binaries) and ubuntu20.04-linux.Dockerfile's header comment
-# for why pinning matters, why this builds the passed-in checkout instead of
-# doing its own git clone (unlike
+# Cross-compiles the Windows x86_64 CLI and QT artifacts. See
+# pirate_build_all.yml's windows-x86_64-cross job (--target=binaries) and
+# ubuntu20.04-linux.Dockerfile's header comment for why this builds the
+# passed-in checkout instead of doing its own git clone (unlike
 # docker-engine-builds/treasure_chest/ubuntu20.04_windows_cc/Dockerfile, a
 # standalone "fetch master and build" convenience image), and why there's
 # only one build here (build-qt-win.sh already produces both the CLI zip and
 # the QT zip).
-FROM ubuntu:20.04 AS builder
+# Unlike the Linux and AArch64 images, this one is NOT pinned to 20.04. That
+# pin exists to fix the glibc baseline the released *Linux* binaries link
+# against; everything this image emits is a Windows PE binary built against
+# the mingw runtime, so the host's glibc is irrelevant here.
+#
+# 20.04's mingw is GCC 9.3, which ICEs building Qt 6.8.4's bundled PCRE2:
+#   pcre2_compile.c: in function 'pcre2_compile_16':
+#   internal compiler error: in i386_pe_seh_unwind_emit, at config/i386/winnt.c:1258
+# 24.04 ships mingw GCC 13.2.
+FROM ubuntu:24.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     build-essential \
