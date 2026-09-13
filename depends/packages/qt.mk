@@ -111,10 +111,11 @@ $(package)_config_opts += -no-feature-macdeployqt
 $(package)_config_opts += -no-feature-qmake
 $(package)_config_opts += -no-feature-windeployqt
 
-ifeq ($(host),$(build))
 # Qt Tools module -- only linguist (lrelease/lupdate/lconvert) is needed for
 # translations; everything else that would drag in Clang or a full designer
-# build is switched off.
+# build is switched off. This applies to cross builds too: without it qttools
+# looks for an LLVM install ("Could NOT find Clang") and pulls in the full
+# designer/qdbusviewer set, which fails to configure.
 $(package)_config_opts += -feature-linguist
 $(package)_config_opts += -no-feature-assistant
 $(package)_config_opts += -no-feature-clang
@@ -125,7 +126,6 @@ $(package)_config_opts += -no-feature-qdoc
 $(package)_config_opts += -no-feature-qtattributionsscanner
 $(package)_config_opts += -no-feature-qtdiag
 $(package)_config_opts += -no-feature-qtplugininfo
-endif
 
 $(package)_config_opts_darwin = -no-dbus
 $(package)_config_opts_darwin += -no-feature-printsupport
@@ -208,9 +208,7 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/fix_openbsd_plugin_qelfparser.patch && \
   patch -p1 -i $($(package)_patch_dir)/fix_missed_headers.patch
 endef
-ifeq ($(host),$(build))
-  $(package)_preprocess_cmds += && patch -p1 -i $($(package)_patch_dir)/qttools_skip_dependencies.patch
-endif
+$(package)_preprocess_cmds += && patch -p1 -i $($(package)_patch_dir)/qttools_skip_dependencies.patch
 
 define $(package)_config_cmds
   export PKG_CONFIG_SYSROOT_DIR=/ && \
