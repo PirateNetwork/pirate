@@ -5,7 +5,7 @@
 
 #include "params.h"
 #include "random.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 
 #include <fstream>
 #include <sstream>

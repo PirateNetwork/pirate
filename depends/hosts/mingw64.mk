@@ -1,3 +1,6 @@
+mingw64_cmake_system_name=Windows
+mingw64_cmake_system_version=10.0
+
 mingw64_CC=x86_64-w64-mingw32-gcc-posix
 mingw64_CXX=x86_64-w64-mingw32-g++-posix
 mingw64_CFLAGS=-pipe -std=c17

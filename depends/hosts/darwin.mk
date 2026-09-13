@@ -45,3 +45,5 @@ darwin_native_toolchain=
 endif
 
 darwin_cmake_system=Darwin
+darwin_cmake_system_name=Darwin
+darwin_cmake_system_version=$(OSX_MIN_VERSION)

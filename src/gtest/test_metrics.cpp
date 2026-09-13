@@ -61,6 +61,13 @@ TEST(Metrics, AtomicTimer) {
 }
 
 TEST(Metrics, GetLocalSolPS) {
+    // solutionTargetChecks is a process-wide global (src/metrics.cpp) that real
+    // mining/block-generation code paths (src/miner.cpp, src/rpc/mining.cpp)
+    // increment; any earlier test in this binary that mines a block leaves a
+    // nonzero residue here. Reset it so this test's absolute-count assertions
+    // are correct regardless of what ran before it.
+    solutionTargetChecks.value = 0;
+
     SetMockTime(100);
     miningTimer.start();
 

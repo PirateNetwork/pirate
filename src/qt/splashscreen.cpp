@@ -14,7 +14,7 @@
 #include "clientversion.h"
 #include "init.h"
 #include "util.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "version.h"
 #include "guiconstants.h"
 
@@ -39,7 +39,6 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QComboBox>
-#include <QDesktopWidget>
 #include <QPainter>
 #include <QRadialGradient>
 #include <QStyle>

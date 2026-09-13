@@ -23,9 +23,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -69,9 +69,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -105,9 +105,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -152,9 +152,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -185,15 +185,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build daemon (macOS)
-        env:
-          CONFIGURE_FLAGS: --disable-hardening
         run: |
           chmod +x zcutil/build-mac.sh
           ./zcutil/build-mac.sh --disable-tests -j$(sysctl -n hw.ncpu)
       - name: Determine package version
         shell: bash
         run: |
-          BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+          . ./zcutil/build-common.sh
+          BASE_VERSION="$(pirate_version)"
           if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
             VERSION="${BASE_VERSION}-${APP_VERSION_SUFFIX}"
           else
@@ -206,14 +205,14 @@ jobs:
           echo "PLATFORM=${HOST%%-*}-macos" >> "$GITHUB_ENV"
       - name: Strip CLI (macOS)
         run: |
-          strip -x src/pirated src/pirate-cli src/pirate-tx
+          strip -x build/src/pirated build/src/pirate-cli build/src/pirate-tx
       - name: Package CLI (macOS)
         run: |
           mkdir -p dist
           zip -j "dist/pirate-cli-${PLATFORM}-v${VERSION}.zip" \
-            src/pirated \
-            src/pirate-cli \
-            src/pirate-tx \
+            build/src/pirated \
+            build/src/pirate-cli \
+            build/src/pirate-tx \
             PIRATE_7776
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -232,9 +231,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -265,15 +264,14 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build daemon (macOS)
-        env:
-          CONFIGURE_FLAGS: --disable-hardening
         run: |
           chmod +x zcutil/build-mac.sh
           ./zcutil/build-mac.sh --disable-tests -j$(sysctl -n hw.ncpu)
       - name: Determine package version
         shell: bash
         run: |
-          BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+          . ./zcutil/build-common.sh
+          BASE_VERSION="$(pirate_version)"
           if [ -n "${APP_VERSION_SUFFIX:-}" ]; then
             VERSION="${BASE_VERSION}-${APP_VERSION_SUFFIX}"
           else
@@ -286,14 +284,14 @@ jobs:
           echo "PLATFORM=${HOST%%-*}-macos" >> "$GITHUB_ENV"
       - name: Strip CLI (macOS)
         run: |
-          strip -x src/pirated src/pirate-cli src/pirate-tx
+          strip -x build/src/pirated build/src/pirate-cli build/src/pirate-tx
       - name: Package CLI (macOS)
         run: |
           mkdir -p dist
           zip -j "dist/pirate-cli-${PLATFORM}-v${VERSION}.zip" \
-            src/pirated \
-            src/pirate-cli \
-            src/pirate-tx \
+            build/src/pirated \
+            build/src/pirate-cli \
+            build/src/pirate-tx \
             PIRATE_7776
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -316,9 +314,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide - honored by build-qt-mac.sh/build-zip.sh.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -341,12 +339,11 @@ jobs:
             fi
           }
 
-          install_brew_formulae autoconf automake libtool coreutils bison cmake qt@5 create-dmg
+          install_brew_formulae autoconf automake libtool coreutils bison cmake create-dmg
           command -v pkg-config >/dev/null 2>&1 || brew install pkgconf
           command -v python3 >/dev/null 2>&1 || brew install python
           command -v wget >/dev/null 2>&1 || brew install wget
           command -v curl >/dev/null 2>&1 || brew install curl
-          echo "$(brew --prefix qt@5)/bin" >> "$GITHUB_PATH"
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build QT (macOS)
@@ -356,7 +353,7 @@ jobs:
       - name: Package QT (macOS)
         run: |
           # build-qt-mac.sh (via makeReleaseMac.sh) already versions (from
-          # configure.ac, via the Makefile's PACKAGE_VERSION) and moves the
+          # CMakeLists.txt's CLIENT_VERSION_*, via pirate_version) and moves the
           # .dmg into artifacts/bin/pirate-qt-*.dmg. It also produces
           # artifacts/bin/pirate-cli-*.zip as a side effect (build-zip.sh's
           # "cli" package - macOS has no separate CLI-only build script this
@@ -381,9 +378,9 @@ jobs:
       - name: Set version suffix
         shell: bash
         run: |
-          # Real releases (tag pushes) use configure.ac's version as-is.
+          # Real releases (tag pushes) use CMakeLists.txt's version as-is.
           # Everything else (e.g. auto-release on master) appends a short
-          # git sha so repeated builds off the same configure.ac version
+          # git sha so repeated builds off the same CMakeLists.txt version
           # don't collide - honored by build-qt-mac.sh/build-zip.sh.
           if [[ "${GITHUB_REF}" != refs/tags/v* ]]; then
             echo "APP_VERSION_SUFFIX=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
@@ -406,12 +403,11 @@ jobs:
             fi
           }
 
-          install_brew_formulae autoconf automake libtool coreutils bison cmake qt@5 create-dmg
+          install_brew_formulae autoconf automake libtool coreutils bison cmake create-dmg
           command -v pkg-config >/dev/null 2>&1 || brew install pkgconf
           command -v python3 >/dev/null 2>&1 || brew install python
           command -v wget >/dev/null 2>&1 || brew install wget
           command -v curl >/dev/null 2>&1 || brew install curl
-          echo "$(brew --prefix qt@5)/bin" >> "$GITHUB_PATH"
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build QT (macOS)
@@ -421,7 +417,7 @@ jobs:
       - name: Package QT (macOS)
         run: |
           # build-qt-mac.sh (via makeReleaseMac.sh) already versions (from
-          # configure.ac, via the Makefile's PACKAGE_VERSION) and moves the
+          # CMakeLists.txt's CLIENT_VERSION_*, via pirate_version) and moves the
           # .dmg into artifacts/bin/pirate-qt-*.dmg. It also produces
           # artifacts/bin/pirate-cli-*.zip as a side effect (build-zip.sh's
           # "cli" package - macOS has no separate CLI-only build script this
@@ -438,7 +434,7 @@ jobs:
   release:
     name: Sign and Release
     # Real releases: pushing a vX.Y.Z tag. Auto-releases: every push to
-    # master, versioned from configure.ac plus a git-sha suffix (see "Set
+    # master, versioned from CMakeLists.txt plus a git-sha suffix (see "Set
     # version suffix" steps above) so they don't collide with each other.
     if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest

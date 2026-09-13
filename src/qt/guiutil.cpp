@@ -49,7 +49,6 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QDesktopServices>
-#include <QDesktopWidget>
 #include <QDoubleValidator>
 #include <QFileDialog>
 #include <QFont>
@@ -60,12 +59,13 @@
 #include <QThread>
 #include <QUrlQuery>
 #include <QMouseEvent>
+#include <QProcess>
+#include <QRegularExpression>
+#include <QStandardPaths>
 
 static fs::detail::utf8_codecvt_facet utf8;
 
 #if defined(Q_OS_MAC)
-#include <QProcess>
-
 void ForceActivation();
 extern double NSAppKitVersionNumber;
 #if !defined(NSAppKitVersionNumber10_8)
@@ -85,7 +85,7 @@ QString dateTimeStr(const QDateTime &date)
 
 QString dateTimeStr(qint64 nTime)
 {
-    return dateTimeStr(QDateTime::fromTime_t((qint32)nTime));
+    return dateTimeStr(QDateTime::fromSecsSinceEpoch((qint32)nTime));
 }
 
 QFont fixedPitchFont()
@@ -319,11 +319,12 @@ QString getSaveFileName(QWidget *parent, const QString &caption, const QString &
     QString result = QDir::toNativeSeparators(QFileDialog::getSaveFileName(parent, caption, myDir, filter, &selectedFilter));
 
     /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
-    QRegExp filter_re(".* \\(\\*\\.(.*)[ \\)]");
+    static const QRegularExpression filter_re(QRegularExpression::anchoredPattern(".* \\(\\*\\.(.*)[ \\)]"));
     QString selectedSuffix;
-    if(filter_re.exactMatch(selectedFilter))
+    QRegularExpressionMatch filter_match = filter_re.match(selectedFilter);
+    if(filter_match.hasMatch())
     {
-        selectedSuffix = filter_re.cap(1);
+        selectedSuffix = filter_match.captured(1);
     }
 
     /* Add suffix if needed */
@@ -371,11 +372,12 @@ QString getOpenFileName(QWidget *parent, const QString &caption, const QString &
     if(selectedSuffixOut)
     {
         /* Extract first suffix from filter pattern "Description (*.foo)" or "Description (*.foo *.bar ...) */
-        QRegExp filter_re(".* \\(\\*\\.(.*)[ \\)]");
+        static const QRegularExpression filter_re(QRegularExpression::anchoredPattern(".* \\(\\*\\.(.*)[ \\)]"));
         QString selectedSuffix;
-        if(filter_re.exactMatch(selectedFilter))
+        QRegularExpressionMatch filter_match = filter_re.match(selectedFilter);
+        if(filter_match.hasMatch())
         {
-            selectedSuffix = filter_re.cap(1);
+            selectedSuffix = filter_match.captured(1);
         }
         *selectedSuffixOut = selectedSuffix;
     }

@@ -64,12 +64,12 @@ case "$HOST" in
         ;;
 esac
 
-# Read the version ./configure already derived from configure.ac's
-# _CLIENT_VERSION_* macros (e.g. "6.0.0-rc2"), rather than hand-maintaining
-# a second copy of it here.
-APP_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)"
+# Read the version directly from CMakeLists.txt's CLIENT_VERSION_* set()
+# calls (e.g. "6.0.4"), rather than hand-maintaining a second copy of it here.
+. "$(dirname "$(readlink -f "$0")")/build-common.sh"
+APP_VERSION="$(pirate_version || echo '')"
 if [ -z "$APP_VERSION" ]; then
-    echo "warning: could not determine PACKAGE_VERSION from ./Makefile (did ./configure run first?), skipping .deb packaging" >&2
+    echo "warning: could not determine the client version from ./CMakeLists.txt, skipping .deb packaging" >&2
     exit 0
 fi
 # CI sets this on non-tag builds (e.g. a short git sha) so repeated builds

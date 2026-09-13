@@ -29,7 +29,7 @@
 #include "openphrasedialog.h"
 #include "unlocktimerdialog.h"
 
-#include "ui_interface.h"
+#include "interface_ui.h"
 
 #include <QAction>
 #include <QActionGroup>

@@ -29,7 +29,7 @@
 #include "core_io.h"
 #include "komodo_bitcoind.h"
 
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "init.h"
 
 #include <stdint.h>

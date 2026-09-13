@@ -67,7 +67,7 @@
 #if ENABLE_EMBEDDED_TOR || ENABLE_EMBEDDED_I2PD
 #include "networking_watchdog.h"
 #endif
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "utilmoneystr.h"
@@ -158,7 +158,7 @@ static const char* FEE_ESTIMATES_FILENAME="fee_estimates.dat";
 
 static const char* DEFAULT_ASMAP_FILENAME="ip_asn.map";
 
-CClientUIInterface uiInterface; // Declared but not defined in ui_interface.h
+CClientUIInterface uiInterface; // Declared but not defined in interface_ui.h
 
 //////////////////////////////////////////////////////////////////////////////
 //

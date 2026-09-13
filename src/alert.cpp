@@ -24,7 +24,7 @@
 #include "net.h"
 #include "pubkey.h"
 #include "timedata.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 
 #include <stdint.h>

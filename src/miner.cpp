@@ -60,7 +60,7 @@ CWallet* GetMiningWallet() { return nullptr; }
 #include "primitives/block.h"
 #include "random.h"
 #include "timedata.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "utilmoneystr.h"
 #include "hex.h"

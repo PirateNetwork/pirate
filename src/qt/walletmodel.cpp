@@ -29,7 +29,7 @@
 #include "net.h" // for g_connman
 #include "policy/fees.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h" // for GetBoolArg
 #include "coincontrol.h"
 #include "main.h"

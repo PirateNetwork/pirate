@@ -51,7 +51,7 @@
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
 
-#include "ui_interface.h"
+#include "interface_ui.h"
 
 #include <QCheckBox>
 #include <QComboBox>

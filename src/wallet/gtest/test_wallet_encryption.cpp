@@ -24,18 +24,54 @@
 //  - P3: the `zkeymeta` purge-routing bug (Sprout metadata records were
 //    misrouted during the legacy-record sweep, so they were never erased).
 
-static boost::filesystem::path MakeTempDataDir()
+// bitdb (src/wallet/db.cpp) is a single process-wide CDBEnv singleton, and
+// CDBEnv::Open() binds to the first datadir it's ever given and silently
+// no-ops (returning success) on every later call with a different path --
+// see db.cpp. GetDataDir() (src/util.cpp) separately memoizes its return
+// value and only recomputes it once that cache is cleared. Without both a
+// fresh CDBEnv *and* a ClearDatadirCache() per test, every test in this file
+// after whichever one runs first in the binary would silently open/read/write
+// against some earlier test's (possibly already-deleted) temp directory
+// instead of its own -- intermittently surfacing as DB_CORRUPT or a raw BDB
+// "can't open database" exception depending on what else ran first. Same
+// pattern as test_walletmanager.cpp's fixture / test_block_connect.cpp /
+// test_httprpc.cpp.
+struct BitdbTestScope
 {
-    boost::filesystem::path pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-    boost::filesystem::create_directories(pathTemp);
-    mapArgs["-datadir"] = pathTemp.string();
-    return pathTemp;
-}
+    std::shared_ptr<CDBEnv> previousBitdb;
+    bool fHadPreviousDatadir;
+    std::string previousDatadir;
+    boost::filesystem::path pathTemp;
+
+    BitdbTestScope() : previousBitdb(bitdb)
+    {
+        pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+        boost::filesystem::create_directories(pathTemp);
+        ClearDatadirCache();
+        fHadPreviousDatadir = mapArgs.count("-datadir") != 0;
+        if (fHadPreviousDatadir)
+            previousDatadir = mapArgs["-datadir"];
+        mapArgs["-datadir"] = pathTemp.string();
+        bitdb = std::shared_ptr<CDBEnv>(new CDBEnv{});
+    }
+    ~BitdbTestScope()
+    {
+        bitdb->Flush(true);
+        bitdb->Reset();
+        bitdb = previousBitdb;
+        if (fHadPreviousDatadir)
+            mapArgs["-datadir"] = previousDatadir;
+        else
+            mapArgs.erase("-datadir");
+        ClearDatadirCache();
+        boost::filesystem::remove_all(pathTemp);
+    }
+};
 
 TEST(WalletEncryptionTests, DestDataRoundTripsThroughEncryption)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_destdata_test.dat");
@@ -74,8 +110,8 @@ TEST(WalletEncryptionTests, DestDataRoundTripsThroughEncryption)
 
 TEST(WalletEncryptionTests, HDChainRoundTripsThroughEncryption)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_hdchain_test.dat");
@@ -109,8 +145,8 @@ TEST(WalletEncryptionTests, HDChainRoundTripsThroughEncryption)
 
 TEST(WalletEncryptionTests, WitnessTreeTamperIsDetected)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_witnesstree_test.dat");
@@ -153,8 +189,8 @@ TEST(WalletEncryptionTests, WitnessTreeTamperIsDetected)
 
 TEST(WalletEncryptionTests, ZkeymetaPurgeRoutingErasesRecord)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_zkeymeta_test.dat");
@@ -219,8 +255,8 @@ TEST(WalletEncryptionTests, ZkeymetaPurgeRoutingErasesRecord)
 // representative, not exhaustive.
 TEST(WalletEncryptionTests, ConfigSettingsRoundTripThroughEncryptionAndPlaintextIsErased)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_configsettings_test.dat");
@@ -304,8 +340,8 @@ TEST(WalletEncryptionTests, ConfigSettingsRoundTripThroughEncryptionAndPlaintext
 // key of the same C++ type must be rejected on load, not silently accepted.
 TEST(WalletEncryptionTests, ConfigSettingsChashIsBoundToKeyNotJustContent)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_configsettings_keybinding_test.dat");
@@ -347,8 +383,8 @@ TEST(WalletEncryptionTests, ConfigSettingsChashIsBoundToKeyNotJustContent)
 // whole feature exists to close.
 TEST(WalletEncryptionTests, ConfigSettingWriteFailsClosedWhenWalletIsLocked)
 {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-    MakeTempDataDir();
 
     bool fFirstRun;
     CWallet wallet("wallet_configsettings_locked_test.dat");

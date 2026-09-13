@@ -46,7 +46,7 @@ CBlockIndex *komodo_chainactive(int32_t height);
 #include "init.h"
 #include "rpc/server.h"
 #include "scheduler.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "warnings.h"
 
@@ -763,7 +763,10 @@ int main(int argc, char *argv[])
 #endif
 
     Q_INIT_RESOURCE(komodo);
-    Q_INIT_RESOURCE(komodo_locale);
+    // TODO(CMake GUI bring-up): komodo_locale.qrc (90 .ts -> .qm via lrelease, bundled by
+    // rcc) isn't built yet -- see src/qt/CMakeLists.txt. Until it is, the app just runs
+    // untranslated; PaymentServer::initTranslations() already tolerates missing catalogs.
+    // Q_INIT_RESOURCE(komodo_locale);
 
 #if QT_VERSION > 0x050100
     // Generate high-dpi pixmaps

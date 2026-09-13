@@ -22,7 +22,7 @@
 #include "alert.h"
 #include "clientversion.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "chainparams.h"
 #include "komodo_globals.h"

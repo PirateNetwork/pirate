@@ -15,7 +15,7 @@
 #include "base58.h"
 #include "chainparams.h"
 #include "policy/policy.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "main.h"
 #include "wallet/wallet.h"

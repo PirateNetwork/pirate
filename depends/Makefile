@@ -97,6 +97,20 @@ $(host_arch)_$(host_os)_native_toolchain?=$($(host_os)_native_toolchain)
 include funcs.mk
 
 toolchain_path=$($($(host_arch)_$(host_os)_native_toolchain)_prefixbin)
+
+# CMake wants a bare compiler in CMAKE_{C,CXX}_COMPILER; any extra words the
+# host recipe carries (e.g. "-m64") get moved onto the *FLAGS lines instead.
+host_CC_bin=$(toolchain_path)$(firstword $(host_CC))
+host_CXX_bin=$(toolchain_path)$(firstword $(host_CXX))
+host_CC_extra=$(wordlist 2,$(words $(host_CC)),$(host_CC))
+host_CXX_extra=$(wordlist 2,$(words $(host_CXX)),$(host_CXX))
+
+ifeq ($(host),$(build))
+crosscompiling=FALSE
+else
+crosscompiling=TRUE
+endif
+
 final_build_id_long+=$(shell $(build_SHA256SUM) $(BASEDIR)/config.site.in)
 final_build_id+=$(shell echo -n $(final_build_id_long) | $(build_SHA256SUM) | cut -c-$(HASH_LENGTH))
 $(host_prefix)/.stamp_$(final_build_id): $(native_packages) $(packages)
@@ -136,6 +150,31 @@ $(host_prefix)/share/config.site : config.site.in $(host_prefix)/.stamp_$(final_
             $< > $@
 	$(AT)touch $@
 
+# Pure text substitution from make variables -- needs no extracted packages,
+# so it is not gated on the package stamp (unlike share/config.site).
+$(host_prefix)/toolchain.cmake : toolchain.cmake.in
+	$(AT)@mkdir -p $(@D)
+	$(AT)sed -e 's|@depends_crosscompiling@|$(crosscompiling)|' \
+            -e 's|@host@|$(host)|' \
+            -e 's|@host_system_name@|$($(host_os)_cmake_system_name)|' \
+            -e 's|@host_system_version@|$($(host_os)_cmake_system_version)|' \
+            -e 's|@host_arch@|$(host_arch)|' \
+            -e 's|@CC@|$(host_CC_bin)|' \
+            -e 's|@CXX@|$(host_CXX_bin)|' \
+            -e 's|@AR@|$(toolchain_path)$(host_AR)|' \
+            -e 's|@RANLIB@|$(toolchain_path)$(host_RANLIB)|' \
+            -e 's|@NM@|$(toolchain_path)$(host_NM)|' \
+            -e 's|@STRIP@|$(toolchain_path)$(host_STRIP)|' \
+            -e 's|@CFLAGS@|$(strip $(host_CC_extra) $(host_CFLAGS) $(host_$(release_type)_CFLAGS))|' \
+            -e 's|@CXXFLAGS@|$(strip $(host_CXX_extra) $(host_CXXFLAGS) $(host_$(release_type)_CXXFLAGS))|' \
+            -e 's|@CPPFLAGS@|$(strip $(host_CPPFLAGS) $(host_$(release_type)_CPPFLAGS))|' \
+            -e 's|@LDFLAGS@|$(strip $(host_LDFLAGS) $(host_$(release_type)_LDFLAGS))|' \
+            -e 's|@qt_packages@|$(qt_packages_)|' \
+            -e 's|@wallet_packages@|$(wallet_packages_)|' \
+            -e 's|@tor_i2pd_packages@|$(tor_i2pd_packages_)|' \
+            $< > $@
+	$(AT)touch $@
+
 
 define check_or_remove_cached
   mkdir -p $(BASE_CACHE)/$(host)/$(package) && cd $(BASE_CACHE)/$(host)/$(package); \
@@ -157,10 +196,11 @@ check-sources:
 	@$(foreach package,$(all_packages),$(call check_or_remove_sources,$(package));)
 
 $(host_prefix)/share/config.site: check-packages
+$(host_prefix)/toolchain.cmake: check-packages
 
 check-packages: check-sources
 
-install: check-packages $(host_prefix)/share/config.site
+install: check-packages $(host_prefix)/share/config.site $(host_prefix)/toolchain.cmake
 
 crates_download_dir=$(base_download_dir)/crates
 download-crates: native_rust

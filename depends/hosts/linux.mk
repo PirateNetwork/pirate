@@ -1,3 +1,7 @@
+linux_cmake_system_name=Linux
+# Refer to doc/dependencies.md for the minimum required kernel.
+linux_cmake_system_version=3.17.0
+
 linux_CFLAGS=-pipe
 linux_CXXFLAGS=$(linux_CFLAGS)
 

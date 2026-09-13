@@ -24,7 +24,7 @@
 #include "sync.h"
 #include "util.h"
 #include "util/strencodings.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #ifdef ENABLE_WALLET
 #include "wallet/walletmanager.h"
 #endif

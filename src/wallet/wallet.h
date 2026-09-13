@@ -32,7 +32,7 @@
 #include "primitives/transaction.h"
 #include "streams_rust.h"
 #include "tinyformat.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "validationinterface.h"

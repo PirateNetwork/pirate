@@ -67,9 +67,9 @@ RUN ./zcutil/build-qt-linux.sh -j$(nproc)
 # build tree back to the host. A test failure fails this RUN and thus the
 # whole docker build.
 RUN ./zcutil/fetch-params.sh
-RUN ./src/pirate-gtest
+RUN ./build/src/pirate-gtest
 
-RUN BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)" && \
+RUN . ./zcutil/build-common.sh && BASE_VERSION="$(pirate_version)" && \
     if [ -n "${APP_VERSION_SUFFIX:-}" ]; then \
         printf '%s-%s' "$BASE_VERSION" "$APP_VERSION_SUFFIX" > /tmp/VERSION; \
     else \

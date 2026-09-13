@@ -6,7 +6,7 @@
 #include "ui_unlocktimerdialog.h"
 
 #include "guiutil.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 
 UnlockTimerDialog::UnlockTimerDialog(QWidget *parent) :

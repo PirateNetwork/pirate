@@ -2,14 +2,32 @@
 
 set -eu -o pipefail
 
+function cmd_pref() {
+    if type -p "$2" > /dev/null; then
+        eval "$1=$2"
+    else
+        eval "$1=$3"
+    fi
+}
+
+# If a g-prefixed version of the command exists, use it preferentially.
+# macOS ships a BSD readlink with no -f; coreutils' greadlink has it.
+function gprefix() {
+    cmd_pref "$1" "g$2" "$2"
+}
+
+gprefix READLINK readlink
+cd "$(dirname "$("$READLINK" -f "$0")")/.."
+. ./zcutil/build-common.sh
+
 # Allow user overrides to $MAKE. Typical usage for users who need it:
-#   MAKE=gmake ./zcutil/build.sh -j$(nproc)
+#   MAKE=gmake ./zcutil/build-mac.sh -j$(sysctl -n hw.ncpu)
 if [[ -z "${MAKE-}" ]]; then
     MAKE=make
 fi
 
 # Allow overrides to $BUILD and $HOST for porters. Most users will not need it.
-#   BUILD=i686-pc-linux-gnu ./zcutil/build.sh
+#   BUILD=x86_64-apple-darwin ./zcutil/build-mac.sh
 if [[ -z "${BUILD-}" ]]; then
     BUILD="$(./depends/config.guess)"
 fi
@@ -17,107 +35,74 @@ if [[ -z "${HOST-}" ]]; then
     HOST="$BUILD"
 fi
 
-# Allow users to set arbitrary compile flags. Most users will not need this.
-if [[ -z "${CONFIGURE_FLAGS-}" ]]; then
-    CONFIGURE_FLAGS=""
-fi
-
 if [ "x$*" = 'x--help' ]
 then
-    cat <<EOF
+    cat <<USAGE
 Usage:
-
 $0 --help
   Show this help message and exit.
-
-$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --disable-rust ] [ --enable-system-command ] [ MAKEARGS... ]
-  Build Pirate and most of its transitive dependencies from
-  source. MAKEARGS are applied to both dependencies and Pirate itself.
-
+$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --enable-debug ] [ --enable-system-command ] [ MAKEARGS... ]
+  Build Pirate and most of its transitive dependencies from source for macOS
+  (headless: no Qt GUI -- see build-qt-mac.sh for the GUI build). MAKEARGS are
+  applied to the CMake build step.
   If --enable-lcov is passed, Pirate is configured to add coverage
-  instrumentation, thus enabling "make cov" to work.
+  instrumentation, thus enabling "cmake --build build --target ExperimentalCoverage" to work.
   If --disable-tests is passed instead, the Pirate tests are not built.
-
   If --disable-mining is passed, Pirate is configured to not build any mining
   code. It must be passed after the test arguments, if present.
-
-  If --disable-rust is passed, Pirate is configured to not build any Rust language
-  assets. It must be passed after test/mining arguments, if present.
-
+  If --enable-debug is passed, Pirate is built with debugging information. It
+  must be passed after the previous arguments, if present.
   If --enable-system-command is passed, -blocknotify/-alertnotify are allowed
   to run their configured command. It must be passed after the previous
   arguments, if present.
-EOF
+USAGE
     exit 0
 fi
 
-# If --enable-lcov is the first argument, enable lcov coverage support:
-LCOV_ARG=''
-HARDENING_ARG='--enable-hardening'
-TEST_ARG=''
+BUILD_TYPE=RelWithDebInfo
+BUILD_GTEST=ON
 if [ "x${1:-}" = 'x--enable-lcov' ]
 then
-    LCOV_ARG='--enable-lcov'
-    HARDENING_ARG='--disable-hardening'
+    BUILD_TYPE=Coverage
     shift
 elif [ "x${1:-}" = 'x--disable-tests' ]
 then
-    TEST_ARG='--enable-tests=no'
+    BUILD_GTEST=OFF
     shift
 fi
 
-# If --disable-mining is the next argument, disable mining code:
-MINING_ARG=''
+ENABLE_MINING=ON
 if [ "x${1:-}" = 'x--disable-mining' ]
 then
-    MINING_ARG='--enable-mining=no'
+    ENABLE_MINING=OFF
     shift
 fi
 
-# If --disable-rust is the next argument, disable Rust code:
-RUST_ARG=''
-if [ "x${1:-}" = 'x--disable-rust' ]
+if [ "x${1:-}" = 'x--enable-debug' ]
 then
-    RUST_ARG='--enable-rust=no'
+    BUILD_TYPE=Debug
     shift
 fi
 
-# If --enable-system-command is the next argument, allow -blocknotify/
-# -alertnotify to actually run their configured command (see
-# util.cpp's runCommand(), gated behind this macro).
-SYSTEM_COMMAND_CXXFLAGS=''
+WITH_SYSTEM_COMMAND=OFF
 if [ "x${1:-}" = 'x--enable-system-command' ]
 then
-    SYSTEM_COMMAND_CXXFLAGS='-DENABLE_SYSTEM_COMMAND'
+    WITH_SYSTEM_COMMAND=ON
     shift
 fi
 
-PREFIX="$(pwd)/depends/$HOST"
+pirate_depends "$HOST" "$BUILD" NO_QT=1 "$@"
 
-eval "$MAKE" --version
-eval "$MAKE" "$@" -C ./depends/ V=1 NO_QT=1 NO_PROTON=1
-
-# Detect architecture
 ARCH=$(uname -m)
 if [[ $ARCH == 'arm64' ]]; then
-    # Add arm64 specific flags
     export RUSTFLAGS="-C link-arg=-undefined -C link-arg=dynamic_lookup"
-fi
-
-if command -v rustup >/dev/null 2>&1; then
-    if [[ $ARCH == 'arm64' ]]; then
+    if command -v rustup >/dev/null 2>&1; then
         rustup target add aarch64-apple-darwin
     fi
-    export RUSTC="$(rustup which rustc)"
-    export CARGO="$(rustup which cargo)"
 fi
 
-# Build the library
-cd src/rust
-${CARGO:-cargo} build --release
-cd ../..
-
-# Build the full node
-./autogen.sh
-CONFIG_SITE="$PREFIX/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$RUST_ARG" $CONFIGURE_FLAGS CXXFLAGS="-g $SYSTEM_COMMAND_CXXFLAGS"
-"$MAKE" "$@" V=1
+pirate_cmake_configure "$HOST" build "$BUILD_TYPE" OFF \
+    -DBUILD_GTEST="$BUILD_GTEST" \
+    -DENABLE_MINING="$ENABLE_MINING" \
+    -DWITH_SYSTEM_COMMAND="$WITH_SYSTEM_COMMAND"
+pirate_cmake_build build "$@"

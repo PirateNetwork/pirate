@@ -15,6 +15,50 @@
 // Sapling and Ironwood shielded pools (StoreAndLoadSaplingZkeys,
 // StoreAndLoadIronwoodKeys, and related load/decrypt paths).
 
+// bitdb (src/wallet/db.cpp) is a single process-wide CDBEnv singleton, and
+// CDBEnv::Open() binds to the first datadir it's ever given and silently
+// no-ops (returning success) on every later call with a different path --
+// see db.cpp. GetDataDir() (src/util.cpp) separately memoizes its return
+// value and only recomputes it once that cache is cleared. The two tests
+// below load a wallet from an on-disk temp directory (the other two in this
+// file only construct an in-memory CWallet, never touching bitdb) and need
+// both a fresh CDBEnv and a cleared datadir cache bound to their own
+// directory, or they intermittently open/read/write against some earlier
+// test's (possibly already-deleted) temp directory instead -- same pattern
+// as test_wallet_encryption.cpp / test_block_connect.cpp /
+// test_walletmanager.cpp / test_httprpc.cpp.
+struct BitdbTestScope
+{
+    std::shared_ptr<CDBEnv> previousBitdb;
+    bool fHadPreviousDatadir;
+    std::string previousDatadir;
+    boost::filesystem::path pathTemp;
+
+    BitdbTestScope() : previousBitdb(bitdb)
+    {
+        pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+        boost::filesystem::create_directories(pathTemp);
+        ClearDatadirCache();
+        fHadPreviousDatadir = mapArgs.count("-datadir") != 0;
+        if (fHadPreviousDatadir)
+            previousDatadir = mapArgs["-datadir"];
+        mapArgs["-datadir"] = pathTemp.string();
+        bitdb = std::shared_ptr<CDBEnv>(new CDBEnv{});
+    }
+    ~BitdbTestScope()
+    {
+        bitdb->Flush(true);
+        bitdb->Reset();
+        bitdb = previousBitdb;
+        if (fHadPreviousDatadir)
+            mapArgs["-datadir"] = previousDatadir;
+        else
+            mapArgs.erase("-datadir");
+        ClearDatadirCache();
+        boost::filesystem::remove_all(pathTemp);
+    }
+};
+
 /**
  * This test covers Sapling methods on CWallet
  * GenerateNewSaplingZKey()
@@ -126,13 +170,8 @@ TEST(wallet_zkeys_tests, StoreAndLoadSaplingZkeys) {
  * This test covers methods on CWalletDB to load/save crypted sapling z keys.
  */
 TEST(wallet_zkeys_tests, WriteCryptedSaplingZkeyDirectToDb) {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-
-    // Get temporary and unique path for file.
-    // Note: / operator to append paths
-    boost::filesystem::path pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-    boost::filesystem::create_directories(pathTemp);
-    mapArgs["-datadir"] = pathTemp.string();
 
     bool fFirstRun;
     CWallet wallet("wallet_crypted_sapling.dat");
@@ -287,11 +326,8 @@ TEST(wallet_zkeys_tests, StoreAndLoadIronwoodKeys) {
 }
 
 TEST(wallet_zkeys_tests, EncryptAndUnlockIronwoodKeys) {
+    BitdbTestScope bitdbScope;
     SelectParams(CBaseChainParams::TESTNET);
-
-    boost::filesystem::path pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
-    boost::filesystem::create_directories(pathTemp);
-    mapArgs["-datadir"] = pathTemp.string();
 
     bool fFirstRun;
     CWallet wallet("wallet_crypted_ironwood.dat");

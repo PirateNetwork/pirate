@@ -90,6 +90,25 @@ TEST(WalletTests, SetupDatadirLocationRunAsFirstTest) {
     boost::filesystem::path pathTemp = boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
     boost::filesystem::create_directories(pathTemp);
     mapArgs["-datadir"] = pathTemp.string();
+    // GetDataDir() (src/util.cpp) memoizes its return value and only
+    // recomputes it once this cache is cleared -- without it, whichever path
+    // was cached by any earlier test suite in this binary keeps being
+    // returned. bitdb (src/wallet/db.cpp) is a single process-wide CDBEnv
+    // singleton whose Open() binds to the first datadir it's ever given and
+    // silently no-ops on every later call with a different one -- without a
+    // fresh CDBEnv too, pTestWallet below (constructed in
+    // SetupKeysRunAsSecondTest) would open its "testwallet" file through an
+    // environment still physically rooted at whatever directory an earlier
+    // suite left it bound to, not this test's own pathTemp, throwing "CDB:
+    // Error 22, can't open database". This group deliberately shares this
+    // datadir/wallet state forward across its own ordered
+    // RunAs{First,Second,Third}Test tests (see pTestWallet/saplingWallet
+    // below), so there is no matching teardown here -- only the entry side
+    // needs fixing, same pattern as test_wallet_encryption.cpp /
+    // test_wallet_zkeys.cpp / test_walletmanager.cpp / test_block_connect.cpp
+    // / test_httprpc.cpp.
+    ClearDatadirCache();
+    bitdb = std::shared_ptr<CDBEnv>(new CDBEnv{});
 }
 
 

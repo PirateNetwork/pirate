@@ -7,7 +7,7 @@
 #include "ui_importVKdialog.h"
 
 #include "guiutil.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 
 
 #include <QUrl>

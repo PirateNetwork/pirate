@@ -34,16 +34,16 @@
 
 #include "chainparams.h"
 #include "init.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 
 #include <iostream>
 
 #include <QAction>
+#include <QActionGroup>
 #include <QApplication>
 #include <QProgressDialog>
 #include <QDateTime>
-#include <QDesktopWidget>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileInfo>
@@ -377,14 +377,14 @@ void PirateOceanGUI::createActions()
     overviewAction->setStatusTip(tr("Show general overview of wallet"));
     overviewAction->setToolTip(overviewAction->statusTip());
     overviewAction->setCheckable(true);
-    overviewAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_1));
+    overviewAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_1));
     tabGroup->addAction(overviewAction);
 
     //sendCoinsAction = new QAction(platformStyle->SingleColorIcon(":/icons/send"), tr("&Send"), this);
     //sendCoinsAction->setStatusTip(tr("Send coins to a Pirate address"));
     //sendCoinsAction->setToolTip(sendCoinsAction->statusTip());
     //sendCoinsAction->setCheckable(true);
-    //sendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_2));
+    //sendCoinsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_2));
     //tabGroup->addAction(sendCoinsAction);
     //sendCoinsMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/send"), sendCoinsAction->text(), this);
     //sendCoinsMenuAction->setStatusTip(sendCoinsAction->statusTip());
@@ -398,7 +398,7 @@ void PirateOceanGUI::createActions()
     zsendCoinsAction->setStatusTip(tr("Send coins to a recipient"));
     zsendCoinsAction->setToolTip(zsendCoinsAction->statusTip());
     zsendCoinsAction->setCheckable(true);
-    zsendCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_3));
+    zsendCoinsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_3));
     tabGroup->addAction(zsendCoinsAction);
 
     zsendCoinsMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/z-send"), zsendCoinsAction->text(), this);
@@ -410,7 +410,7 @@ void PirateOceanGUI::createActions()
     zsignAction->setStatusTip(tr("Sign an off-line transaction"));
     zsignAction->setToolTip(zsignAction->statusTip());
     zsignAction->setCheckable(true);
-    zsignAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_9));
+    zsignAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_9));
     tabGroup->addAction(zsignAction);
 
     //Startup: Pull GUI config back to the server side during startup
@@ -433,7 +433,7 @@ void PirateOceanGUI::createActions()
     receiveCoinsAction->setStatusTip(tr("Your addresses (To which people are sending payments)"));
     receiveCoinsAction->setToolTip(receiveCoinsAction->statusTip());
     receiveCoinsAction->setCheckable(true);
-    receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_4));
+    receiveCoinsAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_4));
     tabGroup->addAction(receiveCoinsAction);
 
     receiveCoinsMenuAction = new QAction(platformStyle->TextColorIcon(":/icons/receiving_addresses"), receiveCoinsAction->text(), this);
@@ -444,7 +444,7 @@ void PirateOceanGUI::createActions()
     historyAction->setStatusTip(tr("Browse transaction history"));
     historyAction->setToolTip(historyAction->statusTip());
     historyAction->setCheckable(true);
-    historyAction->setShortcut(QKeySequence(Qt::ALT + Qt::Key_5));
+    historyAction->setShortcut(QKeySequence(Qt::ALT | Qt::Key_5));
     tabGroup->addAction(historyAction);
 
 #ifdef ENABLE_WALLET
@@ -503,7 +503,7 @@ void PirateOceanGUI::createActions()
 
     quitAction = new QAction(platformStyle->TextColorIcon(":/icons/quit"), tr("E&xit"), this);
     quitAction->setStatusTip(tr("Quit application"));
-    quitAction->setShortcut(QKeySequence(Qt::CTRL + Qt::Key_Q));
+    quitAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Q));
     quitAction->setMenuRole(QAction::QuitRole);
     aboutAction = new QAction(platformStyle->TextColorIcon(":/icons/about"), tr("&About %1").arg(tr(PACKAGE_NAME)), this);
     aboutAction->setStatusTip(tr("Show information about %1").arg(tr(PACKAGE_NAME)));
@@ -599,8 +599,8 @@ void PirateOceanGUI::createActions()
     }
 #endif // ENABLE_WALLET
 
-    new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_C), this, SLOT(showDebugWindowActivateConsole()));
-    new QShortcut(QKeySequence(Qt::CTRL + Qt::SHIFT + Qt::Key_D), this, SLOT(showDebugWindow()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_C), this, SLOT(showDebugWindowActivateConsole()));
+    new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D), this, SLOT(showDebugWindow()));
     // setStyleSheet("background-color: lightGray;");
 
     //hide all the bits that are for t addys
@@ -761,7 +761,7 @@ void PirateOceanGUI::setClientModel(ClientModel *_clientModel)
         connect(_clientModel, SIGNAL(networkActiveChanged(bool)), this, SLOT(setNetworkActive(bool)));
         connect(_clientModel, SIGNAL(showProgressDialog(QString, int)), this, SLOT(ShowProgress(QString, int)));
 
-        modalOverlay->setKnownBestHeight(_clientModel->getHeaderTipHeight(), QDateTime::fromTime_t(_clientModel->getHeaderTipTime()));
+        modalOverlay->setKnownBestHeight(_clientModel->getHeaderTipHeight(), QDateTime::fromSecsSinceEpoch(_clientModel->getHeaderTipTime()));
         setNumBlocks(_clientModel->getNumBlocks(), _clientModel->getLastBlockDate(), _clientModel->getVerificationProgress(nullptr), false);
         connect(_clientModel, SIGNAL(numBlocksChanged(int,QDateTime,double,bool)), this, SLOT(setNumBlocks(int,QDateTime,double,bool)));
 

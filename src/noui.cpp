@@ -20,7 +20,7 @@
 
 #include "noui.h"
 
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 
 #include <cstdio>

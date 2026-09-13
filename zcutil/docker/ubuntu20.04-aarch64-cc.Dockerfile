@@ -54,7 +54,7 @@ ARG APP_VERSION_SUFFIX=
 ENV APP_VERSION_SUFFIX=${APP_VERSION_SUFFIX}
 
 RUN ./zcutil/build-qt-aarch64.sh -j$(nproc)
-RUN BASE_VERSION="$(sed -n 's/^PACKAGE_VERSION *= *//p' Makefile | head -1)" && \
+RUN . ./zcutil/build-common.sh && BASE_VERSION="$(pirate_version)" && \
     if [ -n "${APP_VERSION_SUFFIX:-}" ]; then \
         printf '%s-%s' "$BASE_VERSION" "$APP_VERSION_SUFFIX" > /tmp/VERSION; \
     else \

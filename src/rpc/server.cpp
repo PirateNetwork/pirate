@@ -25,7 +25,7 @@
 #include "key_io.h"
 #include "random.h"
 #include "sync.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "asyncrpcqueue.h"

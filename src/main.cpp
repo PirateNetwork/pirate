@@ -44,7 +44,7 @@
 #include "script/interpreter.h"
 #include "txdb.h"
 #include "txmempool.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "undo.h"
 #include "util.h"
 #include "utilmoneystr.h"

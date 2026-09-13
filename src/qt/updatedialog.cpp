@@ -8,7 +8,7 @@
 #include "init.h"
 
 #include "guiutil.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 
 
 UpdateDialog::UpdateDialog(QWidget *parent, QVersionNumber clientVersion, QVersionNumber gitVersion) :

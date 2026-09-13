@@ -22,7 +22,7 @@
 #include "chainparams.h"
 #include "checkpoints.h"
 #include "main.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "util.h"
 #include "utiltime.h"
 #include "utilmoneystr.h"

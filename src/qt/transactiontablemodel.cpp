@@ -615,8 +615,8 @@ public:
             
             // Rebuild cachedWallet with default filters (show all transactions)
             // This ensures the initial presentation is correct
-            QDateTime minDate = QDateTime::fromTime_t(0);
-            QDateTime maxDate = QDateTime::fromTime_t(0xFFFFFFFF);
+            QDateTime minDate = QDateTime::fromSecsSinceEpoch(0);
+            QDateTime maxDate = QDateTime::fromSecsSinceEpoch(0xFFFFFFFF);
             quint32 allTypes = 0xFFFFFFFF;
             int watchOnlyAll = 0; // WatchOnlyFilter_All
             
@@ -812,7 +812,7 @@ public:
                     continue;
                 
                 // Apply filters
-                QDateTime txDateTime = QDateTime::fromTime_t(rec.time);
+                QDateTime txDateTime = QDateTime::fromSecsSinceEpoch(rec.time);
                 if (txDateTime < dateFrom || txDateTime > dateTo)
                     continue;
                     
@@ -2550,7 +2550,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case TypeRole:
         return rec->type;
     case DateRole:
-        return QDateTime::fromTime_t(static_cast<uint>(rec->time));
+        return QDateTime::fromSecsSinceEpoch(static_cast<uint>(rec->time));
     case WatchonlyRole:
         return rec->involvesWatchAddress;
     case WatchonlyDecorationRole:
@@ -2583,7 +2583,7 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
     case TxPlainTextRole:
         {
             QString details;
-            QDateTime date = QDateTime::fromTime_t(static_cast<uint>(rec->time));
+            QDateTime date = QDateTime::fromSecsSinceEpoch(static_cast<uint>(rec->time));
             QString txLabel = walletModel->getAddressTableModel()->labelForAddress(QString::fromStdString(rec->address));
 
             details.append(date.toString("M/d/yy HH:mm"));

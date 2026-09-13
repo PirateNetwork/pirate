@@ -32,7 +32,7 @@
 #include "clientversion.h"
 #include "primitives/transaction.h"
 #include "scheduler.h"
-#include "ui_interface.h"
+#include "interface_ui.h"
 #include "crypto/common.h"
 #include "tls/utiltls.h"
 #include "komodo_defs.h"
