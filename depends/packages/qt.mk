@@ -177,6 +177,16 @@ $(package)_cmake_opts += -DCMAKE_SYSTEM_PROCESSOR=$(host_arch)
 $(package)_config_env = CC="$($(package)_cc)"
 $(package)_config_env += CXX="$($(package)_cxx)"
 
+# qtbase/configure does not forward CC/CXX from the environment into the CMake
+# invocation it builds, so setting them above is not enough on its own: CMake
+# falls back to the build machine's /usr/bin/c++ and then fails its own compiler
+# test once CMAKE_SYSTEM_NAME says it is cross-compiling. Pass them as options
+# too. Safe here because only cross hosts reach this block, and their CC/CXX are
+# bare tool names -- the native ones embed flags (e.g. "gcc -m64") and could not
+# be used this way.
+$(package)_cmake_opts += -DCMAKE_C_COMPILER=$($(package)_cc)
+$(package)_cmake_opts += -DCMAKE_CXX_COMPILER=$($(package)_cxx)
+
 # Qt looks for these native packages unconditionally even when cross-compiling,
 # which picks up build-machine copies that cannot be linked into a target
 # build. Turn the searches off.

@@ -13,7 +13,10 @@ set(_cc_lib ${CMAKE_CURRENT_SOURCE_DIR}/libcryptoconditions_core.a)
 ExternalProject_Add(cryptoconditions_ep
   SOURCE_DIR        ${CMAKE_CURRENT_SOURCE_DIR}
   BUILD_IN_SOURCE   1
-  CONFIGURE_COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure
+  # configure is generated, not committed, so autogen.sh has to run first --
+  # see the same note in src/secp256k1/CMakeLists.txt.
+  CONFIGURE_COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_CURRENT_SOURCE_DIR} ./autogen.sh
+            COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/configure
                       --disable-shared --with-pic
                       CC=${CMAKE_C_COMPILER}
                       "CFLAGS=${CMAKE_C_FLAGS}"

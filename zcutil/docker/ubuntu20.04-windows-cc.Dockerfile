@@ -15,6 +15,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     m4 \
     g++-multilib \
     autoconf \
+    automake \
     libtool \
     libncurses-dev \
     unzip \
