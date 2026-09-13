@@ -479,8 +479,13 @@ target_link_libraries(bitcoin_zcash_libs INTERFACE
 
 # TARGET_DARWIN's RUST_DARWIN_FRAMEWORKS (Makefile.am): librustzcash needs
 # the Security framework for keychain-adjacent APIs on macOS.
+#
+# Linked as a plain flag rather than looked up with find_library(): the depends
+# toolchain sets CMAKE_FIND_ROOT_PATH_MODE_LIBRARY to ONLY, which confines
+# find_library() to the depends prefix, and the SDK frameworks live outside it.
+# This is what the autotools build passed, too.
 if(APPLE)
-  find_library(SECURITY_FRAMEWORK Security REQUIRED)
+  set(SECURITY_FRAMEWORK "-framework Security")
 else()
   set(SECURITY_FRAMEWORK "")
 endif()
