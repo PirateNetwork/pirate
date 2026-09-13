@@ -8,6 +8,13 @@ qt_android_packages := qt
 qt_darwin_packages := qt
 qt_mingw32_packages := qt
 
+# Cross builds need a Qt built for the build machine to supply the host tools
+# (moc, rcc, lrelease); qt.mk points at it with -qt-host-path. Consumed by
+# depends/Makefile's `native_packages += $(qt_native_packages)`.
+ifneq ($(host),$(build))
+qt_native_packages := native_qt
+endif
+
 native_packages := native_ccache native_rust native_cxxbridge
 $(host_arch)_$(host_os)_native_packages += native_b2
 

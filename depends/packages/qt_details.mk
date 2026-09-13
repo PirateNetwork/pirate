@@ -1,0 +1,29 @@
+# Shared Qt source definitions, included by both qt.mk (the target build) and
+# native_qt.mk (the host tools a cross build needs). Kept in one place so the
+# version, download paths and hashes cannot drift between the two recipes.
+
+qt_details_version=6.8.4
+qt_details_download_path=https://download.qt.io/archive/qt/6.8/$(qt_details_version)/submodules
+qt_details_suffix=everywhere-opensource-src-$(qt_details_version).tar.xz
+qt_details_patches_path=$(PATCHES_PATH)/qt
+
+qt_details_qtbase_file_name=qtbase-$(qt_details_suffix)
+qt_details_qtbase_sha256_hash=532dfbf3fa3cbc68fa37441ea9e81c5009da044eaecda78ffaeafd8bd125532f
+
+qt_details_qttranslations_file_name=qttranslations-$(qt_details_suffix)
+qt_details_qttranslations_sha256_hash=33b1fd1d75598cbf54da12263957f18292c9fb01e42fcc3ab9bd2f8ac79763b7
+
+qt_details_qttools_file_name=qttools-$(qt_details_suffix)
+qt_details_qttools_sha256_hash=c6030ea66d7be1ca7e3b40578beb35b0f4ff4014277d8e051d3219759f6ab399
+
+# Qt 6 fetches submodule tarballs individually, so the top-level CMake driver
+# that would normally be part of the qt5.git super-repo has to be pulled in
+# separately. Versions/hashes track qt/qt5 tag v$(qt_details_version)-lts-lgpl.
+qt_details_top_download_path=https://raw.githubusercontent.com/qt/qt5/refs/tags/v$(qt_details_version)-lts-lgpl
+qt_details_top_cmakelists_file_name=CMakeLists.txt
+qt_details_top_cmakelists_sha256_hash=54e9a4e554da37792446dda4f52bc308407b01a34bcc3afbad58e4e0f71fac9b
+qt_details_top_cmake_download_path=$(qt_details_top_download_path)/cmake
+qt_details_top_cmake_ecmoptionaladdsubdirectory_file_name=ECMOptionalAddSubdirectory.cmake
+qt_details_top_cmake_ecmoptionaladdsubdirectory_sha256_hash=97ee8bbfcb0a4bdcc6c1af77e467a1da0c5b386c42be2aa97d840247af5f6f70
+qt_details_top_cmake_qttoplevelhelpers_file_name=QtTopLevelHelpers.cmake
+qt_details_top_cmake_qttoplevelhelpers_sha256_hash=e11581b2101a6836ca991817d43d49e1f6016e4e672bbc3523eaa8b3eb3b64c2

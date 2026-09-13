@@ -1,9 +1,14 @@
 package=qt
-$(package)_version=6.8.4
-$(package)_download_path=https://download.qt.io/archive/qt/6.8/$($(package)_version)/submodules
-$(package)_suffix=everywhere-opensource-src-$($(package)_version).tar.xz
-$(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=532dfbf3fa3cbc68fa37441ea9e81c5009da044eaecda78ffaeafd8bd125532f
+include packages/qt_details.mk
+$(package)_version=$(qt_details_version)
+$(package)_download_path=$(qt_details_download_path)
+$(package)_file_name=$(qt_details_qtbase_file_name)
+$(package)_sha256_hash=$(qt_details_qtbase_sha256_hash)
+# Cross builds need host tools (moc, rcc, lrelease) that run on the build
+# machine, which only a native Qt provides.
+ifneq ($(host),$(build))
+$(package)_dependencies = native_qt
+endif
 $(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_cursor libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
 $(package)_patches = dont_hardcode_pwd.patch
 $(package)_patches += qtbase_avoid_qmain.patch
@@ -24,23 +29,20 @@ $(package)_patches += fix-gcc16-sfinae-qchar.patch
 $(package)_patches += fix-gcc16-sfinae-qbitarray.patch
 $(package)_patches += fix-gcc16-sfinae-qanystringview.patch
 
-$(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=33b1fd1d75598cbf54da12263957f18292c9fb01e42fcc3ab9bd2f8ac79763b7
+$(package)_qttranslations_file_name=$(qt_details_qttranslations_file_name)
+$(package)_qttranslations_sha256_hash=$(qt_details_qttranslations_sha256_hash)
 
-$(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=c6030ea66d7be1ca7e3b40578beb35b0f4ff4014277d8e051d3219759f6ab399
+$(package)_qttools_file_name=$(qt_details_qttools_file_name)
+$(package)_qttools_sha256_hash=$(qt_details_qttools_sha256_hash)
 
-# Qt 6 fetches submodule tarballs individually, so the top-level CMake driver
-# that would normally be part of the qt5.git super-repo has to be pulled in
-# separately. Versions/hashes track qt/qt5 tag v$($(package)_version)-lts-lgpl.
-$(package)_top_download_path=https://raw.githubusercontent.com/qt/qt5/refs/tags/v$($(package)_version)-lts-lgpl
-$(package)_top_cmakelists_file_name=CMakeLists.txt
-$(package)_top_cmakelists_sha256_hash=54e9a4e554da37792446dda4f52bc308407b01a34bcc3afbad58e4e0f71fac9b
-$(package)_top_cmake_download_path=$($(package)_top_download_path)/cmake
-$(package)_top_cmake_ecmoptionaladdsubdirectory_file_name=ECMOptionalAddSubdirectory.cmake
-$(package)_top_cmake_ecmoptionaladdsubdirectory_sha256_hash=97ee8bbfcb0a4bdcc6c1af77e467a1da0c5b386c42be2aa97d840247af5f6f70
-$(package)_top_cmake_qttoplevelhelpers_file_name=QtTopLevelHelpers.cmake
-$(package)_top_cmake_qttoplevelhelpers_sha256_hash=e11581b2101a6836ca991817d43d49e1f6016e4e672bbc3523eaa8b3eb3b64c2
+$(package)_top_download_path=$(qt_details_top_download_path)
+$(package)_top_cmakelists_file_name=$(qt_details_top_cmakelists_file_name)
+$(package)_top_cmakelists_sha256_hash=$(qt_details_top_cmakelists_sha256_hash)
+$(package)_top_cmake_download_path=$(qt_details_top_cmake_download_path)
+$(package)_top_cmake_ecmoptionaladdsubdirectory_file_name=$(qt_details_top_cmake_ecmoptionaladdsubdirectory_file_name)
+$(package)_top_cmake_ecmoptionaladdsubdirectory_sha256_hash=$(qt_details_top_cmake_ecmoptionaladdsubdirectory_sha256_hash)
+$(package)_top_cmake_qttoplevelhelpers_file_name=$(qt_details_top_cmake_qttoplevelhelpers_file_name)
+$(package)_top_cmake_qttoplevelhelpers_sha256_hash=$(qt_details_top_cmake_qttoplevelhelpers_sha256_hash)
 
 define $(package)_set_vars
 $(package)_config_opts_release = -release
@@ -156,6 +158,32 @@ ifneq (,$(filter linux openbsd,$(host_os)))
 # The `-dbus-runtime` configure option does not work; drive it via CMake.
 # https://qt-project.atlassian.net/browse/QTBUG-144864
 $(package)_cmake_opts += -DINPUT_dbus=runtime
+endif
+
+ifneq ($(host),$(build))
+# Host tools come from the native_qt build rather than being built for the
+# target, which could not run here.
+$(package)_config_opts += -qt-host-path $(build_prefix)
+
+# Without these CMake never learns it is cross-compiling: it would fall back to
+# the build machine's compiler while using the target's ar.
+$(package)_cmake_opts += -DCMAKE_SYSTEM_NAME=$($(host_os)_cmake_system_name)
+$(package)_cmake_opts += -DCMAKE_SYSTEM_VERSION=$($(host_os)_cmake_system_version)
+$(package)_cmake_opts += -DCMAKE_SYSTEM_PROCESSOR=$(host_arch)
+
+# qtbase/configure is invoked directly rather than through $(package)_autoconf,
+# which is the only thing that passes CC/CXX, so hand the cross compiler over
+# explicitly.
+$(package)_config_env = CC="$($(package)_cc)"
+$(package)_config_env += CXX="$($(package)_cxx)"
+
+# Qt looks for these native packages unconditionally even when cross-compiling,
+# which picks up build-machine copies that cannot be linked into a target
+# build. Turn the searches off.
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_Libb2=TRUE
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_WrapSystemDoubleConversion=TRUE
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_WrapSystemMd4c=TRUE
+$(package)_cmake_opts += -DCMAKE_DISABLE_FIND_PACKAGE_WrapZSTD=TRUE
 endif
 endef
 
