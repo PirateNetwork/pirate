@@ -25,6 +25,50 @@
 
 class TestWallet;
 
+/**
+ * Restores chainActive's tip when it goes out of scope.
+ *
+ * A number of tests point chainActive at a stack-allocated CBlockIndex. Once
+ * such a test returns, the global is left holding a pointer into a dead stack
+ * frame, and the next test to read chainActive.Tip() -- CChain::GetLocator()
+ * via CWalletManager::LoadWallet(), for one -- dereferences freed memory. The
+ * restore has to be automatic rather than a statement at the end of the test,
+ * because ASSERT_* returns early and would skip it.
+ */
+class ScopedChainTip
+{
+public:
+    ScopedChainTip() : saved(chainActive.Tip()) {}
+    explicit ScopedChainTip(CBlockIndex* tip) : saved(chainActive.Tip()) { chainActive.SetTip(tip); }
+    ~ScopedChainTip() { chainActive.SetTip(saved); }
+
+    ScopedChainTip(const ScopedChainTip&) = delete;
+    ScopedChainTip& operator=(const ScopedChainTip&) = delete;
+
+private:
+    CBlockIndex* saved;
+};
+
+/**
+ * Erases a mapBlockIndex entry when it goes out of scope.
+ *
+ * Same stack-lifetime problem as ScopedChainTip: a test that registers a
+ * stack-allocated CBlockIndex in the global map leaves a dangling pointer
+ * behind for anything that later walks it.
+ */
+class ScopedMapBlockIndexEntry
+{
+public:
+    explicit ScopedMapBlockIndexEntry(const uint256& hash) : key(hash) {}
+    ~ScopedMapBlockIndexEntry() { mapBlockIndex.erase(key); }
+
+    ScopedMapBlockIndexEntry(const ScopedMapBlockIndexEntry&) = delete;
+    ScopedMapBlockIndexEntry& operator=(const ScopedMapBlockIndexEntry&) = delete;
+
+private:
+    uint256 key;
+};
+
 #define VCH(a,b) std::vector<unsigned char>(a, a + b)
 
 static char ccjsonerr[1000] = "\0";

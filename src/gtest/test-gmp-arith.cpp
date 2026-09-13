@@ -16,6 +16,7 @@
 #include "komodo_utils.h"
 #include "komodo_hardfork.h"
 #include "txdb.h"
+#include "gtest/gtestutils.h"
 
 #include <iostream>
 #include <vector>
@@ -286,7 +287,10 @@ namespace GMPArithTests
 
                         if (pblocktree->WriteTxIndex(vPos))
                         {
-                            chainActive.SetTip(&indexDummy);
+                            // Both indexDummy objects are stack-local, and the
+                            // ASSERT_EQ below returns early on failure, so the
+                            // tip has to be restored by scope exit.
+                            ScopedChainTip chainTipGuard(&indexDummy);
 
                             CBlock new_block;
                             CBlockIndex indexDummy2(new_block);

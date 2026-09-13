@@ -18,6 +18,7 @@
 #include "main.h"
 
 #include "komodo_utils.h"
+#include "gtest/gtestutils.h"
 #include "komodo_globals.h"
 
 extern uint64_t ASSETCHAINS_TIMEUNLOCKFROM;
@@ -58,8 +59,11 @@ namespace TestHarakaRemoval {
 
         auto blockHash = block.GetHash();
         CBlockIndex fakeIndex {block};
+        // fakeIndex lives on this stack frame, so neither global may still
+        // point at it once this test returns.
         mapBlockIndex.insert(std::make_pair(blockHash, &fakeIndex));
-        chainActive.SetTip(&fakeIndex);
+        ScopedMapBlockIndexEntry fakeIndexEntryGuard(blockHash);
+        ScopedChainTip chainTipGuard(&fakeIndex);
         EXPECT_TRUE(chainActive.Contains(&fakeIndex));
         EXPECT_EQ(0, chainActive.Height());
 

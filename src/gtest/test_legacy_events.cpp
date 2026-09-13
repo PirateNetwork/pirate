@@ -15,6 +15,7 @@
 #include "core_io.h"
 #include "komodo.h"
 #include "komodo_notary.h"
+#include "gtest/gtestutils.h"
 
 // Tests for specific cross-chain notarization event scenarios (e.g.
 // PhantomOpReturnEvent, NormalKMDLTCNota, MILKMDNota, MARTYKMDNota) parsed
@@ -230,7 +231,8 @@ namespace LegacyEventsTests {
         CBlockIndex indexDummy(b);
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
-        chainActive.SetTip(&indexDummy);
+        // indexDummy is stack-local; restore the tip on scope exit.
+        ScopedChainTip chainTipGuard(&indexDummy);
 
         if (IsInitialBlockDownload() == false) {
             CBlockIndex *pfakeIndex = new CBlockIndex();
@@ -325,7 +327,8 @@ namespace LegacyEventsTests {
         CBlockIndex indexDummy(b);
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
-        chainActive.SetTip(&indexDummy);
+        // indexDummy is stack-local; restore the tip on scope exit.
+        ScopedChainTip chainTipGuard(&indexDummy);
 
         if (IsInitialBlockDownload() == false) {
             CBlockIndex *pfakeIndex = new CBlockIndex();
@@ -424,7 +427,8 @@ namespace LegacyEventsTests {
         CBlockIndex indexDummy(b);
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
-        chainActive.SetTip(&indexDummy);
+        // indexDummy is stack-local; restore the tip on scope exit.
+        ScopedChainTip chainTipGuard(&indexDummy);
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
         komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
@@ -510,7 +514,8 @@ namespace LegacyEventsTests {
         CBlockIndex indexDummy(b);
         indexDummy.nHeight = fakeBlockHeight;
         //indexDummy.nTime = GetTime();
-        chainActive.SetTip(&indexDummy);
+        // indexDummy is stack-local; restore the tip on scope exit.
+        ScopedChainTip chainTipGuard(&indexDummy);
         int32_t res_kcb = komodo_connectblock(false, &indexDummy, b);
 
         komodo_state *state_ptr = komodo_stateptrget((char *)chainName.symbol().c_str()); // &KOMODO_STATES[0]
