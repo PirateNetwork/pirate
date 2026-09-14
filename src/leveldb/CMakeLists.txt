@@ -43,8 +43,17 @@ add_library(leveldb STATIC
   util/logging.cc
   util/options.cc
   util/status.cc
-  port/port_posix.cc
 )
+# Platform port implementation, matching Makefile.leveldb.include: env_posix.cc
+# builds everywhere, but the port layer is one or the other, and Windows adds
+# env_win.cc. port.h includes port_win.h under LEVELDB_PLATFORM_WINDOWS, so
+# compiling port_posix.cc there pulls in port_posix.h and its <endian.h>.
+if(WIN32)
+  target_sources(leveldb PRIVATE port/port_win.cc util/env_win.cc)
+else()
+  target_sources(leveldb PRIVATE port/port_posix.cc)
+endif()
+
 target_include_directories(leveldb PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/include

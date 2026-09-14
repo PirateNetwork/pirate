@@ -464,11 +464,19 @@ find_dep_package(libcrypto         PKGCONFIG_NAME libcrypto
   EXTRA_LIBS ${WINDOWS_SYSTEM_LIBS})
 find_dep_package(libsodium         PKGCONFIG_NAME libsodium
   LIBRARY_NAMES sodium HEADER sodium.h)
+# zlib is a depends package in its own right, and both libcurl (gzip transfer
+# encoding) and libarchive link against it. On Linux find_dep_package defers to
+# pkg-config, which resolves that transitively; on macOS and Windows it builds
+# the imported target by hand and carries no dependencies but these, so libcurl
+# there fails to link with undefined _zlibVersion/_inflate/_uncompress.
+find_dep_package(zlib              PKGCONFIG_NAME zlib
+  LIBRARY_NAMES z HEADER zlib.h)
 find_dep_package(libcurl           PKGCONFIG_NAME libcurl
   LIBRARY_NAMES curl HEADER curl/curl.h
-  EXTRA_LIBS ${WINDOWS_SYSTEM_LIBS})
+  EXTRA_LIBS PkgConfig::zlib ${WINDOWS_SYSTEM_LIBS})
 find_dep_package(libarchive        PKGCONFIG_NAME libarchive
-  LIBRARY_NAMES archive HEADER archive.h)
+  LIBRARY_NAMES archive HEADER archive.h
+  EXTRA_LIBS PkgConfig::zlib)
 if(ENABLE_ZMQ)
   find_dep_package(libzmq          PKGCONFIG_NAME libzmq
     LIBRARY_NAMES zmq HEADER zmq.h

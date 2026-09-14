@@ -30,10 +30,13 @@ else ifeq ($(_tmp_build_os),linux)
     _sha256_hash_to_use := $($(package)_sha256_hash_linux)
   endif
 else ifeq ($(_tmp_build_os),darwin)
-  # config.guess reports arm64 on Apple Silicon; accept aarch64 too. Without
-  # this an arm64 host gets the x86_64 toolchain, whose rustc has no
-  # aarch64-apple-darwin std, and cargo fails with "can't find crate for core".
-  ifneq (,$(filter arm64 aarch64,$(strip $(build_arch))))
+  # Apple Silicon reports itself inconsistently: config.guess on the GitHub
+  # macos-14 runners yields plain "arm", and config.sub leaves it alone, so an
+  # exact arm64/aarch64 match misses it entirely and the host silently gets the
+  # x86_64 toolchain -- whose rustc has no aarch64-apple-darwin std, so cargo
+  # fails with "can't find crate for core". The rust_target function below
+  # already covers all three spellings; match the same set here.
+  ifneq (,$(filter aarch64 arm64 arm,$(strip $(build_arch))))
     _file_name_to_use := $($(package)_file_name_aarch64_darwin)
     _sha256_hash_to_use := $($(package)_sha256_hash_aarch64_darwin)
   else
