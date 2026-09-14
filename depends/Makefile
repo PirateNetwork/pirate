@@ -159,6 +159,7 @@ $(host_prefix)/toolchain.cmake : toolchain.cmake.in
             -e 's|@host_system_name@|$($(host_os)_cmake_system_name)|' \
             -e 's|@host_system_version@|$($(host_os)_cmake_system_version)|' \
             -e 's|@host_arch@|$(host_arch)|' \
+            -e 's|@rust_target@|$(call rust_target,native_rust,$(canonical_host),$(host_os))|' \
             -e 's|@CC@|$(host_CC_bin)|' \
             -e 's|@CXX@|$(host_CXX_bin)|' \
             -e 's|@AR@|$(toolchain_path)$(host_AR)|' \

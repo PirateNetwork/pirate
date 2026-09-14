@@ -19,6 +19,11 @@ if(@depends_crosscompiling@)
   set(CMAKE_CXX_COMPILER_TARGET @host@)
 endif()
 
+# cargo's target triple. Not the same string as @host@: depends' rust_target
+# maps e.g. x86_64-apple-darwin24.6.0 to x86_64-apple-darwin, which is what
+# rustc actually recognises (see depends/packages/native_rust.mk).
+set(DEPENDS_RUST_TARGET "@rust_target@")
+
 if(NOT DEFINED CMAKE_C_COMPILER)
   set(CMAKE_C_COMPILER @CC@)
 endif()

@@ -44,10 +44,18 @@ endif()
 #=============================
 # Vendored third-party trees
 #=============================
-# RUST_TARGET: the triple cargo emits under target/<triple>/release/. Native
-# builds match the depends host dir name.
+# RUST_TARGET: the triple cargo emits under target/<triple>/release/. Prefer the
+# value depends computed, because rustc's triple is not always the depends host
+# dir name -- on macOS the latter carries an OS version (x86_64-apple-darwin24.6.0)
+# that rustc rejects outright. Fall back to the directory name for trees
+# configured without the depends toolchain file.
 get_filename_component(_depends_host "${DEPENDS_PREFIX}" NAME)
-set(RUST_TARGET "${_depends_host}" CACHE STRING "Rust target triple for librustzcash")
+if(DEPENDS_RUST_TARGET)
+  set(_default_rust_target "${DEPENDS_RUST_TARGET}")
+else()
+  set(_default_rust_target "${_depends_host}")
+endif()
+set(RUST_TARGET "${_default_rust_target}" CACHE STRING "Rust target triple for librustzcash")
 
 add_subdirectory(leveldb)
 add_subdirectory(univalue)
@@ -406,6 +414,12 @@ if(ENABLE_ZMQ)
   )
   target_link_libraries(bitcoin_zmq PRIVATE bitcoin_includes)
   target_compile_definitions(bitcoin_zmq PRIVATE ENABLE_ZMQ=1)
+  if(WIN32)
+    # depends builds libzmq static; without this zmq.h declares its API
+    # __declspec(dllimport) and the static link fails. configure.ac added
+    # -DZMQ_STATIC to ZMQ_CFLAGS for mingw for the same reason.
+    target_compile_definitions(bitcoin_zmq PRIVATE ZMQ_STATIC)
+  endif()
 endif()
 
 # Serialise the cxxbridge codegen before any C++ TU that pulls in rust/*.h.
@@ -467,6 +481,10 @@ find_library(BDB_CXX_LIBRARY NAMES db_cxx-6.2 db_cxx db_cxx-6.3
 # RUST_LIBS: -ldl on Linux, -luserenv on Windows.
 if(WIN32)
   set(RUST_SYSTEM_LIBS userenv)
+elseif(APPLE)
+  # No librt on macOS: clock_gettime and friends live in libSystem. configure.ac
+  # only ever linked -lrt under --enable-glibc-back-compat, which defaults off.
+  set(RUST_SYSTEM_LIBS dl pthread m)
 else()
   set(RUST_SYSTEM_LIBS dl pthread m rt)
 endif()

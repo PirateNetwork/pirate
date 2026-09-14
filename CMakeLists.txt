@@ -183,6 +183,16 @@ target_link_libraries(core_interface INTERFACE Threads::Threads)
 
 # Boost is provided by depends/. Header-only for most of the tree; a few
 # components are used directly.
+#
+# depends builds Boost with runtime-link=static for mingw32 and
+# runtime-link=shared elsewhere (depends/packages/boost.mk). BoostConfig.cmake
+# rejects the Windows build outright -- "No suitable build variant has been
+# found ... static runtime, Boost_USE_STATIC_RUNTIME not ON" -- unless it is
+# told which runtime to expect, so match the recipe here.
+if(WIN32)
+  set(Boost_USE_STATIC_RUNTIME ON)
+endif()
+
 find_package(Boost 1.70 REQUIRED COMPONENTS
   system filesystem thread chrono program_options
 )
@@ -264,6 +274,15 @@ try_append_cxx_flags("-fstack-reuse=none" TARGET core_interface)
 try_append_linker_flag("-Wl,-z,relro" TARGET core_interface)
 try_append_linker_flag("-Wl,-z,now" TARGET core_interface)
 try_append_linker_flag("-Wl,--as-needed" TARGET core_interface)
+
+if(WIN32)
+  # PE hardening. configure.ac treated all three as mandatory on mingw
+  # (AC_MSG_ERROR if unsupported); without them the shipped Windows binaries
+  # lose ASLR and DEP, which no build or test failure would ever reveal.
+  try_append_linker_flag("-Wl,--dynamicbase" TARGET core_interface)
+  try_append_linker_flag("-Wl,--nxcompat" TARGET core_interface)
+  try_append_linker_flag("-Wl,--high-entropy-va" TARGET core_interface)
+endif()
 
 #=============================
 # Generate the config header

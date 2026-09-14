@@ -76,11 +76,29 @@ target_include_directories(leveldb_sse42 PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_compile_definitions(leveldb_sse42 PRIVATE
-  ${LEVELDB_PLATFORM_DEFS}
-  LEVELDB_PLATFORM_POSIX_SSE
+# port_posix_sse.cc keys entirely off LEVELDB_PLATFORM_POSIX_SSE: define it and
+# the file uses _mm_crc32_* unconditionally, which does not exist off x86. Feature
+# -test the intrinsics rather than matching on CMAKE_SYSTEM_PROCESSOR, mirroring
+# configure.ac's ENABLE_HWCRC32 check, and gate both the define and the flag on
+# the result as Makefile.leveldb.include did. Without the define the file falls
+# back to a portable CRC32 implementation.
+include(CheckSourceCompilesWithFlags)
+check_cxx_source_compiles_with_flags("
+  #include <stdint.h>
+  #include <nmmintrin.h>
+  int main() {
+    uint64_t l = 0;
+    l = _mm_crc32_u8(l, 0);
+    l = _mm_crc32_u32(l, 0);
+    l = _mm_crc32_u64(l, 0);
+    return (int)l;
+  }
+  " HAVE_HWCRC32 CXXFLAGS -msse4.2
 )
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64|i[3-6]86)$")
+
+target_compile_definitions(leveldb_sse42 PRIVATE ${LEVELDB_PLATFORM_DEFS})
+if(HAVE_HWCRC32)
+  target_compile_definitions(leveldb_sse42 PRIVATE LEVELDB_PLATFORM_POSIX_SSE)
   target_compile_options(leveldb_sse42 PRIVATE -msse4.2)
 endif()
 target_link_libraries(leveldb_sse42 PRIVATE core_interface)

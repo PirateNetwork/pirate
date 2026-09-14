@@ -49,26 +49,6 @@ private:
     CBlockIndex* saved;
 };
 
-/**
- * Erases a mapBlockIndex entry when it goes out of scope.
- *
- * Same stack-lifetime problem as ScopedChainTip: a test that registers a
- * stack-allocated CBlockIndex in the global map leaves a dangling pointer
- * behind for anything that later walks it.
- */
-class ScopedMapBlockIndexEntry
-{
-public:
-    explicit ScopedMapBlockIndexEntry(const uint256& hash) : key(hash) {}
-    ~ScopedMapBlockIndexEntry() { mapBlockIndex.erase(key); }
-
-    ScopedMapBlockIndexEntry(const ScopedMapBlockIndexEntry&) = delete;
-    ScopedMapBlockIndexEntry& operator=(const ScopedMapBlockIndexEntry&) = delete;
-
-private:
-    uint256 key;
-};
-
 #define VCH(a,b) std::vector<unsigned char>(a, a + b)
 
 static char ccjsonerr[1000] = "\0";
