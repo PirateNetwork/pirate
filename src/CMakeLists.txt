@@ -450,8 +450,13 @@ endif()
 find_dep_package(libevent          PKGCONFIG_NAME libevent
   LIBRARY_NAMES event HEADER event2/event.h
   EXTRA_LIBS ${WINDOWS_SYSTEM_LIBS})
-find_dep_package(libevent_pthreads PKGCONFIG_NAME libevent_pthreads
-  LIBRARY_NAMES event_pthreads HEADER event2/thread.h)
+# libevent's pthreads shim does not exist on Windows, where libevent uses the
+# native threading API instead. configure.ac guarded both its pkg-config and
+# fallback checks with `if test x$TARGET_OS != xwindows`.
+if(NOT WIN32)
+  find_dep_package(libevent_pthreads PKGCONFIG_NAME libevent_pthreads
+    LIBRARY_NAMES event_pthreads HEADER event2/thread.h)
+endif()
 find_dep_package(libssl            PKGCONFIG_NAME libssl
   LIBRARY_NAMES ssl HEADER openssl/ssl.h)
 find_dep_package(libcrypto         PKGCONFIG_NAME libcrypto
@@ -484,7 +489,11 @@ if(WIN32)
 elseif(APPLE)
   # No librt on macOS: clock_gettime and friends live in libSystem. configure.ac
   # only ever linked -lrt under --enable-glibc-back-compat, which defaults off.
-  set(RUST_SYSTEM_LIBS dl pthread m)
+  #
+  # CoreFoundation is required by librustzcash itself: chrono's
+  # offset::local::inner::current_zone calls CFTimeZoneCopySystem and friends,
+  # so without it every executable fails to link with undefined _CF* symbols.
+  set(RUST_SYSTEM_LIBS dl pthread m "-framework CoreFoundation")
 else()
   set(RUST_SYSTEM_LIBS dl pthread m rt)
 endif()
@@ -588,7 +597,7 @@ target_link_libraries(pirated PRIVATE
   ${_boost_all}
   ${BDB_CXX_LIBRARY}
   PkgConfig::libssl PkgConfig::libcrypto
-  PkgConfig::libevent PkgConfig::libevent_pthreads
+  PkgConfig::libevent $<$<NOT:$<BOOL:${WIN32}>>:PkgConfig::libevent_pthreads>
   PkgConfig::libcurl PkgConfig::libarchive
   $<$<BOOL:${ENABLE_ZMQ}>:PkgConfig::libzmq>
   ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}
@@ -781,7 +790,7 @@ if(BUILD_GTEST)
     ${BDB_CXX_LIBRARY}
     ${GTEST_LIB} ${GMOCK_LIB}
     PkgConfig::libssl PkgConfig::libcrypto
-    PkgConfig::libevent PkgConfig::libevent_pthreads
+    PkgConfig::libevent $<$<NOT:$<BOOL:${WIN32}>>:PkgConfig::libevent_pthreads>
     PkgConfig::libcurl PkgConfig::libarchive
     $<$<BOOL:${ENABLE_ZMQ}>:PkgConfig::libzmq>
     ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}

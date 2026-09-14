@@ -11,6 +11,8 @@ $(package)_file_name_freebsd=rust-$($(package)_version)-x86_64-unknown-freebsd.t
 $(package)_sha256_hash_freebsd=5457c15df17ff963b582b95c55fae3bc3736468e4df765182c75c19b1b6e8e74
 $(package)_file_name_aarch64_linux=rust-$($(package)_version)-aarch64-unknown-linux-gnu.tar.gz
 $(package)_sha256_hash_aarch64_linux=20d5ebe3916fe489891fc577574e47fc679cdf62080c1bb1be6b6905ff4e275b
+$(package)_file_name_aarch64_darwin=rust-$($(package)_version)-aarch64-apple-darwin.tar.gz
+$(package)_sha256_hash_aarch64_darwin=d97daf14c5c346c2d5a3271880d5a06d9885ec9af7e1fd2f072986e338526f8c
 $(package)_file_name_windows=rust-$($(package)_version)-x86_64-pc-windows-gnu.tar.gz
 $(package)_sha256_hash_windows=f9d9411035190563fc08a461188ea90cd778bb1c36d534469b5772612d6daad5
 
@@ -28,8 +30,16 @@ else ifeq ($(_tmp_build_os),linux)
     _sha256_hash_to_use := $($(package)_sha256_hash_linux)
   endif
 else ifeq ($(_tmp_build_os),darwin)
-  _file_name_to_use := $($(package)_file_name_darwin)
-  _sha256_hash_to_use := $($(package)_sha256_hash_darwin)
+  # config.guess reports arm64 on Apple Silicon; accept aarch64 too. Without
+  # this an arm64 host gets the x86_64 toolchain, whose rustc has no
+  # aarch64-apple-darwin std, and cargo fails with "can't find crate for core".
+  ifneq (,$(filter arm64 aarch64,$(strip $(build_arch))))
+    _file_name_to_use := $($(package)_file_name_aarch64_darwin)
+    _sha256_hash_to_use := $($(package)_sha256_hash_aarch64_darwin)
+  else
+    _file_name_to_use := $($(package)_file_name_darwin)
+    _sha256_hash_to_use := $($(package)_sha256_hash_darwin)
+  endif
 else ifeq ($(_tmp_build_os),freebsd)
   _file_name_to_use := $($(package)_file_name_freebsd)
   _sha256_hash_to_use := $($(package)_sha256_hash_freebsd)

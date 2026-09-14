@@ -183,7 +183,7 @@ target_link_libraries(pirate-qt PRIVATE
   $<$<BOOL:${WITH_DBUS}>:Qt6::DBus>
   $<$<BOOL:${USE_QRCODE}>:PkgConfig::libqrencode>
   PkgConfig::libssl PkgConfig::libcrypto
-  PkgConfig::libevent PkgConfig::libevent_pthreads
+  PkgConfig::libevent $<$<NOT:$<BOOL:${WIN32}>>:PkgConfig::libevent_pthreads>
   PkgConfig::libcurl PkgConfig::libarchive
   $<$<BOOL:${ENABLE_ZMQ}>:PkgConfig::libzmq>
   ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}
