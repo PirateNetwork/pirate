@@ -52,10 +52,17 @@ else
   _sha256_hash_to_use := $($(package)_sha256_hash_linux)
 endif
 
-# 3. Assign to the main package variables, stripping results
-$(package)_file_name = $(strip $(_file_name_to_use))
-$(package)_download_file = $(strip $(_file_name_to_use))
-$(package)_sha256_hash = $(strip $(_sha256_hash_to_use))
+# 3. Assign to the main package variables, stripping results.
+#
+# These must be := rather than =. _file_name_to_use and _sha256_hash_to_use are
+# plain globals, and funcs.mk re-expands $(package)_file_name from int_get_build_id,
+# which runs after every packages/*.mk has been included -- so a lazy assignment
+# is resolved long after this file was parsed and can disagree with the value
+# $(package)_download_file resolves to. That is how an Apple Silicon host ended
+# up fetching the aarch64 tarball while checking it against the x86_64 hash.
+$(package)_file_name := $(strip $(_file_name_to_use))
+$(package)_download_file := $(strip $(_file_name_to_use))
+$(package)_sha256_hash := $(strip $(_sha256_hash_to_use))
 
 # --- Original Rust target mappings and std sha256 hashes (keep these as they are) ---
 $(package)_rust_target_x86_64-pc-linux-gnu=x86_64-unknown-linux-gnu

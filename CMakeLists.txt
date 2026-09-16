@@ -146,14 +146,24 @@ endif()
 # matching embedded daemon is disabled. These feed both the install rules that
 # ship them as pirate-tor/pirate-i2pd and the embedded_binary_hashes.h that
 # records what this build shipped.
+# Windows binaries carry .exe, as depends/config.site.in did with
+# embedded_bin_suffix. Without it the paths below name files that do not exist,
+# and the embedded_binary_hashes custom command declares them as dependencies
+# make has no rule to produce.
+if(WIN32)
+  set(_embedded_bin_suffix ".exe")
+else()
+  set(_embedded_bin_suffix "")
+endif()
+
 if(ENABLE_EMBEDDED_TOR)
-  set(TOR_BINARY_PATH "${DEPENDS_PREFIX}/bin/tor" CACHE FILEPATH
+  set(TOR_BINARY_PATH "${DEPENDS_PREFIX}/bin/tor${_embedded_bin_suffix}" CACHE FILEPATH
       "Path to a tor binary to bundle for embedded Tor support.")
 else()
   set(TOR_BINARY_PATH "" CACHE FILEPATH "Path to a tor binary to bundle." FORCE)
 endif()
 if(ENABLE_EMBEDDED_I2PD)
-  set(I2PD_BINARY_PATH "${DEPENDS_PREFIX}/bin/i2pd" CACHE FILEPATH
+  set(I2PD_BINARY_PATH "${DEPENDS_PREFIX}/bin/i2pd${_embedded_bin_suffix}" CACHE FILEPATH
       "Path to an i2pd binary to bundle for embedded I2P support.")
 else()
   set(I2PD_BINARY_PATH "" CACHE FILEPATH "Path to an i2pd binary to bundle." FORCE)

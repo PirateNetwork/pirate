@@ -474,9 +474,17 @@ find_dep_package(zlib              PKGCONFIG_NAME zlib
 find_dep_package(libcurl           PKGCONFIG_NAME libcurl
   LIBRARY_NAMES curl HEADER curl/curl.h
   EXTRA_LIBS PkgConfig::zlib ${WINDOWS_SYSTEM_LIBS})
+# libarchive's archive_string.o calls iconv_open/iconv/iconv_close. On Linux
+# those are in glibc; macOS keeps them in a separate libiconv that has to be
+# named explicitly.
+if(APPLE)
+  set(_libarchive_extra_libs PkgConfig::zlib iconv)
+else()
+  set(_libarchive_extra_libs PkgConfig::zlib)
+endif()
 find_dep_package(libarchive        PKGCONFIG_NAME libarchive
   LIBRARY_NAMES archive HEADER archive.h
-  EXTRA_LIBS PkgConfig::zlib)
+  EXTRA_LIBS ${_libarchive_extra_libs})
 if(ENABLE_ZMQ)
   find_dep_package(libzmq          PKGCONFIG_NAME libzmq
     LIBRARY_NAMES zmq HEADER zmq.h
@@ -870,8 +878,10 @@ endif()
 # The bundled daemons ship under pirate-* names so they cannot collide with a
 # separately-installed system tor/i2pd - see doc/tor.md and doc/i2p.md.
 if(TOR_BINARY_PATH)
-  install(PROGRAMS ${TOR_BINARY_PATH} DESTINATION bin RENAME pirate-tor)
+  install(PROGRAMS ${TOR_BINARY_PATH} DESTINATION bin
+          RENAME pirate-tor${_embedded_bin_suffix})
 endif()
 if(I2PD_BINARY_PATH)
-  install(PROGRAMS ${I2PD_BINARY_PATH} DESTINATION bin RENAME pirate-i2pd)
+  install(PROGRAMS ${I2PD_BINARY_PATH} DESTINATION bin
+          RENAME pirate-i2pd${_embedded_bin_suffix})
 endif()
