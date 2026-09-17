@@ -541,10 +541,17 @@ set(_boost_all
 )
 
 # Windows resource scripts (icons/version info), one per executable, matching
-# each *_SOURCES += *-res.rc in src/Makefile.am.
+# each *_SOURCES += *-res.rc in src/Makefile.am. Each .rc #includes
+# clientversion.h, which guards its C++ includes behind
+# `#if !defined(WINDRES_PREPROC)` because windres's preprocessor has no C++
+# standard library include path and chokes on <string>. Makefile.am's .rc.o
+# rule passed -DWINDRES_PREPROC to windres for exactly this reason; the CMake
+# port dropped it, so windres fell through to the real includes and failed
+# with "fatal error: string: No such file or directory".
 function(target_add_windows_resource target rc_file)
   if(WIN32)
     target_sources(${target} PRIVATE ${rc_file})
+    set_source_files_properties(${rc_file} PROPERTIES COMPILE_DEFINITIONS "WINDRES_PREPROC")
   endif()
 endfunction()
 

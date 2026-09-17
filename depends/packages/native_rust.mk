@@ -54,14 +54,24 @@ endif
 
 # 3. Assign to the main package variables, stripping results.
 #
-# These must be := rather than =. _file_name_to_use and _sha256_hash_to_use are
-# plain globals, and funcs.mk re-expands $(package)_file_name from int_get_build_id,
-# which runs after every packages/*.mk has been included -- so a lazy assignment
-# is resolved long after this file was parsed and can disagree with the value
-# $(package)_download_file resolves to. That is how an Apple Silicon host ended
-# up fetching the aarch64 tarball while checking it against the x86_64 hash.
+# exact_file_name/exact_sha256_hash, not file_name/sha256_hash directly: funcs.mk's
+# int_get_build_id (run after every packages/*.mk is included) does
+#   $(1)_file_name = $(if $($(1)_exact_file_name),...,$(if $($(1)_file_name_$(host_os)),$($(1)_file_name_$(host_os)),...))
+# and the same for sha256_hash. That generic "per-host-os override" convention
+# collides head-on with the per-host-os raw variables this file already defines
+# for its OWN case selection above ($(package)_file_name_darwin,
+# $(package)_file_name_linux, and their sha256 counterparts) -- so on any Darwin
+# host the framework silently re-forced file_name/sha256_hash back to the plain
+# x86_64 darwin values, discarding the arch-aware selection above regardless of
+# what build_arch actually was. This is exactly how an Apple Silicon host ended
+# up fetching the aarch64 tarball (download_file, unaffected by this collision)
+# while checking it against the x86_64 hash and saving it under the x86_64 name
+# (file_name, silently overwritten). exact_file_name/exact_sha256_hash take the
+# first branch of that $(if), so the collision never triggers.
+$(package)_exact_file_name := $(strip $(_file_name_to_use))
 $(package)_file_name := $(strip $(_file_name_to_use))
 $(package)_download_file := $(strip $(_file_name_to_use))
+$(package)_exact_sha256_hash := $(strip $(_sha256_hash_to_use))
 $(package)_sha256_hash := $(strip $(_sha256_hash_to_use))
 
 # --- Original Rust target mappings and std sha256 hashes (keep these as they are) ---

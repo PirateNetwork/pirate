@@ -226,8 +226,21 @@ if(BUILD_GUI)
   endif()
   find_package(Qt 6.2 MODULE REQUIRED COMPONENTS ${qt_components})
   message(STATUS "Found Qt ${Qt6_VERSION} at ${Qt6_DIR}")
-  set(QT_QPA_PLATFORM_XCB TRUE)
-  set(QT_QPA_PLATFORM_MINIMAL TRUE)
+  # komodo.cpp's Q_IMPORT_PLUGIN block picks exactly one of these three via
+  # #if defined(QT_QPA_PLATFORM_XCB)/_WINDOWS/_COCOA, matching whichever
+  # platform plugin src/qt/CMakeLists.txt actually links in
+  # (QT_PLATFORM_PLUGIN there is already WIN32/APPLE conditional). Setting
+  # QT_QPA_PLATFORM_XCB unconditionally made every platform's static Qt
+  # binary reference qt_static_plugin_QXcbIntegrationPlugin(), which is only
+  # linked on Linux/BSD -- undefined symbol everywhere else.
+  if(WIN32)
+    set(QT_QPA_PLATFORM_WINDOWS TRUE)
+  elseif(APPLE)
+    set(QT_QPA_PLATFORM_COCOA TRUE)
+  else()
+    set(QT_QPA_PLATFORM_XCB TRUE)
+    set(QT_QPA_PLATFORM_MINIMAL TRUE)
+  endif()
   set(QT_STATICPLUGIN TRUE)
   unset(qt_components)
 endif()
