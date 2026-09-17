@@ -471,9 +471,15 @@ find_dep_package(libsodium         PKGCONFIG_NAME libsodium
 # there fails to link with undefined _zlibVersion/_inflate/_uncompress.
 find_dep_package(zlib              PKGCONFIG_NAME zlib
   LIBRARY_NAMES z HEADER zlib.h)
+# CURL_STATICLIB: curl.h otherwise declares its API __declspec(dllimport) on
+# Windows (the linkage a *dynamic* libcurl.dll needs), and depends builds
+# libcurl statically -- linking then fails with undefined __imp_curl_*
+# references. libcurl.pc's Cflags already carries this; EXTRA_DEFS repeats it
+# for the Windows/macOS path, which has no .pc file to read it from.
 find_dep_package(libcurl           PKGCONFIG_NAME libcurl
   LIBRARY_NAMES curl HEADER curl/curl.h
-  EXTRA_LIBS PkgConfig::zlib ${WINDOWS_SYSTEM_LIBS})
+  EXTRA_LIBS PkgConfig::zlib ${WINDOWS_SYSTEM_LIBS}
+  EXTRA_DEFS CURL_STATICLIB)
 # libarchive's archive_string.o calls iconv_open/iconv/iconv_close. On Linux
 # those are in glibc; macOS keeps them in a separate libiconv that has to be
 # named explicitly.

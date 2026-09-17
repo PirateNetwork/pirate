@@ -21,9 +21,18 @@
 #
 # Usage:
 #   find_dep_package(<prefix> PKGCONFIG_NAME <pc-name> LIBRARY_NAMES <names...>
-#                     [HEADER <path/to/header.h>] [EXTRA_LIBS <names...>])
+#                     [HEADER <path/to/header.h>] [EXTRA_LIBS <names...>]
+#                     [EXTRA_DEFS <defs...>])
+#
+# EXTRA_DEFS mirrors a compile-time -D flag the package's own .pc file's
+# Cflags carries (e.g. libcurl.pc's -DCURL_STATICLIB, needed so curl.h
+# declares its API with plain linkage instead of __declspec(dllimport) --
+# without it, a static libcurl built for Windows links with undefined
+# __imp_curl_* references). pkg_check_modules picks Cflags up on its own on
+# the Linux/BSD path below; the hand-rolled Windows/macOS path has no .pc
+# file to read, so anything beyond -I/-L has to be named explicitly here.
 function(find_dep_package prefix)
-  cmake_parse_arguments(FDP "" "PKGCONFIG_NAME;HEADER" "LIBRARY_NAMES;EXTRA_LIBS" ${ARGN})
+  cmake_parse_arguments(FDP "" "PKGCONFIG_NAME;HEADER" "LIBRARY_NAMES;EXTRA_LIBS;EXTRA_DEFS" ${ARGN})
 
   if(CMAKE_SYSTEM_NAME MATCHES "^(Linux|FreeBSD|OpenBSD)$")
     find_package(PkgConfig REQUIRED)
@@ -49,5 +58,8 @@ function(find_dep_package prefix)
   )
   if(FDP_EXTRA_LIBS)
     target_link_libraries(PkgConfig::${prefix} INTERFACE ${FDP_EXTRA_LIBS})
+  endif()
+  if(FDP_EXTRA_DEFS)
+    target_compile_definitions(PkgConfig::${prefix} INTERFACE ${FDP_EXTRA_DEFS})
   endif()
 endfunction()
