@@ -474,8 +474,14 @@ find_dep_package(zlib              PKGCONFIG_NAME zlib
 # CURL_STATICLIB: curl.h otherwise declares its API __declspec(dllimport) on
 # Windows (the linkage a *dynamic* libcurl.dll needs), and depends builds
 # libcurl statically -- linking then fails with undefined __imp_curl_*
-# references. libcurl.pc's Cflags already carries this; EXTRA_DEFS repeats it
-# for the Windows/macOS path, which has no .pc file to read it from.
+# references. libcurl.pc carries this in its Cflags; EXTRA_DEFS repeats it
+# here to match, for whatever directly links PkgConfig::libcurl. That is not
+# actually where the define needs to land, though: curl.h is pulled in
+# transitively (via params.h/komodo_bitcoind.h) into several static-library
+# targets that never declare libcurl as a dependency at all, so the real fix
+# is the CURL_STATICLIB define on core_interface in the top-level
+# CMakeLists.txt, which reaches every target unconditionally. Left here too
+# since it costs nothing and matches the .pc file's own stated Cflags.
 find_dep_package(libcurl           PKGCONFIG_NAME libcurl
   LIBRARY_NAMES curl HEADER curl/curl.h
   EXTRA_LIBS PkgConfig::zlib ${WINDOWS_SYSTEM_LIBS}

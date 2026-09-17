@@ -123,6 +123,21 @@ target_link_libraries(core_interface INTERFACE
   $<$<CONFIG:RelWithDebInfo>:core_interface_relwithdebinfo>
   $<$<CONFIG:Debug>:core_interface_debug>
 )
+
+# CURL_STATICLIB has to reach every translation unit that includes curl.h,
+# transitively, through params.h/komodo_bitcoind.h -- which is nearly every
+# static-library target in this tree (bitcoin_common, bitcoin_server,
+# bitcoin_wallet, the qt library), not just the ones that formally declare a
+# PkgConfig::libcurl link dependency. find_dep_package's EXTRA_DEFS
+# (src/CMakeLists.txt's libcurl call) only reaches targets that actually link
+# PkgConfig::libcurl, which for this codebase is only the final executables --
+# too late, since komodo_bitcoind.cpp etc. are already compiled into their
+# static libraries by then. Defining it globally here, via core_interface
+# (which everything links), is the only way that reliably works; it is a
+# no-op for any translation unit that never includes curl.h.
+if(WIN32)
+  target_compile_definitions(core_interface INTERFACE CURL_STATICLIB)
+endif()
 # The tree gates "#include \"config/bitcoin-config.h\"" on HAVE_CONFIG_H, which
 # autotools passed unconditionally.
 target_compile_definitions(core_interface INTERFACE HAVE_CONFIG_H ${DEPENDS_COMPILE_DEFINITIONS})
