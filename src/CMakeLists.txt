@@ -482,10 +482,24 @@ find_dep_package(zlib              PKGCONFIG_NAME zlib
 # is the CURL_STATICLIB define on core_interface in the top-level
 # CMakeLists.txt, which reaches every target unconditionally. Left here too
 # since it costs nothing and matches the .pc file's own stated Cflags.
+# crypt32: a static libcurl's Windows cert-store integration
+# (lib/vtls/openssl.c's CertOpenSystemStoreA/CertEnumCertificatesInStore/
+# CertGetIntendedKeyUsage/CertGetEnhancedKeyUsage/CertFreeCertificateContext/
+# CertCloseStore) lives in crypt32.dll, not covered by WINDOWS_SYSTEM_LIBS's
+# general AC_CHECK_LIB set (that list matches what this project's own
+# configure.ac checked for; libcurl.pc's own Libs.private is what would have
+# supplied -lcrypt32 on the autotools/pkg-config path, same reasoning as the
+# zlib dependency just below).
+if(WIN32)
+  set(_libcurl_extra_libs crypt32 ${WINDOWS_SYSTEM_LIBS})
+else()
+  set(_libcurl_extra_libs ${WINDOWS_SYSTEM_LIBS})
+endif()
 find_dep_package(libcurl           PKGCONFIG_NAME libcurl
   LIBRARY_NAMES curl HEADER curl/curl.h
-  EXTRA_LIBS PkgConfig::zlib ${WINDOWS_SYSTEM_LIBS}
+  EXTRA_LIBS PkgConfig::zlib ${_libcurl_extra_libs}
   EXTRA_DEFS CURL_STATICLIB)
+unset(_libcurl_extra_libs)
 # libarchive's archive_string.o calls iconv_open/iconv/iconv_close. On Linux
 # those are in glibc; macOS keeps them in a separate libiconv that has to be
 # named explicitly.
