@@ -602,8 +602,13 @@ target_link_libraries(pirate-tx PRIVATE
   bitcoin_crypto
   bitcoin_zcash_libs
   ${_boost_all}
-  PkgConfig::libcrypto
+  # libcurl (statically linked) must come before libcrypto: its objects
+  # reference OpenSSL symbols (RAND_*/OCSP_*/BIO_f_ssl/...), and a single-pass
+  # linker (GNU ld on the MinGW toolchain, unlike glibc's dynamic libssl/
+  # libcrypto on Linux) only resolves undefined references against libraries
+  # that appear *later* on the link line.
   PkgConfig::libcurl
+  PkgConfig::libcrypto
   ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}
 )
 
@@ -631,10 +636,13 @@ target_link_libraries(pirated PRIVATE
   bitcoin_zcash_libs
   ${_boost_all}
   ${BDB_CXX_LIBRARY}
-  PkgConfig::libssl PkgConfig::libcrypto
   PkgConfig::libevent $<$<NOT:$<BOOL:${WIN32}>>:PkgConfig::libevent_pthreads>
   PkgConfig::libcurl PkgConfig::libarchive
   $<$<BOOL:${ENABLE_ZMQ}>:PkgConfig::libzmq>
+  # See the comment at pirate-tx's link line: libssl/libcrypto must come
+  # after everything that references OpenSSL symbols (libcurl, libarchive,
+  # libzmq if built with TLS) for a single-pass linker.
+  PkgConfig::libssl PkgConfig::libcrypto
   ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}
 )
 
@@ -824,10 +832,13 @@ if(BUILD_GTEST)
     ${_boost_all}
     ${BDB_CXX_LIBRARY}
     ${GTEST_LIB} ${GMOCK_LIB}
-    PkgConfig::libssl PkgConfig::libcrypto
     PkgConfig::libevent $<$<NOT:$<BOOL:${WIN32}>>:PkgConfig::libevent_pthreads>
     PkgConfig::libcurl PkgConfig::libarchive
     $<$<BOOL:${ENABLE_ZMQ}>:PkgConfig::libzmq>
+    # See the comment at pirate-tx's link line (src/CMakeLists.txt): libssl/
+    # libcrypto must come after everything that references OpenSSL symbols
+    # for a single-pass linker.
+    PkgConfig::libssl PkgConfig::libcrypto
     ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}
   )
   add_test(NAME pirate-gtest COMMAND pirate-gtest)

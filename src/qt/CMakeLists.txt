@@ -182,9 +182,12 @@ target_link_libraries(pirate-qt PRIVATE
   ${QT_PLATFORM_PLUGIN}
   $<$<BOOL:${WITH_DBUS}>:Qt6::DBus>
   $<$<BOOL:${USE_QRCODE}>:PkgConfig::libqrencode>
-  PkgConfig::libssl PkgConfig::libcrypto
   PkgConfig::libevent $<$<NOT:$<BOOL:${WIN32}>>:PkgConfig::libevent_pthreads>
   PkgConfig::libcurl PkgConfig::libarchive
   $<$<BOOL:${ENABLE_ZMQ}>:PkgConfig::libzmq>
+  # See the comment at pirate-tx's link line (src/CMakeLists.txt): libssl/
+  # libcrypto must come after everything that references OpenSSL symbols
+  # for a single-pass linker.
+  PkgConfig::libssl PkgConfig::libcrypto
   ${WINDOWS_SYSTEM_LIBS} ${SECURITY_FRAMEWORK}
 )
