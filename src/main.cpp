@@ -3961,6 +3961,9 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
 
     size_t total_sapling_tx = 0;
     size_t total_ironwood_tx = 0;
+    // Template validation uses a temporary index with no phashBlock. Subtree
+    // completion metadata must use the candidate block's hash, not the index.
+    // Persistence remains restricted to actual block connection below.
     std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedSaplingSubtrees;
     std::vector<std::pair<uint64_t, ShieldedSubtreeData>> completedIronwoodSubtrees;
 
@@ -4159,7 +4162,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     ShieldedSubtreeData(
                         saplingResult.completed_subtree_root,
                         pindex->nHeight,
-                        pindex->GetBlockHash()));
+                        block.GetHash()));
             }
             total_sapling_tx += 1;
         }
@@ -4181,7 +4184,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
                     ShieldedSubtreeData(
                         ironwoodResult.completed_subtree_root,
                         pindex->nHeight,
-                        pindex->GetBlockHash()));
+                        block.GetHash()));
             }
             total_ironwood_tx += 1;
         }
