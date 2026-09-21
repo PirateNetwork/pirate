@@ -51,6 +51,8 @@ Changelog
   (57e95b76b)
   test(consensus): cover subtree boundaries with temporary block indexes.
   (bcb7d625b)
+  test(consensus): seed Sapling boundary fixture with a nonempty
+  commitment. (3efa3b871)
 
 Cryptoforge:
   Bump version to 6.0.5.50 (patch).
