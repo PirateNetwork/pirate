@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -39,6 +40,26 @@ namespace GUIUtil
 
     // Return a monospace font
     QFont fixedPitchFont();
+
+    // Persist `name` ("dark"/"light") as the active theme, read its stylesheet
+    // resource, and apply it + the accompanying link-color palette tweak to
+    // the whole application. Shared by OptionsDialog's theme combobox and
+    // PirateOceanGUI's status-bar quick-toggle so both entry points apply a
+    // theme identically. Does NOT retint icons -- callers that have a
+    // PlatformStyle to hand (both current callers do) follow this with their
+    // own updateIconTint()-style call.
+    void applyTheme(const QString &name);
+
+    // Map anything other than the two live theme names to "dark" -- an
+    // upgrading install's persisted "strTheme" can still hold one of the 8
+    // retired pirate-branded names (or the old "pirate" default itself), and
+    // QSettings only ever supplies a fallback for a MISSING key, never for a
+    // present-but-now-invalid one. Loading a deleted stylesheet resource
+    // fails silently (an empty stylesheet, i.e. completely unstyled native
+    // widgets), so this is applied wherever a persisted theme name feeds into
+    // actually loading a resource, not just the dark/light color branches
+    // that tolerate any string already.
+    QString sanitizeThemeName(const QString &name);
 
     // Set up widgets for address and amounts
     void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent, bool allowZAddresses = false);
@@ -225,7 +246,7 @@ namespace GUIUtil
         void mouseReleaseEvent(QMouseEvent *event);
     };
 
-#if defined(Q_OS_MAC) && QT_VERSION >= 0x050000
+#if defined(Q_OS_MAC)
     // workaround for Qt OSX Bug:
     // https://bugreports.qt-project.org/browse/QTBUG-15631
     // QProgressBar uses around 10% CPU even when app is in background

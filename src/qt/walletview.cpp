@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -59,7 +60,7 @@ WalletView::WalletView(const PlatformStyle *_platformStyle, QWidget *parent):
     hbox_buttons->addWidget(statusLabel, 1); // Stretch factor 1 to expand
     
     // Add export button (right side)
-    QPushButton *exportButton = new QPushButton(tr("&Export"), this);
+    exportButton = new QPushButton(tr("&Export"), this);
     exportButton->setToolTip(tr("Export the data in the current tab to a file"));
     if (platformStyle->getImagesOnButtons()) {
         exportButton->setIcon(platformStyle->SingleColorIcon(":/icons/export"));
@@ -134,6 +135,18 @@ void WalletView::setPirateOceanGUI(PirateOceanGUI *_gui)
     {
         // Clicking on a transaction on the overview page simply sends you to transaction history page
         connect(overviewPage, SIGNAL(transactionClicked(QModelIndex)), gui, SLOT(gotoHistoryPage()));
+
+        // Overview page's Send/Receive quick actions -- same destinations the
+        // left-nav Send/Receive entries used to reach before they moved here.
+        connect(overviewPage, SIGNAL(sendCoinsClicked()), gui, SLOT(gotoZSendCoinsPage()));
+        connect(overviewPage, SIGNAL(receiveCoinsClicked()), gui, SLOT(gotoReceiveCoinsPage()));
+
+        // Header wallet dropdown -- same switch path as File > Wallets.
+        connect(overviewPage, SIGNAL(walletSwitchRequested(QString)), gui, SLOT(switchWalletRequested(QString)));
+        // Queued, not direct: the wallets modal can close -- and so delete --
+        // the very wallet whose page emitted this, and that must not happen
+        // from inside that page's own signal emission.
+        connect(overviewPage, SIGNAL(manageWalletsRequested()), gui, SLOT(showWalletsDialog()), Qt::QueuedConnection);
 
         // Receive and report messages -- routed through this view's own
         // forward*() slots rather than straight to `gui`, so a background
@@ -310,6 +323,12 @@ void WalletView::setUnlockButton()
     }
 }
 
+void WalletView::setWalletList(const QStringList &names, const QString &current)
+{
+    if (overviewPage)
+        overviewPage->setWalletList(names, current);
+}
+
 void WalletView::gotoOverviewPage()
 {
     setCurrentWidget(overviewPage);
@@ -390,6 +409,15 @@ bool WalletView::handlePaymentRequest(const SendCoinsRecipient& recipient)
 void WalletView::showOutOfSyncWarning(bool fShow)
 {
     overviewPage->showOutOfSyncWarning(fShow);
+}
+
+void WalletView::updateIconTint()
+{
+    if (platformStyle->getImagesOnButtons()) {
+        exportButton->setIcon(platformStyle->SingleColorIcon(":/icons/export"));
+    }
+    overviewPage->updateShadowTheme();
+    transactionView->updateIconTint();
 }
 
 void WalletView::updateEncryptionStatus()

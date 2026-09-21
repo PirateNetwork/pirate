@@ -48,6 +48,7 @@
 #include "transactiondescdialog.h"
 #include "transactionfilterproxy.h"
 #include "transactionrecord.h"
+#include "transactionrowdelegate.h"
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
 
@@ -59,17 +60,17 @@
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDoubleValidator>
+#include <QAbstractItemView>
 #include <QHBoxLayout>
-#include <QHeaderView>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListView>
 #include <QMenu>
 #include <QPoint>
 #include <QProgressDialog>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSignalMapper>
-#include <QTableView>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
@@ -81,7 +82,7 @@
  * - Row 1 (Search): Search field, Search button, Clear button, Address Only checkbox
  * - Row 2 (Filters): Watch-only, Date, Type, Limit, Min Amount, Reset, Expand/Collapse
  * - Date Range Widget: Custom date picker (hidden by default)
- * - Main Table: Transaction list with sorting and selection
+ * - Card List: Transaction list (TransactionRowDelegate) with sorting and selection
  * 
  * FILTER BEHAVIOR:
  * - All filters start disabled during lazy load
@@ -100,7 +101,7 @@
  */
 TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *parent) :
     QWidget(parent), model(0), transactionProxyModel(0),
-    transactionView(0), columnResizingFixer(0)
+    transactionView(0), transactionDelegate(0)
 {
     /**
      * FIRST ROW: SEARCH INTERFACE
@@ -130,9 +131,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     searchLayout->addWidget(searchLabel);
     
     addressWidget = new QLineEdit(this);
-#if QT_VERSION >= 0x040700
     addressWidget->setPlaceholderText(tr("Enter address or label to search"));
-#endif
     addressWidget->setMinimumWidth(200);
     searchLayout->addWidget(addressWidget);
 
@@ -277,6 +276,33 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     separator3->setLineWidth(1);
     hlayout2->addWidget(separator3);
 
+    // Sort-order control -- the card list has no clickable column headers to
+    // sort by (see TransactionRowDelegate's doc comment), so this replaces
+    // that lost interaction rather than dropping it.
+    QLabel *sortLabel = new QLabel(tr("Sort:"), this);
+    sortLabel->setStyleSheet("QLabel { color: white; }");
+    hlayout2->addWidget(sortLabel);
+
+    sortWidget = new QComboBox(this);
+    sortWidget->setToolTip(tr("Sort the transaction list"));
+    sortWidget->addItem(tr("Date (newest)"));
+    sortWidget->addItem(tr("Date (oldest)"));
+    sortWidget->addItem(tr("Amount (high-low)"));
+    sortWidget->addItem(tr("Amount (low-high)"));
+    if (platformStyle->getUseExtraSpacing()) {
+        sortWidget->setFixedWidth(141);
+    } else {
+        sortWidget->setFixedWidth(140);
+    }
+    hlayout2->addWidget(sortWidget);
+
+    // Add visual separator
+    QFrame *separator5 = new QFrame(this);
+    separator5->setFrameShape(QFrame::VLine);
+    separator5->setFrameShadow(QFrame::Sunken);
+    separator5->setLineWidth(1);
+    hlayout2->addWidget(separator5);
+
     // Add stretch to push remaining items to the right
     hlayout2->addStretch();
 
@@ -286,9 +312,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     hlayout2->addWidget(amountLabel);
 
     amountWidget = new QLineEdit(this);
-#if QT_VERSION >= 0x040700
     amountWidget->setPlaceholderText(tr("0.00"));
-#endif
     if (platformStyle->getUseExtraSpacing()) {
         amountWidget->setFixedWidth(97);
     } else {
@@ -361,12 +385,21 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     vlayout->setContentsMargins(0,0,0,0);
     vlayout->setSpacing(0);
 
-    QTableView *view = new QTableView(this);
+    // Card list (not a table) -- see TransactionRowDelegate's doc comment for
+    // why: a full-row card per transaction, driven by the same
+    // TransactionFilterProxy/TransactionTableModel underneath, no model
+    // changes needed.
+    QListView *view = new QListView(this);
+    transactionDelegate = new TransactionRowDelegate(platformStyle, this);
+    view->setItemDelegate(transactionDelegate);
+    view->setSpacing(8);
+    view->setUniformItemSizes(false); // parent (card) vs. child (flat line) rows differ in height
+    view->setResizeMode(QListView::Adjust);
     vlayout->addLayout(searchLayout);
     vlayout->addLayout(hlayout2);
     vlayout->addWidget(createDateRangeWidget());
-    vlayout->addWidget(view, 1); // Give the table view a stretch factor of 1
-    
+    vlayout->addWidget(view, 1); // Give the list view a stretch factor of 1
+
     vlayout->setSpacing(0);
     int width = view->verticalScrollBar()->sizeHint().width();
     // Cover scroll bar width with spacing
@@ -428,6 +461,7 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     connect(typeWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseType);
     connect(watchOnlyWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseWatchonly);
     connect(limitWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseLimit);
+    connect(sortWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::chooseSort);
     connect(amountWidget, &QLineEdit::textChanged, amount_typing_delay, QOverload<>::of(&QTimer::start));
     connect(amount_typing_delay, &QTimer::timeout, this, &TransactionView::changedAmount);
     // Connect search button and Enter key to trigger search
@@ -440,9 +474,9 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     // Connect reset button
     connect(resetButton, &QPushButton::clicked, this, &TransactionView::resetFilters);
 
-    connect(view, &QTableView::doubleClicked, this, &TransactionView::doubleClicked);
-    connect(view, &QTableView::clicked, this, &TransactionView::handleTransactionClicked);
-    connect(view, &QTableView::customContextMenuRequested, this, &TransactionView::contextualMenu);
+    connect(view, &QAbstractItemView::doubleClicked, this, &TransactionView::doubleClicked);
+    connect(view, &QAbstractItemView::clicked, this, &TransactionView::handleTransactionClicked);
+    connect(view, &QAbstractItemView::customContextMenuRequested, this, &TransactionView::contextualMenu);
     connect(expandAllButton, &QPushButton::clicked, this, &TransactionView::toggleExpandAll);
 
     connect(copyAddressAction, &QAction::triggered, this, &TransactionView::copyAddress);
@@ -462,13 +496,14 @@ TransactionView::TransactionView(const PlatformStyle *platformStyle, QWidget *pa
     connect(dateWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
     connect(typeWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
     connect(watchOnlyWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
+    connect(sortWidget, QOverload<int>::of(&QComboBox::activated), this, &TransactionView::sendResetUnlockSignal);
     connect(amountWidget, &QLineEdit::textChanged, this, &TransactionView::sendResetUnlockSignal);
     connect(amount_typing_delay, &QTimer::timeout, this, &TransactionView::sendResetUnlockSignal);
     connect(addressWidget, &QLineEdit::textChanged, this, &TransactionView::sendResetUnlockSignal);
     connect(addressOnlyCheckbox, &QCheckBox::toggled, this, &TransactionView::sendResetUnlockSignal);
     connect(prefix_typing_delay, &QTimer::timeout, this, &TransactionView::sendResetUnlockSignal);
-    connect(view, &QTableView::doubleClicked, this, &TransactionView::sendResetUnlockSignal);
-    connect(view, &QTableView::customContextMenuRequested, this, &TransactionView::sendResetUnlockSignal);
+    connect(view, &QAbstractItemView::doubleClicked, this, &TransactionView::sendResetUnlockSignal);
+    connect(view, &QAbstractItemView::customContextMenuRequested, this, &TransactionView::sendResetUnlockSignal);
     connect(copyAddressAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
     connect(copyLabelAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
     connect(copyAmountAction, &QAction::triggered, this, &TransactionView::sendResetUnlockSignal);
@@ -499,10 +534,10 @@ void TransactionView::sendResetUnlockSignal() {
  * - Sets case-insensitive filtering for search
  * - Sorts by date descending (newest first)
  * 
- * COLUMN CONFIGURATION:
- * - Sets fixed widths for Status, Watchonly, Date, Type, Amount
- * - ToAddress column dynamically sized using TableViewLastColumnResizingFixer
- * 
+ * VIEW CONFIGURATION:
+ * - Single-column card list (TransactionRowDelegate draws each full row);
+ *   see setModelColumn() below for why it's pinned to ToAddress
+ *
  * LAZY LOAD INTEGRATION:
  * - Connects to lazyLoadComplete and lazyLoadProgress signals
  * - Disables all filters until lazy load finishes
@@ -530,20 +565,19 @@ void TransactionView::setModel(WalletModel *_model)
 
         transactionView->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         transactionView->setModel(transactionProxyModel);
-        transactionView->setAlternatingRowColors(true);
+        // Every row is a single item drawn by TransactionRowDelegate, but
+        // Qt::DisplayRole/Qt::ForegroundRole are still column-dependent in
+        // TransactionTableModel::data() -- pin the view to ToAddress so the
+        // delegate reads the same pre-formatted description text/color
+        // OverviewPage's own TxViewDelegate already relies on via the exact
+        // same mechanism.
+        transactionView->setModelColumn(TransactionTableModel::ToAddress);
         transactionView->setSelectionBehavior(QAbstractItemView::SelectRows);
         transactionView->setSelectionMode(QAbstractItemView::ExtendedSelection);
-        transactionView->setSortingEnabled(true);
-        transactionView->sortByColumn(TransactionTableModel::Date, Qt::DescendingOrder);
-        transactionView->verticalHeader()->hide();
-
-        transactionView->setColumnWidth(TransactionTableModel::Status, STATUS_COLUMN_WIDTH);
-        transactionView->setColumnWidth(TransactionTableModel::Watchonly, WATCHONLY_COLUMN_WIDTH);
-        transactionView->setColumnWidth(TransactionTableModel::Date, DATE_COLUMN_WIDTH);
-        transactionView->setColumnWidth(TransactionTableModel::Type, TYPE_COLUMN_WIDTH);
-        transactionView->setColumnWidth(TransactionTableModel::Amount, AMOUNT_MINIMUM_COLUMN_WIDTH);
-
-        columnResizingFixer = new GUIUtil::TableViewLastColumnResizingFixer(transactionView, AMOUNT_MINIMUM_COLUMN_WIDTH, MINIMUM_COLUMN_WIDTH, this);
+        // No column headers to click-sort by on a card list -- sortWidget
+        // (see the filter bar above) drives this instead; default matches
+        // what click-sorting the Date header used to default to.
+        transactionProxyModel->sort(TransactionTableModel::Date, Qt::DescendingOrder);
 
         if (_model->getOptionsModel())
         {
@@ -716,6 +750,25 @@ void TransactionView::chooseLimit(int idx)
 }
 
 /**
+ * @brief Apply sort order (replaces the card list's lost click-to-sort
+ *        column headers)
+ *
+ * @param idx sortWidget's current index: 0=Date newest, 1=Date oldest,
+ *            2=Amount high-low, 3=Amount low-high
+ */
+void TransactionView::chooseSort(int idx)
+{
+    if(!transactionProxyModel)
+        return;
+    switch (idx) {
+    case 0: transactionProxyModel->sort(TransactionTableModel::Date, Qt::DescendingOrder); break;
+    case 1: transactionProxyModel->sort(TransactionTableModel::Date, Qt::AscendingOrder); break;
+    case 2: transactionProxyModel->sort(TransactionTableModel::Amount, Qt::DescendingOrder); break;
+    case 3: transactionProxyModel->sort(TransactionTableModel::Amount, Qt::AscendingOrder); break;
+    }
+}
+
+/**
  * @brief Apply address/label search filter
  * 
  * SEARCH BEHAVIOR:
@@ -794,14 +847,16 @@ void TransactionView::resetFilters()
     typeWidget->setCurrentIndex(0); // All types
     watchOnlyWidget->setCurrentIndex(0); // All watch-only
     limitWidget->setCurrentIndex(0); // 50 transactions
+    sortWidget->setCurrentIndex(0); // Date (newest)
     amountWidget->clear(); // Clear min amount
     addressWidget->clear(); // Clear search
     addressOnlyCheckbox->setChecked(false); // Uncheck address only
-    
+
     // Trigger filter updates
     chooseDate(0);
     chooseType(0);
     chooseWatchonly(0);
+    chooseSort(0);
     chooseLimit(0);
     changedAmount();
     changedPrefix();
@@ -1023,7 +1078,7 @@ void TransactionView::toggleExpandAll()
  * - Edit label (opens address book)
  * - Third-party block explorer links (if configured)
  * 
- * @param point Mouse position in table viewport coordinates
+ * @param point Mouse position in list viewport coordinates
  */
 void TransactionView::contextualMenu(const QPoint &point)
 {
@@ -1319,9 +1374,9 @@ void TransactionView::dateRangeChanged()
  * - Handles filtering (transaction may not be visible)
  * 
  * ACTIONS:
- * - Scrolls table to make transaction visible
+ * - Scrolls list to make transaction visible
  * - Sets as current selection
- * - Gives focus to table view
+ * - Gives focus to the list view
  * 
  * USAGE:
  * - Navigate from other views (e.g., OverviewPage)
@@ -1337,27 +1392,6 @@ void TransactionView::focusTransaction(const QModelIndex &idx)
     transactionView->scrollTo(targetIdx);
     transactionView->setCurrentIndex(targetIdx);
     transactionView->setFocus();
-}
-
-/**
- * @brief Handle widget resize events
- * 
- * COLUMN RESIZING:
- * - Uses columnResizingFixer to maintain proportional column widths
- * - Stretches ToAddress column to fill available space
- * - Maintains minimum widths for other columns
- * 
- * ARCHITECTURE:
- * - Overrides QWidget::resizeEvent()
- * - Ensures table columns adjust smoothly with window resize
- * - GUIUtil::TableViewLastColumnResizingFixer handles the details
- * 
- * @param event Resize event containing old and new sizes
- */
-void TransactionView::resizeEvent(QResizeEvent* event)
-{
-    QWidget::resizeEvent(event);
-    columnResizingFixer->stretchColumnWidth(TransactionTableModel::ToAddress);
 }
 
 /**
@@ -1417,6 +1451,15 @@ bool TransactionView::eventFilter(QObject *obj, QEvent *event)
  */
 void TransactionView::updateWatchOnlyColumn(bool fHaveWatchOnly)
 {
+    // The card list has no separate watch-only column to hide -- the
+    // TransactionRowDelegate already only draws the watch-only overlay icon
+    // per-row when WatchonlyRole is set, so there's nothing to toggle beyond
+    // the filter combo box itself.
     watchOnlyWidget->setVisible(fHaveWatchOnly);
-    transactionView->setColumnHidden(TransactionTableModel::Watchonly, !fHaveWatchOnly);
+}
+
+void TransactionView::updateIconTint()
+{
+    transactionDelegate->setThemeColors();
+    transactionView->update();
 }

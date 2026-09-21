@@ -45,12 +45,8 @@
 #include <QSslSocket>
 #include <QStringList>
 #include <QTextDocument>
-
-#if QT_VERSION < 0x050000
 #include <QUrl>
-#else
 #include <QUrlQuery>
-#endif
 
 extern int nMaxConnections;          // from net.cpp
 
@@ -470,11 +466,7 @@ void PaymentServer::handleURIOrFile(const QString& s)
 
     if (s.startsWith(KOMODO_IPC_PREFIX, Qt::CaseInsensitive)) // pirate: URI
     {
-#if QT_VERSION < 0x050000
-        QUrl uri(s);
-#else
         QUrlQuery uri((QUrl(s)));
-#endif
         if (uri.hasQueryItem("r")) // payment request URI
         {
             // #ifdef ENABLE_BIP70

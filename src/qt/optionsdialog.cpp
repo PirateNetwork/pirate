@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -25,9 +26,7 @@
 #include <QMessageBox>
 #include <QTimer>
 #include <QApplication>
-#include <QFile>
 #include <QSettings>
-#include <QPalette>
 #include <stdio.h>
 
 OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
@@ -115,14 +114,6 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     ui->openKomodoConfButton->setToolTip(ui->openKomodoConfButton->toolTip().arg(tr(PACKAGE_NAME)));
 
     //Add Wallet themes available
-    ui->theme->addItem("Armada", QVariant("armada"));
-    ui->theme->addItem("Ghost Ship", QVariant("ghostship"));
-    ui->theme->addItem("Night Ship", QVariant("night"));
-    ui->theme->addItem("Pirate", QVariant("pirate"));
-    ui->theme->addItem("Pirate Ship", QVariant("pirateship"));
-    ui->theme->addItem("Pirate Map", QVariant("piratemap"));
-    ui->theme->addItem("Treasure", QVariant("treasure"));
-    ui->theme->addItem("Treasure Map", QVariant("treasuremap"));
     ui->theme->addItem("Dark", QVariant("dark"));
     ui->theme->addItem("Light", QVariant("light"));
 
@@ -135,28 +126,16 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
         /** check if the locale name consists of 2 parts (language_country) */
         if(langStr.contains("_"))
         {
-#if QT_VERSION >= 0x040800
             /** display language strings as "native language - native country (locale name)", e.g. "Deutsch - Deutschland (de)" */
             ui->lang->addItem(locale.nativeLanguageName() + QString(" - ") + locale.nativeCountryName() + QString(" (") + langStr + QString(")"), QVariant(langStr));
-#else
-            /** display language strings as "language - country (locale name)", e.g. "German - Germany (de)" */
-            ui->lang->addItem(QLocale::languageToString(locale.language()) + QString(" - ") + QLocale::countryToString(locale.country()) + QString(" (") + langStr + QString(")"), QVariant(langStr));
-#endif
         }
         else
         {
-#if QT_VERSION >= 0x040800
             /** display language strings as "native language (locale name)", e.g. "Deutsch (de)" */
             ui->lang->addItem(locale.nativeLanguageName() + QString(" (") + langStr + QString(")"), QVariant(langStr));
-#else
-            /** display language strings as "language (locale name)", e.g. "German (de)" */
-            ui->lang->addItem(QLocale::languageToString(locale.language()) + QString(" (") + langStr + QString(")"), QVariant(langStr));
-#endif
         }
     }
-#if QT_VERSION >= 0x040700
     ui->thirdPartyTxUrls->setPlaceholderText("https://example.com/tx/%s");
-#endif
 
     ui->unit->setModel(new KomodoUnits(this));
 
@@ -456,22 +435,8 @@ void OptionsDialog::evaluateOfflineSigning(bool bChecked)
 
 void OptionsDialog::setTheme()
 {
-      //Set the theme in the settings
-      QSettings settings;
       QString strTheme = ui->theme->itemData(ui->theme->currentIndex()).toString();
-      settings.setValue("strTheme", strTheme);
-
-      //Set the Theme in the app
-      LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(),__func__);
-      QFile file(":/stylesheets/" + strTheme);
-      file.open(QFile::ReadOnly);
-      QString stylesheet = QLatin1String(file.readAll());
-      qApp->setStyleSheet(stylesheet);
-
-      QPalette newPal(qApp->palette());
-      newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
-      newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
-      qApp->setPalette(newPal);
+      GUIUtil::applyTheme(strTheme);
 }
 
 void OptionsDialog::enableProxyTypes()

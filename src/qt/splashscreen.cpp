@@ -59,10 +59,7 @@ SplashScreen::SplashScreen(const NetworkStyle *networkStyle) :
     int titleCopyrightVSpace    = 25; // down from title
 
     float fontFactor            = 1.0;
-    float devicePixelRatio      = 0.75;
-#if QT_VERSION > 0x050100
-    devicePixelRatio = static_cast<QGuiApplication*>(QCoreApplication::instance())->devicePixelRatio();
-#endif
+    float devicePixelRatio      = static_cast<QGuiApplication*>(QCoreApplication::instance())->devicePixelRatio();
 
     // define text to place
     QString titleText       = tr("Treasure Chest");
@@ -78,10 +75,8 @@ SplashScreen::SplashScreen(const NetworkStyle *networkStyle) :
     pixmap.load(":/backgrounds/splash");
     pixmap = pixmap.scaled(splashSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
 
-#if QT_VERSION > 0x050100
     // change to HiDPI if it makes sense
     pixmap.setDevicePixelRatio(devicePixelRatio);
-#endif
 
     QPainter pixPaint(&pixmap);
 

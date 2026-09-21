@@ -1,45 +1,97 @@
+/* Pirate Chain Light theme -- ported from Pirate-Unified-Light-Wallet's design
+ * tokens (app/lib/design/tokens/{colors,default_colors,spacing}.dart,
+ * PColorsLight). Values are written literally per-rule (Qt QSS has no
+ * variables), matching this project's existing stylesheet convention. */
+
 QMainWindow, QMenuBar, QMenu, QDialog, QTabWidget, QScrollArea, QGroupBox, QPlainTextEdit
 {
-    background-color: #F7F9FB;
-    color: #687864;
+    background-color: #F5F7FA; /* backgroundBase */
+    color: #0B1220; /* textPrimary */
 }
 
 QLabel {
     background: transparent;
-    color: #687864;
+    color: #0B1220;
+}
+
+QToolBar {
+    background-color: #FFFFFF; /* backgroundSurface */
+    border: none;
+    spacing: 4px;
+    padding: 4px;
+}
+
+QToolBar QToolButton, QToolButton {
+    background-color: transparent;
+    color: #2A3342; /* textSecondary */
+    border: none;
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+QToolButton:hover {
+    background-color: rgba(0,0,0,0.04); /* hoverOverlay */
+    color: #0B1220;
+}
+
+QToolButton:checked {
+    background-color: rgba(43,111,247,0.12);
+    border: 1px solid rgba(43,111,247,0.35);
+    color: #2B6FF7; /* focusRing */
+}
+
+/* Left nav-rail (PirateOceanGUI::createToolBars(), objectName "NavRail") --
+ * more specific than the generic QToolBar/QToolButton rules above, so only
+ * the properties that differ (padding/sizing/label size) need repeating;
+ * background/hover/checked colors above already apply here unchanged. */
+QToolBar#NavRail {
+    background-color: #FFFFFF; /* backgroundSurface */
+    border: none;
+    border-right: 1px solid rgba(0,0,0,0.06); /* borderDefault */
+    spacing: 8px;
+    padding: 12px 8px;
+}
+
+QToolBar#NavRail QToolButton {
+    padding: 10px 4px;
+    min-height: 48px;
+    font-size: 11px;
 }
 
 QTabWidget QTabBar::tab {
-padding-left:20px;
-padding-right:20px;
-padding-top:5px;
-padding-bottom:5px;
-border: 1px solid #687864;
-background-color: #F7F9FB;
-color: #687864;
+padding: 8px 20px;
+border: 1px solid rgba(0,0,0,0.06); /* borderDefault */
+border-top-left-radius: 8px;
+border-top-right-radius: 8px;
+background-color: #FFFFFF;
+color: #2A3342;
 }
 
 QTabWidget QTabBar::tab:selected {
 min-height: 10px;
-background-color: #9FD1F3;
-color: #283824;
-border: 1px solid #687864;
+background-color: #EDF1F6; /* backgroundElevated */
+color: #0B1220;
+border: 1px solid rgba(0,0,0,0.13); /* borderStrong */
+border-bottom: 2px solid #2B6FF7;
 }
 
 QTabWidget QTabBar::tab:hover {
-background-color: #E7E9EB;
-color: #687864;
-border: 1px solid #687864;
+background-color: #F5F7FA;
+color: #0B1220;
+border: 1px solid rgba(0,0,0,0.13);
 min-height: 20px
 }
 
 QHeaderView { /* Table Header */
-background-color:#8FC1E3;
+background-color:#EDF1F6;
 }
 
 QHeaderView::section { /* Table Header Sections */
-background-color: #8FC1E3;
-color: #283824;
+background-color: #EDF1F6;
+color: #0B1220;
+border: none;
+border-bottom: 1px solid rgba(0,0,0,0.06);
+padding: 6px;
 }
 
 QHeaderView::section:last {
@@ -51,52 +103,46 @@ background:transparent;
 border:0px;
 }
 
-QScrollBar { /* Scroll Bar */
-
-}
-
 QScrollBar:vertical { /* Vertical Scroll Bar Attributes */
 border:0;
-background:#F7F9FB;
-width:18px;
-margin: 18px 0px 18px 0px;
+background:#F5F7FA;
+width:12px;
+margin: 0px;
 }
 
 QScrollBar:horizontal { /* Horizontal Scroll Bar Attributes */
 border:0;
-background:#F7F9FB;
-height:18px;
-margin: 0px 18px 0px 18px;
+background:#F5F7FA;
+height:12px;
+margin: 0px;
 }
 
-
 QScrollBar::handle:vertical { /* Scroll Bar Slider - vertical */
-background:#8FC1E3;
-min-height:10px;
-border: 1px solid #f2f0f0
+background: rgba(0,0,0,0.13);
+min-height:24px;
+border-radius: 6px;
 }
 
 QScrollBar::handle:horizontal { /* Scroll Bar Slider - horizontal */
-background:#8FC1E3;
-min-width:10px;
-border: 1px solid #f2f0f0;
+background: rgba(0,0,0,0.13);
+min-width:24px;
+border-radius: 6px;
+}
+
+QScrollBar::handle:vertical:hover, QScrollBar::handle:horizontal:hover {
+background: rgba(0,0,0,0.22);
 }
 
 QScrollBar::add-page, QScrollBar::sub-page { /* Scroll Bar Background */
-background:#F7F9FB;
-border: 1px solid #f2f0f0;
+background:transparent;
+border: none;
 }
 
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical, QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { /* Define Arrow Button Dimensions */
-background-color:#F7F9FB;
-color:#27292B;
-border: 1px solid #f2f0f0;
-width:16px;
-height:16px;
-}
-
-QScrollBar::add-line:vertical:pressed, QScrollBar::sub-line:vertical:pressed, QScrollBar::add-line:horizontal:pressed, QScrollBar::sub-line:horizontal:pressed {
-background-color:#F7F9FB;
+background: transparent;
+border: none;
+width:0px;
+height:0px;
 }
 
 QScrollBar::sub-line:vertical { /* Vertical - top button position */
@@ -119,209 +165,376 @@ subcontrol-position:right;
 subcontrol-origin: margin;
 }
 
-QScrollBar:up-arrow, QScrollBar:down-arrow, QScrollBar:left-arrow, QScrollBar:right-arrow { /* Arrows Icon */
-width:10px;
-height:10px;
-}
-
-
 QTableView { /* Table - has to be selected as a class otherwise it throws off QCalendarWidget */
-    background:#F7F9FB;
-    alternate-background-color: #E7E9EB;
-    color: #687864;
+    background:#FFFFFF;
+    alternate-background-color: #EDF1F6;
+    color: #0B1220;
+    gridline-color: rgba(0,0,0,0.06);
+    selection-background-color: rgba(43,111,247,0.14);
+    selection-color: #0B1220;
+    border: none;
 }
 
-QToolBar {
-    background-color: #F7F9FB;
-    color:#687864;
-    border:none
-}
-
-QToolBar QToolButton  {
-    background-color: #F7F9FB;
-    color:#687864;
-    border:none
-}
-
-QToolButton {
-    background-color: #E7E9EB;
-    color:#687864;
+/* Main Transactions tab's card list (TransactionView, objectName
+ * "transactionView") -- TransactionRowDelegate paints its own card
+ * background/border per row, so the view itself stays transparent. Scoped by
+ * objectName rather than a bare QListView rule, since QComboBox's popup is
+ * also a QListView and must not be made transparent by this. */
+QListView#transactionView {
+    background: transparent;
+    border: none;
+    selection-background-color: transparent;
 }
 
 QPushButton  { /* Global Button Style */
-    background-color: #E7E9EB;
-    border:1px solid #687864;
-    border-radius:6px;
-    color:#687864;
-    font-size:12px;
-    font-weight:bold;
-    padding-left:15px;
-    padding-right:15px;
-    padding-top:5px;
-    padding-bottom:5px;
-    min-height:15px;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2B6FF7, stop:1 #1E55C7);
+    border: none;
+    border-radius: 12px;
+    color: #FFFFFF;
+    font-size: 10pt;
+    font-weight: 600;
+    padding-left: 24px;
+    padding-right: 24px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    min-height: 20px;
     }
 
 QPushButton:hover,
 .QPushButton:hover {
-    background-color: #9FD1F3;
-    color: #687864;
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3A7BF8, stop:1 #2660D6);
+    color: #FFFFFF;
 }
 
 QPushButton:focus {
-    border:none;
+    border: 2px solid #2B6FF7;
     outline:none;
 }
 
 QPushButton:pressed {
-    border:1px solid #333;
+    background-color: #1E55C7;
+    border: none;
 }
 
 QPushButton:disabled {
-    background-color: transparent;
-    color: transparent;
-    border:none;
+    background-color: rgba(0,0,0,0.06);
+    color: #7B8798; /* textDisabled */
 }
 
 QStatusBar {
-    background: #8FC1E3;
+    background: #FFFFFF;
     border: 0;
-    color: #687864;
-    height: 36px;
-    min-height: 36px;
+    border-top: 1px solid rgba(0,0,0,0.06);
+    color: #2A3342;
+    height: 44px;
+    min-height: 44px;
     padding: 0;
 }
 
+QStatusBar QToolButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+}
+
+QStatusBar QToolButton:hover {
+    background-color: rgba(0,0,0,0.04);
+}
+
 QMenuBar {
-    background-color: #F7F9FB;
-    color:#687864;
+    background-color: #F5F7FA;
+    color:#2A3342;
 }
 
 QMenuBar::item {
-    background-color:#F7F9FB;
-    color: #687864;
+    background-color:#F5F7FA;
+    color: #2A3342;
+    padding: 4px 10px;
+    border-radius: 6px;
 }
 
 QMenuBar::item:selected {
-    background-color:#E7E9EB;
-    color:#687864;
+    background-color: rgba(0,0,0,0.06);
+    color:#0B1220;
 }
 
 QMenu {
-    background-color:#F7F9FB;
-    color:#687864;
+    background-color:#FFFFFF;
+    color:#2A3342;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 8px;
+    padding: 4px;
 }
 
 QMenu::item {
-    background-color:#F7F9FB;
-    color:#687864;
+    background-color:transparent;
+    color:#2A3342;
+    padding: 6px 12px;
+    border-radius: 6px;
 }
 
 QMenu::item:selected {
-    background-color: #E7E9EB;
-    color:#687864;
+    background-color: rgba(43,111,247,0.12);
+    color:#0B1220;
 }
 
 
 QCheckBox {
-    background-color:#F7F9FB;
-    color: #687864;
-    spacing: 5px;
+    background-color:transparent;
+    color: #2A3342;
+    spacing: 8px;
 }
 
 QCheckBox::indicator {
-    background-color: #8FC1E3;
-    color: #687864;
-    width: 8px;
-    height: 8px;
-    border: 4px solid #8FC1E3;
-    border-radius: 8px;
+    background-color: #FFFFFF;
+    color: #2A3342;
+    width: 16px;
+    height: 16px;
+    border: 1px solid rgba(0,0,0,0.13);
+    border-radius: 4px;
 }
 
 QCheckBox::indicator:checked {
-    background-color: #687864;
-    color: #8FC1E3;
-    width: 8px;
-    height: 8px;
-    border: 4px solid #8FC1E3;
-    border-radius: 8px;
+    background-color: #2B6FF7;
+    color: #FFFFFF;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #2B6FF7;
+    border-radius: 4px;
 }
 
 QAbstractSpinBox#UnitBox
 {
-    background-color: #E7E9EB;
-    color: #687864;
-    height: 20px;
+    background-color: #FFFFFF;
+    color: #2A3342;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 8px;
+    height: 24px;
+    padding: 0 8px;
 }
 
+/* Balance hero card. Qt QSS can't alpha-composite a translucent gradient over
+ * a separate solid fill, so these stops are the surface color (#FFFFFF,
+ * 255/255/255) pre-blended with 8%/6% of the two accent hues (gradientA blue
+ * #2B6FF7, gradientB green #1FA971): stop0 = base*0.92 + blue*0.08,
+ * stop1 = base*0.94 + green*0.06. Recompute the same way if the tokens
+ * change. */
 QFrame#frame
 {
-    background-color:#F7F9FB;
-    border: 1px solid #8FC1E3;
-    color: #687864;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #EEF3FE, stop:1 #F2FAF6);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #2A3342;
+}
+
+/* Balance card typography -- Stashi-style: a small muted card title, a big
+ * hero total with its fiat value beneath, then a row of caption-over-value
+ * stat tiles for the breakdown. Every label here keeps its objectName, so the
+ * show/hide logic in OverviewPage is unaffected. */
+QLabel#label_6 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #5B6678;
+}
+
+QLabel#labelTotal, QLabel#labelWatchTotal {
+    font-size: 32px;
+    font-weight: 700;
+    color: #0B1220;
+}
+
+QLabel#labelFiat, QLabel#labelWatchFiat {
+    font-size: 14px;
+    font-weight: 500;
+    color: #5B6678;
+}
+
+QLabel#labelBalanceText, QLabel#labelPendingText, QLabel#labelImmatureText,
+QLabel#labelPrivateTotalText, QLabel#labelInterestTotalText, QLabel#labelExchangeText,
+QLabel#labelWalletTotalText, QLabel#labelFiatTotalText, QLabel#labelSpendable, QLabel#labelWatchonly {
+    font-size: 11px;
+    font-weight: 500;
+    color: #5B6678;
+}
+
+QLabel#labelBalance, QLabel#labelUnconfirmed, QLabel#labelImmature, QLabel#labelPrivateBalance,
+QLabel#labelInterestBalance, QLabel#labelExchange, QLabel#labelWalletTotal, QLabel#labelFiatTotal,
+QLabel#labelWatchAvailable, QLabel#labelWatchPending, QLabel#labelWatchImmature, QLabel#labelPrivateWatchBalance {
+    font-size: 15px;
+    font-weight: 600;
+    color: #0B1220;
+}
+
+/* "Combined Wallet Totals" section header -- smaller/secondary treatment vs.
+ * the other bold row labels on this card, matching this design system's
+ * grouped-list section-header convention elsewhere. */
+QLabel#labelCombinedText {
+    font-size: 11px;
+    font-weight: 600;
+    color: #2A3342; /* textSecondary */
+}
+
+/* Balance card's divider lines -- Qt's default bevel look doesn't match the
+ * flat token system. */
+QFrame#line, QFrame#lineFiat {
+    background-color: rgba(0,0,0,0.06); /* borderDefault */
+    max-height: 1px;
+    border: none;
+}
+
+/* Out-of-sync / cold-storage-mode alert banner -- replaces an inline .ui
+ * stylesheet that hardcoded the old pirate-gold-era gradient and never
+ * picked up either theme. Alpha values match the warning semantic token,
+ * same alpha recipe already used for other highlighted-state surfaces
+ * (e.g. the nav-rail's checked state). */
+QLabel#labelAlerts {
+    background-color: rgba(245,158,11,0.14);
+    border: 1px solid rgba(245,158,11,0.35);
+    border-radius: 10px;
+    padding: 8px 12px;
+    color: #0B1220; /* textPrimary */
 }
 
 QFrame#frame_2
 {
-    background-color:#F7F9FB;
-    border: 1px solid #8FC1E3;
-    color: #687864;
+    background-color:#FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #0B1220;
 }
 
 QFrame#frameCoinControl
 {
-    background-color:#F7F9FB;
-    border: 1px solid #8FC1E3;
-    color: #687864;
+    background-color:#FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #2A3342;
+}
+
+/* Per-recipient entry card (SendCoinsEntry's live page) -- same recipe as its
+ * dialog siblings above/below (frameCoinControl/frameFee/frameResult), the
+ * one frame in this dialog family that never got card chrome. */
+QFrame#SendCoins
+{
+    background-color:#FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #2A3342;
+}
+
+/* Every plain QTextEdit in the app (raw transaction-hex boxes in ZSignDialog/
+ * ZSendCoinsDialog_popup/ZSendCoinsDialog, HelpMessageDialog, Verify Payment
+ * Disclosure, TransactionDescDialog, RPCConsole's message log) previously had
+ * zero QSS coverage anywhere, rendering in default Qt chrome. Generic by
+ * design (not ID-scoped); more specific ID rules (e.g. #outUri) still win per
+ * normal CSS specificity, and RPCConsole's own per-document HTML stylesheet
+ * only recolors inline text spans, not this outer chrome, so the two layer
+ * cleanly. */
+QTextEdit {
+    background-color: #F5F7FA; /* backgroundBase */
+    color: #0B1220; /* textPrimary */
+    border: 1px solid rgba(0,0,0,0.06); /* borderDefault */
+    border-radius: 10px; /* radiusInput */
+}
+
+/* Overview page's Send/Receive quick-action buttons, between the Balances
+ * card and Activity list -- a secondary, card-style pair rather than the
+ * primary blue-gradient "Global Button Style" pill (that's reserved for a
+ * dialog's actual submit action), matching the same frameCoinControl surface/
+ * border recipe used throughout the app for secondary chrome. */
+QPushButton#sendCoinsButton, QPushButton#receiveCoinsButton {
+    background-color: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #0B1220;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 0 16px;
+}
+
+/* The global QPushButton:focus rule draws a 2px blue ring; after a click these
+ * buttons keep focus, so without this the ring would stick around. */
+QPushButton#sendCoinsButton:focus, QPushButton#receiveCoinsButton:focus {
+    border: 1px solid rgba(0,0,0,0.06);
+}
+
+QPushButton#sendCoinsButton:hover, QPushButton#receiveCoinsButton:hover {
+    background-color: rgba(0,0,0,0.04); /* hoverOverlay */
+    border: 1px solid rgba(0,0,0,0.06);
+    color: #0B1220;
+}
+
+QPushButton#sendCoinsButton:pressed, QPushButton#receiveCoinsButton:pressed {
+    background-color: rgba(43,111,247,0.12); /* focusRing tint */
+    border: 1px solid rgba(43,111,247,0.35);
 }
 
 QFrame#frameFee
 {
-    background-color:#F7F9FB;
-    border: 1px solid #8FC1E3;
-    color: #687864;
+    background-color:#FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #2A3342;
 }
 
 QFrame#frameResult
 {
-    background-color:#F7F9FB;
-    border: 1px solid #8FC1E3;
-    color: #687864;
+    background-color:#FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #2A3342;
 }
 
 QLineEdit
 {
-    background-color: #E7E9EB;
-    color: #687864;
-    border: none;
+    background-color: #FFFFFF;
+    color: #0B1220;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
     height: 20px;
+    padding-left: 12px;
+    padding-right: 12px;
     padding-top: 2px;
     padding-bottom: 2px;
 }
 
+QLineEdit:focus {
+    border: 1px solid #2B6FF7;
+}
+
 QValidatedLineEdit
 {
-    background-color: #E7E9EB;
-    color: #687864;
-    border: none;
+    background-color: #FFFFFF;
+    color: #0B1220;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
     height: 20px;
+    padding-left: 12px;
+    padding-right: 12px;
     padding-top: 2px;
     padding-bottom: 2px;
 }
 
 QComboBox {
-    background-color: #E7E9EB;
-    color: #687864;
+    background-color: #FFFFFF;
+    color: #0B1220;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    padding-left: 12px;
+    padding-right: 12px;
 }
 
 QComboBox QAbstractItemView {
-    background-color: #E7E9EB;
-    color: #687864;
+    background-color: #FFFFFF;
+    color: #2A3342;
+    border: 1px solid rgba(0,0,0,0.06);
+    selection-background-color: rgba(43,111,247,0.14);
 }
 
 QComboBox::item:selected {
-    background-color:#F7F9FB;
-    color:#687864;
+    background-color: rgba(43,111,247,0.14);
+    color:#0B1220;
     padding: 0px;
 }
 
@@ -336,107 +549,269 @@ QComboBox::indicator {
 }
 
 QValueComboBox {
-    background-color: #E7E9EB;
-    color: #687864;
+    background-color: #FFFFFF;
+    color: #0B1220;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    padding-left: 12px;
+    padding-right: 12px;
 }
 
 QValueComboBox QAbstractItemView {
-    background-color: #E7E9EB;
-    color: #687864;
+    background-color: #FFFFFF;
+    color: #2A3342;
+    border: 1px solid rgba(0,0,0,0.06);
+    selection-background-color: rgba(43,111,247,0.14);
 }
 
 QValueComboBox::item:selected {
-    background-color:#F7F9FB;
-    color:#687864;
+    background-color: rgba(43,111,247,0.14);
+    color:#0B1220;
     padding: 0px;
 }
 
+QPushButton:disabled {
+    background-color: transparent;
+    color: transparent;
+    border:none;
+}
+
 QWidget#ShutDown {
-    background-color:#F7F9FB;
-    color: #687864;
+    background-color:#F5F7FA;
+    color: #0B1220;
 }
 
 QWidget#RPCConsole {
-    background-color:#F7F9FB;
-    color: #687864;
+    background-color:#F5F7FA;
+    color: #0B1220;
 }
 
 QWidget#WalletOptionsPage {
-    background-color: #F7F9FB;
-    color: #687864;
+    background-color: #F5F7FA;
+    color: #0B1220;
 }
 
 QDialog#AskPassphraseDialog {
-    background-color: #F7F9FB;
-    color: #687864;
+    background-color: #FFFFFF;
+    color: #0B1220;
 }
 
 QWidget#bgWidget {
-    background: rgba(0,0,0,0.8);
-    color: #687864;
+    background: rgba(0,0,0,0.60); /* backgroundOverlay */
+    color: #2A3342;
 }
 
 QWidget#contentWidget {
-    background: #F7F9FB;
-    color: #687864;
+    background: #EDF1F6;
+    border-radius: 14px;
+    color: #0B1220;
 }
 
 QWidget#contentWidget QLabel{
-    background: #F7F9FB;
-    color: #687864;
+    background: #EDF1F6;
+    color: #0B1220;
 }
 
-QPushButton#warningIcon, QPushButton#labelWalletStatus, QPushButton#labelTransactionsStatus  {
-    background-color:#F7F9FB;
+QPushButton#warningIcon, QPushButton#labelWalletStatus, QPushButton#labelTransactionsStatus, QPushButton#privacyToggle  {
+    background-color:#F5F7FA;
     border: none;
+    border-radius: 8px;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+QPushButton#privacyToggle:hover {
+    background-color: rgba(0,0,0,0.04); /* hoverOverlay */
+}
+
+QPushButton#privacyToggle:checked {
+    background-color: rgba(43,111,247,0.12); /* focusRing tint, matches nav-rail's checked state */
+    border: 1px solid rgba(43,111,247,0.35);
 }
 
 QFrame#encodingFrame {
-    background: #F7F9FB;
-    color: #687864;
+    background: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+    color: #0B1220;
+}
+
+/* ReceiveRequestDialog's QR module -- qrBackground/qrForeground (#FFFFFF/
+ * #000000) are the same in both themes by design (the Unified Wallet's QR
+ * code is always white-on-white regardless of app theme), so this rule is
+ * intentionally identical in dark.css. */
+QFrame#frameQR {
+    background-color: #FFFFFF;
+    border-radius: 14px;
+}
+
+/* ReceiveRequestDialog's "Payment information" panel -- radiusInput(10px)
+ * treatment, matching the Unified Wallet's address-code panel. */
+QTextEdit#outUri {
+    background-color: #E6ECF2; /* backgroundPanel */
+    border: 1px solid rgba(0,0,0,0.03); /* borderSubtle */
+    border-radius: 10px;
+    padding: 12px;
+}
+
+/* ZAddressBookPage's address list (the live Receive tab) -- QSS-only polish,
+ * no structural change; row height/selection color tuned to the same tokens
+ * already used elsewhere, not new values. */
+QWidget#ZAddressBookPage QTableView::item {
+    padding: 4px 2px;
+}
+
+QWidget#ZAddressBookPage QTableView::item:selected {
+    background-color: rgba(43,111,247,0.14);
+    color: #0B1220;
 }
 
 QRadioButton {
-    background: #F7F9FB;
-    color: #687864;
-    spacing: 5px;
+    background: transparent;
+    color: #2A3342;
+    spacing: 8px;
 }
 
 QRadioButton::indicator {
-    background-color: #8FC1E3;
-    color: #687864;
-    width: 8px;
-    height: 8px;
-    border: 4px solid #8FC1E3;
+    background-color: #FFFFFF;
+    color: #2A3342;
+    width: 16px;
+    height: 16px;
+    border: 1px solid rgba(0,0,0,0.13);
     border-radius: 8px;
 }
 
 QRadioButton::indicator:checked {
-    background-color: #687864;
-    color: #8FC1E3;
-    width: 8px;
-    height: 8px;
-    border: 4px solid #8FC1E3;
+    background-color: #2B6FF7;
+    color: #FFFFFF;
+    width: 16px;
+    height: 16px;
+    border: 1px solid #2B6FF7;
     border-radius: 8px;
 }
 
 QWidget#OverviewPage QLabel#lockedMessage {
-    color:#687864;
-    font-weight: bold;
+    color: #0B1220;
+    font-weight: 600;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageLabel {
-    color: red;
+    color: #E24A4A; /* error */
 }
 
 QStackedWidget#SendCoinsEntry QLabel#messageTextLabel {
-    color:#687864;
+    color: #2A3342;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#paymentDescription {
-    color: #687864;
+    color: #2A3342;
 }
 
 QStackedWidget#SendCoinsEntry QLabel#paymentDescriptionLabel {
-    color: #687864;
+    color: #2A3342;
+}
+
+/* Overview header row: wallet switcher + Lock/Unlock, top-right. Both share the
+ * same height/surface so they read as one control group. */
+QComboBox#walletSelector {
+    font-weight: 600;
+    padding-left: 14px;
+    padding-right: 14px;
+}
+
+QPushButton#btnUnlock, QPushButton#walletsLoadButton, QPushButton#walletsCloseButton {
+    background-color: #FFFFFF;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 10px;
+    color: #0B1220;
+    font-weight: 600;
+    padding: 0 16px;
+}
+
+QPushButton#btnUnlock:hover, QPushButton#walletsLoadButton:hover, QPushButton#walletsCloseButton:hover {
+    background-color: rgba(0,0,0,0.04);
+    border: 1px solid rgba(0,0,0,0.06);
+    color: #0B1220;
+}
+
+/* A locked wallet's Unlock is the page's one call to action -- keep the
+ * primary fill for that state only (set via OverviewPage::setUnlockButtonLocked). */
+QPushButton#btnUnlock[locked="true"] {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #2B6FF7, stop:1 #1E55C7);
+    border: none;
+    color: #FFFFFF;
+}
+
+QPushButton#btnUnlock[locked="true"]:hover {
+    background-color: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #3A7BF8, stop:1 #2660D6);
+}
+
+/* Wallets modal (WalletsDialog): title, one card per open wallet, ACTIVE badge. */
+QDialog#WalletsDialog {
+    background-color: #FFFFFF;
+    color: #0B1220;
+}
+
+QLabel#walletsTitle {
+    font-size: 20px;
+    font-weight: 700;
+    color: #0B1220;
+}
+
+QLabel#walletsEmptyLabel {
+    color: #5B6678;
+}
+
+QFrame#walletCard {
+    background-color: #F5F7FA;
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 14px;
+}
+
+QFrame#walletCard:hover {
+    background-color: rgba(0,0,0,0.04);
+}
+
+QFrame#walletCard[current="true"] {
+    background-color: rgba(43,111,247,0.10);
+    border: 1px solid rgba(43,111,247,0.45);
+}
+
+QLabel#walletCardName {
+    font-size: 15px;
+    font-weight: 600;
+    color: #0B1220;
+}
+
+QLabel#walletCardSub {
+    font-size: 12px;
+    color: #5B6678;
+}
+
+QLabel#walletBadge {
+    background-color: rgba(31,169,113,0.16);
+    border: 1px solid rgba(31,169,113,0.40);
+    border-radius: 10px;
+    padding: 2px 10px;
+    font-size: 10px;
+    font-weight: 700;
+    color: #1FA971; /* positive */
+}
+
+QToolButton#walletMenuButton {
+    background-color: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 8px;
+    color: #5B6678;
+    font-weight: 700;
+}
+
+QToolButton#walletMenuButton:hover {
+    background-color: rgba(0,0,0,0.04);
+    color: #0B1220;
+}
+
+QToolButton#walletMenuButton::menu-indicator {
+    image: none;
 }

@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -8,6 +9,7 @@
 #include "amount.h"
 
 #include <QStackedWidget>
+#include <QStringList>
 
 class PirateOceanGUI;
 class ClientModel;
@@ -28,6 +30,7 @@ class OpenVKDialog;
 QT_BEGIN_NAMESPACE
 class QModelIndex;
 class QProgressDialog;
+class QPushButton;
 QT_END_NAMESPACE
 
 /*
@@ -68,6 +71,14 @@ public:
     bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
+    /** Forward the open-wallet list to the overview page's header dropdown */
+    void setWalletList(const QStringList &names, const QString &current);
+
+    /** Rebuild the transactions page's export-button icon with
+     * platformStyle's current tint -- called by WalletFrame::updateIconTint()
+     * after a live theme switch, since it (like the toolbar actions in
+     * PirateOceanGUI) is only ever iconified once, at construction time. */
+    void updateIconTint();
 
 private:
     PirateOceanGUI *gui = nullptr;
@@ -78,6 +89,7 @@ private:
 
     OverviewPage *overviewPage;
     QWidget *transactionsPage;
+    QPushButton *exportButton;
     QWidget *receiveCoinsPage;
     //SendCoinsDialog *sendCoinsPage;
     ZSendCoinsDialog *zsendCoinsPage;

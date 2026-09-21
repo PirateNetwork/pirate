@@ -66,9 +66,11 @@ add_library(bitcoin_qt STATIC
   transactiondescdialog.cpp
   transactionfilterproxy.cpp
   transactionrecord.cpp
+  transactionrowdelegate.cpp
   transactiontablemodel.cpp
   transactionview.cpp
   unlocktimerdialog.cpp
+  walletsdialog.cpp
   updatedialog.cpp
   verifypaymentdisclosuredialog.cpp
   walletframe.cpp
@@ -150,7 +152,10 @@ if(WIN32)
 elseif(APPLE)
   set(QT_PLATFORM_PLUGIN Qt6::QCocoaIntegrationPlugin)
 else()
-  set(QT_PLATFORM_PLUGIN Qt6::QXcbIntegrationPlugin)
+  # QOffscreenIntegrationPlugin alongside XCB is purely additive -- XCB stays
+  # the default for real displays, this just also makes `-platform offscreen`
+  # available for headless runs (dev/CI debugging with no real display).
+  set(QT_PLATFORM_PLUGIN Qt6::QXcbIntegrationPlugin Qt6::QOffscreenIntegrationPlugin)
 endif()
 
 add_executable(pirate-qt komodo.cpp)

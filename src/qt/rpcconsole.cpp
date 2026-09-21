@@ -47,10 +47,7 @@
 #include <QTimer>
 #include <QStringList>
 #include <QScreen>
-
-#if QT_VERSION < 0x050000
 #include <QUrl>
-#endif
 
 // TODO: make it possible to filter out categories (esp debug messages when implemented)
 // TODO: receive errors and debug messages through ClientModel
@@ -920,38 +917,27 @@ void RPCConsole::clear(bool clearHistory)
     // Set default style sheet
     QFontInfo fixedFontInfo(GUIUtil::fixedPitchFont());
     QSettings settings;
-    if (settings.value("strTheme", "pirate").toString() == "pirateship") {
+    if (settings.value("strTheme", "dark").toString() == "dark") {
         ui->messagesWidget->document()->setDefaultStyleSheet(
         QString(
         "table { }"
-        "td.time { color: #c5cad3; font-size: %2; padding-top: 3px; } "
+        "td.time { color: #D0D6E0; font-size: %2; padding-top: 3px; } "
         "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
-        "td.cmd-request { color: #4cb24c; } "
-        "td.cmd-error { color: #ff4e4e; } "
-        ".secwarning { color: #ff4e4e; }"
-        "b { color: #4cb24c; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
-      );
-    } else if (settings.value("strTheme", "pirate").toString() == "dark") {
-        ui->messagesWidget->document()->setDefaultStyleSheet(
-        QString(
-        "table { }"
-        "td.time { color: #c5cad3; font-size: %2; padding-top: 3px; } "
-        "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
-        "td.cmd-request { color: #4cb24c; } "
-        "td.cmd-error { color: #ff4e4e; } "
-        ".secwarning { color: #ff4e4e; }"
-        "b { color: #4cb24c; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
+        "td.cmd-request { color: #1FA971; } "
+        "td.cmd-error { color: #E24A4A; } "
+        ".secwarning { color: #E24A4A; }"
+        "b { color: #1FA971; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
       );
     } else {
         ui->messagesWidget->document()->setDefaultStyleSheet(
         QString(
         "table { }"
-        "td.time { color: #808080; font-size: %2; padding-top: 3px; } "
+        "td.time { color: #5A667A; font-size: %2; padding-top: 3px; } "
         "td.message { font-family: %1; font-size: %2; white-space:pre-wrap; } "
-        "td.cmd-request { color: #006060; } "
-        "td.cmd-error { color: red; } "
-        ".secwarning { color: red; } "
-        "b { color: #006060; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
+        "td.cmd-request { color: #178A5E; } "
+        "td.cmd-error { color: #E24A4A; } "
+        ".secwarning { color: #E24A4A; } "
+        "b { color: #178A5E; }").arg(fixedFontInfo.family(), QString("%1pt").arg(consoleFontSize))
       );
     }
 

@@ -84,9 +84,18 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("strThirdPartyTxUrls", "");
     strThirdPartyTxUrls = settings.value("strThirdPartyTxUrls", "").toString();
 
+    // Sanitize here too, not just PirateOceanGUI's constructor: this model
+    // is constructed and its combobox-facing strTheme member populated
+    // before that constructor runs (see KomodoApplication::createOptionsModel()),
+    // so without this an install with a stale pre-restyle theme name (one of
+    // the 8 retired pirate-branded names, or the old "pirate" default) would
+    // show up as an unselected/blank entry in OptionsDialog's theme combobox
+    // until the user changed it manually, even after the main window itself
+    // has already self-corrected and re-persisted a valid name.
     if (!settings.contains("strTheme"))
-        settings.setValue("strTheme", "pirate");
-    strTheme = settings.value("strTheme", "pirate").toString();
+        settings.setValue("strTheme", "dark");
+    strTheme = GUIUtil::sanitizeThemeName(settings.value("strTheme", "dark").toString());
+    settings.setValue("strTheme", strTheme);
 
     // These are shared with the core or have a command-line parameter
     // and we want command-line parameters to overwrite the GUI settings.

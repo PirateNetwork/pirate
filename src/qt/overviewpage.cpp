@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +14,7 @@
 #include "optionsmodel.h"
 #include "platformstyle.h"
 #include "transactionfilterproxy.h"
+#include "transactionrowdelegate.h"
 #include "transactiontablemodel.h"
 #include "walletmodel.h"
 #include "updatedialog.h"
@@ -20,9 +22,11 @@
 
 #include "params.h" //curl for price check
 
-#include <QAbstractItemDelegate>
-#include <QPainter>
+#include <QGraphicsDropShadowEffect>
 #include <QSettings>
+#include <QStyle>
+#include <QPainter>
+#include <QPixmap>
 #include <QTimer>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -32,7 +36,6 @@
 #include <QUrl>
 #include <QVersionNumber>
 
-#define DECORATION_SIZE 54
 #define NUM_ITEMS 5
 
 
@@ -40,145 +43,43 @@ extern int nMaxConnections; //From net.h
 
 extern char ASSETCHAINS_SYMBOL[KOMODO_ASSETCHAIN_MAXLEN];
 
-class TxViewDelegate : public QAbstractItemDelegate
+// Stashi-style quick-action glyph: an accent-tinted disc with an arrow drawn
+// inside it (up = send, down = receive). Drawn rather than shipped as a
+// resource because the accent hue is the same in both themes and the disc
+// needs its own translucent fill, which a single-color icon tint can't give.
+static QIcon QuickActionIcon(bool up, const QColor &accent)
 {
-    Q_OBJECT
-public:
-    explicit TxViewDelegate(const PlatformStyle *_platformStyle, QObject *parent=nullptr):
-        QAbstractItemDelegate(parent), unit(KomodoUnits::ARRR),
-        platformStyle(_platformStyle)
-    {
+    const int size = 40;
+    const qreal dpr = 2.0;
+    QPixmap pm(int(size * dpr), int(size * dpr));
+    pm.setDevicePixelRatio(dpr);
+    pm.fill(Qt::transparent);
 
-    }
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    QColor disc = accent;
+    disc.setAlphaF(0.16);
+    p.setPen(Qt::NoPen);
+    p.setBrush(disc);
+    p.drawEllipse(QRectF(0, 0, size, size));
 
-    inline void paint(QPainter *painter, const QStyleOptionViewItem &option,
-                      const QModelIndex &index ) const
-    {
-        painter->save();
-
-        QIcon icon = qvariant_cast<QIcon>(index.data(TransactionTableModel::RawDecorationRole));
-        QRect mainRect = option.rect;
-        QRect decorationRect(mainRect.topLeft(), QSize(DECORATION_SIZE, DECORATION_SIZE));
-        int xspace = DECORATION_SIZE + 8;
-        int ypad = 6;
-        int halfheight = (mainRect.height() - 2*ypad)/2;
-        QRect amountRect(mainRect.left() + xspace, mainRect.top()+ypad, mainRect.width() - xspace, halfheight);
-        QRect addressRect(mainRect.left() + xspace, mainRect.top()+ypad+halfheight, mainRect.width() - xspace, halfheight);
-        icon = platformStyle->SingleColorIcon(icon);
-        icon.paint(painter, decorationRect);
-
-        QDateTime date = index.data(TransactionTableModel::DateRole).toDateTime();
-        QString address = index.data(Qt::DisplayRole).toString();
-        qint64 amount = index.data(TransactionTableModel::AmountRole).toLongLong();
-        bool confirmed = index.data(TransactionTableModel::ConfirmedRole).toBool();
-        QVariant value = index.data(Qt::ForegroundRole);
-        QColor foreground = option.palette.color(QPalette::Text);
-        if(value.canConvert<QBrush>())
-        {
-            QBrush brush = qvariant_cast<QBrush>(value);
-            foreground = brush.color();
-        }
-
-        painter->setPen(foreground);
-        QRect boundingRect;
-        painter->drawText(addressRect, Qt::AlignLeft|Qt::AlignVCenter, address, &boundingRect);
-
-        if (index.data(TransactionTableModel::WatchonlyRole).toBool())
-        {
-            QIcon iconWatchonly = qvariant_cast<QIcon>(index.data(TransactionTableModel::WatchonlyDecorationRole));
-            iconWatchonly = platformStyle->SingleColorIcon(iconWatchonly);
-            QRect watchonlyRect(boundingRect.right() + 5, mainRect.top()+ypad+halfheight, 16, halfheight);
-            iconWatchonly.paint(painter, watchonlyRect);
-        }
-
-        if(amount < 0)
-        {
-            QSettings settings;
-            if (settings.value("strTheme", "pirate").toString() == "dark") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "pirateship") {
-                foreground = COLOR_NEGATIVE;
-            } else if (settings.value("strTheme", "pirate").toString() == "piratemap") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "armada") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "treasure") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "treasuremap") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "ghostship") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "night") {
-                foreground = COLOR_NEGATIVE_DARK;
-            } else {
-                foreground = COLOR_NEGATIVE;
-            }
-        }
-        else if(amount > 0)
-        {
-            QSettings settings;
-            if (settings.value("strTheme", "pirate").toString() == "dark") {
-                foreground = COLOR_POSITIVE_DARK;
-            } else if (settings.value("strTheme", "pirate").toString() == "pirate") {
-              foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "pirateship") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "piratemap") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "armada") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "treasure") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "treasuremap") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "ghostship") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else if (settings.value("strTheme", "pirate").toString() == "night") {
-                foreground = COLOR_POSITIVE_PIRATE;
-            } else {
-                foreground = COLOR_POSITIVE;
-            }
-        }
-        else if(!confirmed)
-        {
-            foreground = COLOR_UNCONFIRMED;
-        }
-        else
-        {
-            foreground = option.palette.color(QPalette::Text);
-        }
-        painter->setPen(foreground);
-        QString amountText = KomodoUnits::formatWithUnit(unit, amount, true, KomodoUnits::separatorAlways);
-        if(!confirmed)
-        {
-            amountText = QString("[") + amountText + QString("]");
-        }
-        painter->drawText(amountRect, Qt::AlignRight|Qt::AlignVCenter, amountText);
-
-        painter->setPen(option.palette.color(QPalette::Text));
-        painter->drawText(amountRect, Qt::AlignLeft|Qt::AlignVCenter, GUIUtil::dateTimeStr(date));
-
-        painter->restore();
-    }
-
-    inline QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const
-    {
-        return QSize(DECORATION_SIZE, DECORATION_SIZE);
-    }
-
-    int unit;
-    const PlatformStyle *platformStyle;
-
-};
-#include "overviewpage.moc"
+    p.setPen(QPen(accent, 2.4, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    const qreal c = size / 2.0, h = 7.0, w = 5.5;
+    const qreal dir = up ? -1.0 : 1.0; // arrow tip's direction on the y axis
+    p.drawLine(QPointF(c, c - dir * h), QPointF(c, c + dir * h));
+    p.drawLine(QPointF(c - w, c + dir * (h - w)), QPointF(c, c + dir * h));
+    p.drawLine(QPointF(c + w, c + dir * (h - w)), QPointF(c, c + dir * h));
+    p.end();
+    return QIcon(pm);
+}
 
 OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) :
     QWidget(parent),
     ui(new Ui::OverviewPage),
     clientModel(0),
     walletModel(0),
+    platformStyle(platformStyle),
     currentBalance(-1),
     currentUnconfirmedBalance(-1),
     currentImmatureBalance(-1),
@@ -188,7 +89,9 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     currentPrivateWatchBalance(-1),
     currentPrivateBalance(-1),
     currentInterestBalance(-1),
-    txdelegate(new TxViewDelegate(platformStyle, this))
+    transactionDelegate(new TransactionRowDelegate(platformStyle, this)),
+    balanceCardShadow(nullptr),
+    fPrivacyMode(false)
 {
     ui->setupUi(this);
 
@@ -198,10 +101,51 @@ OverviewPage::OverviewPage(const PlatformStyle *platformStyle, QWidget *parent) 
     ui->labelTransactionsStatus->setIcon(icon);
     ui->labelWalletStatus->setIcon(icon);
 
-    // Recent transactions
-    ui->listTransactions->setItemDelegate(txdelegate);
-    ui->listTransactions->setIconSize(QSize(DECORATION_SIZE, DECORATION_SIZE));
-    ui->listTransactions->setMinimumHeight(NUM_ITEMS * (DECORATION_SIZE + 2));
+    // Balance hero card: a real drop shadow, since QSS has no box-shadow.
+    // Color is theme-dependent -- updateShadowTheme() sets it, called once
+    // here and again on every live theme switch via WalletView::
+    // updateIconTint() (the same chain phase 1 already uses for icon tint).
+    balanceCardShadow = new QGraphicsDropShadowEffect(this);
+    balanceCardShadow->setBlurRadius(8);
+    balanceCardShadow->setOffset(0, 4);
+    ui->frame->setGraphicsEffect(balanceCardShadow);
+    updateShadowTheme();
+
+    // Balance privacy toggle: persisted, masks every amount label with a
+    // fixed string instead of the real formatted value.
+    QSettings privacySettings;
+    fPrivacyMode = privacySettings.value("fPrivacyMode", false).toBool();
+    ui->privacyToggle->setChecked(fPrivacyMode);
+    ui->privacyToggle->setIcon(platformStyle->SingleColorIcon(fPrivacyMode ? ":/icons/eye_minus" : ":/icons/eye"));
+    connect(ui->privacyToggle, SIGNAL(clicked()), this, SLOT(togglePrivacy()));
+
+    // Send/Receive quick actions, between the Balances card and Activity --
+    // replaces the left-nav Send/Receive entries (removed from PirateOceanGUI's
+    // toolbar), matching the Unified Wallet's layout. Just re-emitted as our
+    // own signals; WalletView::setPirateOceanGUI() connects these straight to
+    // PirateOceanGUI::gotoZSendCoinsPage()/gotoReceiveCoinsPage().
+    ui->sendCoinsButton->setIcon(QuickActionIcon(true, QColor(0x2B, 0x6F, 0xF7)));      // primary blue
+    ui->receiveCoinsButton->setIcon(QuickActionIcon(false, QColor(0x1F, 0xA9, 0x71)));  // positive green
+    // QPushButton has no icon-to-text gap setting; a leading space is the
+    // usual way to keep the 40px disc from butting up against the label.
+    ui->sendCoinsButton->setText("  " + ui->sendCoinsButton->text());
+    ui->receiveCoinsButton->setText("  " + ui->receiveCoinsButton->text());
+    connect(ui->sendCoinsButton, SIGNAL(clicked()), this, SIGNAL(sendCoinsClicked()));
+    connect(ui->receiveCoinsButton, SIGNAL(clicked()), this, SIGNAL(receiveCoinsClicked()));
+
+    // Wallet switcher in the header row -- activated() only fires for a real
+    // user pick, never for setWalletList()'s programmatic repopulation, so
+    // no signal-blocking dance is needed to avoid switching in a loop.
+    connect(ui->walletSelector, SIGNAL(activated(int)), this, SLOT(walletSelectorActivated(int)));
+
+    // Recent transactions -- same card-row delegate as the main Transactions
+    // tab (phase 2); this mini-list's proxy only ever shows parent rows
+    // (setShowParentsOnly(true) in setWalletModel() below), so every row
+    // gets full card chrome.
+    ui->listTransactions->setItemDelegate(transactionDelegate);
+    ui->listTransactions->setSpacing(8);
+    ui->listTransactions->setUniformItemSizes(true);
+    ui->listTransactions->setMinimumHeight(NUM_ITEMS * 72);
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
 
     connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
@@ -375,18 +319,28 @@ void OverviewPage::setBalance(const CAmount& balance, const CAmount& unconfirmed
     currentPrivateWatchBalance = privateWatchBalance;
     currentPrivateBalance = privateBalance;
     currentInterestBalance = interestBalance;
-    ui->labelBalance->setText(KomodoUnits::formatWithUnit(unit, balance, false, KomodoUnits::separatorAlways));
-    ui->labelUnconfirmed->setText(KomodoUnits::formatWithUnit(unit, unconfirmedBalance, false, KomodoUnits::separatorAlways));
-    ui->labelImmature->setText(KomodoUnits::formatWithUnit(unit, immatureBalance, false, KomodoUnits::separatorAlways));
-    ui->labelTotal->setText(KomodoUnits::formatWithUnit(unit, balance + unconfirmedBalance + immatureBalance + privateBalance + interestBalance, false, KomodoUnits::separatorAlways));
-    ui->labelWatchAvailable->setText(KomodoUnits::formatWithUnit(unit, watchOnlyBalance, false, KomodoUnits::separatorAlways));
-    ui->labelWatchPending->setText(KomodoUnits::formatWithUnit(unit, watchUnconfBalance, false, KomodoUnits::separatorAlways));
-    ui->labelWatchImmature->setText(KomodoUnits::formatWithUnit(unit, watchImmatureBalance, false, KomodoUnits::separatorAlways));
-    ui->labelWatchTotal->setText(KomodoUnits::formatWithUnit(unit, watchOnlyBalance + watchUnconfBalance + watchImmatureBalance + privateWatchBalance, false, KomodoUnits::separatorAlways));
-    ui->labelPrivateWatchBalance->setText(KomodoUnits::formatWithUnit(unit, privateWatchBalance, false, KomodoUnits::separatorAlways));
-    ui->labelPrivateBalance->setText(KomodoUnits::formatWithUnit(unit, privateBalance, false, KomodoUnits::separatorAlways));
-    ui->labelInterestBalance->setText(KomodoUnits::formatWithUnit(unit, interestBalance, false, KomodoUnits::separatorAlways));
-    ui->labelWalletTotal->setText(KomodoUnits::formatWithUnit(unit, balance + unconfirmedBalance + immatureBalance + privateBalance + interestBalance +watchOnlyBalance + watchUnconfBalance + watchImmatureBalance + privateWatchBalance , false, KomodoUnits::separatorAlways));
+
+    // Privacy mode: mask every amount label with a fixed string instead of
+    // its real formatted value (matching the Unified Wallet's own literal
+    // mask). Fiat/exchange-rate labels (set elsewhere, from price replies)
+    // are deliberately left alone -- this covers the coin-balance figures
+    // set here, which are what "hide my balance" is actually asking for.
+    static const QString maskedText("*******");
+    auto formatOrMask = [&](CAmount amount) {
+        return fPrivacyMode ? maskedText : KomodoUnits::formatWithUnit(unit, amount, false, KomodoUnits::separatorAlways);
+    };
+    ui->labelBalance->setText(formatOrMask(balance));
+    ui->labelUnconfirmed->setText(formatOrMask(unconfirmedBalance));
+    ui->labelImmature->setText(formatOrMask(immatureBalance));
+    ui->labelTotal->setText(formatOrMask(balance + unconfirmedBalance + immatureBalance + privateBalance + interestBalance));
+    ui->labelWatchAvailable->setText(formatOrMask(watchOnlyBalance));
+    ui->labelWatchPending->setText(formatOrMask(watchUnconfBalance));
+    ui->labelWatchImmature->setText(formatOrMask(watchImmatureBalance));
+    ui->labelWatchTotal->setText(formatOrMask(watchOnlyBalance + watchUnconfBalance + watchImmatureBalance + privateWatchBalance));
+    ui->labelPrivateWatchBalance->setText(formatOrMask(privateWatchBalance));
+    ui->labelPrivateBalance->setText(formatOrMask(privateBalance));
+    ui->labelInterestBalance->setText(formatOrMask(interestBalance));
+    ui->labelWalletTotal->setText(formatOrMask(balance + unconfirmedBalance + immatureBalance + privateBalance + interestBalance + watchOnlyBalance + watchUnconfBalance + watchImmatureBalance + privateWatchBalance));
 
     // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
     // for the non-mining users
@@ -420,8 +374,6 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
     if (showWatchOnly) {
         ui->labelSpendable->setVisible(showWatchOnly);            // show spendable label (only when watch-only is active)
         ui->labelWatchonly->setVisible(showWatchOnly);            // show watch-only label
-        ui->lineWatchBalance->setVisible(showWatchOnly);          // show watch-only balance separator line
-        ui->lineWatchFiat->setVisible(showWatchOnly);             // show watch-only fiat separator line
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelPrivateWatchBalance->setVisible(showWatchOnly);  // show watch-only private balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
@@ -449,8 +401,6 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
     } else {
         ui->labelSpendable->setVisible(showWatchOnly);            // show spendable label (only when watch-only is active)
         ui->labelWatchonly->setVisible(showWatchOnly);            // show watch-only label
-        ui->lineWatchBalance->setVisible(showWatchOnly);          // show watch-only balance separator line
-        ui->lineWatchFiat->setVisible(showWatchOnly);          // show watch-only fiat separator line
         ui->labelWatchAvailable->setVisible(showWatchOnly);       // show watch-only available balance
         ui->labelWatchPending->setVisible(showWatchOnly);         // show watch-only pending balance
         ui->labelWatchTotal->setVisible(showWatchOnly);           // show watch-only total balance
@@ -467,8 +417,11 @@ void OverviewPage::updateWatchOnlyLabels(bool showWatchOnly)
         ui->labelCombinedText->setVisible(showWatchOnly);
     }
 
-    ui->lineWatchFiat->setVisible(false);
-    ui->lineFiat->setVisible(false);
+    // lineFiat separates the balance tiles from the Combined Wallet Totals
+    // block below them -- previously this function unconditionally hid it
+    // (and a since-removed sibling) right after setting them correctly
+    // per-branch above, so the divider could never actually render.
+    ui->lineFiat->setVisible(true);
 }
 
 void OverviewPage::setClientModel(ClientModel *model)
@@ -525,12 +478,33 @@ void OverviewPage::updateDisplayUnit()
                        currentWatchOnlyBalance, currentWatchUnconfBalance, currentWatchImmatureBalance,
                        currentPrivateWatchBalance, currentPrivateBalance, currentInterestBalance);
 
-        // Update txdelegate->unit with the current unit
-        txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
+        // TransactionRowDelegate reads FormattedAmountRole (already
+        // unit-formatted by the model, kept in sync with
+        // OptionsModel::displayUnitChanged there) -- no unit to push down.
 
         ui->listTransactions->update();
 
     }
+}
+
+void OverviewPage::togglePrivacy()
+{
+    fPrivacyMode = !fPrivacyMode;
+    QSettings settings;
+    settings.setValue("fPrivacyMode", fPrivacyMode);
+    ui->privacyToggle->setIcon(platformStyle->SingleColorIcon(fPrivacyMode ? ":/icons/eye_minus" : ":/icons/eye"));
+    updateDisplayUnit(); // re-runs setBalance() from the cached current* amounts
+}
+
+void OverviewPage::updateShadowTheme()
+{
+    QSettings settings;
+    bool fDarkTheme = (settings.value("strTheme", "dark").toString() == "dark");
+    balanceCardShadow->setColor(fDarkTheme ? QColor(0, 0, 0, 64) : QColor(0, 0, 0, 31));
+
+    // Recent-transactions card list uses the same theme-refresh chain.
+    transactionDelegate->setThemeColors();
+    ui->listTransactions->update();
 }
 
 void OverviewPage::updateAlerts(const QString &warnings)
@@ -548,8 +522,50 @@ void OverviewPage::showOutOfSyncWarning(bool fShow)
   }
 }
 
+void OverviewPage::setWalletList(const QStringList &names, const QString &current)
+{
+    // Repopulated wholesale on every wallet add/remove/switch rather than
+    // diffed -- it's a handful of names at most, and blocking signals keeps
+    // the rebuild itself from looking like a user switching wallets.
+    QSignalBlocker blocker(ui->walletSelector);
+    currentWalletKey = current;
+    ui->walletSelector->clear();
+    for (const QString &name : names)
+        ui->walletSelector->addItem(name, name);
+    int idx = ui->walletSelector->findData(current);
+    ui->walletSelector->setCurrentIndex(idx);
+    // Last entry opens the wallets modal (load/new/close). It has no item
+    // data, which is what walletSelectorActivated() keys off to tell it apart
+    // from a real wallet name -- those are never empty.
+    ui->walletSelector->insertSeparator(ui->walletSelector->count());
+    ui->walletSelector->addItem(tr("Manage wallets..."), QString());
+}
+
+void OverviewPage::walletSelectorActivated(int index)
+{
+    const QString name = ui->walletSelector->itemData(index).toString();
+    if (name.isEmpty()) {
+        // "Manage wallets...": snap the box back to the wallet actually in
+        // use so it never displays the action as if it were a selection.
+        ui->walletSelector->setCurrentIndex(ui->walletSelector->findData(currentWalletKey));
+        Q_EMIT manageWalletsRequested();
+        return;
+    }
+    Q_EMIT walletSwitchRequested(name);
+}
+
 void OverviewPage::setLockMessage(QString message) {
     ui->lblLockedMessage->setText(message);
+}
+
+// Drives QPushButton#btnUnlock[locked="true"] in the theme files: a locked
+// wallet's Unlock button is the page's one call to action (primary fill),
+// while Lock on an already-unlocked wallet stays a quiet secondary button.
+void OverviewPage::setUnlockButtonLocked(bool locked)
+{
+    ui->btnUnlock->setProperty("locked", locked);
+    ui->btnUnlock->style()->unpolish(ui->btnUnlock);
+    ui->btnUnlock->style()->polish(ui->btnUnlock);
 }
 
 void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime) {
@@ -560,12 +576,15 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
         if (nMaxConnections>0) 	//Online
         {
             ui->frame->setVisible(true);
+            ui->quickActionsFrame->setVisible(true);
             ui->frame_2->setVisible(true);
         }
         else			//Offline
         {
             //Hide the balances frame.
             ui->frame->setVisible(false);
+            //Hide the Send/Receive quick actions -- nothing to send/receive to while offline
+            ui->quickActionsFrame->setVisible(false);
             //Hide the transaction summary frame
             ui->frame_2->setVisible(false);
             //Give a message on the empty page that we're in offline mode
@@ -579,19 +598,25 @@ void OverviewPage::setUiVisible(bool visible, bool isCrypted, int64_t relockTime
 
     if (visible) {
         ui->btnUnlock->setText("Unlock");
+        setUnlockButtonLocked(true);
         ui->frame->setVisible(false);
+        ui->quickActionsFrame->setVisible(false);
         ui->frame_2->setVisible(false);
     } else {
         ui->btnUnlock->setText("Lock");
+        setUnlockButtonLocked(false);
         if (nMaxConnections>0) //Online
         {
             ui->frame->setVisible(true);
+            ui->quickActionsFrame->setVisible(true);
             ui->frame_2->setVisible(true);
         }
         else //Cold storagage offline
         {
             //Hide the balances frame.
             ui->frame->setVisible(false);
+            //Hide the Send/Receive quick actions -- nothing to send/receive to while offline
+            ui->quickActionsFrame->setVisible(false);
             //Hide the transaction summary frame
             ui->frame_2->setVisible(false);
             //Give a message on the empty page that we're in offline mode

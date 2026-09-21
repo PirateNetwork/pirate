@@ -232,6 +232,20 @@ void WalletFrame::showOutOfSyncWarning(bool fShow)
         i.value()->showOutOfSyncWarning(fShow);
 }
 
+void WalletFrame::setWalletList(const QStringList &names, const QString &current)
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->setWalletList(names, current);
+}
+
+void WalletFrame::updateIconTint()
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->updateIconTint();
+}
+
 void WalletFrame::resetUnlockTimer()
 {
     QMap<QString, WalletView*>::const_iterator i;

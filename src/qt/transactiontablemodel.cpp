@@ -2521,29 +2521,20 @@ QVariant TransactionTableModel::data(const QModelIndex &index, int role) const
             }
             
             // Theme-aware color selection for negative/positive amounts
-            QString theme = settings.value("strTheme", "pirate").toString();
-            
+            QString theme = settings.value("strTheme", "dark").toString();
+            bool fDarkTheme = (theme == "dark");
+
             if(amount < 0)
             {
-                // Negative amounts (outgoing): Dark themes use dark red, light themes use standard red
-                if (theme == "dark" || theme == "pirate" || theme == "piratemap" || 
-                    theme == "armada" || theme == "treasure" || theme == "treasuremap" || 
-                    theme == "ghostship" || theme == "night") {
-                    return COLOR_NEGATIVE_DARK;
-                } else if (theme == "pirateship") {
-                    return COLOR_NEGATIVE;
-                } else {
-                    return COLOR_NEGATIVE;
-                }
+                // Negative amounts (outgoing): dark theme uses a dark-red tuned
+                // for the dark background, light theme uses standard red.
+                return fDarkTheme ? COLOR_NEGATIVE_DARK : COLOR_NEGATIVE;
             }
             else // amount >= 0
             {
-                // Positive/zero amounts (incoming): Most themes use pirate green, dark theme uses dark variant
-                if (theme == "dark") {
-                    return COLOR_POSITIVE_DARK;
-                } else {
-                    return COLOR_POSITIVE_PIRATE;
-                }
+                // Positive/zero amounts (incoming): dark theme uses a dark-green
+                // variant, light theme uses standard green.
+                return fDarkTheme ? COLOR_POSITIVE_DARK : COLOR_POSITIVE;
             }
         }
         break;

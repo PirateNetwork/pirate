@@ -1,4 +1,5 @@
 // Copyright (c) 2015-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -6,11 +7,9 @@
 
 #include "guiconstants.h"
 
-#include <QApplication>
 #include <QColor>
 #include <QIcon>
 #include <QImage>
-#include <QPalette>
 #include <QPixmap>
 
 static const struct {
@@ -77,25 +76,13 @@ PlatformStyle::PlatformStyle(const QString &_name, bool _imagesOnButtons, bool _
     imagesOnButtons(_imagesOnButtons),
     colorizeIcons(_colorizeIcons),
     useExtraSpacing(_useExtraSpacing),
-    singleColor(193, 157, 66), //main icons
-    textColor(193, 157, 66)      //tx & small icon
+    // Placeholder until PirateOceanGUI's constructor calls setSingleColor()
+    // with the persisted theme's actual tint (dark theme: light neutral;
+    // light theme: dark neutral) -- happens before any icon is actually
+    // built, so this initial value is never seen on screen.
+    singleColor(208, 214, 224), //main icons
+    textColor(208, 214, 224)      //tx & small icon
 {
-    // Determine icon highlighting color
-    if (colorizeIcons) {
-        const QColor colorHighlightBg(QApplication::palette().color(QPalette::Highlight));
-        const QColor colorHighlightFg(QApplication::palette().color(QPalette::HighlightedText));
-        const QColor colorText(QApplication::palette().color(QPalette::WindowText));
-        const int colorTextLightness = colorText.lightness();
-        QColor colorbase = QColor(193, 157, 66); // Pirate Color
-
-        /*if (abs(colorHighlightBg.lightness() - colorTextLightness) < abs(colorHighlightFg.lightness() - colorTextLightness))
-            colorbase = colorHighlightBg;
-        else
-            colorbase = colorHighlightFg;*/
-        //singleColor = colorbase;
-    }
-    // Determine text color
-    //textColor = QColor(QApplication::palette().color(QPalette::WindowText));
 }
 
 QImage PlatformStyle::SingleColorImage(const QString& filename) const

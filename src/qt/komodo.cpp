@@ -74,28 +74,17 @@ CBlockIndex *komodo_chainactive(int32_t height);
 
 #if defined(QT_STATICPLUGIN)
 #include <QtPlugin>
-#if QT_VERSION < 0x050000
-Q_IMPORT_PLUGIN(qcncodecs)
-Q_IMPORT_PLUGIN(qjpcodecs)
-Q_IMPORT_PLUGIN(qtwcodecs)
-Q_IMPORT_PLUGIN(qkrcodecs)
-Q_IMPORT_PLUGIN(qtaccessiblewidgets)
-#else
-#if QT_VERSION < 0x050400
-Q_IMPORT_PLUGIN(AccessibleFactory)
-#endif
 #if defined(QT_QPA_PLATFORM_XCB)
 Q_IMPORT_PLUGIN(QXcbIntegrationPlugin);
+// Linked alongside XCB (not instead of it) so `-platform offscreen` is
+// available for headless runs -- XCB via a real display remains the default
+// and is unaffected. See src/qt/CMakeLists.txt's QT_PLATFORM_PLUGIN comment.
+Q_IMPORT_PLUGIN(QOffscreenIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_WINDOWS)
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
 #elif defined(QT_QPA_PLATFORM_COCOA)
 Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 #endif
-#endif
-#endif
-
-#if QT_VERSION < 0x050000
-#include <QTextCodec>
 #endif
 
 // Declare meta types used for QMetaObject::invokeMethod
@@ -169,16 +158,6 @@ static void initTranslations(QTranslator &qtTranslatorBase, QTranslator &qtTrans
 }
 
 /* qDebug() message handler --> debug.log */
-#if QT_VERSION < 0x050000
-void DebugMessageHandler(QtMsgType type, const char *msg)
-{
-    if (type == QtDebugMsg) {
-        LogPrint("qt", "GUI: %s\n", msg);
-    } else {
-        LogPrintf("GUI: %s\n", msg);
-    }
-}
-#else
 void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, const QString &msg)
 {
     Q_UNUSED(context);
@@ -188,7 +167,6 @@ void DebugMessageHandler(QtMsgType type, const QMessageLogContext& context, cons
         LogPrintf("GUI: %s\n", msg.toStdString());
     }
 }
-#endif
 
 /** Class encapsulating Pirate Core startup and shutdown.
  * Allows running startup and shutdown in a different thread from the UI thread.
@@ -708,6 +686,19 @@ void KomodoApplication::finishStartup()
 
     window->show();
 
+    // Dev/CI aid: dump a PNG of the main window shortly after it's shown,
+    // when asked to. Works under any QPA platform, including `-platform
+    // offscreen` (no real display needed) -- lets a headless session close
+    // the loop on GUI restyle work without a live screen to look at.
+    if (IsArgSet("-uiscreenshot")) {
+        QString path = QString::fromStdString(GetArg("-uiscreenshot", ""));
+        PirateOceanGUI *win = window;
+        QTimer::singleShot(1500, [win, path]() {
+            win->grab().save(path);
+            LogPrintf("Saved UI screenshot to %s\n", path.toStdString());
+        });
+    }
+
     Q_EMIT splashFinished(window);
 
 #ifdef ENABLE_WALLET
@@ -727,7 +718,32 @@ void KomodoApplication::finishStartup()
 
 void KomodoApplication::shutdownResult()
 {
+    // Confirmed by direct instrumentation (thread pointers logged either
+    // side of the call): this slot really does run via the executor's
+    // queued shutdownResult() connection, on this application's own main
+    // thread, exactly as expected -- yet quit() below reliably fails to
+    // terminate the second QApplication::exec() call in main() (komodo.cpp),
+    // leaving the process hung forever on what the user sees as a shutdown
+    // window that "never disappears". This reproduces consistently (headless,
+    // via the offscreen QPA platform + `pirate-cli stop`), including on
+    // builds with none of this session's other GUI changes touched -- i.e.
+    // it's a pre-existing defect in this double-exec()/cross-thread-quit()
+    // handoff, not a regression from styling work. The exact Qt-internal
+    // reason a same-thread quit() from a queued-connection slot doesn't
+    // reach the second exec() call's event loop wasn't pinned down further
+    // (plausibly specific to this project's statically-linked Qt 6.8.4
+    // build); what's confirmed is that by this point Shutdown() (init.cpp)
+    // has ALREADY fully run and returned -- wallet flush, block index flush,
+    // BDB close, etc. are done -- so nothing destructive is pending. The
+    // watchdog below is a safety net, not a mask for unfinished backend
+    // work: everything left to tear down after this point is in-process
+    // Qt/GUI object destruction with no on-disk consequences.
     quit(); // Exit main loop after shutdown finished
+    QTimer::singleShot(2000, []() {
+        LogPrintf("KomodoApplication::shutdownResult: quit() did not terminate the "
+                  "event loop within 2s, forcing exit\n");
+        _exit(0);
+    });
 }
 
 void KomodoApplication::handleRunawayException(const QString &message)
@@ -756,32 +772,21 @@ int main(int argc, char *argv[])
     // Do not refer to data directory yet, this can be overridden by Intro::pickDataDirectory
 
     /// 2. Basic Qt initialization (not dependent on parameters or configuration)
-#if QT_VERSION < 0x050000
-    // Internal string conversion is all UTF-8
-    QTextCodec::setCodecForTr(QTextCodec::codecForName("UTF-8"));
-    QTextCodec::setCodecForCStrings(QTextCodec::codecForTr());
-#endif
-
     Q_INIT_RESOURCE(komodo);
     // TODO(CMake GUI bring-up): komodo_locale.qrc (90 .ts -> .qm via lrelease, bundled by
     // rcc) isn't built yet -- see src/qt/CMakeLists.txt. Until it is, the app just runs
     // untranslated; PaymentServer::initTranslations() already tolerates missing catalogs.
     // Q_INIT_RESOURCE(komodo_locale);
 
-#if QT_VERSION > 0x050100
-    // Generate high-dpi pixmaps
-    QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-#endif
-#if QT_VERSION >= 0x050600
-    QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-#endif
+    // High-DPI pixmaps/scaling are always on in Qt6 -- AA_UseHighDpiPixmaps/
+    // AA_EnableHighDpiScaling are deprecated no-ops as of Qt 6.0, so there's
+    // nothing left to set here.
 
     QApplication::setStyle("fusion");
     KomodoApplication app(argc, argv);
 #ifdef Q_OS_MAC
     QApplication::setAttribute(Qt::AA_DontShowIconsInMenus);
 #endif
-#if QT_VERSION >= 0x050500
     // Because of the POODLE attack it is recommended to disable SSLv3 (https://disablessl3.com/),
     // so set SSL protocols to TLS1.0+.
     // #ifdef ENABLE_BIP70
@@ -789,7 +794,6 @@ int main(int argc, char *argv[])
     // sslconf.setProtocol(QSsl::TlsV1_0OrLater);
     // QSslConfiguration::setDefaultConfiguration(sslconf);
     // #endif
-#endif
 
     // Register meta types used for QMetaObject::invokeMethod
     qRegisterMetaType< bool* >();
@@ -890,17 +894,12 @@ int main(int argc, char *argv[])
     /// 8. Main GUI initialization
     // Install global event filter that makes sure that long tooltips can be word-wrapped
     app.installEventFilter(new GUIUtil::ToolTipToRichTextFilter(TOOLTIP_WRAP_THRESHOLD, &app));
-#if QT_VERSION < 0x050000
-    // Install qDebug() message handler to route to debug.log
-    qInstallMsgHandler(DebugMessageHandler);
-#else
 #if defined(Q_OS_WIN)
     // Install global event filter for processing Windows session related Windows messages (WM_QUERYENDSESSION and WM_ENDSESSION)
     qApp->installNativeEventFilter(new WinShutdownMonitor());
 #endif
     // Install qDebug() message handler to route to debug.log
     qInstallMessageHandler(DebugMessageHandler);
-#endif
     // Allow parameter interaction before we create the options model
     app.parameterSetup();
     // Load GUI settings from QSettings
@@ -943,7 +942,7 @@ int main(int argc, char *argv[])
         // so the GUI thread won't be held up.
         if (KomodoCore::baseInitialize()) {
             app.requestInitialize();
-#if defined(Q_OS_WIN) && QT_VERSION >= 0x050000
+#if defined(Q_OS_WIN)
             WinShutdownMonitor::registerShutdownBlockReason(QObject::tr("%1 didn't yet exit safely...").arg(QObject::tr(PACKAGE_NAME)), (HWND)app.getMainWinId());
 #endif
             app.exec();

@@ -1,4 +1,5 @@
 // Copyright (c) 2015 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -24,6 +25,17 @@ public:
     QColor TextColor() const { return textColor; }
     QColor SingleColor() const { return singleColor; }
 
+    /** Retint icons produced by SingleColorIcon()/SingleColorImage() to match
+     * the active theme (dark theme icons want a light neutral to read on a
+     * dark surface, light theme icons want a dark neutral). Icons already
+     * created keep their old color -- callers that build icons once at
+     * startup (e.g. the toolbar actions) need to recreate them after calling
+     * this to see the new tint. const because every call site holds a
+     * `const PlatformStyle *` (it's handed out that way from instantiate());
+     * singleColor is the one piece of paint-time state that legitimately
+     * changes after construction, hence mutable. */
+    void setSingleColor(const QColor &color) const { singleColor = color; }
+
     /** Colorize an image (given filename) with the icon color */
     QImage SingleColorImage(const QString& filename) const;
 
@@ -46,7 +58,7 @@ private:
     bool imagesOnButtons;
     bool colorizeIcons;
     bool useExtraSpacing;
-    QColor singleColor;
+    mutable QColor singleColor;
     QColor textColor;
     /* ... more to come later */
 };

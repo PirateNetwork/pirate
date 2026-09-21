@@ -38,6 +38,7 @@ class QAction;
 class QProgressBar;
 class QProgressDialog;
 class QThread;
+class QToolButton;
 QT_END_NAMESPACE
 
 /**
@@ -105,6 +106,12 @@ private:
     QProgressBar *progressBar;
     QProgressDialog *progressDialog;
 
+    // Status-bar left-side utility controls (Node Options shortcut + quick
+    // theme toggle) -- see createToolBars()'s doc comment for why the nav
+    // rail itself needed no new widgets, unlike this pair.
+    QToolButton *nodeOptionsButton;
+    QToolButton *themeToggleButton;
+
     QMenuBar *appMenuBar;
     QAction *overviewAction;
     QAction *historyAction;
@@ -139,9 +146,7 @@ private:
     QAction *verifyPaymentDisclosureAction;
 #ifdef ENABLE_WALLET
     QAction *walletOptionsAction;
-    QAction *loadWalletAction;
-    QAction *newWalletAction;
-    QMenu *walletsMenu;
+    QAction *manageWalletsAction;
     // Single non-modal, top-level window (shown/raised like rpcConsole's debug
     // window, never exec()'d) -- retargeted via setWalletModel() every time
     // setCurrentWallet() runs, so it always reflects whichever wallet is
@@ -218,6 +223,15 @@ private:
 
     /** Enable or disable all wallet-related actions */
     void setWalletActionsEnabled(bool enabled);
+
+    /** Re-tint platformStyle's icon color for the given theme name ("dark"/
+     * "light") and rebuild every already-created icon that was baked in at
+     * construction time (toolbar actions, each open wallet's export button)
+     * so a live theme switch is reflected immediately. Safe to call before
+     * those icons exist yet (constructor start-up path) -- each rebuild is
+     * null-guarded and simply skipped until the corresponding widget is
+     * created, by which point it picks up the already-updated tint itself. */
+    void updateIconTint(const QString &theme);
 
     /** Connect core signals to GUI client */
     void subscribeToCoreSignals();
@@ -306,19 +320,20 @@ private Q_SLOTS:
     /** Show/raise the non-modal Wallet Options window, retargeted to whichever
      *  wallet is currently displayed */
     void showWalletOptionsWindow();
-    /** Rebuild the File > Wallets submenu from CWalletManager's current
-     *  wallet list; called each time the submenu is about to be shown so it
-     *  never goes stale relative to a load/create/close since it was last
-     *  opened. */
-    void rebuildWalletsMenu();
+    /** Open the wallets modal: switch between open wallets, close one, or
+     *  create/load another. Also the only way to get a first wallet loaded
+     *  from a zero-wallet start (there is no Overview page, so no header
+     *  dropdown, until one is). */
+    void showWalletsDialog();
+    /** Re-push the open-wallet list + current selection to every wallet's
+     * overview-page dropdown -- called from every place that changes either. */
+    void updateWalletSelectors();
     /** Prompt for a filename and load it as a secondary wallet */
     void loadWalletClicked();
     /** Prompt for a filename and create a brand-new, freshly-seeded secondary wallet */
     void newWalletClicked();
-    /** One "Close" action per loaded wallet in the Wallets submenu; closes the one triggered */
-    void closeWalletActionTriggered();
-    /** One checkable action per loaded wallet in the Wallets submenu; switches to the one triggered */
-    void switchWalletActionTriggered();
+    /** Overview header dropdown picked `name` */
+    void switchWalletRequested(const QString &name);
     /** Notices an active-wallet change that moved via setactivewallet from
      *  outside this window (RPC, another session) and switches the
      *  displayed tab to match, if that wallet has one open here -- keeps
@@ -328,6 +343,10 @@ private Q_SLOTS:
 #endif // ENABLE_WALLET
     /** Show configuration dialog */
     void optionsClicked();
+    /** Flip strTheme between "dark"/"light" via GUIUtil::applyTheme(), update
+     *  themeToggleButton's label, and retint icons -- the status-bar
+     *  equivalent of OptionsDialog's theme combobox. */
+    void toggleTheme();
     /** Show about dialog */
     void aboutClicked();
     /** Show debug window */

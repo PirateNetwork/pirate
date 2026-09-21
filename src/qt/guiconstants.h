@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -16,8 +17,15 @@ static const int STATUSBAR_ICONSIZE = 16;
 
 static const bool DEFAULT_SPLASHSCREEN = true;
 
-/* Invalid field background style */
-#define STYLE_INVALID "background:#FF8080"
+/* Invalid field style -- a widget-local QSS override (see
+ * AmountSpinBox::setValid(), komodoamountfield.cpp), so it takes precedence
+ * over the app theme for that one widget instance. Keeps the input's own
+ * rounded border instead of reverting to a flat square red block, and uses
+ * the error semantic token (alpha background + alpha border, the same recipe
+ * as the alert banner / QR card) rather than a pre-restyle literal color.
+ * Same value works in both themes -- the error hue doesn't shift between
+ * them. */
+#define STYLE_INVALID "background-color: rgba(226,74,74,0.14); border: 1px solid #E24A4A; border-radius: 10px; color: #E24A4A;"
 
 /* Transaction list -- unconfirmed transaction */
 #define COLOR_UNCONFIRMED QColor(128, 128, 128)
@@ -29,8 +37,6 @@ static const bool DEFAULT_SPLASHSCREEN = true;
 #define COLOR_POSITIVE QColor(0, 118, 0)
 /* Transaction list -- positive amount */
 #define COLOR_POSITIVE_DARK QColor(76, 178, 76)
-/* Transaction list -- positive amount */
-#define COLOR_POSITIVE_PIRATE QColor(25, 225, 25)
 /* Transaction list -- bare address (without label) */
 #define COLOR_BAREADDRESS QColor(140, 140, 140)
 /* Transaction list -- TX status decoration - open until date */

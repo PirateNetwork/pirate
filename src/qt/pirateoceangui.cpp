@@ -26,6 +26,7 @@
 #ifdef ENABLE_WALLET
 #include "walletframe.h"
 #include "walletmodel.h"
+#include "walletsdialog.h"
 #include "walletoptionspage.h"
 #include "wallet/wallet.h"
 #include "wallet/walletmanager.h"
@@ -47,6 +48,8 @@
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QFileInfo>
+#include <QFont>
+#include <QFontDatabase>
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QListWidget>
@@ -62,15 +65,12 @@
 #include <QScreen>
 #include <QTimer>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QPalette>
 
-#if QT_VERSION < 0x050000
-#include <QTextDocument>
 #include <QUrl>
-#else
 #include <QUrlQuery>
-#endif
 
 extern int nMaxConnections;          //From net.cpp
 extern bool bOverrideMaxConnections; //From net.cpp
@@ -171,9 +171,7 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     showHelpMessageAction(0),
 #ifdef ENABLE_WALLET
     walletOptionsAction(0),
-    loadWalletAction(0),
-    newWalletAction(0),
-    walletsMenu(0),
+    manageWalletsAction(0),
     walletOptionsPage(0),
 #endif
     trayIcon(0),
@@ -195,24 +193,35 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
 
     QCoreApplication::setAttribute(Qt::AA_UseStyleSheetPropagationInWidgetStyles, true);
 
+    // Bundle Sora (UI) and JetBrains Mono (monospace) once for the whole
+    // process -- both ship as resources (see komodo.qrc's /fonts prefix) so
+    // this works the same on every platform without an OS-level install.
+    // Sora becomes the application default font; JetBrains Mono is picked up
+    // by name wherever GUIUtil::fixedPitchFont() is already used (addresses,
+    // signatures, the RPC console) rather than being set here.
+    QFontDatabase::addApplicationFont(":/fonts/Sora");
+    QFontDatabase::addApplicationFont(":/fonts/JetBrainsMono");
+    qApp->setFont(QFont("Sora"));
+
     //Set the theme in the settings
-    QString strTheme = settings.value("strTheme","pirate").toString();
+    // Sanitized here: an upgrading install can still have one of the 8
+    // retired pirate-branded theme names (or the old "pirate" default)
+    // persisted from before this app's restyle -- GUIUtil::applyTheme()
+    // below re-persists the corrected name too, so this is a one-time fix
+    // per install rather than a sanitize-every-startup workaround.
+    QString strTheme = GUIUtil::sanitizeThemeName(settings.value("strTheme","dark").toString());
 
     //Set usingGUI to true so the wallet known the GUI is active
     LogPrintf("Setting usingGUI to true, %s\n", __func__);
     usingGUI = true;
 
     //Set the Theme in the app
-    LogPrintf("Setting Theme: %s %s\n", strTheme.toStdString(), __func__);
-    QFile file(":/stylesheets/" + strTheme);
-    file.open(QFile::ReadOnly);
-    QString stylesheet = QLatin1String(file.readAll());
-    qApp->setStyleSheet(stylesheet);
+    GUIUtil::applyTheme(strTheme);
 
-    QPalette newPal(qApp->palette());
-    newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
-    newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
-    qApp->setPalette(newPal);
+    // Icons haven't been built yet at this point (createActions() runs
+    // later in this constructor) -- this just primes platformStyle's tint so
+    // every icon comes out right the first time it's created.
+    updateIconTint(strTheme);
 
 
     QString windowTitle = "Treasure Chest";
@@ -223,12 +232,6 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     QApplication::setWindowIcon(networkStyle->getTrayAndWindowIcon());
     setWindowIcon(networkStyle->getTrayAndWindowIcon());
     setWindowTitle(windowTitle);
-
-#if defined(Q_OS_MAC) && QT_VERSION < 0x050000
-    // This property is not implemented in Qt 5. Setting it has no effect.
-    // A replacement API (QtMacUnifiedToolBar) is available in QtMacExtras.
-    setUnifiedTitleAndToolBarOnMac(true);
-#endif
 
     rpcConsole = new RPCConsole(_platformStyle, 0);
     connect(rpcConsole, SIGNAL(resetUnlockTimerEvent()), this, SLOT(resetUnlockTimer()));
@@ -319,6 +322,20 @@ PirateOceanGUI::PirateOceanGUI(const PlatformStyle *_platformStyle, const Networ
     //     progressBar->setStyleSheet("QProgressBar { background-color: #e8e8e8; border: 1px solid grey; border-radius: 7px; padding: 1px; text-align: center; } QProgressBar::chunk { background: QLinearGradient(x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 #FF8000, stop: 1 orange); border-radius: 7px; margin: 0px; }");
     // }
 
+    // Left-side status-bar utility controls: a Node Options shortcut (bound
+    // to the existing optionsAction via setDefaultAction() so it stays in
+    // sync with that action's enabled state/icon/tooltip for free) and a
+    // quick theme toggle (label-only, no new icon asset needed).
+    nodeOptionsButton = new QToolButton();
+    nodeOptionsButton->setDefaultAction(optionsAction);
+    nodeOptionsButton->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    themeToggleButton = new QToolButton();
+    themeToggleButton->setText(strTheme == "dark" ? tr("Dark") : tr("Light"));
+    themeToggleButton->setToolTip(tr("Switch between dark and light theme"));
+    connect(themeToggleButton, &QToolButton::clicked, this, &PirateOceanGUI::toggleTheme);
+
+    statusBar()->addWidget(nodeOptionsButton);
+    statusBar()->addWidget(themeToggleButton);
     statusBar()->addWidget(progressBarLabel);
     statusBar()->addWidget(progressBar);
     statusBar()->addPermanentWidget(frameBlocks);
@@ -483,21 +500,9 @@ void PirateOceanGUI::createActions()
     connect(walletOptionsAction, SIGNAL(triggered()), this, SLOT(showNormalIfMinimized()));
     connect(walletOptionsAction, SIGNAL(triggered()), this, SLOT(showWalletOptionsWindow()));
 
-    loadWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("&Load Wallet..."), this);
-    loadWalletAction->setStatusTip(tr("Load an existing wallet file as a secondary wallet"));
-    newWalletAction = new QAction(platformStyle->TextColorIcon(":/icons/filesave"), tr("&New Wallet..."), this);
-    newWalletAction->setStatusTip(tr("Create a brand-new, freshly-seeded secondary wallet"));
-    // No standalone "Close Wallet" action: closing targets one specific
-    // wallet by name, not "whichever tab is current" -- viewing a tab always
-    // makes it active now (see setCurrentWallet()), and the active wallet can
-    // never be closed (CWalletManager::UnloadWallet()'s own invariant), so a
-    // single current-tab-scoped action could never be enabled for anything.
-    // rebuildWalletsMenu() instead adds one "Close" action per loaded wallet.
-
-    walletsMenu = new QMenu(tr("&Wallets"), this);
-    connect(walletsMenu, SIGNAL(aboutToShow()), this, SLOT(rebuildWalletsMenu()));
-    connect(loadWalletAction, SIGNAL(triggered()), this, SLOT(loadWalletClicked()));
-    connect(newWalletAction, SIGNAL(triggered()), this, SLOT(newWalletClicked()));
+    manageWalletsAction = new QAction(platformStyle->TextColorIcon(":/icons/open"), tr("Manage &Wallets..."), this);
+    manageWalletsAction->setStatusTip(tr("Switch, close, create, or load wallets"));
+    connect(manageWalletsAction, SIGNAL(triggered()), this, SLOT(showWalletsDialog()));
 
 #endif // ENABLE_WALLET
 
@@ -629,7 +634,7 @@ void PirateOceanGUI::createMenuBar()
     if(walletFrame)
     {
 
-        file->addMenu(walletsMenu);
+        file->addAction(manageWalletsAction);
         file->addSeparator();
         file->addAction(openAction);
         file->addAction(backupWalletAction);
@@ -676,16 +681,35 @@ void PirateOceanGUI::createToolBars()
 {
     if(walletFrame)
     {
-        QToolBar *toolbar = addToolBar(tr("Tabs toolbar"));
+        // A left-docked QToolBar rather than a hand-built nav-rail widget --
+        // Qt auto-orients a left/right-docked toolbar vertically, and
+        // ToolButtonTextUnderIcon gives the icon-over-label nav-rail look for
+        // free. This reuses every existing QAction (tabGroup's exclusive
+        // checked-highlight, setWalletActionsEnabled()/setColdStorageLayout()/
+        // setEncryptionStatus()'s visibility logic) completely unchanged --
+        // only the container the actions live in has moved.
+        QToolBar *toolbar = new QToolBar(tr("Navigation"), this);
+        addToolBar(Qt::LeftToolBarArea, toolbar);
+        toolbar->setObjectName("NavRail");
         toolbar->setContextMenuPolicy(Qt::PreventContextMenu);
         toolbar->setMovable(false);
-        toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        toolbar->setFloatable(false);
+        toolbar->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        toolbar->setIconSize(QSize(24, 24));
+        toolbar->setFixedWidth(104);
         toolbar->addAction(overviewAction);
         //toolbar->addAction(sendCoinsAction);
-        toolbar->addAction(zsendCoinsAction);
+        // Z-Send/Receive moved off the left nav onto the Overview page itself
+        // (quick-action buttons between the Balances card and Activity list,
+        // matching the Unified Wallet's layout) -- zsignAction stays here
+        // since offline-signing mode has no Overview-page equivalent yet.
         toolbar->addAction(zsignAction);
-        toolbar->addAction(receiveCoinsAction);
         toolbar->addAction(historyAction);
+        // Keep their Alt+3/Alt+4 shortcuts alive even though they're no
+        // longer in any visible menu/toolbar -- a QAction's shortcut only
+        // dispatches while it's in some widget's action list.
+        this->addAction(zsendCoinsAction);
+        this->addAction(receiveCoinsAction);
         overviewAction->setChecked(true);
     }
 }
@@ -838,6 +862,7 @@ bool PirateOceanGUI::addWallet(const QString& name, WalletModel *walletModel)
     // right.
     CWalletManager::Get().AddRef(walletModel->getWalletName().toStdString());
     setWalletActionsEnabled(true);
+    updateWalletSelectors();
     return true;
 }
 
@@ -878,6 +903,7 @@ bool PirateOceanGUI::setCurrentWallet(const QString& name)
         // whichever wallet is actually showing.
         if (walletOptionsPage)
             walletOptionsPage->setWalletModel(mapWalletModels.value(name));
+        updateWalletSelectors();
     }
     return fOk;
 }
@@ -915,6 +941,7 @@ bool PirateOceanGUI::removeWallet(const QString& name)
     }
     if (mapWalletModels.isEmpty())
         setWalletActionsEnabled(false);
+    updateWalletSelectors();
     return true;
 }
 
@@ -967,14 +994,41 @@ void PirateOceanGUI::setWalletActionsEnabled(bool enabled)
     openAction->setEnabled(enabled);
 #ifdef ENABLE_WALLET
     walletOptionsAction->setEnabled(enabled);
-    // loadWalletAction/newWalletAction deliberately not tied to `enabled`:
-    // they're the only way to escape a zero-wallets-loaded state (including
-    // at startup, before any wallet has ever been added), so they must stay
-    // enabled regardless of whether one is currently loaded. Per-wallet
-    // Close actions need no equivalent handling: rebuildWalletsMenu() only
-    // ever creates one for a wallet that's actually loaded, so there is
-    // nothing to force off when `enabled` is false (mapWalletModels is empty
-    // in exactly that case).
+    // manageWalletsAction deliberately not tied to `enabled`: it's the only
+    // way to escape a zero-wallets-loaded state (including at startup, before
+    // any wallet has ever been added), so it must stay enabled regardless of
+    // whether one is currently loaded.
+#endif
+}
+
+void PirateOceanGUI::updateIconTint(const QString &theme)
+{
+    // Dark theme icons want a light neutral to read on a dark surface; light
+    // theme (or anything else, as a safe default) wants a dark neutral.
+    // Matches textSecondary from the corresponding stylesheet's token set.
+    QColor tint = (theme == "dark") ? QColor(0xD0, 0xD6, 0xE0) : QColor(0x2A, 0x33, 0x42);
+    platformStyle->setSingleColor(tint);
+
+    // Toolbar actions build their icon once at construction time (see
+    // createActions()) and never re-query platformStyle afterward, so a live
+    // theme switch has to explicitly rebuild each one. Null-guarded because
+    // this same function also runs from the constructor before any of these
+    // exist yet -- see this function's declaration for why that's fine.
+    if (overviewAction)
+        overviewAction->setIcon(platformStyle->SingleColorIcon(":/icons/overview"));
+    if (zsendCoinsAction)
+        zsendCoinsAction->setIcon(platformStyle->SingleColorIcon(":/icons/z-send"));
+    if (zsignAction)
+        zsignAction->setIcon(platformStyle->SingleColorIcon(":/icons/z-send"));
+    if (receiveCoinsAction)
+        receiveCoinsAction->setIcon(platformStyle->SingleColorIcon(":/icons/receiving_addresses"));
+    if (historyAction)
+        historyAction->setIcon(platformStyle->SingleColorIcon(":/icons/history"));
+#ifdef ENABLE_WALLET
+    if (walletOptionsAction)
+        walletOptionsAction->setIcon(platformStyle->SingleColorIcon(":/icons/options"));
+    if (walletFrame)
+        walletFrame->updateIconTint();
 #endif
 }
 
@@ -1055,6 +1109,15 @@ void PirateOceanGUI::optionsClicked()
     dlg.setModel(clientModel->getOptionsModel());
     dlg.exec();
 
+    // OptionsDialog::setTheme() already applies a theme switch live, the
+    // moment the combobox changes (not gated on OK/Cancel) -- match that here
+    // regardless of dlg.result() so icon tint doesn't lag one dialog open
+    // behind the stylesheet it's supposed to match.
+    QSettings themeSettings;
+    QString strCurrentTheme = themeSettings.value("strTheme", "dark").toString();
+    updateIconTint(strCurrentTheme);
+    themeToggleButton->setText(strCurrentTheme == "dark" ? tr("Dark") : tr("Light"));
+
     if (dlg.result() == QDialog::Accepted) {
         QSettings settings;
 
@@ -1091,6 +1154,15 @@ void PirateOceanGUI::optionsClicked()
 
     dlg.close();
 
+}
+
+void PirateOceanGUI::toggleTheme()
+{
+    QSettings settings;
+    QString strNewTheme = (settings.value("strTheme", "dark").toString() == "dark") ? "light" : "dark";
+    GUIUtil::applyTheme(strNewTheme);
+    updateIconTint(strNewTheme);
+    themeToggleButton->setText(strNewTheme == "dark" ? tr("Dark") : tr("Light"));
 }
 
 void PirateOceanGUI::aboutClicked()
@@ -1243,67 +1315,74 @@ void PirateOceanGUI::showWalletOptionsWindow()
     walletOptionsPage->activateWindow();
 }
 
-void PirateOceanGUI::rebuildWalletsMenu()
+void PirateOceanGUI::showWalletsDialog()
 {
-    if (!walletsMenu)
-        return;
-    walletsMenu->clear();
-
     // Lists mapWalletModels, not CWalletManager::Get().ListWalletNames() --
     // the latter also includes wallets loaded some other way (e.g. directly
     // via RPC) that this window has no WalletModel/WalletView for at all;
-    // listing those here would show an entry that silently does nothing
+    // listing those here would offer an entry that silently does nothing
     // when clicked (setCurrentWallet() has nothing to switch to). Loading a
-    // wallet through Load Wallet below is the only way to actually attach
-    // one to this window right now.
-    // Each tab displays under its own real, stable name always. "(active)"
-    // is recomputed fresh on every rebuild against whichever tab's real name
-    // currently matches GetActiveWalletName(), so it always reflects reality
-    // even if active status moved via setactivewallet from outside this
-    // window entirely -- though in steady state it always matches the
-    // checked entry too, since setCurrentWallet() makes a switched-to tab
-    // active and syncCurrentWalletWithActive() pulls the reverse case back
-    // into sync; "(active)"/checked can only differ for the brief window
-    // (up to one ~250ms poll tick) between an external setactivewallet call
-    // and this window noticing it.
-    const std::string activeWalletName = CWalletManager::Get().GetActiveWalletName();
-    for (auto it = mapWalletModels.constBegin(); it != mapWalletModels.constEnd(); ++it) {
-        QString guiKey = it.key();
-        bool fIsActive = (guiKey.toStdString() == activeWalletName);
-        QString displayName = fIsActive ? tr("%1 (active)").arg(guiKey) : guiKey;
-        QAction *action = walletsMenu->addAction(displayName);
-        action->setCheckable(true);
-        action->setChecked(guiKey == currentWalletName);
-        action->setData(guiKey);
-        connect(action, SIGNAL(triggered()), this, SLOT(switchWalletActionTriggered()));
+    // wallet through the dialog's Load button is the only way to actually
+    // attach one to this window right now.
+    // Each card shows its wallet's own real, stable name; the ACTIVE badge is
+    // the wallet this window is showing, which setCurrentWallet() always makes
+    // the RPC-active one too.
+    WalletsDialog dlg(platformStyle, this);
+    auto refresh = [this, &dlg]() {
+        QList<WalletsDialog::WalletEntry> entries;
+        for (auto it = mapWalletModels.constBegin(); it != mapWalletModels.constEnd(); ++it) {
+            WalletsDialog::WalletEntry entry;
+            entry.name = it.key();
+            entry.encrypted = (it.value()->getEncryptionStatus() != WalletModel::Unencrypted);
+            entries.append(entry);
+        }
+        dlg.setWallets(entries, currentWalletName);
+    };
+    refresh();
 
-        // Targets this specific wallet by name rather than "whichever tab is
-        // current": viewing a tab always makes it active now, so a close
-        // action scoped to the current tab could never apply to anything
-        // else -- closing a wallet means picking it here without first
-        // switching to it. Enabled even for the active wallet: closeWallet()
-        // deactivates it first (UnloadWallet()'s own suggested recipe), since
-        // otherwise the active wallet -- always the only one, when just one
-        // is loaded -- could never be closed at all, leaving no way back to
-        // a zero-wallet state through the GUI.
-        QAction *closeAction = walletsMenu->addAction(platformStyle->TextColorIcon(":/icons/remove"),
-                                                       tr("Close \"%1\"").arg(guiKey));
-        closeAction->setData(guiKey);
-        connect(closeAction, SIGNAL(triggered()), this, SLOT(closeWalletActionTriggered()));
-    }
-    walletsMenu->addSeparator();
-    walletsMenu->addAction(loadWalletAction);
-    walletsMenu->addAction(newWalletAction);
+    // Switching/creating/loading all dismiss the modal first: the latter two
+    // open their own file dialog, which shouldn't stack on top of this one.
+    connect(&dlg, &WalletsDialog::switchRequested, this, [this, &dlg](const QString &name) {
+        dlg.accept();
+        switchWalletRequested(name);
+    });
+    connect(&dlg, &WalletsDialog::newWalletRequested, this, [this, &dlg]() {
+        dlg.accept();
+        newWalletClicked();
+    });
+    connect(&dlg, &WalletsDialog::loadWalletRequested, this, [this, &dlg]() {
+        dlg.accept();
+        loadWalletClicked();
+    });
+    // Closing keeps the modal open (and refreshes it) so several wallets can
+    // be closed in one visit. Targets the named wallet, not "the current
+    // one": closing doesn't require switching to it first. Enabled for the
+    // active wallet too -- closeWallet() deactivates it first
+    // (UnloadWallet()'s own suggested recipe), since otherwise the active
+    // wallet -- always the only one, when just one is loaded -- could never
+    // be closed at all, leaving no way back to a zero-wallet state.
+    connect(&dlg, &WalletsDialog::closeWalletRequested, this, [this, refresh](const QString &name) {
+        closeWallet(name);
+        refresh();
+    });
+
+    dlg.exec();
 }
 
-void PirateOceanGUI::switchWalletActionTriggered()
+void PirateOceanGUI::updateWalletSelectors()
 {
-    QAction *action = qobject_cast<QAction*>(sender());
-    if (!action)
+    if (!walletFrame)
         return;
-    QString guiKey = action->data().toString();
-    if (guiKey != currentWalletName)
-        setCurrentWallet(guiKey);
+    // mapWalletModels is a QMap, so keys() is already sorted -- same order
+    // File > Wallets lists them in.
+    walletFrame->setWalletList(mapWalletModels.keys(), currentWalletName);
+}
+
+void PirateOceanGUI::switchWalletRequested(const QString &name)
+{
+    if (name.isEmpty() || name == currentWalletName)
+        return;
+    setCurrentWallet(name);
 }
 
 void PirateOceanGUI::syncCurrentWalletWithActive()
@@ -1542,14 +1621,6 @@ void PirateOceanGUI::handleWalletLoadOrCreateResult(const QString& name, bool fC
         QMessageBox::Ok, this);
     seedBox.setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     seedBox.exec();
-}
-
-void PirateOceanGUI::closeWalletActionTriggered()
-{
-    QAction *action = qobject_cast<QAction*>(sender());
-    if (!action)
-        return;
-    closeWallet(action->data().toString());
 }
 
 void PirateOceanGUI::closeWallet(const QString& guiKey)

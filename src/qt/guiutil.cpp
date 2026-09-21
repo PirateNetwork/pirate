@@ -1,9 +1,11 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include "guiutil.h"
 
+#include "guiconstants.h"
 #include "komodoaddressvalidator.h"
 #include "komodounits.h"
 #include "qvalidatedlineedit.h"
@@ -50,10 +52,12 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QDoubleValidator>
+#include <QFile>
 #include <QFileDialog>
 #include <QFont>
 #include <QFontDatabase>
 #include <QLineEdit>
+#include <QPalette>
 #include <QSettings>
 #include <QTextDocument> // for Qt::mightBeRichText
 #include <QThread>
@@ -90,7 +94,44 @@ QString dateTimeStr(qint64 nTime)
 
 QFont fixedPitchFont()
 {
-    return QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    // JetBrains Mono is bundled as a resource and loaded once at startup
+    // (see PirateOceanGUI's constructor) -- used here instead of the OS
+    // default fixed-pitch font so addresses/signatures/the RPC console match
+    // the rest of the app's design system.
+    return QFont("JetBrains Mono");
+}
+
+QString sanitizeThemeName(const QString &name)
+{
+    if (name == "dark" || name == "light") {
+        return name;
+    }
+    return "dark";
+}
+
+void applyTheme(const QString &name)
+{
+    // Guard against a persisted value left over from before this app's 8
+    // pirate-branded themes were retired down to just dark/light (or the old
+    // literal "pirate" default) -- QFile::open() below fails silently for a
+    // resource that no longer exists, leaving the whole app unstyled with no
+    // visible error, so an invalid name is corrected (and the correction
+    // re-persisted) before it's ever used to load a resource.
+    QString sanitizedName = sanitizeThemeName(name);
+
+    QSettings settings;
+    settings.setValue("strTheme", sanitizedName);
+
+    LogPrintf("Setting Theme: %s %s\n", sanitizedName.toStdString(), __func__);
+    QFile file(":/stylesheets/" + sanitizedName);
+    file.open(QFile::ReadOnly);
+    QString stylesheet = QLatin1String(file.readAll());
+    qApp->setStyleSheet(stylesheet);
+
+    QPalette newPal(qApp->palette());
+    newPal.setColor(QPalette::Link, COLOR_POSITIVE_DARK);
+    newPal.setColor(QPalette::LinkVisited, COLOR_NEGATIVE_DARK);
+    qApp->setPalette(newPal);
 }
 
 // Just some dummy data to generate an convincing random-looking (but consistent) address
@@ -260,11 +301,7 @@ bool isDust(const QString& address, const CAmount& amount)
 
 QString HtmlEscape(const QString& str, bool fMultiLine)
 {
-#if QT_VERSION < 0x050000
-    QString escaped = Qt::escape(str);
-#else
     QString escaped = str.toHtmlEscaped();
-#endif
     if(fMultiLine)
     {
         escaped = escaped.replace("\n", "<br>\n");
@@ -305,11 +342,7 @@ QString getSaveFileName(QWidget *parent, const QString &caption, const QString &
     QString myDir;
     if(dir.isEmpty()) // Default to user documents location
     {
-#if QT_VERSION < 0x050000
-        myDir = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
-#else
         myDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-#endif
     }
     else
     {
@@ -356,11 +389,7 @@ QString getOpenFileName(QWidget *parent, const QString &caption, const QString &
     QString myDir;
     if(dir.isEmpty()) // Default to user documents location
     {
-#if QT_VERSION < 0x050000
-        myDir = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
-#else
         myDir = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
-#endif
     }
     else
     {
@@ -528,15 +557,10 @@ void TableViewLastColumnResizingFixer::disconnectViewHeadersSignals()
     disconnect(tableView->horizontalHeader(), SIGNAL(geometriesChanged()), this, SLOT(on_geometriesChanged()));
 }
 
-// Setup the resize mode, handles compatibility for Qt5 and below as the method signatures changed.
 // Refactored here for readability.
 void TableViewLastColumnResizingFixer::setViewHeaderResizeMode(int logicalIndex, QHeaderView::ResizeMode resizeMode)
 {
-#if QT_VERSION < 0x050000
-    tableView->horizontalHeader()->setResizeMode(logicalIndex, resizeMode);
-#else
     tableView->horizontalHeader()->setSectionResizeMode(logicalIndex, resizeMode);
-#endif
 }
 
 void TableViewLastColumnResizingFixer::resizeColumn(int nColumnIndex, int width)

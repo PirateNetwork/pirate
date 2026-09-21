@@ -140,6 +140,19 @@
       </widget>
      </item>
      <item>
+      <widget class="QPushButton" name="showQR">
+       <property name="toolTip">
+        <string>Show a QR code for the currently selected address</string>
+       </property>
+       <property name="text">
+        <string>Show &amp;QR</string>
+       </property>
+       <property name="autoDefault">
+        <bool>false</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
       <spacer name="horizontalSpacer">
        <property name="orientation">
         <enum>Qt::Horizontal</enum>

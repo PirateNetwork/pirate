@@ -13,6 +13,7 @@
 
 class PlatformStyle;
 class TransactionFilterProxy;
+class TransactionRowDelegate;
 class WalletModel;
 
 QT_BEGIN_NAMESPACE
@@ -22,10 +23,10 @@ class QDateTimeEdit;
 class QFrame;
 class QLabel;
 class QLineEdit;
+class QListView;
 class QMenu;
 class QModelIndex;
 class QSignalMapper;
-class QTableView;
 QT_END_NAMESPACE
 
 /**
@@ -72,8 +73,13 @@ public:
     explicit TransactionView(const PlatformStyle *platformStyle, QWidget *parent = 0);
 
     void setModel(WalletModel *model);
-    
+
     QLabel* getLazyLoadStatusLabel() { return lazyLoadStatusLabel; }
+
+    /** Re-theme the card-list delegate -- called by WalletView::
+     *  updateIconTint() on every live theme switch, the same chain phase 1
+     *  already uses for icon/shadow retinting. */
+    void updateIconTint();
 
     /**
      * @brief Date range filter presets
@@ -92,25 +98,11 @@ public:
         Range        ///< Custom date range (shows date picker)
     };
 
-    /**
-     * @brief Column width constants for transaction table
-     * 
-     * Fixed widths ensure consistent layout. ToAddress column is
-     * dynamically sized using TableViewLastColumnResizingFixer.
-     */
-    enum ColumnWidths {
-        STATUS_COLUMN_WIDTH = 30,              ///< Status icon column
-        WATCHONLY_COLUMN_WIDTH = 23,           ///< Watch-only eye icon column
-        DATE_COLUMN_WIDTH = 120,               ///< Date/time column
-        TYPE_COLUMN_WIDTH = 113,               ///< Transaction type column
-        AMOUNT_MINIMUM_COLUMN_WIDTH = 120,     ///< Amount column minimum width
-        MINIMUM_COLUMN_WIDTH = 23              ///< Absolute minimum column width
-    };
-
 private:
     WalletModel *model;                            ///< Wallet model providing transaction data
     TransactionFilterProxy *transactionProxyModel; ///< Proxy model for filtering transactions
-    QTableView *transactionView;                   ///< Table view displaying transactions
+    QListView *transactionView;                    ///< Card-list view displaying transactions (TransactionRowDelegate)
+    TransactionRowDelegate *transactionDelegate;   ///< Owned by transactionView; kept here too for updateIconTint()
 
     /** @name Filter widgets */
     /**@{*/
@@ -118,6 +110,7 @@ private:
     QComboBox *typeWidget;           ///< Transaction type filter combo box
     QComboBox *watchOnlyWidget;      ///< Watch-only filter combo box
     QComboBox *limitWidget;          ///< Display limit combo box (50/100/200)
+    QComboBox *sortWidget;           ///< Sort-order combo box (replaces the card list's lack of clickable column headers)
     QLineEdit *addressWidget;        ///< Address/label search field
     QCheckBox *addressOnlyCheckbox;  ///< Show only matching address records checkbox
     QLineEdit *amountWidget;         ///< Minimum amount filter field
@@ -139,10 +132,6 @@ private:
      * @return Widget with from/to date pickers
      */
     QWidget *createDateRangeWidget();
-
-    GUIUtil::TableViewLastColumnResizingFixer *columnResizingFixer; ///< Manages ToAddress column resizing
-
-    virtual void resizeEvent(QResizeEvent* event);
 
     bool eventFilter(QObject *obj, QEvent *event);
 
@@ -184,6 +173,7 @@ public Q_SLOTS:
     void chooseType(int idx);        ///< Handle type filter selection
     void chooseWatchonly(int idx);   ///< Handle watch-only filter selection
     void chooseLimit(int idx);       ///< Handle limit filter selection
+    void chooseSort(int idx);        ///< Handle sort-order selection (replaces click-to-sort column headers)
     void changedAmount();            ///< Handle amount filter change (after debounce)
     void changedPrefix();            ///< Handle search field change (after debounce or button click)
     void exportClicked();            ///< Export transactions to CSV

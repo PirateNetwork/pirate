@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2015 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -70,6 +71,11 @@ private Q_SLOTS:
     void onCopyZSendManyFromAction();
     /** Copy address of currently selected address entry to clipboard */
     void on_copyAddress_clicked();
+    /** Open a QR-code dialog (ReceiveRequestDialog) for the currently selected
+     *  address entry -- the only reachable way to see a QR code in this app;
+     *  see this dialog's own doc comment in the .cpp for why ReceiveCoinsDialog
+     *  (the upstream call site for the same dialog) isn't it. */
+    void on_showQR_clicked();
     /** Copy label of currently selected address entry to clipboard (no button) */
     void onCopyLabelAction();
     /** Edit currently selected address entry (no button) */

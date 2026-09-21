@@ -7,6 +7,7 @@
 
 #include <QFrame>
 #include <QMap>
+#include <QStringList>
 #include <QTimer>
 
 class PirateOceanGUI;
@@ -45,6 +46,15 @@ public:
     bool handlePaymentRequest(const SendCoinsRecipient& recipient);
 
     void showOutOfSyncWarning(bool fShow);
+
+    /** Push the open-wallet list to every wallet view's header dropdown, so
+     * the dropdown is correct on whichever wallet's page is showing. */
+    void setWalletList(const QStringList &names, const QString &current);
+
+    /** Rebuild every open wallet tab's export-button icon with platformStyle's
+     * current tint -- called after a live theme switch, see PirateOceanGUI::
+     * updateIconTint(). */
+    void updateIconTint();
 
 Q_SIGNALS:
     /** Notify that the user has requested more information about the out-of-sync warning */

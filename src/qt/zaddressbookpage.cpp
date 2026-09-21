@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,6 +16,7 @@
 #include "editzaddressdialog.h"
 #include "guiutil.h"
 #include "platformstyle.h"
+#include "receiverequestdialog.h"
 #include "walletmodel.h"
 #include "transactiondescdialog.h"
 
@@ -78,6 +80,7 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     QAction *copyAddressAction = new QAction(tr("&Copy Address"), this);
     QAction *copyLabelAction = new QAction(tr("Copy &Label"), this);
     QAction *editAction = new QAction(tr("&Edit"), this);
+    QAction *showQRAction = new QAction(tr("Show &QR Code"), this);
 
     // QAction *copyZSendManyToAction = new QAction(tr("Copy zsendmany (to) template"), this);
     // QAction *copyZSendManyFromAction = new QAction(tr("Copy zsendmany (from) template"), this);
@@ -90,6 +93,7 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     contextMenu->addAction(copyAddressAction);
     contextMenu->addAction(copyLabelAction);
     contextMenu->addAction(editAction);
+    contextMenu->addAction(showQRAction);
 
     // contextMenu->addAction(copyZSendManyToAction);
     // contextMenu->addAction(copyZSendManyFromAction);
@@ -103,6 +107,7 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     connect(copyAddressAction, SIGNAL(triggered()), this, SLOT(on_copyAddress_clicked()));
     connect(copyLabelAction, SIGNAL(triggered()), this, SLOT(onCopyLabelAction()));
     connect(editAction, SIGNAL(triggered()), this, SLOT(onEditAction()));
+    connect(showQRAction, SIGNAL(triggered()), this, SLOT(on_showQR_clicked()));
 
     // connect(copyZSendManyToAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyToAction()));
     // connect(copyZSendManyFromAction, SIGNAL(triggered()), this, SLOT(onCopyZSendManyFromAction()));
@@ -111,6 +116,13 @@ ZAddressBookPage::ZAddressBookPage(const PlatformStyle *platformStyle, Mode _mod
     connect(exportViewingKeyAction, SIGNAL(triggered()), this, SLOT(exportVK()));
 
     connect(ui->tableView, SIGNAL(customContextMenuRequested(QPoint)), this, SLOT(contextualMenu(QPoint)));
+    // Fast path to the QR dialog -- matches the removed ReceiveCoinsDialog's
+    // own double-click-to-view convention (receivecoinsdialog.cpp's
+    // on_recentRequestsView_doubleClicked()). Qt allows connecting a signal
+    // with a QModelIndex argument to a no-argument slot; the click that
+    // triggers doubleClicked() has already updated the selection by then, so
+    // on_showQR_clicked() reading the current selection is equivalent.
+    connect(ui->tableView, SIGNAL(doubleClicked(QModelIndex)), this, SLOT(on_showQR_clicked()));
 }
 
 ZAddressBookPage::~ZAddressBookPage()
@@ -237,6 +249,41 @@ void ZAddressBookPage::onCopyZSendManyToAction()
 void ZAddressBookPage::on_copyAddress_clicked()
 {
     GUIUtil::copyEntryData(ui->tableView, ZAddressTableModel::Address);
+
+    Q_EMIT resetUnlockTimerEvent();
+}
+
+void ZAddressBookPage::on_showQR_clicked()
+{
+    if(!ui->tableView->selectionModel())
+        return;
+    QModelIndexList selection = ui->tableView->selectionModel()->selectedRows();
+    if(selection.isEmpty())
+        return;
+
+    // Suppress for group header rows (no raw address), same guard
+    // contextualMenu() already uses.
+    QString address = selection.at(0).data(ZAddressTableModel::AddressRole).toString();
+    if(address.isEmpty())
+        return;
+
+    // AddressRole is column-independent ("usable even after column
+    // re-ordering", zaddresstablemodel.h), but there's no equivalent role for
+    // the label -- selectedRows() anchors at column 0, so build a sibling
+    // index at the Label column the same way onCopyLabelAction()'s
+    // GUIUtil::copyEntryData(ui->tableView, ZAddressTableModel::Label) does.
+    QString label = selection.at(0).sibling(selection.at(0).row(), ZAddressTableModel::Label).data(Qt::EditRole).toString();
+
+    // SendCoinsRecipient is address-type-agnostic (walletmodel.h) and
+    // GUIUtil::formatPirateURI() builds the URI generically, so this z-address
+    // needs no special handling to reuse the dialog upstream Bitcoin Core
+    // wrote for transparent addresses.
+    SendCoinsRecipient info(address, label, 0, "", "");
+    ReceiveRequestDialog *dialog = new ReceiveRequestDialog(this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setModel(walletModel->getOptionsModel());
+    dialog->setInfo(info);
+    dialog->show();
 
     Q_EMIT resetUnlockTimerEvent();
 }
