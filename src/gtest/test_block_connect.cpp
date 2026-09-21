@@ -333,12 +333,23 @@ static void CheckSaplingBlockConnection(bool subtreeBoundary)
         const size_t outputCount = shieldTx.GetSaplingOutputsCount();
         ASSERT_GT(outputCount, 0u);
         ASSERT_LT(outputCount, 1u << libzcash::TRACKED_SUBTREE_HEIGHT);
+        // Sapling's uncommitted leaf is 01. Repeating it leaves the root equal
+        // to the empty root, so the anchor cache would retain the empty tree.
+        // Use an actual output commitment for this synthetic historical tree.
+        const uint256 commitment = uint256::FromRawBytes(shieldTx.GetSaplingOutputs()[0].cmu());
         for (size_t i = 0; i < (1u << libzcash::TRACKED_SUBTREE_HEIGHT) - outputCount; ++i) {
-            saplingFrontier.append(uint256S("01"));
-            legacyTree.append(uint256S("01"));
+            saplingFrontier.append(commitment);
+            legacyTree.append(commitment);
         }
+        ASSERT_NE(saplingFrontier.root(), SaplingMerkleFrontier::empty_root());
+        ASSERT_EQ(legacyTree.root(), saplingFrontier.root());
         chain.GetCoinsViewCache()->PushAnchor(legacyTree);
         chain.GetCoinsViewCache()->PushAnchor(saplingFrontier);
+        SaplingMerkleFrontier cachedFrontier;
+        ASSERT_TRUE(chain.GetCoinsViewCache()->GetSaplingFrontierAnchorAt(
+            chain.GetCoinsViewCache()->GetBestAnchor(SAPLINGFRONTIER), cachedFrontier));
+        ASSERT_EQ(cachedFrontier.size(), (1u << libzcash::TRACKED_SUBTREE_HEIGHT) - outputCount);
+        ASSERT_EQ(cachedFrontier.root(), saplingFrontier.root());
     }
 
     CMutableTransaction coinbaseBNew = CreateNewContextualCMutableTransaction(consensusParams, heightB);
