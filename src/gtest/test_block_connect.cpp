@@ -216,7 +216,7 @@ static const std::string tSecretRegtestBlockConnect = "UuRoAgHmjHZqexxVAPjzW8N6h
 // the *same* block has no recognized anchor yet to spend against. This is also why
 // TestSpendInSameBlock/TestDoubleSpendInSameBlock (a related, unconfirmed-transfer
 // scenario) were removed rather than adapted - this project has no 0-conf concept at all.
-TEST(test_block, TestSaplingSameBlockDuplicateNullifierRejected)
+static void CheckSaplingBlockConnection(bool subtreeBoundary)
 {
     TestChain chain;
     chainName = assetchain("TST");
@@ -326,6 +326,20 @@ TEST(test_block, TestSaplingSameBlockDuplicateNullifierRejected)
     auto maybeShieldTx = shieldBuilder.Build();
     ASSERT_TRUE(maybeShieldTx.IsTx());
     auto shieldTx = maybeShieldTx.GetTxOrThrow();
+    if (subtreeBoundary) {
+        // Make the real transaction complete exactly one subtree, regardless
+        // of how many padding outputs the transaction builder includes.
+        SaplingMerkleTree legacyTree;
+        const size_t outputCount = shieldTx.GetSaplingOutputsCount();
+        ASSERT_GT(outputCount, 0u);
+        ASSERT_LT(outputCount, 1u << libzcash::TRACKED_SUBTREE_HEIGHT);
+        for (size_t i = 0; i < (1u << libzcash::TRACKED_SUBTREE_HEIGHT) - outputCount; ++i) {
+            saplingFrontier.append(uint256S("01"));
+            legacyTree.append(uint256S("01"));
+        }
+        chain.GetCoinsViewCache()->PushAnchor(legacyTree);
+        chain.GetCoinsViewCache()->PushAnchor(saplingFrontier);
+    }
 
     CMutableTransaction coinbaseBNew = CreateNewContextualCMutableTransaction(consensusParams, heightB);
     coinbaseBNew.vin.resize(1);
@@ -352,7 +366,23 @@ TEST(test_block, TestSaplingSameBlockDuplicateNullifierRejected)
         uint256 hash;
         ~MapIndexEraserB() { mapBlockIndex.erase(hash); }
     } eraseIndexB{hashB};
+    if (subtreeBoundary) {
+        // TestBlockValidity uses an unregistered index with no hash pointer.
+        mapBlockIndex.erase(hashB);
+        indexB.phashBlock = nullptr;
+    }
     ASSERT_TRUE(chain.ConnectBlock(blockB, stateB, &indexB, true, false)) << stateB.GetRejectReason();
+    if (subtreeBoundary) {
+        SaplingMerkleFrontier connected;
+        ASSERT_TRUE(chain.GetCoinsViewCache()->GetSaplingFrontierAnchorAt(
+            chain.GetCoinsViewCache()->GetBestAnchor(SAPLINGFRONTIER), connected));
+        EXPECT_EQ(connected.size(), 1u << libzcash::TRACKED_SUBTREE_HEIGHT);
+        EXPECT_EQ(connected.current_subtree_index(), 1u);
+        EXPECT_EQ(indexB.phashBlock, nullptr);
+        // Validation must not advance the persistent chain marker.
+        EXPECT_EQ(chain.GetCoinsViewCache()->GetBestBlock(), hashA);
+        return;
+    }
     chain.GetCoinsViewCache()->SetBestBlock(hashB);
 
     // Derive the note/anchor locally: block B is the first (and only, so far) block to
@@ -424,7 +454,17 @@ TEST(test_block, TestSaplingSameBlockDuplicateNullifierRejected)
     EXPECT_EQ(stateC.GetRejectReason(), "bad-txns-sapling-duplicate-nullifier");
 }
 
-TEST(test_block, TestIronwoodSameBlockDuplicateNullifierRejected)
+TEST(test_block, TestSaplingSameBlockDuplicateNullifierRejected)
+{
+    CheckSaplingBlockConnection(false);
+}
+
+TEST(test_block, TestSaplingSubtreeBoundaryWithUnregisteredBlockIndex)
+{
+    CheckSaplingBlockConnection(true);
+}
+
+static void CheckIronwoodBlockConnection(bool subtreeBoundary)
 {
     TestChain chain;
     chainName = assetchain("TST");
@@ -536,6 +576,17 @@ TEST(test_block, TestIronwoodSameBlockDuplicateNullifierRejected)
     auto maybeShieldTx = shieldBuilder.Build();
     ASSERT_TRUE(maybeShieldTx.IsTx());
     auto shieldTx = maybeShieldTx.GetTxOrThrow();
+    if (subtreeBoundary) {
+        // Make the real transaction complete exactly one subtree, regardless
+        // of how many padding outputs the transaction builder includes.
+        const size_t outputCount = shieldTx.GetIronwoodActionsCount();
+        ASSERT_GT(outputCount, 0u);
+        ASSERT_LT(outputCount, 1u << libzcash::TRACKED_SUBTREE_HEIGHT);
+        for (size_t i = 0; i < (1u << libzcash::TRACKED_SUBTREE_HEIGHT) - outputCount; ++i) {
+            ironwoodFrontier.append(uint256S("01"));
+        }
+        chain.GetCoinsViewCache()->PushAnchor(ironwoodFrontier);
+    }
 
     CMutableTransaction coinbaseBNew = CreateNewContextualCMutableTransaction(consensusParams, heightB);
     coinbaseBNew.vin.resize(1);
@@ -570,7 +621,23 @@ TEST(test_block, TestIronwoodSameBlockDuplicateNullifierRejected)
         uint256 hash;
         ~MapIndexEraserB() { mapBlockIndex.erase(hash); }
     } eraseIndexB{hashB};
+    if (subtreeBoundary) {
+        // TestBlockValidity uses an unregistered index with no hash pointer.
+        mapBlockIndex.erase(hashB);
+        indexB.phashBlock = nullptr;
+    }
     ASSERT_TRUE(chain.ConnectBlock(blockB, stateB, &indexB, true, false)) << stateB.GetRejectReason();
+    if (subtreeBoundary) {
+        IronwoodMerkleFrontier connected;
+        ASSERT_TRUE(chain.GetCoinsViewCache()->GetIronwoodFrontierAnchorAt(
+            chain.GetCoinsViewCache()->GetBestAnchor(IRONWOODFRONTIER), connected));
+        EXPECT_EQ(connected.size(), 1u << libzcash::TRACKED_SUBTREE_HEIGHT);
+        EXPECT_EQ(connected.current_subtree_index(), 1u);
+        EXPECT_EQ(indexB.phashBlock, nullptr);
+        // Validation must not advance the persistent chain marker.
+        EXPECT_EQ(chain.GetCoinsViewCache()->GetBestBlock(), hashA);
+        return;
+    }
     chain.GetCoinsViewCache()->SetBestBlock(hashB);
 
     const auto& bundleDetails = shieldTx.GetIronwoodBundle().GetDetails();
@@ -665,6 +732,16 @@ TEST(test_block, TestIronwoodSameBlockDuplicateNullifierRejected)
 // Consensus::CheckTxShieldedInputs check, "bad-txns-.../-duplicate-nullifier") and from
 // CheckTransactionWithoutProofVerification's within-tx check ("bad-.../-nullifiers-
 // duplicate") - so it gets its own coverage, with its own distinct reject reason.
+TEST(test_block, TestIronwoodSameBlockDuplicateNullifierRejected)
+{
+    CheckIronwoodBlockConnection(false);
+}
+
+TEST(test_block, TestIronwoodSubtreeBoundaryWithUnregisteredBlockIndex)
+{
+    CheckIronwoodBlockConnection(true);
+}
+
 TEST(test_mempool, TestSaplingMempoolDuplicateNullifierRejected)
 {
     TestChain chain;
