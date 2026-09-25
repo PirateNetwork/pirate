@@ -1,4 +1,5 @@
 // Copyright (c) 2012 Pieter Wuille
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -23,6 +24,8 @@
 #include "serialize.h"
 #include "streams.h"
 #include "init.h"
+
+#include <algorithm>
 
 int CAddrInfo::GetTriedBucket(const uint256& nKey, const std::vector<bool> &asmap) const
 {
@@ -394,10 +397,12 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
     if (size() == 0)
         return CAddrInfo();
 
-    // Track number of attempts to find a table entry, before giving up to avoid infinite loop
+    // Track number of attempts to find a table entry, before giving up to avoid infinite loop.
+    // This runs with the address manager lock held (see CAddrMan::Select()), so it must never
+    // sleep: a sparse table needs on the order of a thousand cheap probes to find an entry, and
+    // sleeping between them held the lock for hundreds of milliseconds per call, starving every
+    // other addrman user (including callers that hold cs_main) while the dialer threads looped.
     const int kMaxRetries = 200000;         // magic number so unit tests can pass
-    const int kRetriesBetweenSleep = 1000;
-    const int kRetrySleepInterval = 100;    // milliseconds
     // Bounded budget for skipping IsTerrible() entries outright before
     // falling back to the existing probabilistic weighting below. Bounded
     // rather than an unconditional hard skip because, unlike the
@@ -436,8 +441,6 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
                 nKBucketPos = (nKBucketPos + insecure_rand()) % ADDRMAN_BUCKET_SIZE;
                 if (i++ > kMaxRetries)
                     return CAddrInfo();
-                if (i % kRetriesBetweenSleep == 0 && !nKey.IsNull())
-                    MilliSleep(kRetrySleepInterval);
             }
             int nId = vvTried[nKBucket][nKBucketPos];
             assert(mapInfo.count(nId) == 1);
@@ -476,8 +479,6 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
                 nUBucketPos = (nUBucketPos + insecure_rand()) % ADDRMAN_BUCKET_SIZE;
                 if (i++ > kMaxRetries)
                     return CAddrInfo();
-                if (i % kRetriesBetweenSleep == 0 && !nKey.IsNull())
-                    MilliSleep(kRetrySleepInterval);
             }
             int nId = vvNew[nUBucket][nUBucketPos];
             assert(mapInfo.count(nId) == 1);
@@ -501,6 +502,60 @@ CAddrInfo CAddrMan::Select_(bool newOnly)
     }
 
     return CAddrInfo();
+}
+
+std::vector<CAddrInfo> CAddrMan::SelectCandidates_(Network net, size_t nMax)
+{
+    std::vector<CAddrInfo> vRet;
+    if (nMax == 0)
+        return vRet;
+
+    const int64_t nNow = GetTime();
+
+    // Like Select(), which picks the tried table (peers we have connected to before) or the new
+    // table with equal probability, keep the two tables apart and draw from them below.
+    std::vector<int> vTried, vNew;
+    for (std::map<int, CAddrInfo>::const_iterator it = mapInfo.begin(); it != mapInfo.end(); ++it) {
+        const CAddrInfo& info = it->second;
+        if (info.GetNetwork() != net)
+            continue;
+        if (info.IsTerrible(nNow))
+            continue;
+        (info.fInTried ? vTried : vNew).push_back(it->first);
+    }
+
+    // Partial Fisher-Yates shuffle of each list. At most nMax entries can be taken from either
+    // list, so only the first nMax positions need to be randomized: RandomInt() reads the system
+    // RNG, and this runs with the addrman lock held on a table that remote peers can fill with
+    // entries, so the number of calls must not grow with the size of the table.
+    for (std::vector<int>* pv : {&vTried, &vNew}) {
+        const size_t nShuffle = std::min(nMax, pv->size());
+        for (size_t n = 0; n < nShuffle && n + 1 < pv->size(); n++) {
+            const size_t nRndPos = n + RandomInt((int)(pv->size() - n));
+            std::swap((*pv)[n], (*pv)[nRndPos]);
+        }
+    }
+
+    // Draw from tried or new with equal probability while both have entries left, then from
+    // whichever list remains.
+    vRet.reserve(std::min(nMax, vTried.size() + vNew.size()));
+    size_t nTriedPos = 0, nNewPos = 0;
+    while (vRet.size() < nMax && (nTriedPos < vTried.size() || nNewPos < vNew.size())) {
+        bool fTakeTried;
+        if (nTriedPos >= vTried.size())
+            fTakeTried = false;
+        else if (nNewPos >= vNew.size())
+            fTakeTried = true;
+        else
+            fTakeTried = RandomInt(2) == 0;
+
+        if (fTakeTried)
+            vRet.push_back(mapInfo.at(vTried[nTriedPos++]));
+        else
+            vRet.push_back(mapInfo.at(vNew[nNewPos++]));
+    }
+
+    return vRet;
 }
 
 #ifdef DEBUG_ADDRMAN
@@ -689,6 +744,9 @@ int CAddrMan::RandomInt(int nMax){
 
 void CAddrMan::GetAllPeers(std::map<std::string, int64_t> &info) {
 
+    // mapInfo is modified under cs by every other addrman user (Add/Good/Attempt/Select/...),
+    // so iterating it without the lock is a data race with the network threads.
+    LOCK(cs);
     for(std::map<int, CAddrInfo>::iterator it = mapInfo.begin(); it != mapInfo.end(); it++) {
         info[(*it).second.ToStringIPPort()] = (*it).second.GetLastSuccess();
     }

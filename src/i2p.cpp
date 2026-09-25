@@ -1,4 +1,5 @@
 // Copyright (c) 2020-2020 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -112,6 +113,18 @@ static CNetAddr DestB64ToAddr(const std::string& dest)
 
 namespace sam {
 
+namespace {
+//! Thrown by Session::Hello() when the SAM proxy cannot be reached or will not complete the HELLO
+//! handshake - i.e. the router itself is unavailable, as opposed to it answering and then refusing
+//! or failing a later request (SESSION CREATE, NAMING LOOKUP, STREAM CONNECT). Session::Connect()
+//! reports it through its router_unreachable out-param.
+class RouterUnreachableError : public std::runtime_error
+{
+public:
+    using std::runtime_error::runtime_error;
+};
+} // namespace
+
 Session::Session(const fs::path& private_key_file,
                  const CService& control_host)
     : m_private_key_file(private_key_file), m_control_host(control_host),
@@ -203,9 +216,11 @@ bool Session::Accept(Connection& conn)
     return false;
 }
 
-bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
+bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error, bool* router_unreachable)
 {
     proxy_error = true;
+    if (router_unreachable != nullptr)
+        *router_unreachable = false;
 
     std::string session_id;
     std::unique_ptr<Sock> sock;
@@ -250,6 +265,8 @@ bool Session::Connect(const CService& to, Connection& conn, bool& proxy_error)
     } catch (const std::runtime_error& e) {
         LogPrint("i2p","I2P: Error connecting to %s: %s\n", to.ToString(), e.what());
         CheckControlSock();
+        if (router_unreachable != nullptr)
+            *router_unreachable = dynamic_cast<const RouterUnreachableError*>(&e) != nullptr;
         return false;
     }
 }
@@ -307,14 +324,18 @@ std::unique_ptr<Sock> Session::Hello() const
     auto sock = CreateSock(m_control_host);
 
     if (!sock) {
-        throw std::runtime_error("Cannot create socket");
+        throw RouterUnreachableError("Cannot create socket");
     }
 
     if (!ConnectSocketDirectly(m_control_host, *sock, nConnectTimeout)) {
-        throw std::runtime_error(strprintf("Cannot connect to %s", m_control_host.ToString()));
+        throw RouterUnreachableError(strprintf("Cannot connect to %s", m_control_host.ToString()));
     }
 
-    SendRequestAndGetReply(*sock, "HELLO VERSION MIN=3.1 MAX=3.1");
+    try {
+        SendRequestAndGetReply(*sock, "HELLO VERSION MIN=3.1 MAX=3.1");
+    } catch (const std::runtime_error& e) {
+        throw RouterUnreachableError(e.what());
+    }
 
     return sock;
 }

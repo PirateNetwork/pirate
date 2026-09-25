@@ -3,6 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#include <addrman.h>
 #include <chainparams.h>
 #include <net.h>
 #include <netaddress.h>
@@ -20,6 +21,7 @@
 #include <chrono>
 #include <future>
 #include <ios>
+#include <limits>
 #include <string>
 #include <thread>
 
@@ -673,6 +675,137 @@ TEST_F(net_tests_bitcoin, ShouldSkipForNetworkDiversity_Behavior)
     // entirely.
     EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget, kBudget));
     EXPECT_FALSE(ShouldSkipForNetworkDiversity(NET_IPV4, underTarget, kBudget + 1, kBudget));
+}
+
+// With no I2P router running, every I2P dial fails at once. Without a backoff the
+// dialer threads immediately pick new candidates to fail against the same dead proxy,
+// spinning on the address manager lock other threads (some holding cs_main) need.
+TEST_F(net_tests_bitcoin, GetI2PProxyBackoffSeconds_Schedule)
+{
+    EXPECT_EQ(GetI2PProxyBackoffSeconds(-1), 0);
+    EXPECT_EQ(GetI2PProxyBackoffSeconds(0), 0);
+
+    // Starts at the base delay and doubles per consecutive failure...
+    EXPECT_EQ(GetI2PProxyBackoffSeconds(1), I2P_PROXY_BACKOFF_BASE_SECONDS);
+    EXPECT_EQ(GetI2PProxyBackoffSeconds(2), 2 * I2P_PROXY_BACKOFF_BASE_SECONDS);
+    EXPECT_EQ(GetI2PProxyBackoffSeconds(3), 4 * I2P_PROXY_BACKOFF_BASE_SECONDS);
+
+    // ...never exceeds the cap (so a router started later is picked up promptly),
+    // however many failures accumulate, without overflowing.
+    for (int n : {6, 7, 16, 17, 32, 1000, std::numeric_limits<int>::max()})
+        EXPECT_EQ(GetI2PProxyBackoffSeconds(n), I2P_PROXY_BACKOFF_MAX_SECONDS) << "n=" << n;
+
+    int64_t prev = 0;
+    for (int n = 0; n <= 40; n++) {
+        const int64_t cur = GetI2PProxyBackoffSeconds(n);
+        EXPECT_GE(cur, prev) << "n=" << n;
+        EXPECT_LE(cur, I2P_PROXY_BACKOFF_MAX_SECONDS) << "n=" << n;
+        prev = cur;
+    }
+}
+
+TEST_F(net_tests_bitcoin, I2PProxyBackoff_SuspendsAndResumes)
+{
+    NoteI2PProxyReachable(); // process-wide state: start clean
+    const int64_t t0 = 1000000;
+
+    EXPECT_FALSE(IsI2PDialingSuspended(t0));
+
+    // First failure: idle for the base delay, then dial again.
+    NoteI2PProxyFailure(t0);
+    EXPECT_TRUE(IsI2PDialingSuspended(t0));
+    EXPECT_TRUE(IsI2PDialingSuspended(t0 + I2P_PROXY_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsI2PDialingSuspended(t0 + I2P_PROXY_BACKOFF_BASE_SECONDS));
+
+    // Failing again on that next attempt lengthens the wait.
+    const int64_t t1 = t0 + I2P_PROXY_BACKOFF_BASE_SECONDS;
+    NoteI2PProxyFailure(t1);
+    EXPECT_TRUE(IsI2PDialingSuspended(t1 + 2 * I2P_PROXY_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsI2PDialingSuspended(t1 + 2 * I2P_PROXY_BACKOFF_BASE_SECONDS));
+
+    // Any answer from the proxy clears the backoff outright, and the next failure
+    // starts again from the base delay rather than continuing the old streak.
+    NoteI2PProxyReachable();
+    EXPECT_FALSE(IsI2PDialingSuspended(t1));
+    NoteI2PProxyFailure(t1);
+    EXPECT_TRUE(IsI2PDialingSuspended(t1 + I2P_PROXY_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsI2PDialingSuspended(t1 + I2P_PROXY_BACKOFF_BASE_SECONDS));
+
+    NoteI2PProxyReachable(); // don't leave the dialers suspended for other tests
+}
+
+// If the system clock steps backwards after a failure was recorded, the recorded resume time
+// ends up further in the future than any backoff can be. That must not keep the dialers idle
+// for the size of the step on top of the backoff.
+TEST_F(net_tests_bitcoin, I2PProxyBackoff_ClockStepBackwardsDoesNotProlongSuspension)
+{
+    NoteI2PProxyReachable();
+    const int64_t t0 = 3000000;
+
+    NoteI2PProxyFailure(t0); // resumes at t0 + base
+    EXPECT_TRUE(IsI2PDialingSuspended(t0));
+
+    // Clock jumps back by an hour: the resume time now looks an hour+ away.
+    EXPECT_FALSE(IsI2PDialingSuspended(t0 - 3600));
+
+    // A normal (small) step back within the maximum backoff still counts as suspended.
+    EXPECT_TRUE(IsI2PDialingSuspended(t0 - 1));
+
+    NoteI2PProxyReachable();
+}
+
+TEST_F(net_tests_bitcoin, PickI2PDialCandidate_Behavior)
+{
+    const int64_t now = 2000000;
+    CNetAddr source;
+    ASSERT_TRUE(LookupHost("252.2.2.2", source, false));
+
+    auto makeCandidate = [&](int i, int64_t nLastTry) {
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+        s << MakeSpan(ParseHex(strprintf("0520%064x", i))); // BIP155 network id 5 = I2P
+        CNetAddr i2p;
+        s >> i2p;
+        CAddrInfo info(CAddress(CService(i2p, 45452), NODE_NETWORK), source);
+        info.nLastTry = nLastTry;
+        return info;
+    };
+    const int64_t kLongAgo = now - 10 * I2P_DIAL_RECENT_TRY_SECONDS;
+    const int64_t kJustNow = now - 1;
+    const auto acceptAll = [](const CAddrInfo&) { return true; };
+
+    CAddress chosen;
+
+    // Nothing to choose from / nothing usable.
+    EXPECT_FALSE(PickI2PDialCandidate({}, now, acceptAll, chosen));
+    EXPECT_FALSE(PickI2PDialCandidate({makeCandidate(1, kLongAgo)}, now,
+                                      [](const CAddrInfo&) { return false; }, chosen));
+
+    // Prefers a candidate not tried recently over an earlier one that was.
+    std::vector<CAddrInfo> v{makeCandidate(1, kJustNow), makeCandidate(2, kLongAgo), makeCandidate(3, kLongAgo)};
+    ASSERT_TRUE(PickI2PDialCandidate(v, now, acceptAll, chosen));
+    EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[1]));
+
+    // A candidate exactly at the recency threshold counts as not recent.
+    v = {makeCandidate(1, kJustNow), makeCandidate(2, now - I2P_DIAL_RECENT_TRY_SECONDS)};
+    ASSERT_TRUE(PickI2PDialCandidate(v, now, acceptAll, chosen));
+    EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[1]));
+
+    // With only recently-tried candidates, still dial the first rather than sit idle
+    // (a small pool of known I2P addresses would otherwise never be redialed).
+    v = {makeCandidate(1, kJustNow), makeCandidate(2, kJustNow)};
+    ASSERT_TRUE(PickI2PDialCandidate(v, now, acceptAll, chosen));
+    EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[0]));
+
+    // Unusable candidates (already connected, local, unreachable...) are never chosen,
+    // even when they would otherwise be the best pick.
+    v = {makeCandidate(1, kLongAgo), makeCandidate(2, kJustNow), makeCandidate(3, kLongAgo)};
+    const CService rejected1 = v[0];
+    const CService rejected3 = v[2];
+    ASSERT_TRUE(PickI2PDialCandidate(v, now,
+        [&](const CAddrInfo& a) { return static_cast<CService>(a) != rejected1 && static_cast<CService>(a) != rejected3; },
+        chosen));
+    EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[1]));
 }
 
 // Regression test for CreateNodeFromAcceptedSocket's MAX_INBOUND_FROMIP

@@ -66,6 +66,33 @@ bool StartsWith(const std::string& s, const std::string& prefix)
     return s.rfind(prefix, 0) == 0;
 }
 
+// A private-key file path in the temp dir that removes the file again when the test finishes.
+//
+// The path needs real randomness: these tests used a 4-hex-digit random suffix (16 bits) and never
+// deleted the file, so leftovers from earlier runs piled up (thousands, over weeks) until a fresh
+// name occasionally hit an existing one. Session then loads that key instead of asking the proxy
+// for DEST GENERATE, the scripted SAM conversation no longer matches, and the test fails
+// intermittently - more often the longer the tree has been used.
+class TempKeyFile
+{
+public:
+    TempKeyFile()
+        : m_path(GetTempPath() / boost::filesystem::unique_path("i2p_privkey-%%%%%%%%-%%%%%%%%-%%%%%%%%-%%%%%%%%.dat"))
+    {
+    }
+    ~TempKeyFile()
+    {
+        boost::system::error_code ec;
+        boost::filesystem::remove(m_path, ec);
+    }
+    TempKeyFile(const TempKeyFile&) = delete;
+    TempKeyFile& operator=(const TempKeyFile&) = delete;
+    const fs::path& Path() const { return m_path; }
+
+private:
+    fs::path m_path;
+};
+
 // Thread-safe line log: the MockLineServer handler runs on a background
 // thread, and gtest assertion macros are not guaranteed safe to call there
 // across all gtest versions - so the handler only records what it saw/did,
@@ -152,9 +179,8 @@ TEST_F(i2p_tests, SessionConnectDistinguishesProxyVsPeerErrors)
             }
         });
 
-        i2p::sam::Session session(
-            GetTempPath() / boost::filesystem::unique_path("i2p_privkey-%%%%.dat"),
-            samAddr);
+        TempKeyFile keyFile;
+        i2p::sam::Session session(keyFile.Path(), samAddr);
 
         CNetAddr peerAddr;
         ASSERT_TRUE(peerAddr.SetSpecial(
@@ -181,6 +207,112 @@ TEST_F(i2p_tests, SessionConnectDistinguishesProxyVsPeerErrors)
     }
 }
 
+// Session::Connect()'s optional router_unreachable out-param tells "the I2P router itself
+// can't be reached / won't complete the HELLO handshake" apart from "the router answered and
+// something after that failed" (a rejected SESSION CREATE, an unknown destination, ...). proxy_error can't do that job: it is true for anything except a
+// STREAM CONNECT that reports an unreachable peer, so a NAMING LOOKUP for an unknown name leaves
+// it true even though the router answered. The node's dial backoff is keyed on
+// router_unreachable so a flood of stale or fake I2P addresses can't suspend all I2P dialing
+// while a healthy router is running.
+TEST_F(i2p_tests, SessionConnectReportsRouterUnreachableOnlyWhenRouterUnreachable)
+{
+    enum class Failure {
+        NO_ROUTER,
+        HELLO_REFUSED,
+        SESSION_CREATE_REJECTED,
+        LOOKUP_KEY_NOT_FOUND,
+        STREAM_CANT_REACH_PEER,
+        STREAM_I2P_ERROR,
+    };
+    struct Case {
+        Failure failure;
+        bool expectRouterUnreachable;
+        bool expectProxyError;
+    };
+    const std::vector<Case> cases{
+        // Nothing listening on the SAM port: exactly what a missing router looks like.
+        {Failure::NO_ROUTER, true, true},
+        // Something answers on the SAM port but won't complete the handshake.
+        {Failure::HELLO_REFUSED, true, true},
+        // The router completed HELLO and then rejected SESSION CREATE (duplicate destination,
+        // tunnel limits, ...): it is up, so this must not look like a dead router - one identity's
+        // session trouble would otherwise pause dialing for every identity.
+        {Failure::SESSION_CREATE_REJECTED, false, true},
+        // Router answered HELLO, then doesn't know the name: proxy_error stays true (unchanged
+        // behavior) but the router is demonstrably up.
+        {Failure::LOOKUP_KEY_NOT_FOUND, false, true},
+        {Failure::STREAM_CANT_REACH_PEER, false, false},
+        {Failure::STREAM_I2P_ERROR, false, true},
+    };
+
+    const std::vector<unsigned char> privKey = MakeFakePrivateKey();
+    const std::string privKeyB64 = ToI2PBase64(privKey);
+
+    for (const Case& c : cases) {
+        SCOPED_TRACE(static_cast<int>(c.failure));
+
+        std::atomic<int> connectionIndex{0};
+        MockLineServer server;
+
+        CService samAddr = server.Start([&](const Sock& sock) {
+            const int idx = connectionIndex++;
+            std::string line;
+
+            if (idx == 0) {
+                // Session::CreateIfNotCreatedAlready(): HELLO, DEST GENERATE, SESSION CREATE.
+                if (!MockServerReadLine(sock, line)) return;
+                if (c.failure == Failure::HELLO_REFUSED) {
+                    MockServerWriteLine(sock, "HELLO REPLY RESULT=NOVERSION");
+                    return;
+                }
+                MockServerWriteLine(sock, "HELLO REPLY RESULT=OK VERSION=3.1");
+                if (!MockServerReadLine(sock, line)) return;
+                MockServerWriteLine(sock, "DEST REPLY PUB=unused PRIV=" + privKeyB64);
+                if (!MockServerReadLine(sock, line)) return;
+                if (c.failure == Failure::SESSION_CREATE_REJECTED) {
+                    MockServerWriteLine(sock, "SESSION STATUS RESULT=I2P_ERROR MESSAGE=rejected");
+                    return;
+                }
+                MockServerWriteLine(sock, "SESSION STATUS RESULT=OK DESTINATION=" + privKeyB64);
+            } else {
+                // Session::Connect(): a fresh HELLO, then NAMING LOOKUP, then STREAM CONNECT.
+                if (!MockServerReadLine(sock, line)) return;
+                MockServerWriteLine(sock, "HELLO REPLY RESULT=OK VERSION=3.1");
+                if (!MockServerReadLine(sock, line)) return;
+                if (c.failure == Failure::LOOKUP_KEY_NOT_FOUND) {
+                    MockServerWriteLine(sock, "NAMING REPLY RESULT=KEY_NOT_FOUND");
+                    return;
+                }
+                MockServerWriteLine(sock, "NAMING REPLY RESULT=OK VALUE=" + privKeyB64);
+                if (!MockServerReadLine(sock, line)) return;
+                MockServerWriteLine(sock, std::string("STREAM STATUS RESULT=") +
+                    (c.failure == Failure::STREAM_CANT_REACH_PEER ? "CANT_REACH_PEER" : "I2P_ERROR"));
+            }
+        });
+        if (c.failure == Failure::NO_ROUTER)
+            server.Stop(); // the port is now closed; connecting to it is refused
+
+        TempKeyFile keyFile;
+        i2p::sam::Session session(keyFile.Path(), samAddr);
+
+        CNetAddr peerAddr;
+        ASSERT_TRUE(peerAddr.SetSpecial(
+            "ukeu3k5oycgaauneqgtnvselmt4yemvoilkln7jpvamvfx7dnkdq.b32.i2p"));
+        CService peer(peerAddr, 0);
+
+        i2p::Connection conn;
+        bool proxyError = false;
+        bool routerUnreachable = !c.expectRouterUnreachable; // must be overwritten either way
+        const bool connected = session.Connect(peer, conn, proxyError, &routerUnreachable);
+
+        server.Stop();
+
+        EXPECT_FALSE(connected);
+        EXPECT_EQ(routerUnreachable, c.expectRouterUnreachable);
+        EXPECT_EQ(proxyError, c.expectProxyError);
+    }
+}
+
 // Basic happy-path coverage: session creation succeeds against a scripted SAM
 // proxy, and the private key is persisted to disk and reused (no second
 // DEST GENERATE) by a fresh Session pointed at the same key file.
@@ -188,7 +320,8 @@ TEST_F(i2p_tests, SessionCreatePersistsAndReusesPrivateKey)
 {
     const std::vector<unsigned char> privKey = MakeFakePrivateKey();
     const std::string privKeyB64 = ToI2PBase64(privKey);
-    const fs::path keyFile = GetTempPath() / boost::filesystem::unique_path("i2p_privkey-%%%%.dat");
+    TempKeyFile tempKeyFile;
+    const fs::path keyFile = tempKeyFile.Path();
 
     auto handlerFor = [&](bool expectDestGenerate, LineLog* log) {
         return [&privKeyB64, expectDestGenerate, log](const Sock& sock) {

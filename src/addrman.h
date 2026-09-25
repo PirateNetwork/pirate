@@ -1,4 +1,5 @@
 // Copyright (c) 2012 Pieter Wuille
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -72,6 +73,7 @@ private:
     bool fLocal;
 
     friend class CAddrMan;
+    friend class CAddrManTest;
 
 public:
 
@@ -283,6 +285,9 @@ protected:
 
     //! Select an address to connect to, if newOnly is set to true, only the new table is selected from.
     CAddrInfo Select_(bool newOnly);
+
+    //! Collect up to nMax non-terrible entries on the given network, in random order.
+    std::vector<CAddrInfo> SelectCandidates_(Network net, size_t nMax);
 
     //! Wraps GetRandInt to allow tests to override RandomInt and make it deterministic.
     virtual int RandomInt(int nMax);
@@ -710,6 +715,28 @@ public:
             Check();
         }
         return addrRet;
+    }
+
+    /**
+     * Return up to nMax dial candidates on a single network, in random order (tried and new
+     * entries drawn with equal probability, like Select()), in one pass under a single lock
+     * acquisition.
+     *
+     * Select() picks from all networks, so a caller that only wants one of them (the I2P
+     * dialers) had to call it repeatedly and throw most results away - each call taking and
+     * releasing the address manager lock that other threads, including ones holding cs_main,
+     * are waiting on. Terrible entries are excluded, matching what Select() prefers.
+     */
+    std::vector<CAddrInfo> SelectCandidates(Network net, size_t nMax)
+    {
+        std::vector<CAddrInfo> vRet;
+        {
+            LOCK(cs);
+            Check();
+            vRet = SelectCandidates_(net, nMax);
+            Check();
+        }
+        return vRet;
     }
 
     //! Return a bunch of addresses, selected at random.

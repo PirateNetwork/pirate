@@ -1,4 +1,5 @@
 // Copyright (c) 2020-2020 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -100,9 +101,16 @@ public:
      * @param[out] proxy_error If an error occurs due to proxy or general network failure, then
      * this is set to `true`. If an error occurs due to unreachable peer (likely peer is down), then
      * it is set to `false`. Only set if `false` is returned.
+     * @param[out] router_unreachable Optional. Set to `true` only if `false` is returned because the
+     * SAM proxy itself could not be reached or would not complete the HELLO handshake (e.g. no I2P
+     * router is running). It stays `false` for anything that goes wrong after the router has
+     * answered - a rejected SESSION CREATE, a NAMING LOOKUP for an unknown name, a peer that can't
+     * be reached, a STREAM CONNECT error - even though `proxy_error` may be `true` for those:
+     * `proxy_error` is deliberately broad (it is `true` unless STREAM CONNECT reports an
+     * unreachable peer), so it can't be used to tell a dead router from a bad destination.
      * @return true on success
      */
-    bool Connect(const CService& to, Connection& conn, bool& proxy_error);
+    bool Connect(const CService& to, Connection& conn, bool& proxy_error, bool* router_unreachable = nullptr);
 
     /**
      * Return this session's own I2P destination (.b32.i2p) address, derived

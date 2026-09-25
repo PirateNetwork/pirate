@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -38,6 +39,7 @@
 #include "util.h"
 
 #include <deque>
+#include <functional>
 #include <map>
 #include <set>
 #include <stdint.h>
@@ -54,6 +56,7 @@
 #include <openssl/bio.h>
 #include <openssl/ssl.h>
 
+class CAddrInfo;
 class CAddrMan;
 class CBlockIndex;
 class CScheduler;
@@ -321,6 +324,50 @@ std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& 
  */
 bool ShouldSkipForNetworkDiversity(Network net, const std::set<Network>& underTargetNetworks,
                                     int nTries, int nDiversityTryBudget = DIVERSITY_TRY_BUDGET);
+
+//! First and longest delay, in seconds, the I2P dialers wait after consecutive
+//! failures to reach the local I2P (SAM) proxy - see GetI2PProxyBackoffSeconds.
+static const int64_t I2P_PROXY_BACKOFF_BASE_SECONDS = 5;
+static const int64_t I2P_PROXY_BACKOFF_MAX_SECONDS = 60;
+
+//! A candidate tried within this many seconds is only dialed again when no
+//! other usable candidate exists - see PickI2PDialCandidate.
+static const int64_t I2P_DIAL_RECENT_TRY_SECONDS = 600;
+
+/**
+ * How long the I2P dialers should stay idle after nConsecutiveProxyFailures
+ * failures in a row to reach the local I2P proxy: 0 with no failures, then
+ * I2P_PROXY_BACKOFF_BASE_SECONDS doubling per failure up to
+ * I2P_PROXY_BACKOFF_MAX_SECONDS.
+ *
+ * With no I2P router running every dial fails immediately, so without a
+ * backoff the dialer threads spin on the address manager lock selecting
+ * candidates they cannot possibly reach.
+ */
+int64_t GetI2PProxyBackoffSeconds(int nConsecutiveProxyFailures);
+
+//! Record a failed attempt to reach the I2P proxy, extending the backoff.
+void NoteI2PProxyFailure(int64_t nNow);
+
+//! Record that the I2P proxy answered (whether or not the remote peer did),
+//! clearing the backoff.
+void NoteI2PProxyReachable();
+
+//! Whether the I2P dialers should currently skip candidate selection and
+//! dialing because the proxy was recently unreachable.
+bool IsI2PDialingSuspended(int64_t nNow);
+
+/**
+ * Choose the I2P peer to dial from candidates already in random order (see
+ * CAddrMan::SelectCandidates). Candidates rejected by fUsable are never
+ * chosen. Among the usable ones the first not tried within the last
+ * I2P_DIAL_RECENT_TRY_SECONDS wins; if every usable candidate was tried
+ * recently the first of those is used, so a small pool of known I2P
+ * addresses is still redialed rather than left idle.
+ * @return true and sets addrOut if a candidate was chosen
+ */
+bool PickI2PDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
+                          const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut);
 
 
 extern bool fDiscover;

@@ -6,8 +6,14 @@
 
 #include "addrman.h"
 #include <boost/filesystem.hpp>
+#include <atomic>
 #include <boost/thread.hpp>
+#include <chrono>
+#include <future>
+#include <memory>
+#include <set>
 #include <string>
+#include <thread>
 
 #include "hash.h"
 #include "random.h"
@@ -15,6 +21,9 @@
 
 #include "net.h"
 #include "netbase.h"
+#include "gtest/gtestutils.h"
+#include "pubkey.h"
+#include "rpc/server.h"
 #include "chainparams.h"
 #include "streams.h"
 #include "tinyformat.h"
@@ -102,8 +111,12 @@ class CAddrManTest : public CAddrMan
             seed_insecure_rand(true);
         }
 
+        //! Number of RandomInt() calls so far (each one reads the RNG).
+        int nRandomCalls = 0;
+
         int RandomInt(int nMax)
         {
+            nRandomCalls++;
             state = (CHashWriter(SER_GETHASH, 0) << state).GetHash().GetCheapHash();
             return (unsigned int)(state % nMax);
         }
@@ -147,6 +160,19 @@ class CAddrManTest : public CAddrMan
                 }
             }
             return std::pair<int, int>(-1, -1);
+        }
+
+        //! CAddrManTest is a friend of CAddrMan, so tests can hold any CAddrMan's
+        //! lock (including the global addrman) to simulate it being busy.
+        static CCriticalSection& GetLock(CAddrMan& am)
+        {
+            return am.cs;
+        }
+
+        //! Whether an entry returned by Select()/SelectCandidates() lives in the tried table.
+        static bool IsInTried(const CAddrInfo& info)
+        {
+            return info.fInTried;
         }
 
         void Clear()
@@ -1252,6 +1278,445 @@ namespace TestAddrmanTests {
                 << "legacy GetAddr() response must never include a V1-incompatible "
                    "address (got " << addr.ToString() << ")";
         }
+    }
+
+    static CAddress MakeI2PAddress(int i, int64_t nTime)
+    {
+        CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+        s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+        // BIP155 network id 0x05 = I2P, length 0x20 = 32 bytes
+        s << MakeSpan(ParseHex(strprintf("0520%064x", i)));
+        CNetAddr i2p;
+        s >> i2p;
+        EXPECT_TRUE(i2p.IsI2P()) << "iteration " << i;
+        CAddress addr(CService(i2p, 45452), NODE_NONE);
+        addr.nTime = nTime;
+        return addr;
+    }
+
+    // SelectCandidates() is what the I2P dialer threads use to find dial candidates in a
+    // single pass under one addrman lock acquisition, instead of calling Select() (over
+    // every network) many times and discarding almost everything it returns.
+    TEST(TestAddrmanTests, addrman_select_candidates_filters_network_and_limit)
+    {
+        CAddrManTest addrman;
+        addrman.MakeDeterministic();
+
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        size_t nI2P = 0, nOnion = 0;
+        for (int i = 1; i <= 12; i++) {
+            if (addrman.Add(MakeI2PAddress(i, GetTime()), source))
+                nI2P++;
+        }
+        for (int i = 1; i <= 5; i++) {
+            CDataStream s(SER_NETWORK, PROTOCOL_VERSION);
+            s.SetVersion(s.GetVersion() | ADDRV2_FORMAT);
+            s << MakeSpan(ParseHex(strprintf("0420%064x", i)));
+            CNetAddr onion;
+            s >> onion;
+            CAddress addr(CService(onion, 8233), NODE_NONE);
+            addr.nTime = GetTime();
+            if (addrman.Add(addr, source))
+                nOnion++;
+        }
+        for (int i = 1; i <= 8; i++) {
+            CNetAddr ipv4;
+            LookupHost(strprintf("250.%d.%d.23", i, i).c_str(), ipv4, false);
+            CAddress addr(CService(ipv4, 8233), NODE_NONE);
+            addr.nTime = GetTime();
+            addrman.Add(addr, source);
+        }
+        ASSERT_GT(nI2P, 5u) << "test setup didn't add enough I2P addresses";
+        ASSERT_GT(nOnion, 0u);
+
+        // Every I2P entry, and only I2P entries, each exactly once.
+        std::vector<CAddrInfo> all = addrman.SelectCandidates(NET_I2P, 50);
+        EXPECT_EQ(all.size(), nI2P);
+        std::set<CService> seen;
+        for (const CAddrInfo& info : all) {
+            EXPECT_EQ(info.GetNetwork(), NET_I2P);
+            seen.insert(info);
+        }
+        EXPECT_EQ(seen.size(), all.size()) << "candidates must be distinct";
+
+        // nMax caps the result without changing what qualifies.
+        std::vector<CAddrInfo> limited = addrman.SelectCandidates(NET_I2P, 5);
+        EXPECT_EQ(limited.size(), 5u);
+        std::set<CService> seenLimited;
+        for (const CAddrInfo& info : limited) {
+            EXPECT_EQ(info.GetNetwork(), NET_I2P);
+            seenLimited.insert(info);
+        }
+        EXPECT_EQ(seenLimited.size(), limited.size());
+
+        EXPECT_TRUE(addrman.SelectCandidates(NET_I2P, 0).empty());
+        EXPECT_EQ(addrman.SelectCandidates(NET_ONION, 50).size(), nOnion);
+        EXPECT_TRUE(addrman.SelectCandidates(NET_IPV6, 50).empty()) << "no IPv6 entries were added";
+    }
+
+    // Terrible entries (here: not seen in longer than the addrman horizon) are the ones
+    // Select() already steers away from, so they are not worth handing to a dialer either.
+    TEST(TestAddrmanTests, addrman_select_candidates_excludes_terrible)
+    {
+        CAddrManTest addrman;
+        addrman.MakeDeterministic();
+
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        CAddress good = MakeI2PAddress(1, GetTime());
+        CAddress stale = MakeI2PAddress(2, GetTime() - int64_t(60) * 24 * 60 * 60);
+        ASSERT_TRUE(addrman.Add(good, source));
+        ASSERT_TRUE(addrman.Add(stale, source));
+
+        std::vector<CAddrInfo> candidates = addrman.SelectCandidates(NET_I2P, 50);
+        ASSERT_EQ(candidates.size(), 1u);
+        EXPECT_TRUE(static_cast<CService>(candidates[0]) == static_cast<CService>(good));
+    }
+
+    // Select() runs with the addrman lock held, so it must not sleep: with a real (non-null)
+    // nKey it used to MilliSleep(100) every 1000 probes while looking for an occupied slot,
+    // and a sparse table needs thousands of probes. A single tried entry in the 16384-slot
+    // (256 buckets x 64) tried table costs roughly sixteen sleeps per call - long enough, across
+    // the dialer threads looping on Select(), to starve every other addrman user for minutes.
+    TEST(TestAddrmanTests, addrman_select_sparse_table_does_not_sleep_under_lock)
+    {
+        // A real (non-null) nKey and random probing are what the old sleep depended on; put the
+        // process-wide insecure RNG back to its fixed initial state afterwards for other tests.
+        seed_insecure_rand(false);
+        struct RngRestorer {
+            ~RngRestorer() { seed_insecure_rand(true); }
+        } rngRestorer;
+        CAddrManTest addrman(/* makeDeterministic */ false);
+
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+        // A handful of tried entries among thousands of slots, like the node this was found on
+        // (3 tried entries): each Select() has to probe for an occupied slot.
+        for (int i = 1; i <= 3; i++) {
+            CNetAddr ipv4;
+            LookupHost(strprintf("250.%d.1.1", i).c_str(), ipv4, false);
+            CAddress addr(CService(ipv4, 8233), NODE_NONE);
+            addr.nTime = GetTime();
+            ASSERT_TRUE(addrman.Add(addr, source));
+            addrman.Good(addr); // move it to the tried table
+        }
+
+        const int64_t nStart = GetTimeMillis();
+        int nCalls = 0;
+        for (; nCalls < 20; nCalls++) {
+            CAddrInfo selected = addrman.Select();
+            ASSERT_TRUE(selected.IsValid()) << "iteration " << nCalls;
+            if (GetTimeMillis() - nStart > 1500)
+                break; // already failing; don't spend minutes proving it
+        }
+        EXPECT_LT(GetTimeMillis() - nStart, 1500)
+            << "Select() on a sparse table is sleeping while holding the addrman lock ("
+            << nCalls + 1 << " calls)";
+    }
+
+    // Like Select(), which picks the tried table (peers we have connected to before) or the new
+    // table with equal probability, candidates are drawn from the two tables with equal
+    // probability - known-good peers are not diluted by whatever has merely been announced to us,
+    // but they also don't monopolize the front of the list (every dialer, and every I2P pool
+    // identity, would otherwise start from the same few tried peers).
+    TEST(TestAddrmanTests, addrman_select_candidates_draws_tried_and_new_evenly)
+    {
+        CAddrManTest addrman;
+        addrman.MakeDeterministic();
+
+        CNetAddr source;
+        LookupHost("252.2.2.2", source, false);
+
+        std::vector<CAddress> vAdded;
+        for (int i = 1; i <= 12; i++) {
+            CAddress addr = MakeI2PAddress(i, GetTime());
+            if (addrman.Add(addr, source))
+                vAdded.push_back(addr);
+        }
+        ASSERT_GE(vAdded.size(), 8u);
+        for (size_t i = 0; i < 4; i++)
+            addrman.Good(vAdded[i]); // promote to the tried table
+
+        int nFirstTried = 0;
+        const int kRuns = 200;
+        for (int run = 0; run < kRuns; run++) {
+            // nMax == 1 exposes which table the first draw came from.
+            std::vector<CAddrInfo> first = addrman.SelectCandidates(NET_I2P, 1);
+            ASSERT_EQ(first.size(), 1u);
+            nFirstTried += CAddrManTest::IsInTried(first[0]) ? 1 : 0;
+
+            // Asking for everything returns every entry exactly once, whichever table it is in.
+            std::vector<CAddrInfo> all = addrman.SelectCandidates(NET_I2P, 50);
+            ASSERT_EQ(all.size(), vAdded.size());
+            std::set<CService> seen;
+            for (const CAddrInfo& info : all)
+                seen.insert(info);
+            ASSERT_EQ(seen.size(), all.size());
+        }
+        // 50/50 per draw: both tables must lead a substantial share of the time.
+        EXPECT_GT(nFirstTried, kRuns / 4) << "tried entries are almost never drawn first";
+        EXPECT_LT(nFirstTried, kRuns * 3 / 4) << "tried entries lead almost every list";
+    }
+
+    // SelectCandidates() runs with the addrman lock held on a table remote peers can fill with
+    // entries, and every RandomInt() call reads the system RNG - so the number of draws must be
+    // bounded by nMax, not by the size of the table (a full shuffle of every matching entry made it
+    // grow with the table).
+    TEST(TestAddrmanTests, addrman_select_candidates_random_draws_bounded_by_nmax)
+    {
+        CAddrManTest addrman;
+        addrman.MakeDeterministic();
+
+        // Vary the source group: entries are bucketed by (address group, source group), and one
+        // bucket holds only 64 of them.
+        size_t nAdded = 0;
+        for (int i = 1; i <= 600; i++) {
+            CNetAddr entrySource;
+            LookupHost(strprintf("250.%d.1.1", i % 100 + 1).c_str(), entrySource, false);
+            if (addrman.Add(MakeI2PAddress(i, GetTime()), entrySource))
+                nAdded++;
+        }
+        ASSERT_GT(nAdded, 300u) << "test setup didn't add enough I2P addresses";
+
+        const size_t nMax = 5;
+        addrman.nRandomCalls = 0;
+        std::vector<CAddrInfo> candidates = addrman.SelectCandidates(NET_I2P, nMax);
+        ASSERT_EQ(candidates.size(), nMax);
+        // At most nMax swaps per list plus one table choice per candidate.
+        EXPECT_LE(addrman.nRandomCalls, static_cast<int>(3 * nMax))
+            << "random draws grew with the table size (" << nAdded << " entries)";
+    }
+
+    // ---- addrman use while holding cs_main -------------------------------------------
+    //
+    // AddressCurrentlyConnected() (addrman.Add() + addrman.Connected()) is called when a
+    // peer completes its handshake (VERACK) and when it is disconnected (FinalizeNode).
+    // Both used to happen with cs_main held, so whenever the network threads kept the address
+    // manager lock busy (looping on Select()) the caller sat on cs_main until it got the lock -
+    // up to two minutes on a live node - and every RPC and block-processing thread queued
+    // behind it. These tests hold the global addrman lock on a helper thread, drive the real
+    // code path on another, and require that cs_main is not held while it waits.
+
+    class AddrmanNodeLockTests : public BitcoinTestingSetup {};
+
+    // Holds the global addrman's lock on a helper thread until Release() or destruction.
+    class GlobalAddrmanLockHolder
+    {
+    public:
+        GlobalAddrmanLockHolder()
+        {
+            m_release_future = m_release.get_future().share();
+            m_thread = std::thread([this]() {
+                LOCK(CAddrManTest::GetLock(addrman));
+                m_locked.set_value();
+                m_release_future.wait();
+            });
+            m_locked.get_future().wait();
+        }
+        void Release()
+        {
+            if (!m_released) {
+                m_released = true;
+                m_release.set_value();
+            }
+        }
+        ~GlobalAddrmanLockHolder()
+        {
+            Release();
+            m_thread.join();
+        }
+    private:
+        std::promise<void> m_locked;
+        std::promise<void> m_release;
+        std::shared_future<void> m_release_future;
+        std::thread m_thread;
+        bool m_released = false;
+    };
+
+    // A fresh routable test address on every call, each in its own /16. The lock tests add their
+    // node's address to the process-wide addrman (which the fixture never clears) and check that
+    // it was added. A fixed address would already be present when the test runs again in the same
+    // process (--gtest_repeat), and merely-distinct addresses in one /16 would all compete for the
+    // same 64-slot new-table bucket - addrman buckets by (address group, source group), and the
+    // source here is the peer's own address - so once it filled up Add() would silently refuse
+    // further ones. Distinct groups land in different buckets. (Good for 250 calls per process.)
+    static std::string UniqueTestAddress()
+    {
+        static std::atomic<int> nCounter(0);
+        const int n = nCounter++;
+        return strprintf("250.%d.77.1", n % 250 + 1);
+    }
+
+    static CDataStream MakeVersionPayload()
+    {
+        CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+        const uint64_t nServices = NODE_NETWORK;
+        const int64_t nTime = GetTime();
+        const CAddress addrMe, addrFrom;
+        const uint64_t nNonce = 0x1234567; // != nLocalHostNonce, or the handler treats it as a self-connection
+        const std::string strSubVer = "/gtest:0.0.0/";
+        const int nStartingHeight = 0;
+        const bool fRelay = true;
+        payload << PROTOCOL_VERSION << nServices << nTime << addrMe << addrFrom << nNonce
+                << strSubVer << nStartingHeight << fRelay;
+        return payload;
+    }
+
+    // True if another thread can take cs_main within timeoutMs. The caller is blocked on the
+    // addrman lock at that point, so any failure to get cs_main means the caller holds it.
+    static bool CsMainAcquirableWithin(int timeoutMs)
+    {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeoutMs);
+        while (std::chrono::steady_clock::now() < deadline) {
+            {
+                TRY_LOCK(cs_main, lock);
+                if (lock)
+                    return true;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return false;
+    }
+
+    // Wait until `flag` is set, then give the thread that set it time to run into the lock
+    // it is expected to block on.
+    static void WaitForThreadToBlock(const std::atomic<bool>& flag)
+    {
+        for (int i = 0; i < 500 && !flag; i++)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+    }
+
+    // Completes VERSION for a fresh inbound test node. For an inbound peer whose addrFrom
+    // differs from its own address the VERSION handler does not touch addrman (the outbound
+    // path's addrman.Good() calls, which would block on the held lock too early, are skipped),
+    // so this can run with or without the addrman lock held.
+    static void SendVersion(CNode* node)
+    {
+        CDataStream payload = MakeVersionPayload();
+        InjectMessage(node, NetMsgType::VERSION, payload);
+    }
+
+    static void SendVerack(CNode* node)
+    {
+        CDataStream payload(SER_NETWORK, PROTOCOL_VERSION);
+        InjectMessage(node, NetMsgType::VERACK, payload);
+    }
+
+    TEST_F(AddrmanNodeLockTests, verack_handler_releases_cs_main_before_updating_addrman)
+    {
+        CService service;
+        ASSERT_TRUE(Lookup(UniqueTestAddress().c_str(), service, 8233, false));
+        CAddress addr(service, NODE_NETWORK);
+        CNode node(INVALID_SOCKET, addr, "", true);
+        node.fNetworkNode = true;
+        const size_t nBefore = addrman.size();
+
+        SendVersion(&node);
+        ASSERT_NE(node.nVersion, 0) << "version message was not accepted";
+        ASSERT_EQ(addrman.size(), nBefore) << "the VERSION handler unexpectedly updated addrman";
+
+        {
+            GlobalAddrmanLockHolder holder;
+            std::atomic<bool> started(false);
+            std::thread injector([&]() {
+                started = true;
+                SendVerack(&node);
+            });
+            WaitForThreadToBlock(started);
+
+            EXPECT_TRUE(CsMainAcquirableWithin(1000))
+                << "the VERACK handler is holding cs_main while it waits for the addrman lock";
+
+            holder.Release();
+            injector.join();
+        }
+
+        // Guards against a vacuous pass: the blocked call must actually have been the addrman update.
+        EXPECT_GT(addrman.size(), nBefore);
+    }
+
+    TEST_F(AddrmanNodeLockTests, finalize_node_releases_cs_main_before_updating_addrman)
+    {
+        CService service;
+        ASSERT_TRUE(Lookup(UniqueTestAddress().c_str(), service, 8233, false));
+        CAddress addr(service, NODE_NETWORK);
+        std::unique_ptr<CNode> node(new CNode(INVALID_SOCKET, addr, "", true));
+        node->fNetworkNode = true;
+        const size_t nBefore = addrman.size();
+
+        // Complete the handshake first (nothing is blocking addrman yet) so that disconnecting
+        // the node takes the "connected, not misbehaving" path that updates addrman.
+        SendVersion(node.get());
+        SendVerack(node.get());
+        ASSERT_GT(addrman.size(), nBefore) << "handshake did not mark the node as connected";
+        ASSERT_EQ(GetMisbehavior(node->GetId()), 0);
+
+        {
+            GlobalAddrmanLockHolder holder;
+            std::atomic<bool> started(false);
+            // ~CNode() calls FinalizeNode() via the node signals.
+            std::thread destroyer([&]() {
+                started = true;
+                node.reset();
+            });
+            WaitForThreadToBlock(started);
+
+            EXPECT_TRUE(CsMainAcquirableWithin(1000))
+                << "FinalizeNode is holding cs_main while it waits for the addrman lock";
+
+            holder.Release();
+            destroyer.join();
+        }
+    }
+
+    // GetAllPeers() iterated mapInfo without taking the addrman lock, racing with every thread
+    // that adds, promotes or removes entries.
+    TEST_F(AddrmanNodeLockTests, get_all_peers_takes_the_addrman_lock)
+    {
+        std::atomic<bool> started(false), finished(false);
+        std::thread reader;
+        {
+            GlobalAddrmanLockHolder holder;
+            reader = std::thread([&]() {
+                started = true;
+                std::map<std::string, int64_t> info;
+                addrman.GetAllPeers(info);
+                finished = true;
+            });
+            WaitForThreadToBlock(started);
+            EXPECT_FALSE(finished) << "GetAllPeers() completed while another thread held the addrman lock";
+            holder.Release();
+        }
+        reader.join();
+        EXPECT_TRUE(finished);
+    }
+
+    // With GetAllPeers() locking addrman, getpeerlist must not hold cs_main while it waits.
+    TEST_F(AddrmanNodeLockTests, getpeerlist_does_not_hold_cs_main_while_waiting_for_addrman)
+    {
+        std::atomic<bool> started(false), finished(false);
+        std::thread rpc;
+        {
+            GlobalAddrmanLockHolder holder;
+            rpc = std::thread([&]() {
+                started = true;
+                UniValue result = getpeerlist(UniValue(UniValue::VARR), false, CPubKey());
+                EXPECT_TRUE(result.isArray());
+                finished = true;
+            });
+            WaitForThreadToBlock(started);
+
+            EXPECT_FALSE(finished) << "getpeerlist finished without waiting for the addrman lock";
+            EXPECT_TRUE(CsMainAcquirableWithin(1000))
+                << "getpeerlist is holding cs_main while it waits for the addrman lock";
+            holder.Release();
+        }
+        rpc.join();
+        EXPECT_TRUE(finished);
     }
 
 }

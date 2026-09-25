@@ -2,6 +2,7 @@
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Copyright (c) 2015-2022 The Zcash developers
 // Copyright (c) 2015-2023 The Komodo Platform developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -440,22 +441,35 @@ namespace {
     }
 
     void FinalizeNode(NodeId nodeid) {
-        LOCK(cs_main);
-        CNodeState *state = State(nodeid);
+        // The address manager has its own lock, and the network threads can hold it
+        // for a long time while selecting addresses to dial. Only record which
+        // address to mark as connected while cs_main is held and update addrman
+        // after releasing it, otherwise every cs_main waiter (all RPCs, block
+        // processing) queues behind the address manager lock.
+        CService addrConnected;
+        bool fAddrConnected = false;
+        {
+            LOCK(cs_main);
+            CNodeState *state = State(nodeid);
 
-        if (state->fSyncStarted)
-            nSyncStarted--;
+            if (state->fSyncStarted)
+                nSyncStarted--;
 
-        if (state->nMisbehavior == 0 && state->fCurrentlyConnected) {
-            AddressCurrentlyConnected(state->address);
+            if (state->nMisbehavior == 0 && state->fCurrentlyConnected) {
+                addrConnected = state->address;
+                fAddrConnected = true;
+            }
+
+            BOOST_FOREACH(const QueuedBlock& entry, state->vBlocksInFlight)
+            mapBlocksInFlight.erase(entry.hash);
+            EraseOrphansFor(nodeid);
+            nPreferredDownload -= state->fPreferredDownload;
+
+            mapNodeState.erase(nodeid);
         }
 
-        BOOST_FOREACH(const QueuedBlock& entry, state->vBlocksInFlight)
-        mapBlocksInFlight.erase(entry.hash);
-        EraseOrphansFor(nodeid);
-        nPreferredDownload -= state->fPreferredDownload;
-
-        mapNodeState.erase(nodeid);
+        if (fAddrConnected)
+            AddressCurrentlyConnected(addrConnected);
     }
 
     void LimitMempoolSize(CTxMemPool& pool, size_t limit, unsigned long age)
@@ -8473,9 +8487,15 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
         // Mark this node as currently connected, so we update its timestamp later.
         if (pfrom->fNetworkNode) {
-            LOCK(cs_main);
-            State(pfrom->GetId())->fCurrentlyConnected = true;
-            AddressCurrentlyConnected(State(pfrom->GetId())->address);
+            // Update addrman after releasing cs_main - see FinalizeNode().
+            CService addrConnected;
+            {
+                LOCK(cs_main);
+                CNodeState *state = State(pfrom->GetId());
+                state->fCurrentlyConnected = true;
+                addrConnected = state->address;
+            }
+            AddressCurrentlyConnected(addrConnected);
         }
     }
 

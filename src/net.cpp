@@ -679,6 +679,71 @@ void AddressCurrentlyConnected(const CService& addr)
     addrman.Connected(addr);
 }
 
+namespace {
+//! Consecutive failures to reach the local I2P proxy and the time before which the I2P dialers
+//! stay idle. Shared by the dialer threads and ConnectNode(); one lock keeps the pair consistent
+//! (a success racing a failure can't leave a stale suspension behind). Leaf lock: nothing else is
+//! acquired while it is held.
+CCriticalSection cs_i2pProxyBackoff;
+int nI2PProxyFailures = 0;      // guarded by cs_i2pProxyBackoff
+int64_t nI2PDialResumeTime = 0; // guarded by cs_i2pProxyBackoff
+} // namespace
+
+int64_t GetI2PProxyBackoffSeconds(int nConsecutiveProxyFailures)
+{
+    if (nConsecutiveProxyFailures <= 0)
+        return 0;
+    // Cap the shift well before the result could overflow; the maximum is reached after a few steps.
+    const int nShift = std::min(nConsecutiveProxyFailures - 1, 16);
+    return std::min<int64_t>(I2P_PROXY_BACKOFF_BASE_SECONDS << nShift, I2P_PROXY_BACKOFF_MAX_SECONDS);
+}
+
+void NoteI2PProxyFailure(int64_t nNow)
+{
+    LOCK(cs_i2pProxyBackoff);
+    nI2PProxyFailures = std::min(nI2PProxyFailures + 1, 32);
+    nI2PDialResumeTime = nNow + GetI2PProxyBackoffSeconds(nI2PProxyFailures);
+}
+
+void NoteI2PProxyReachable()
+{
+    LOCK(cs_i2pProxyBackoff);
+    nI2PProxyFailures = 0;
+    nI2PDialResumeTime = 0;
+}
+
+bool IsI2PDialingSuspended(int64_t nNow)
+{
+    LOCK(cs_i2pProxyBackoff);
+    const int64_t nResume = nI2PDialResumeTime;
+    // A resume time further out than the longest backoff can only come from the clock having
+    // stepped backwards since the failure was recorded; don't stay suspended for the step too.
+    if (nResume - nNow > I2P_PROXY_BACKOFF_MAX_SECONDS)
+        return false;
+    return nNow < nResume;
+}
+
+bool PickI2PDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
+                          const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut)
+{
+    const CAddrInfo* pRecentlyTried = nullptr;
+    for (const CAddrInfo& addr : vCandidates) {
+        if (!fUsable(addr))
+            continue;
+        if (nNow - addr.nLastTry >= I2P_DIAL_RECENT_TRY_SECONDS) {
+            addrOut = addr;
+            return true;
+        }
+        if (pRecentlyTried == nullptr)
+            pRecentlyTried = &addr;
+    }
+    if (pRecentlyTried != nullptr) {
+        addrOut = *pRecentlyTried;
+        return true;
+    }
+    return false;
+}
+
 CNode::eTlsOption CNode::tlsFallbackNonTls = CNode::eTlsOption::FALLBACK_UNSET;
 CNode::eTlsOption CNode::tlsValidate       = CNode::eTlsOption::FALLBACK_UNSET;
 
@@ -768,6 +833,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
     // Connect
     SOCKET hSocket;
     bool proxyConnectionFailed = false;
+    bool i2pRouterUnreachable = false;
     bool connected = false;
     std::unique_ptr<Sock> sock;
     // Only set when this connection was dialed through an I2P relay-pool
@@ -811,11 +877,22 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
             }
             if (session != nullptr) {
                 i2p::Connection conn;
-                if (session->Connect(addrConnect, conn, proxyConnectionFailed)) {
+                if (session->Connect(addrConnect, conn, proxyConnectionFailed, &i2pRouterUnreachable)) {
                     connected = true;
                     sock = std::move(conn.sock);
                     hSocket = sock->Release();
                     // addr_bind = CAddress{conn.me, NODE_NONE};
+                    NoteI2PProxyReachable();
+                } else if (i2pRouterUnreachable) {
+                    // Lets the I2P dialer threads back off instead of picking new candidates
+                    // to fail against a router that isn't there. Deliberately keyed on the
+                    // router being unreachable, not on proxyConnectionFailed: that is also set
+                    // for a destination the (healthy) router doesn't know, which would let
+                    // stale or fake I2P addresses suspend all I2P dialing.
+                    NoteI2PProxyFailure(GetTime());
+                } else {
+                    // The router answered; only the destination failed.
+                    NoteI2PProxyReachable();
                 }
             }
     } else if (pszDest) {
@@ -2401,6 +2478,10 @@ void ThreadOpenI2PConnections()
         if (m_i2p_sam_session.get() == nullptr || semOutbound == nullptr)
             continue;
 
+        // The proxy was just unreachable: don't select candidates to fail against it.
+        if (IsI2PDialingSuspended(GetTime()))
+            continue;
+
         CSemaphoreGrant grant(*semOutbound, /* fTry */ true);
         if (!grant)
             continue;
@@ -2414,23 +2495,15 @@ void ThreadOpenI2PConnections()
             }
         }
 
-        const int64_t nANow = GetTime();
+        // One pass over addrman for I2P entries only, instead of repeatedly calling
+        // addrman.Select() over every network and discarding the non-I2P results.
         CAddress addrConnect;
-        bool fFound = false;
-        for (int nTries = 0; nTries < 50 && !fFound; nTries++) {
-            CAddrInfo addr = addrman.Select();
-            if (!addr.IsValid() || addr.GetNetwork() != NET_I2P)
-                continue;
-            if (setConnected.count(addr.GetGroup(addrman.m_asmap)) || IsLocal(addr))
-                continue;
-            if (!IsReachable(addr))
-                continue;
-            // only consider very recently tried nodes after 30 failed attempts
-            if (nANow - addr.nLastTry < 600 && nTries < 30)
-                continue;
-            addrConnect = addr;
-            fFound = true;
-        }
+        const bool fFound = PickI2PDialCandidate(
+            addrman.SelectCandidates(NET_I2P, 50), GetTime(),
+            [&setConnected](const CAddrInfo& addr) {
+                return !setConnected.count(addr.GetGroup(addrman.m_asmap)) && !IsLocal(addr) && IsReachable(addr);
+            },
+            addrConnect);
 
         if (fFound)
             OpenNetworkConnection(addrConnect, &grant, nullptr, false, false);
@@ -3021,6 +3094,10 @@ void ThreadI2PPoolTopUp()
         if (!fI2PIdentityRotation)
             continue;
 
+        // The proxy was just unreachable: don't select candidates to fail against it.
+        if (IsI2PDialingSuspended(GetTime()))
+            continue;
+
         std::vector<std::pair<size_t, uint32_t>> vNeedsPeers;
         {
             LOCK(cs_i2p_relay_pool);
@@ -3055,10 +3132,15 @@ void ThreadI2PPoolTopUp()
             if (semI2PPoolOutbound == nullptr)
                 break;
 
+            // An earlier slot's dial in this tick may have found the router down.
+            if (IsI2PDialingSuspended(GetTime()))
+                break;
+
             CAddress addrConnect;
             bool fFound = false;
-            for (int nTries = 0; nTries < 50 && !fFound; nTries++) {
-                CAddrInfo addr = addrman.Select();
+            // One pass over addrman for I2P entries only - see ThreadOpenI2PConnections().
+            const std::vector<CAddrInfo> vCandidates = addrman.SelectCandidates(NET_I2P, 50);
+            for (const CAddrInfo& addr : vCandidates) {
                 if (!addr.IsValid() || addr.GetNetwork() != NET_I2P || IsLocal(addr))
                     continue;
                 // Only exclude this candidate if it's already connected to
@@ -3085,9 +3167,10 @@ void ThreadI2PPoolTopUp()
                     continue;
                 addrConnect = addr;
                 fFound = true;
+                break;
             }
             if (!fFound) {
-                LogPrint("net", "I2P pool: top-up for slot %d found no usable candidate this tick (50 tries)\n", (int)idx);
+                LogPrint("net", "I2P pool: top-up for slot %d found no usable candidate this tick (%d candidates)\n", (int)idx, (int)vCandidates.size());
                 continue;
             }
 

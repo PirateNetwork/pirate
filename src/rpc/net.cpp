@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -99,8 +100,8 @@ UniValue getpeerlist(const UniValue& params, bool fHelp, const CPubKey& mypk)
             + HelpExampleRpc("getpeerlist", "")
         );
 
-    LOCK(cs_main);
-
+    // No cs_main here: the address book has its own lock, and holding cs_main while waiting
+    // for it would stall every other cs_main user whenever the network threads keep it busy.
     UniValue ret(UniValue::VARR);
     std::map<std::string, int64_t> info;
     addrman.GetAllPeers(info);
