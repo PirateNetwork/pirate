@@ -325,49 +325,125 @@ std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& 
 bool ShouldSkipForNetworkDiversity(Network net, const std::set<Network>& underTargetNetworks,
                                     int nTries, int nDiversityTryBudget = DIVERSITY_TRY_BUDGET);
 
-//! First and longest delay, in seconds, the I2P dialers wait after consecutive
-//! failures to reach the local I2P (SAM) proxy - see GetI2PProxyBackoffSeconds.
-static const int64_t I2P_PROXY_BACKOFF_BASE_SECONDS = 5;
-static const int64_t I2P_PROXY_BACKOFF_MAX_SECONDS = 60;
+//! First and longest delay, in seconds, a dialer waits after consecutive failures to reach the
+//! local daemon it dials through (the I2P router, the Tor daemon) - see GetDialBackoffSeconds.
+static const int64_t DIAL_BACKOFF_BASE_SECONDS = 5;
+static const int64_t DIAL_BACKOFF_MAX_SECONDS = 60;
 
 //! A candidate tried within this many seconds is only dialed again when no
-//! other usable candidate exists - see PickI2PDialCandidate.
-static const int64_t I2P_DIAL_RECENT_TRY_SECONDS = 600;
+//! other usable candidate exists - see PickDialCandidate.
+static const int64_t DIAL_RECENT_TRY_SECONDS = 600;
 
 /**
- * How long the I2P dialers should stay idle after nConsecutiveProxyFailures
- * failures in a row to reach the local I2P proxy: 0 with no failures, then
- * I2P_PROXY_BACKOFF_BASE_SECONDS doubling per failure up to
- * I2P_PROXY_BACKOFF_MAX_SECONDS.
+ * How long a dialer should stay idle after nConsecutiveFailures failures in a row to reach the
+ * external daemon it dials through: 0 with no failures, then DIAL_BACKOFF_BASE_SECONDS doubling
+ * per failure up to DIAL_BACKOFF_MAX_SECONDS.
  *
- * With no I2P router running every dial fails immediately, so without a
- * backoff the dialer threads spin on the address manager lock selecting
- * candidates they cannot possibly reach.
+ * With that daemon not running every dial fails immediately, so without a backoff the dialer
+ * thread would keep selecting candidates it cannot possibly reach, once a second, forever.
  */
-int64_t GetI2PProxyBackoffSeconds(int nConsecutiveProxyFailures);
+int64_t GetDialBackoffSeconds(int nConsecutiveFailures);
 
-//! Record a failed attempt to reach the I2P proxy, extending the backoff.
+/**
+ * Backoff state for one external daemon that peers are dialed through (I2P router, Tor daemon).
+ * One instance per daemon, so trouble with one never pauses dialing through the other. Thread-safe.
+ */
+class CDialBackoff
+{
+public:
+    //! Record a failed attempt to reach the daemon, extending the backoff.
+    void NoteFailure(int64_t nNow);
+
+    //! Record that the daemon answered (whether or not the remote peer did), clearing the backoff.
+    void NoteReachable();
+
+    //! Whether dialing through the daemon should currently be skipped because it was recently
+    //! unreachable.
+    bool IsSuspended(int64_t nNow) const;
+
+private:
+    mutable CCriticalSection cs; // leaf lock: nothing else is acquired while it is held
+    int nFailures = 0;           // guarded by cs
+    int64_t nResumeTime = 0;     // guarded by cs
+};
+
+//! Backoff for dialing through the local I2P (SAM) router: failed attempts to reach it, cleared by
+//! any answer from it. (Consulted by the I2P dialer threads.)
 void NoteI2PProxyFailure(int64_t nNow);
-
-//! Record that the I2P proxy answered (whether or not the remote peer did),
-//! clearing the backoff.
 void NoteI2PProxyReachable();
-
-//! Whether the I2P dialers should currently skip candidate selection and
-//! dialing because the proxy was recently unreachable.
 bool IsI2PDialingSuspended(int64_t nNow);
+
+//! Same for the Tor daemon's SOCKS port: a failure is the TCP connection to it being refused or
+//! failing (daemon dead, not started yet, crashed); any SOCKS answer - even an error for one
+//! onion peer - clears it. (Consulted by ThreadOpenTorConnections.)
+void NoteTorProxyFailure(int64_t nNow);
+void NoteTorProxyReachable();
+bool IsTorDialingSuspended(int64_t nNow);
 
 /**
  * Choose the I2P peer to dial from candidates already in random order (see
  * CAddrMan::SelectCandidates). Candidates rejected by fUsable are never
  * chosen. Among the usable ones the first not tried within the last
- * I2P_DIAL_RECENT_TRY_SECONDS wins; if every usable candidate was tried
+ * DIAL_RECENT_TRY_SECONDS wins; if every usable candidate was tried
  * recently the first of those is used, so a small pool of known I2P
  * addresses is still redialed rather than left idle.
  * @return true and sets addrOut if a candidate was chosen
  */
-bool PickI2PDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
-                          const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut);
+bool PickDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
+                       const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut);
+
+//! Outbound connection slots reserved for Tor peers by default, dialed by their own thread from
+//! their own semaphore so they never compete with regular (clearnet) peer discovery - see
+//! ThreadOpenTorConnections and -toroutbound.
+static const int DEFAULT_TOR_OUTBOUND = 8;
+
+//! Upper bound on -toroutbound. ThreadOpenTorConnections() connects to at most one peer per
+//! network group, and Tor addresses are grouped by the first 4 bits of the address
+//! (CNetAddr::GetGroup), so it can never fill more than 16 slots. (Peers added through -addnode or
+//! -seednode aren't subject to the group rule, and each one that is an onion peer takes up a
+//! group, so in practice keep -toroutbound comfortably below 16.) The group rule is a cap here,
+//! not Sybil resistance: grinding an onion address into a chosen group takes about 16 tries.
+static const int MAX_TOR_OUTBOUND = 16;
+
+/**
+ * Number of outbound slots to reserve for Tor given the configured -toroutbound value: never
+ * negative, never more than MAX_TOR_OUTBOUND, and never more than the node's total connection
+ * budget (an operator running a very small -maxconnections must not get a reservation larger
+ * than the whole budget).
+ */
+int GetTorOutboundReserve(int nConfigured, int nMaxConnections);
+
+/**
+ * Whether Tor peers are dialed on the dedicated Tor thread (instead of the regular dialer):
+ * only when slots are reserved for it AND a clearnet (IPv4/IPv6) network is also reachable. On a
+ * node that can only reach Tor - or Tor and I2P/CJDNS - (-onlynet=onion) the regular dialer must
+ * keep dialing onion peers too, otherwise the node would drop from its full regular outbound
+ * budget to the reserved slots.
+ */
+bool UseDedicatedTorSlots(int nTorOutboundReserved, bool fClearnetReachable);
+
+/**
+ * Networks whose outbound count is below the diversity floor, as far as the *regular* dialer is
+ * concerned: like GetUnderTargetReachableNetworks(), but without Tor when Tor is dialed by its
+ * own thread - the regular dialer can't fix a Tor shortfall, so steering it toward onion
+ * candidates it will then skip would only waste its search budget.
+ */
+std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network, int>& outboundCountByNetwork,
+                                                         bool fDedicatedTor);
+
+//! Whether the regular dialer should leave a candidate on `net` to the dedicated Tor thread.
+bool ShouldSkipForDedicatedTor(Network net, bool fDedicatedTor);
+
+/**
+ * Whether the operator's -onlynet setting allows outbound connections on `net`: true when
+ * -onlynet isn't given, otherwise only if `net` is one of the networks it lists.
+ *
+ * Reachability of the excluded networks is switched off at startup, but several things later turn
+ * a network back on because a proxy or daemon for it is available (-proxy, -onion=<addr> and
+ * -i2psam in init, and Tor's control code once it has authenticated with the Tor daemon). Each of
+ * them has to ask this first - otherwise -onlynet=ipv4 would still dial Tor or I2P peers.
+ */
+bool IsOnlyNetPermitted(Network net);
 
 
 extern bool fDiscover;
@@ -388,6 +464,8 @@ extern bool fPrivateTxRelayFallback;
 extern bool fI2PIdentityRotation;
 extern int nI2PPoolMinReserve;
 extern int nI2PPoolMaxSize;
+//! Configured -toroutbound (see GetTorOutboundReserve for the effective value).
+extern int nTorOutbound;
 
 extern std::vector<CNode*> vNodes;
 extern CCriticalSection cs_vNodes;

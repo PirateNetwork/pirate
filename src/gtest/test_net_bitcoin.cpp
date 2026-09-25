@@ -652,6 +652,127 @@ TEST_F(net_tests_bitcoin, GetUnderTargetReachableNetworks_ReturnsUnreachedReacha
     SetReachable(NET_I2P, true); // reset - global state shared with every other test in this binary
 }
 
+// Tor peers get slots of their own (-toroutbound), dialed by their own thread, so a node keeps
+// trying to fill them whatever the regular dialer is doing - instead of only ever getting the
+// diversity floor (2) and no more.
+TEST_F(net_tests_bitcoin, GetTorOutboundReserve_Clamps)
+{
+    const int kConns = DEFAULT_MAX_PEER_CONNECTIONS;
+
+    // The configured value is used as given...
+    EXPECT_EQ(GetTorOutboundReserve(DEFAULT_TOR_OUTBOUND, kConns), DEFAULT_TOR_OUTBOUND);
+    EXPECT_EQ(GetTorOutboundReserve(1, kConns), 1);
+    EXPECT_EQ(GetTorOutboundReserve(MAX_TOR_OUTBOUND, kConns), MAX_TOR_OUTBOUND);
+
+    // ...0 disables the reservation, and nonsense (negative) values can't produce a negative size...
+    EXPECT_EQ(GetTorOutboundReserve(0, kConns), 0);
+    EXPECT_EQ(GetTorOutboundReserve(-5, kConns), 0);
+    EXPECT_EQ(GetTorOutboundReserve(std::numeric_limits<int>::min(), kConns), 0);
+
+    // ...it can't exceed what one-outbound-peer-per-Tor-group allows (16)...
+    EXPECT_EQ(GetTorOutboundReserve(MAX_TOR_OUTBOUND + 1, kConns), MAX_TOR_OUTBOUND);
+    EXPECT_EQ(GetTorOutboundReserve(std::numeric_limits<int>::max(), kConns), MAX_TOR_OUTBOUND);
+
+    // ...nor the node's whole connection budget (a very small -maxconnections).
+    EXPECT_EQ(GetTorOutboundReserve(DEFAULT_TOR_OUTBOUND, 3), 3);
+    EXPECT_EQ(GetTorOutboundReserve(DEFAULT_TOR_OUTBOUND, 0), 0);
+    EXPECT_EQ(GetTorOutboundReserve(DEFAULT_TOR_OUTBOUND, -1), 0);
+}
+
+// On a node that can only reach Tor (-onlynet=onion) the regular dialer must keep dialing onion
+// peers itself; otherwise the node would fall from its full regular outbound budget to just the
+// reserved Tor slots.
+TEST_F(net_tests_bitcoin, UseDedicatedTorSlots_Behavior)
+{
+    EXPECT_TRUE(UseDedicatedTorSlots(DEFAULT_TOR_OUTBOUND, /* fClearnetReachable */ true));
+    EXPECT_TRUE(UseDedicatedTorSlots(1, true));
+
+    EXPECT_FALSE(UseDedicatedTorSlots(0, true)) << "no slots reserved: the regular dialer keeps dialing Tor";
+    EXPECT_FALSE(UseDedicatedTorSlots(DEFAULT_TOR_OUTBOUND, false)) << "Tor-only node: the regular dialer keeps dialing Tor";
+    EXPECT_FALSE(UseDedicatedTorSlots(0, false));
+}
+
+// Tor's control code marks onion reachable again once it has authenticated with the Tor daemon
+// (embedded Tor is on by default), undoing -onlynet's startup exclusion - so it has to ask
+// whether -onlynet allows onion first. Without that, -onlynet=ipv4 still dialed Tor peers.
+TEST_F(net_tests_bitcoin, IsOnlyNetPermitted_Behavior)
+{
+    const std::map<std::string, std::string> savedArgs = mapArgs;
+    const std::map<std::string, std::vector<std::string> > savedMultiArgs = mapMultiArgs;
+    struct ArgsRestorer {
+        const std::map<std::string, std::string>& args;
+        const std::map<std::string, std::vector<std::string> >& multi;
+        ~ArgsRestorer() { mapArgs = args; mapMultiArgs = multi; }
+    } restorer{savedArgs, savedMultiArgs};
+
+    const Network kNets[] = {NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS};
+
+    // No -onlynet: nothing is excluded.
+    mapArgs.erase("-onlynet");
+    mapMultiArgs.erase("-onlynet");
+    for (Network net : kNets)
+        EXPECT_TRUE(IsOnlyNetPermitted(net)) << "net=" << net;
+
+    // -onlynet=ipv4: only IPv4.
+    mapArgs["-onlynet"] = "ipv4";
+    mapMultiArgs["-onlynet"] = {"ipv4"};
+    EXPECT_TRUE(IsOnlyNetPermitted(NET_IPV4));
+    for (Network net : {NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS})
+        EXPECT_FALSE(IsOnlyNetPermitted(net)) << "net=" << net;
+
+    // Repeated -onlynet lists every permitted network (and "tor" is an accepted spelling of onion).
+    mapArgs["-onlynet"] = "tor";
+    mapMultiArgs["-onlynet"] = {"ipv4", "tor"};
+    EXPECT_TRUE(IsOnlyNetPermitted(NET_IPV4));
+    EXPECT_TRUE(IsOnlyNetPermitted(NET_ONION));
+    EXPECT_FALSE(IsOnlyNetPermitted(NET_I2P));
+
+    // -onlynet=onion alone.
+    mapArgs["-onlynet"] = "onion";
+    mapMultiArgs["-onlynet"] = {"onion"};
+    EXPECT_TRUE(IsOnlyNetPermitted(NET_ONION));
+    EXPECT_FALSE(IsOnlyNetPermitted(NET_IPV4));
+}
+
+TEST_F(net_tests_bitcoin, ShouldSkipForDedicatedTor_Behavior)
+{
+    // Only onion candidates are left to the Tor thread, and only while it is in charge.
+    EXPECT_TRUE(ShouldSkipForDedicatedTor(NET_ONION, true));
+    for (Network net : {NET_IPV4, NET_IPV6, NET_I2P, NET_CJDNS})
+        EXPECT_FALSE(ShouldSkipForDedicatedTor(net, true)) << "net=" << net;
+    for (Network net : {NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS})
+        EXPECT_FALSE(ShouldSkipForDedicatedTor(net, false)) << "net=" << net;
+}
+
+// The regular dialer must not be steered toward Tor candidates it will then skip, or every pass
+// would burn its search budget on them.
+TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_ExcludesTorOnlyWhenDedicated)
+{
+    const std::map<Network, int> empty;
+
+    // Tor still needs peers, but only the regular dialer's set is affected by who dials them.
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(empty, /* fDedicatedTor */ false),
+              (std::set<Network>{NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS}));
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(empty, true),
+              (std::set<Network>{NET_IPV4, NET_IPV6, NET_I2P, NET_CJDNS}));
+
+    // Everything else is untouched: networks that met their floor still drop out.
+    const std::map<Network, int> counts{
+        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV6, 0},
+        {NET_ONION, 0},
+        {NET_I2P, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_CJDNS, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+    };
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, true), (std::set<Network>{NET_IPV6}));
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, false), (std::set<Network>{NET_IPV6, NET_ONION}));
+
+    // And an unreachable network still never appears.
+    SetReachable(NET_IPV6, false);
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, true), std::set<Network>{});
+    SetReachable(NET_IPV6, true); // reset - global state shared with every other test in this binary
+}
+
 TEST_F(net_tests_bitcoin, ShouldSkipForNetworkDiversity_Behavior)
 {
     const std::set<Network> underTarget{NET_ONION, NET_I2P};
@@ -680,26 +801,26 @@ TEST_F(net_tests_bitcoin, ShouldSkipForNetworkDiversity_Behavior)
 // With no I2P router running, every I2P dial fails at once. Without a backoff the
 // dialer threads immediately pick new candidates to fail against the same dead proxy,
 // spinning on the address manager lock other threads (some holding cs_main) need.
-TEST_F(net_tests_bitcoin, GetI2PProxyBackoffSeconds_Schedule)
+TEST_F(net_tests_bitcoin, GetDialBackoffSeconds_Schedule)
 {
-    EXPECT_EQ(GetI2PProxyBackoffSeconds(-1), 0);
-    EXPECT_EQ(GetI2PProxyBackoffSeconds(0), 0);
+    EXPECT_EQ(GetDialBackoffSeconds(-1), 0);
+    EXPECT_EQ(GetDialBackoffSeconds(0), 0);
 
     // Starts at the base delay and doubles per consecutive failure...
-    EXPECT_EQ(GetI2PProxyBackoffSeconds(1), I2P_PROXY_BACKOFF_BASE_SECONDS);
-    EXPECT_EQ(GetI2PProxyBackoffSeconds(2), 2 * I2P_PROXY_BACKOFF_BASE_SECONDS);
-    EXPECT_EQ(GetI2PProxyBackoffSeconds(3), 4 * I2P_PROXY_BACKOFF_BASE_SECONDS);
+    EXPECT_EQ(GetDialBackoffSeconds(1), DIAL_BACKOFF_BASE_SECONDS);
+    EXPECT_EQ(GetDialBackoffSeconds(2), 2 * DIAL_BACKOFF_BASE_SECONDS);
+    EXPECT_EQ(GetDialBackoffSeconds(3), 4 * DIAL_BACKOFF_BASE_SECONDS);
 
     // ...never exceeds the cap (so a router started later is picked up promptly),
     // however many failures accumulate, without overflowing.
     for (int n : {6, 7, 16, 17, 32, 1000, std::numeric_limits<int>::max()})
-        EXPECT_EQ(GetI2PProxyBackoffSeconds(n), I2P_PROXY_BACKOFF_MAX_SECONDS) << "n=" << n;
+        EXPECT_EQ(GetDialBackoffSeconds(n), DIAL_BACKOFF_MAX_SECONDS) << "n=" << n;
 
     int64_t prev = 0;
     for (int n = 0; n <= 40; n++) {
-        const int64_t cur = GetI2PProxyBackoffSeconds(n);
+        const int64_t cur = GetDialBackoffSeconds(n);
         EXPECT_GE(cur, prev) << "n=" << n;
-        EXPECT_LE(cur, I2P_PROXY_BACKOFF_MAX_SECONDS) << "n=" << n;
+        EXPECT_LE(cur, DIAL_BACKOFF_MAX_SECONDS) << "n=" << n;
         prev = cur;
     }
 }
@@ -714,22 +835,22 @@ TEST_F(net_tests_bitcoin, I2PProxyBackoff_SuspendsAndResumes)
     // First failure: idle for the base delay, then dial again.
     NoteI2PProxyFailure(t0);
     EXPECT_TRUE(IsI2PDialingSuspended(t0));
-    EXPECT_TRUE(IsI2PDialingSuspended(t0 + I2P_PROXY_BACKOFF_BASE_SECONDS - 1));
-    EXPECT_FALSE(IsI2PDialingSuspended(t0 + I2P_PROXY_BACKOFF_BASE_SECONDS));
+    EXPECT_TRUE(IsI2PDialingSuspended(t0 + DIAL_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsI2PDialingSuspended(t0 + DIAL_BACKOFF_BASE_SECONDS));
 
     // Failing again on that next attempt lengthens the wait.
-    const int64_t t1 = t0 + I2P_PROXY_BACKOFF_BASE_SECONDS;
+    const int64_t t1 = t0 + DIAL_BACKOFF_BASE_SECONDS;
     NoteI2PProxyFailure(t1);
-    EXPECT_TRUE(IsI2PDialingSuspended(t1 + 2 * I2P_PROXY_BACKOFF_BASE_SECONDS - 1));
-    EXPECT_FALSE(IsI2PDialingSuspended(t1 + 2 * I2P_PROXY_BACKOFF_BASE_SECONDS));
+    EXPECT_TRUE(IsI2PDialingSuspended(t1 + 2 * DIAL_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsI2PDialingSuspended(t1 + 2 * DIAL_BACKOFF_BASE_SECONDS));
 
     // Any answer from the proxy clears the backoff outright, and the next failure
     // starts again from the base delay rather than continuing the old streak.
     NoteI2PProxyReachable();
     EXPECT_FALSE(IsI2PDialingSuspended(t1));
     NoteI2PProxyFailure(t1);
-    EXPECT_TRUE(IsI2PDialingSuspended(t1 + I2P_PROXY_BACKOFF_BASE_SECONDS - 1));
-    EXPECT_FALSE(IsI2PDialingSuspended(t1 + I2P_PROXY_BACKOFF_BASE_SECONDS));
+    EXPECT_TRUE(IsI2PDialingSuspended(t1 + DIAL_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsI2PDialingSuspended(t1 + DIAL_BACKOFF_BASE_SECONDS));
 
     NoteI2PProxyReachable(); // don't leave the dialers suspended for other tests
 }
@@ -754,7 +875,65 @@ TEST_F(net_tests_bitcoin, I2PProxyBackoff_ClockStepBackwardsDoesNotProlongSuspen
     NoteI2PProxyReachable();
 }
 
-TEST_F(net_tests_bitcoin, PickI2PDialCandidate_Behavior)
+// The Tor daemon is an external binary just like the I2P router: with it not running, every onion
+// dial is refused at the SOCKS port at once, so ThreadOpenTorConnections backs off the same way.
+TEST_F(net_tests_bitcoin, DialBackoff_SuspendsResumesAndResets)
+{
+    CDialBackoff backoff;
+    const int64_t t0 = 4000000;
+
+    EXPECT_FALSE(backoff.IsSuspended(t0)) << "a fresh backoff must not suspend anything";
+
+    backoff.NoteFailure(t0);
+    EXPECT_TRUE(backoff.IsSuspended(t0));
+    EXPECT_TRUE(backoff.IsSuspended(t0 + DIAL_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(backoff.IsSuspended(t0 + DIAL_BACKOFF_BASE_SECONDS));
+
+    // Failing again on that next attempt lengthens the wait, up to the cap however many pile up.
+    const int64_t t1 = t0 + DIAL_BACKOFF_BASE_SECONDS;
+    backoff.NoteFailure(t1);
+    EXPECT_TRUE(backoff.IsSuspended(t1 + 2 * DIAL_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(backoff.IsSuspended(t1 + 2 * DIAL_BACKOFF_BASE_SECONDS));
+    int64_t t = t1;
+    for (int i = 0; i < 50; i++)
+        backoff.NoteFailure(t);
+    EXPECT_TRUE(backoff.IsSuspended(t + DIAL_BACKOFF_MAX_SECONDS - 1));
+    EXPECT_FALSE(backoff.IsSuspended(t + DIAL_BACKOFF_MAX_SECONDS)) << "the wait must never exceed the cap";
+
+    // Any answer from the daemon clears it outright, and the next failure starts over.
+    backoff.NoteReachable();
+    EXPECT_FALSE(backoff.IsSuspended(t));
+    backoff.NoteFailure(t);
+    EXPECT_TRUE(backoff.IsSuspended(t + DIAL_BACKOFF_BASE_SECONDS - 1)) << "after a reset the wait starts from the base delay again";
+    EXPECT_FALSE(backoff.IsSuspended(t + DIAL_BACKOFF_BASE_SECONDS));
+}
+
+// One daemon being down must not pause dialing through the other: the I2P router and the Tor
+// daemon each have their own backoff.
+TEST_F(net_tests_bitcoin, TorAndI2PDialBackoffsAreIndependent)
+{
+    NoteTorProxyReachable();
+    NoteI2PProxyReachable();
+    const int64_t t0 = 5000000;
+
+    EXPECT_FALSE(IsTorDialingSuspended(t0));
+    EXPECT_FALSE(IsI2PDialingSuspended(t0));
+
+    NoteTorProxyFailure(t0);
+    EXPECT_TRUE(IsTorDialingSuspended(t0));
+    EXPECT_FALSE(IsI2PDialingSuspended(t0)) << "a dead Tor daemon must not pause I2P dialing";
+    EXPECT_FALSE(IsTorDialingSuspended(t0 + DIAL_BACKOFF_BASE_SECONDS));
+
+    NoteI2PProxyFailure(t0);
+    NoteTorProxyReachable();
+    EXPECT_TRUE(IsI2PDialingSuspended(t0));
+    EXPECT_FALSE(IsTorDialingSuspended(t0)) << "Tor answering must not clear the I2P backoff, nor a dead I2P router pause Tor dialing";
+
+    NoteI2PProxyReachable();
+    EXPECT_FALSE(IsI2PDialingSuspended(t0));
+}
+
+TEST_F(net_tests_bitcoin, PickDialCandidate_Behavior)
 {
     const int64_t now = 2000000;
     CNetAddr source;
@@ -770,31 +949,31 @@ TEST_F(net_tests_bitcoin, PickI2PDialCandidate_Behavior)
         info.nLastTry = nLastTry;
         return info;
     };
-    const int64_t kLongAgo = now - 10 * I2P_DIAL_RECENT_TRY_SECONDS;
+    const int64_t kLongAgo = now - 10 * DIAL_RECENT_TRY_SECONDS;
     const int64_t kJustNow = now - 1;
     const auto acceptAll = [](const CAddrInfo&) { return true; };
 
     CAddress chosen;
 
     // Nothing to choose from / nothing usable.
-    EXPECT_FALSE(PickI2PDialCandidate({}, now, acceptAll, chosen));
-    EXPECT_FALSE(PickI2PDialCandidate({makeCandidate(1, kLongAgo)}, now,
+    EXPECT_FALSE(PickDialCandidate({}, now, acceptAll, chosen));
+    EXPECT_FALSE(PickDialCandidate({makeCandidate(1, kLongAgo)}, now,
                                       [](const CAddrInfo&) { return false; }, chosen));
 
     // Prefers a candidate not tried recently over an earlier one that was.
     std::vector<CAddrInfo> v{makeCandidate(1, kJustNow), makeCandidate(2, kLongAgo), makeCandidate(3, kLongAgo)};
-    ASSERT_TRUE(PickI2PDialCandidate(v, now, acceptAll, chosen));
+    ASSERT_TRUE(PickDialCandidate(v, now, acceptAll, chosen));
     EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[1]));
 
     // A candidate exactly at the recency threshold counts as not recent.
-    v = {makeCandidate(1, kJustNow), makeCandidate(2, now - I2P_DIAL_RECENT_TRY_SECONDS)};
-    ASSERT_TRUE(PickI2PDialCandidate(v, now, acceptAll, chosen));
+    v = {makeCandidate(1, kJustNow), makeCandidate(2, now - DIAL_RECENT_TRY_SECONDS)};
+    ASSERT_TRUE(PickDialCandidate(v, now, acceptAll, chosen));
     EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[1]));
 
     // With only recently-tried candidates, still dial the first rather than sit idle
     // (a small pool of known I2P addresses would otherwise never be redialed).
     v = {makeCandidate(1, kJustNow), makeCandidate(2, kJustNow)};
-    ASSERT_TRUE(PickI2PDialCandidate(v, now, acceptAll, chosen));
+    ASSERT_TRUE(PickDialCandidate(v, now, acceptAll, chosen));
     EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[0]));
 
     // Unusable candidates (already connected, local, unreachable...) are never chosen,
@@ -802,7 +981,7 @@ TEST_F(net_tests_bitcoin, PickI2PDialCandidate_Behavior)
     v = {makeCandidate(1, kLongAgo), makeCandidate(2, kJustNow), makeCandidate(3, kLongAgo)};
     const CService rejected1 = v[0];
     const CService rejected3 = v[2];
-    ASSERT_TRUE(PickI2PDialCandidate(v, now,
+    ASSERT_TRUE(PickDialCandidate(v, now,
         [&](const CAddrInfo& a) { return static_cast<CService>(a) != rejected1 && static_cast<CService>(a) != rejected3; },
         chosen));
     EXPECT_TRUE(static_cast<CService>(chosen) == static_cast<CService>(v[1]));

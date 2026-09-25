@@ -490,6 +490,7 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-i2pidentityrotation", strprintf(_("Maintain a pool of short-lived, burn-after-use I2P identities for relaying locally-originated transactions, separate from the node's normal (permanent) I2P identity, to prevent long-term transaction linkability (default: %d)"), DEFAULT_I2P_IDENTITY_ROTATION));
     strUsage += HelpMessageOpt("-i2pidentitypoolmin=<n>", strprintf(_("Minimum number of warmed, ready I2P relay identities to keep in reserve (default: %d)"), DEFAULT_I2P_POOL_MIN_RESERVE));
     strUsage += HelpMessageOpt("-i2pidentitypoolmax=<n>", strprintf(_("Maximum number of concurrent I2P relay identities (default: %d)"), DEFAULT_I2P_POOL_MAX_SIZE));
+    strUsage += HelpMessageOpt("-toroutbound=<n>", strprintf(_("Outbound connection slots reserved for Tor peers, on top of the regular outbound connections and dialed separately from them (0-%d, 0 disables the reservation; default: %d). A value of 1 gives fewer Tor peers than before this option existed, since the regular dialer no longer keeps a Tor minimum once Tor has slots of its own (0 restores the old behavior). Ignored (Tor is dialed like any other network) on a node that can't reach IPv4 or IPv6, or that uses -connect. Locally-originated transactions are relayed to all outbound Tor peers with -privatetxrelay, and each of them learns this node's onion address: more slots mean better reachability and resilience, but also more peers that see your own transactions first."), MAX_TOR_OUTBOUND, DEFAULT_TOR_OUTBOUND));
     strUsage += HelpMessageOpt("-maxreceivebuffer=<n>", strprintf(_("Maximum per-connection receive buffer, <n>*1000 bytes (default: %u)"), 5000));
     strUsage += HelpMessageOpt("-maxsendbuffer=<n>", strprintf(_("Maximum per-connection send buffer, <n>*1000 bytes (default: %u)"), 1000));
     strUsage += HelpMessageOpt("-onion=<ip:port>", strprintf(_("Use separate SOCKS5 proxy to reach peers via Tor hidden services (default: %s)"), "-proxy"));
@@ -1360,15 +1361,24 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     fI2PIdentityRotation = GetBoolArg("-i2pidentityrotation", DEFAULT_I2P_IDENTITY_ROTATION);
     nI2PPoolMinReserve = std::max(0, (int)GetArg("-i2pidentitypoolmin", DEFAULT_I2P_POOL_MIN_RESERVE));
     nI2PPoolMaxSize = std::max(1, (int)GetArg("-i2pidentitypoolmax", DEFAULT_I2P_POOL_MAX_SIZE));
+    {
+        const int64_t nTorOutboundArg = GetArg("-toroutbound", DEFAULT_TOR_OUTBOUND);
+        nTorOutbound = (int)std::max<int64_t>(0, std::min<int64_t>(nTorOutboundArg, MAX_TOR_OUTBOUND));
+        if (nTorOutbound != nTorOutboundArg)
+            InitWarning(strprintf(_("-toroutbound=%d is outside the allowed range 0-%d; using %d"),
+                                  nTorOutboundArg, MAX_TOR_OUTBOUND, nTorOutbound));
+    }
     if (nI2PPoolMinReserve > nI2PPoolMaxSize)
         nI2PPoolMinReserve = nI2PPoolMaxSize;
-    nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS)), 0);
-    int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS);
+    // The reserved Tor outbound slots (see -toroutbound) are sockets on top of nMaxConnections, so
+    // they count against the descriptor budget too.
+    nMaxConnections = std::max(std::min(nMaxConnections, (int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS - nTorOutbound)), 0);
+    int nFD = RaiseFileDescriptorLimit(nMaxConnections + MIN_CORE_FILEDESCRIPTORS + nTorOutbound);
     //fprintf(stderr,"nMaxConnections %d FD_SETSIZE.%d nBind.%d expr.%d \n",nMaxConnections,FD_SETSIZE,nBind,(int)(FD_SETSIZE - nBind - MIN_CORE_FILEDESCRIPTORS));
     if (nFD < MIN_CORE_FILEDESCRIPTORS)
         return InitError(_("Not enough file descriptors available."));
-    if (nFD - MIN_CORE_FILEDESCRIPTORS < nMaxConnections)
-        nMaxConnections = nFD - MIN_CORE_FILEDESCRIPTORS;
+    if (nFD - MIN_CORE_FILEDESCRIPTORS - nTorOutbound < nMaxConnections)
+        nMaxConnections = std::max(nFD - MIN_CORE_FILEDESCRIPTORS - nTorOutbound, 0);
     if (bOverrideMaxConnections==true)
     {
         //fprintf(stderr,"init: GUI config override maxconnections=%d\n",nMaxConnections);
@@ -1773,7 +1783,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         SetProxy(NET_IPV6, addrProxy);
         SetProxy(NET_ONION, addrProxy);
         SetNameProxy(addrProxy);
-        SetReachable(NET_ONION, true); // by default, -proxy sets onion as reachable, unless -noonion later
+        // by default, -proxy sets onion as reachable, unless -noonion later - or -onlynet excludes it
+        if (IsOnlyNetPermitted(NET_ONION))
+            SetReachable(NET_ONION, true);
     }
 
     const std::string& i2psam_arg = GetArg("-i2psam", "");
@@ -1782,7 +1794,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (!Lookup(i2psam_arg.c_str(), addr, 7656, fNameLookup) || !addr.IsValid()) {
             return InitError(strprintf(_("Invalid -i2psam address or hostname: '%s'"), i2psam_arg));
         }
-        SetReachable(NET_I2P, true);
+        // -onlynet may have excluded I2P: having a router to talk to doesn't override that
+        if (IsOnlyNetPermitted(NET_I2P))
+            SetReachable(NET_I2P, true);
         SetProxy(NET_I2P, proxyType{addr});
     } else {
         SetReachable(NET_I2P, false);
@@ -1801,7 +1815,8 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             if (!addrOnion.IsValid())
                 return InitError(strprintf(_("Invalid -onion address: '%s'"), onionArg));
             SetProxy(NET_ONION, addrOnion);
-            SetReachable(NET_ONION, true);
+            if (IsOnlyNetPermitted(NET_ONION))
+                SetReachable(NET_ONION, true);
         }
     }
 

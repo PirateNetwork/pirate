@@ -125,6 +125,7 @@ bool fPrivateTxRelayFallback = DEFAULT_PRIVATE_TX_RELAY_FALLBACK;
 bool fI2PIdentityRotation = DEFAULT_I2P_IDENTITY_ROTATION;
 int nI2PPoolMinReserve = DEFAULT_I2P_POOL_MIN_RESERVE;
 int nI2PPoolMaxSize = DEFAULT_I2P_POOL_MAX_SIZE;
+int nTorOutbound = DEFAULT_TOR_OUTBOUND;
 bool fAddressesInitialized = false;
 TLSManager tlsmanager = TLSManager();
 std::atomic<bool> fNetworkActive = { true };
@@ -190,6 +191,17 @@ static CSemaphore *semI2PPoolOutbound = NULL;
 //! StopNode() posts back exactly that many rather than recomputing the
 //! sizing formula a second time and risking the two drifting apart.
 static int nI2PPoolOutboundReserved = 0;
+//! Dedicated outbound-connection budget for Tor peers (see ThreadOpenTorConnections), separate
+//! from the regular semOutbound for the same reason as semI2PPoolOutbound: ThreadOpenConnections()
+//! picks candidates from addrman in proportion to what it holds, so Tor - a small share of it - only
+//! ever got the diversity floor (MIN_OUTBOUND_PER_REACHABLE_NETWORK, 2) and never more, however many
+//! Tor peers were known. Tor peers are also the only peers locally-originated transactions are
+//! relayed to (-privatetxrelay), so their number is the size of that relay set. Reserving a
+//! budget of their own guarantees the node keeps trying to fill it regardless of how saturated
+//! ordinary peer discovery is.
+static CSemaphore *semTorOutbound = NULL;
+//! Capacity semTorOutbound was constructed with, so StopNode() posts back exactly that many.
+static int nTorOutboundReserved = 0;
 static boost::condition_variable messageHandlerCondition;
 
 // Denial-of-service detection/prevention
@@ -673,64 +685,110 @@ bool ShouldSkipForNetworkDiversity(Network net, const std::set<Network>& underTa
     return underTargetNetworks.count(net) == 0;
 }
 
+int GetTorOutboundReserve(int nConfigured, int nMaxConnections)
+{
+    return std::max(0, std::min(std::min(nConfigured, MAX_TOR_OUTBOUND), nMaxConnections));
+}
+
+bool UseDedicatedTorSlots(int nTorOutboundReserved, bool fClearnetReachable)
+{
+    return nTorOutboundReserved > 0 && fClearnetReachable;
+}
+
+std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network, int>& outboundCountByNetwork,
+                                                         bool fDedicatedTor)
+{
+    std::set<Network> underTarget = GetUnderTargetReachableNetworks(outboundCountByNetwork);
+    if (fDedicatedTor)
+        underTarget.erase(NET_ONION);
+    return underTarget;
+}
+
+bool ShouldSkipForDedicatedTor(Network net, bool fDedicatedTor)
+{
+    return fDedicatedTor && net == NET_ONION;
+}
+
+bool IsOnlyNetPermitted(Network net)
+{
+    if (!mapArgs.count("-onlynet"))
+        return true;
+    const auto it = mapMultiArgs.find("-onlynet");
+    if (it == mapMultiArgs.end())
+        return false;
+    for (const std::string& snet : it->second) {
+        if (ParseNetwork(snet) == net)
+            return true;
+    }
+    return false;
+}
+
+//! Whether Tor peers are currently dialed by ThreadOpenTorConnections() rather than the regular
+//! dialer. Re-evaluated on every pass: reachability can change at runtime (Tor becoming reachable
+//! once its control connection is up).
+static bool IsTorDedicated()
+{
+    return UseDedicatedTorSlots(nTorOutboundReserved, IsReachable(NET_IPV4) || IsReachable(NET_IPV6));
+}
+
 void AddressCurrentlyConnected(const CService& addr)
 {
     addrman.Add(CAddress(addr),addr); //Add address if not alread in addrman (picks up addnodes)
     addrman.Connected(addr);
 }
 
-namespace {
-//! Consecutive failures to reach the local I2P proxy and the time before which the I2P dialers
-//! stay idle. Shared by the dialer threads and ConnectNode(); one lock keeps the pair consistent
-//! (a success racing a failure can't leave a stale suspension behind). Leaf lock: nothing else is
-//! acquired while it is held.
-CCriticalSection cs_i2pProxyBackoff;
-int nI2PProxyFailures = 0;      // guarded by cs_i2pProxyBackoff
-int64_t nI2PDialResumeTime = 0; // guarded by cs_i2pProxyBackoff
-} // namespace
-
-int64_t GetI2PProxyBackoffSeconds(int nConsecutiveProxyFailures)
+int64_t GetDialBackoffSeconds(int nConsecutiveFailures)
 {
-    if (nConsecutiveProxyFailures <= 0)
+    if (nConsecutiveFailures <= 0)
         return 0;
     // Cap the shift well before the result could overflow; the maximum is reached after a few steps.
-    const int nShift = std::min(nConsecutiveProxyFailures - 1, 16);
-    return std::min<int64_t>(I2P_PROXY_BACKOFF_BASE_SECONDS << nShift, I2P_PROXY_BACKOFF_MAX_SECONDS);
+    const int nShift = std::min(nConsecutiveFailures - 1, 16);
+    return std::min<int64_t>(DIAL_BACKOFF_BASE_SECONDS << nShift, DIAL_BACKOFF_MAX_SECONDS);
 }
 
-void NoteI2PProxyFailure(int64_t nNow)
+void CDialBackoff::NoteFailure(int64_t nNow)
 {
-    LOCK(cs_i2pProxyBackoff);
-    nI2PProxyFailures = std::min(nI2PProxyFailures + 1, 32);
-    nI2PDialResumeTime = nNow + GetI2PProxyBackoffSeconds(nI2PProxyFailures);
+    LOCK(cs);
+    nFailures = std::min(nFailures + 1, 32);
+    nResumeTime = nNow + GetDialBackoffSeconds(nFailures);
 }
 
-void NoteI2PProxyReachable()
+void CDialBackoff::NoteReachable()
 {
-    LOCK(cs_i2pProxyBackoff);
-    nI2PProxyFailures = 0;
-    nI2PDialResumeTime = 0;
+    LOCK(cs);
+    nFailures = 0;
+    nResumeTime = 0;
 }
 
-bool IsI2PDialingSuspended(int64_t nNow)
+bool CDialBackoff::IsSuspended(int64_t nNow) const
 {
-    LOCK(cs_i2pProxyBackoff);
-    const int64_t nResume = nI2PDialResumeTime;
+    LOCK(cs);
     // A resume time further out than the longest backoff can only come from the clock having
     // stepped backwards since the failure was recorded; don't stay suspended for the step too.
-    if (nResume - nNow > I2P_PROXY_BACKOFF_MAX_SECONDS)
+    if (nResumeTime - nNow > DIAL_BACKOFF_MAX_SECONDS)
         return false;
-    return nNow < nResume;
+    return nNow < nResumeTime;
 }
 
-bool PickI2PDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
-                          const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut)
+static CDialBackoff g_i2pDialBackoff;
+static CDialBackoff g_torDialBackoff;
+
+void NoteI2PProxyFailure(int64_t nNow) { g_i2pDialBackoff.NoteFailure(nNow); }
+void NoteI2PProxyReachable() { g_i2pDialBackoff.NoteReachable(); }
+bool IsI2PDialingSuspended(int64_t nNow) { return g_i2pDialBackoff.IsSuspended(nNow); }
+
+void NoteTorProxyFailure(int64_t nNow) { g_torDialBackoff.NoteFailure(nNow); }
+void NoteTorProxyReachable() { g_torDialBackoff.NoteReachable(); }
+bool IsTorDialingSuspended(int64_t nNow) { return g_torDialBackoff.IsSuspended(nNow); }
+
+bool PickDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
+                       const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut)
 {
     const CAddrInfo* pRecentlyTried = nullptr;
     for (const CAddrInfo& addr : vCandidates) {
         if (!fUsable(addr))
             continue;
-        if (nNow - addr.nLastTry >= I2P_DIAL_RECENT_TRY_SECONDS) {
+        if (nNow - addr.nLastTry >= DIAL_RECENT_TRY_SECONDS) {
             addrOut = addr;
             return true;
         }
@@ -899,6 +957,17 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
         connected = ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), connectTimeout, &proxyConnectionFailed);
     }  else {
         connected = ConnectSocket(addrConnect, hSocket, connectTimeout, &proxyConnectionFailed);
+    }
+
+    // Lets the Tor dialer thread back off while the Tor daemon isn't there, instead of picking a
+    // new onion peer to fail against its refused SOCKS port every second. proxyConnectionFailed
+    // is set only when the TCP connection to the proxy itself fails; a SOCKS error for this one
+    // peer (Tor answered, the onion peer didn't) means the daemon is up.
+    if (addrConnect.IsTor()) {
+        if (!connected && proxyConnectionFailed)
+            NoteTorProxyFailure(GetTime());
+        else
+            NoteTorProxyReachable();
     }
 
 
@@ -2380,12 +2449,14 @@ void ThreadOpenConnections()
         // connections across every currently-reachable network rather than
         // letting whichever network is best represented in addrman (usually
         // IPv4) claim every outbound slot - see GetUnderTargetReachableNetworks.
+        const bool fDedicatedTor = IsTorDedicated();
         const std::set<Network> underTargetNetworks =
-            GetUnderTargetReachableNetworks(outboundCountByNetwork);
+            GetUnderTargetNetworksForRegularDialer(outboundCountByNetwork, fDedicatedTor);
 
         int64_t nANow = GetTime();
 
         int nTries = 0;
+        int nSkipped = 0;
         while (true)
         {
             if (ShutdownRequested())
@@ -2394,7 +2465,33 @@ void ThreadOpenConnections()
             CAddrInfo addr = addrman.Select();
 
             // if we selected an invalid address, restart
-            if (!addr.IsValid() || setConnected.count(addr.GetGroup(addrman.m_asmap)) || IsLocal(addr))
+            if (!addr.IsValid())
+                break;
+
+            // I2P peers are dialed by the dedicated ThreadOpenI2PConnections()
+            // thread instead of here - see that thread's doc comment for why
+            // (a slow/unresponsive I2P SAM proxy must never be able to block
+            // clearnet/Tor dialing on this thread).
+            //
+            // Likewise Tor peers, when they have slots of their own: they are dialed by
+            // ThreadOpenTorConnections(), so a regular slot never goes to one (and is never
+            // left idle waiting for one).
+            //
+            // Checked before the connected-group test below, which ends the whole pass: a
+            // candidate this thread would never dial must not be able to do that (with several
+            // of the 16 Tor groups held by the Tor thread, about that share of onion picks
+            // would otherwise cut every pass short).
+            //
+            // Counted separately from nTries, which also paces the diversity budget and the
+            // relaxations below: on an addrman full of onion/I2P entries, skipped candidates must
+            // not use those up.
+            if (addr.GetNetwork() == NET_I2P || ShouldSkipForDedicatedTor(addr.GetNetwork(), fDedicatedTor)) {
+                if (++nSkipped > 100)
+                    break;
+                continue;
+            }
+
+            if (setConnected.count(addr.GetGroup(addrman.m_asmap)) || IsLocal(addr))
                 break;
 
             // If we didn't find an appropriate destination after trying 100 addresses fetched from addrman,
@@ -2405,14 +2502,6 @@ void ThreadOpenConnections()
                 break;
 
             if (!IsReachable(addr)) {
-                continue;
-            }
-
-            // I2P peers are dialed by the dedicated ThreadOpenI2PConnections()
-            // thread instead of here - see that thread's doc comment for why
-            // (a slow/unresponsive I2P SAM proxy must never be able to block
-            // clearnet/Tor dialing on this thread).
-            if (addr.GetNetwork() == NET_I2P) {
                 continue;
             }
 
@@ -2498,7 +2587,7 @@ void ThreadOpenI2PConnections()
         // One pass over addrman for I2P entries only, instead of repeatedly calling
         // addrman.Select() over every network and discarding the non-I2P results.
         CAddress addrConnect;
-        const bool fFound = PickI2PDialCandidate(
+        const bool fFound = PickDialCandidate(
             addrman.SelectCandidates(NET_I2P, 50), GetTime(),
             [&setConnected](const CAddrInfo& addr) {
                 return !setConnected.count(addr.GetGroup(addrman.m_asmap)) && !IsLocal(addr) && IsReachable(addr);
@@ -2507,6 +2596,73 @@ void ThreadOpenI2PConnections()
 
         if (fFound)
             OpenNetworkConnection(addrConnect, &grant, nullptr, false, false);
+    }
+}
+
+//! Dedicated thread for dialing outbound Tor peers selected from addrman, from its own
+//! semaphore (semTorOutbound) - the Tor counterpart of ThreadOpenI2PConnections(), except that it
+//! has slots of its own instead of sharing semOutbound (as the I2P relay pool's top-up dialer does;
+//! see semTorOutbound for why). ThreadOpenConnections() leaves onion candidates to this thread
+//! whenever IsTorDedicated().
+//!
+//! Tor peers are picked with CAddrMan::SelectCandidates() - one pass over the onion entries
+//! only - instead of repeatedly calling Select() over every network and discarding the rest.
+//! Like every outbound peer they are limited to one per network group; for Tor that is one per
+//! 4-bit address prefix (see MAX_TOR_OUTBOUND).
+void ThreadOpenTorConnections()
+{
+    while (true)
+    {
+        if (ShutdownRequested())
+            break;
+
+        MilliSleep(1000);
+        boost::this_thread::interruption_point();
+
+        if (semTorOutbound == nullptr)
+            continue;
+
+        // Tor isn't up (yet): nothing to dial through.
+        if (!IsReachable(NET_ONION))
+            continue;
+
+        // Only when the regular dialer has handed Tor over to us.
+        if (!IsTorDedicated())
+            continue;
+
+        // The Tor daemon was just unreachable: don't select candidates to fail against it.
+        if (IsTorDialingSuspended(GetTime()))
+            continue;
+
+        CSemaphoreGrant grant(*semTorOutbound, /* fTry */ true);
+        if (!grant)
+            continue;
+
+        std::set<std::vector<unsigned char> > setConnected;
+        {
+            LOCK(cs_vNodes);
+            BOOST_FOREACH(CNode* pnode, vNodes) {
+                if (!pnode->fInbound && ((CNetAddr)pnode->addr).IsTor())
+                    setConnected.insert(pnode->addr.GetGroup(addrman.m_asmap));
+            }
+        }
+
+        CAddress addrConnect;
+        const bool fFound = PickDialCandidate(
+            addrman.SelectCandidates(NET_ONION, 50), GetTime(),
+            [&setConnected](const CAddrInfo& addr) {
+                return !setConnected.count(addr.GetGroup(addrman.m_asmap)) && !IsLocal(addr) && IsReachable(addr);
+            },
+            addrConnect);
+
+        if (fFound) {
+            OpenNetworkConnection(addrConnect, &grant, nullptr, false, false);
+        } else {
+            // Nothing dialable right now (no known onion peers yet, or every group already
+            // held): don't rescan addrman every second - a slot that can't be filled stays
+            // unfilled for a while regardless.
+            MilliSleep(9000);
+        }
     }
 }
 
@@ -3551,6 +3707,17 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
         semI2PPoolOutbound = new CSemaphore(nI2PPoolReserved);
     }
 
+    if (semTorOutbound == NULL) {
+        // Additive to the regular outbound allowance, like the I2P relay pool's reservation above,
+        // and bounded by the node's whole connection budget.
+        //
+        // With -connect the node talks to exactly the peers it was told to (ThreadOpenConnections
+        // never touches addrman), so no automatic Tor dialing either.
+        const bool fConnectOnly = mapArgs.count("-connect") && mapMultiArgs["-connect"].size() > 0;
+        nTorOutboundReserved = fConnectOnly ? 0 : GetTorOutboundReserve(nTorOutbound, nMaxConnections);
+        semTorOutbound = new CSemaphore(nTorOutboundReserved);
+    }
+
     if (pnodeLocalHost == NULL) {
         CNetAddr local;
         LookupHost("127.0.0.1", local, false);
@@ -3645,6 +3812,12 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     LogPrintf("Starting regular peer connections with %d slots available\n", MAX_REGULAR_OUTBOUND_CONNECTIONS);
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "opencon", &ThreadOpenConnections));
 
+    // Tor peers get their own dialer and slots - see ThreadOpenTorConnections().
+    if (nTorOutboundReserved > 0) {
+        LogPrintf("Starting Tor peer connections with %d dedicated slots available\n", nTorOutboundReserved);
+        threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "toropencon", &ThreadOpenTorConnections));
+    }
+
     // Process messages
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "msghand", &ThreadMessageHandler));
 
@@ -3677,6 +3850,10 @@ bool StopNode()
     if (semI2PPoolOutbound)
         for (int i=0; i<nI2PPoolOutboundReserved; i++)
             semI2PPoolOutbound->post();
+
+    if (semTorOutbound)
+        for (int i=0; i<nTorOutboundReserved; i++)
+            semTorOutbound->post();
 
     // The I2P SAM session is never otherwise torn down explicitly; without this it
     // only gets destroyed implicitly at process exit via the CNetCleanup static.
@@ -3726,6 +3903,8 @@ public:
         semAddNodeOutbound = NULL;
         delete semI2PPoolOutbound;
         semI2PPoolOutbound = NULL;
+        delete semTorOutbound;
+        semTorOutbound = NULL;
         delete pnodeLocalHost;
         pnodeLocalHost = NULL;
 

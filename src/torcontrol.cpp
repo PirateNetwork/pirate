@@ -499,7 +499,10 @@ void TorController::auth_cb(TorControlConnection& conn, const TorControlReply& r
             CService resolved(LookupNumeric(GetArg("-torsocksport", DEFAULT_TOR_SOCKS).c_str(), 9050));
             proxyType addrOnion = proxyType(resolved, true);
             SetProxy(NET_ONION, addrOnion);
-            SetReachable(NET_ONION, true);
+            // -onlynet may have excluded Tor: don't undo that just because a Tor daemon is there
+            // (the hidden service below is still created; -onlynet restricts outbound only).
+            if (IsOnlyNetPermitted(NET_ONION))
+                SetReachable(NET_ONION, true);
         }
 
         // Finally - now create the service
