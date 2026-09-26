@@ -9,7 +9,7 @@ use crate::ironwood_protocol::ironwood_keys::{
     fvk_to_address_from_index, fvk_to_address_from_index_internal,
     sk_is_valid, sk_to_fvk,
     sk_to_default_address, sk_to_default_address_internal,
-    derive_master_key, derive_child_key,
+    derive_master_key, derive_child_key, derive_child_key_legacy,
 };
 
 #[cxx::bridge]
@@ -38,5 +38,6 @@ pub(crate) mod ffi {
         fn sk_to_default_address_internal(sk: &[u8; 32], out: &mut [u8; 43]) -> bool;
         fn derive_master_key(seed: &[u8], out: &mut [u8; 73]) -> bool;
         fn derive_child_key(xsk: &[u8; 73], coin_type: u32, account: u32, out: &mut [u8; 73]) -> bool;
+        fn derive_child_key_legacy(xsk: &[u8; 73], coin_type: u32, account: u32, out: &mut [u8; 73]) -> bool;
     }
 }

@@ -357,7 +357,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingZKey()
  * The first generated key (account 0) is set as the primary key for diversification.
  * Metadata including keypath and seed fingerprint is stored with the key.
  */
-IronwoodPaymentAddress CWallet::GenerateNewIronwoodZKey()
+IronwoodPaymentAddress CWallet::GenerateNewIronwoodZKey(bool fLegacy)
 {
     AssertLockHeld(cs_wallet); // mapSaplingSpendingKeyMetadata
 
@@ -380,7 +380,38 @@ IronwoodPaymentAddress CWallet::GenerateNewIronwoodZKey()
     // Derive account key at next index, skip keys already known to the wallet
     libzcash::IronwoodExtendedSpendingKeyPirate xsk;
     libzcash::IronwoodExtendedFullViewingKeyPirate extfvk;
-    do
+
+    if (fLegacy) {
+        // Legacy (pre-6.0.7, non-ZIP-32) accounts have no counter of their own - nothing new is
+        // persisted for them: walk the accounts from 0 and take the first the wallet doesn't hold
+        // yet. The ZIP-32 account counter and the primary key belong to the ZIP-32 accounts and
+        // are left alone.
+        uint32_t legacyAccount = 0;
+        while (true) {
+            if (legacyAccount >= (1u << 31)) {
+                throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): no unused legacy account found");
+            }
+            auto account = legacyAccount++;
+            auto xskOpt = master.Derive(coinType, account, /* fLegacy */ true);
+
+            metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
+            metadata.seedFp = hdChain.seedFp;
+
+            if (xskOpt == std::nullopt) {
+                continue;
+            }
+            auto extfvkOpt = xskOpt.value().GetXFVK();
+            if (extfvkOpt == std::nullopt) {
+                continue;
+            }
+            if (HaveIronwoodSpendingKey(extfvkOpt.value())) {
+                continue;
+            }
+            xsk = xskOpt.value();
+            extfvk = extfvkOpt.value();
+            break;
+        }
+    } else do
     {
         auto account = hdChain.ironwoodAccountCounter;
         auto xskOpt = master.Derive(coinType, account);
@@ -419,8 +450,8 @@ IronwoodPaymentAddress CWallet::GenerateNewIronwoodZKey()
         throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): Address Generation failed");
     }
 
-    // Update the chain model in the database
-    if (!WriteHDChainToDisk(hdChain))
+    // Update the chain model in the database (a legacy key changes nothing in it)
+    if (!fLegacy && !WriteHDChainToDisk(hdChain))
         throw std::runtime_error("CWallet::GenerateNewIronwoodZKey(): Writing HD chain model failed");
 
     // Populate metadata for external IVK
@@ -579,7 +610,7 @@ SaplingPaymentAddress CWallet::GenerateNewSaplingDiversifiedAddress()
  * - Stores the new address and diversifier path in the wallet
  * - Returns the generated diversified payment address
  */
-IronwoodPaymentAddress CWallet::GenerateNewIronwoodDiversifiedAddress()
+IronwoodPaymentAddress CWallet::GenerateNewIronwoodDiversifiedAddress(bool fLegacy)
 {
     AssertLockHeld(cs_wallet); // mapIronwoodSpendingKeyMetadata
 
@@ -588,7 +619,69 @@ IronwoodPaymentAddress CWallet::GenerateNewIronwoodDiversifiedAddress()
     libzcash::IronwoodIncomingViewingKey ivk;
     libzcash::IronwoodPaymentAddress addr;
 
-    if (primaryIronwoodSpendingKey == std::nullopt) {
+    if (fLegacy) {
+        // Diversified addresses from the legacy (pre-6.0.7, non-ZIP-32) account key: the first
+        // valid legacy account, the counterpart of the primary key for ZIP-32. Nothing about it
+        // is persisted beyond the key itself, and the real primary key is not touched.
+        int64_t nCreationTime = GetTime();
+        CKeyMetadata metadata(nCreationTime);
+
+        HDSeed seed;
+        if (!GetHDSeed(seed))
+            throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): HD seed not found");
+
+        auto master = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, bip39Enabled);
+        uint32_t coinType = Params().BIP44CoinType();
+
+        uint32_t legacyAccount = 0;
+        while (true) {
+            if (legacyAccount >= (1u << 31)) {
+                throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): no valid legacy account found");
+            }
+            auto account = legacyAccount++;
+            auto extskOpt = master.Derive(coinType, account, /* fLegacy */ true);
+
+            metadata.hdKeypath = "m/32'/" + std::to_string(coinType) + "'/" + std::to_string(account) + "'";
+            metadata.seedFp = hdChain.seedFp;
+
+            if (extskOpt == std::nullopt) {
+                continue;
+            }
+            extsk = extskOpt.value();
+
+            auto extfvkOpt = extsk.GetXFVK();
+            if (extfvkOpt == std::nullopt) {
+                continue;
+            }
+            extfvk = extfvkOpt.value();
+
+            IronwoodIncomingViewingKey ivkDerived;
+            if (!extfvk.fvk.DeriveIVK(&ivkDerived)) {
+                continue;
+            }
+            ivk = ivkDerived;
+
+            if (!extfvk.fvk.DeriveDefaultAddress(&addr)) {
+                continue;
+            }
+            break;
+        }
+
+        // First use of this legacy key: add it and return its default address, as the primary key does.
+        if (!HaveIronwoodSpendingKey(extfvk)) {
+            mapIronwoodSpendingKeyMetadata[ivk] = metadata;
+            if (!AddIronwoodZKey(extsk)) {
+                throw std::runtime_error("CWallet::GenerateNewIronwoodDiversifiedAddress(): AddIronwoodZKey failed");
+            }
+
+            IronwoodPaymentAddress changeAddr;
+            if (extfvk.fvk.DeriveDefaultAddressInternal(&changeAddr)) {
+                SetZAddressBook(changeAddr, "Ironwood", "receive");
+            }
+            return addr;
+        }
+
+    } else if (primaryIronwoodSpendingKey == std::nullopt) {
 
         // Create new metadata
         int64_t nCreationTime = GetTime();

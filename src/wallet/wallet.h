@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1998,9 +1999,11 @@ public:
       * Ironwood ZKeys
       */
     //! Generates new Ironwood key
-    libzcash::IronwoodPaymentAddress GenerateNewIronwoodZKey();
+    //! With fLegacy, derives with the non-ZIP-32 derivation of releases 6.0.0-6.0.6 (see
+    //! IronwoodExtendedSpendingKeyPirate::Derive) - only to reach keys those releases created.
+    libzcash::IronwoodPaymentAddress GenerateNewIronwoodZKey(bool fLegacy = false);
     //! Generates new Sapling diversified payment address
-    libzcash::IronwoodPaymentAddress GenerateNewIronwoodDiversifiedAddress();
+    libzcash::IronwoodPaymentAddress GenerateNewIronwoodDiversifiedAddress(bool fLegacy = false);
     //Set Primary key for address diversification
     bool SetPrimaryIronwoodSpendingKey(
         const libzcash::IronwoodExtendedSpendingKeyPirate &extsk);

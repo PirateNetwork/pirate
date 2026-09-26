@@ -181,10 +181,35 @@ impl ExtendedSpendingKey {
     ///
     /// Discards index if it results in an invalid sk
     pub fn derive_child(&self, index: ChildIndex) -> Result<Self, Error> {
+        self.derive_child_inner(index, false)
+    }
+
+    /// Derives a child key the way releases 6.0.0 through 6.0.6 did, which is NOT ZIP-32, in two
+    /// ways:
+    ///
+    /// * the 4-byte child index was zero-padded to 32 bytes before hashing (28 extra zero bytes),
+    ///   which changes every derived key and address; and
+    /// * the child's `parent_fvk_tag` was taken from the fingerprint of the *child's* full
+    ///   viewing key instead of the parent's. That does not change any key or address, only the
+    ///   serialized extended key - but wallet key maps compare the tag, so it has to be reproduced
+    ///   exactly for the wallet to recognize keys those releases already stored.
+    ///
+    /// Only for reaching keys and addresses those releases created, which no ZIP-32 wallet can
+    /// derive from the same seed. Everything new must use [`derive_child`](Self::derive_child).
+    pub fn derive_child_legacy(&self, index: ChildIndex) -> Result<Self, Error> {
+        self.derive_child_inner(index, true)
+    }
+
+    fn derive_child_inner(&self, index: ChildIndex, legacy: bool) -> Result<Self, Error> {
         // I := PRF^Expand(c_par, [0x81] || sk_par || I2LEOSP(i))
+        // ZIP-32 encodes i as 4 bytes. The legacy variant pads it to 32 bytes.
+        let index_le = index.0.to_le_bytes();
+        let mut index_padded = [0u8; 32];
+        index_padded[..4].copy_from_slice(&index_le);
+        let index_bytes: &[u8] = if legacy { &index_padded } else { &index_le };
         let I: [u8; 64] = PrfExpand::IronwoodZip32Child.with_ad_slices(
             &self.chain_code.0,
-            &[self.sk.to_bytes(), &{let mut b = [0u8; 32]; b[..4].copy_from_slice(&index.0.to_le_bytes()); b}],
+            &[self.sk.to_bytes(), index_bytes],
         );
 
         // I_L is used as the child spending key sk_i.
@@ -197,11 +222,14 @@ impl ExtendedSpendingKey {
         // I_R is used as the child chain code c_i.
         let c_i = ChainCode(I[32..].try_into().unwrap());
 
-        let fvk: FullViewingKey = (&sk_i).into();
+        // parent_fvk_tag is the first 4 bytes of the PARENT's full viewing key fingerprint
+        // (ZIP-32). The legacy derivation took it from the child's instead - see
+        // derive_child_legacy.
+        let tag_fvk: FullViewingKey = if legacy { (&sk_i).into() } else { (&self.sk).into() };
 
         Ok(Self {
             depth: self.depth.checked_add(1).ok_or(Error::InvalidChildIndex(u32::MAX))?,
-            parent_fvk_tag: FvkFingerprint::from(&fvk).tag(),
+            parent_fvk_tag: FvkFingerprint::from(&tag_fvk).tag(),
             child_index: index,
             chain_code: c_i,
             sk: sk_i,
@@ -291,5 +319,97 @@ mod tests {
                 .unwrap()
                 .ct_eq(&xsk_5h_7)
         ));
+    }
+
+    fn unhex(s: &str) -> Vec<u8> {
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
+    }
+
+    fn test_seed() -> Vec<u8> {
+        (0u8..32).collect()
+    }
+
+    /// The official ZIP-32 Orchard test vectors (zcash-test-vectors `orchard_zip32.py`, the same
+    /// ones the `orchard` crate tests against), as the 73-byte serialized extended spending key of
+    /// m, m/1', m/1'/2' and m/1'/2'/3' for seed 0..31. Releases 6.0.0 through 6.0.6 derived every
+    /// child key differently and none of them matched past the master key.
+    const OFFICIAL_XSK: [&str; 4] = [
+        "000000000000000000ab8b7a00509ef20e469b5292b61d474b7cffcb1657924cda720250ae405266777eee3c1017870990a3dd6891b82f80be8976c1e7dc20d60817a5e88e8b2cd4b8",
+        "01ff4cda50010000806a041dfb9cfebee97cb1854fdc481cc04f02c9577aa6f13b2c445b80a9669a2298d703fcb40504c95b3b6ed10ecd50082cff97dfd1dd9aa0913c78f977c962af",
+        "0232bbdc92020000806da8b57a36c77ad6412a9dc0115f12aced0ee01c402a0cf0a507cb17fc7bbd1d99afd8894baad58784d0ec08f5148ee2c2a17b2b294b08ef9e0a0cf14bcc0920",
+        "0336a57c4f03000080b196e9b5809d76577a8944c3f8c8a83f93f0c8f5ace6e7bc9ce4396c034d93fe96439ea348a4b2ce4ec7beb4543c70274c8f76495d60c5fa5f018b68f3c32367",
+    ];
+
+    #[test]
+    fn matches_official_zip32_orchard_test_vectors() {
+        let seed = test_seed();
+        let i1h = ChildIndex::try_from(1).unwrap();
+        let i2h = ChildIndex::try_from(2).unwrap();
+        let i3h = ChildIndex::try_from(3).unwrap();
+
+        let m = ExtendedSpendingKey::master(&seed).unwrap();
+        let m_1h = m.derive_child(i1h).unwrap();
+        let m_1h_2h = ExtendedSpendingKey::from_path(&seed, &[i1h, i2h]).unwrap();
+        let m_1h_2h_3h = m_1h_2h.derive_child(i3h).unwrap();
+
+        for (i, xsk) in [m, m_1h, m_1h_2h, m_1h_2h_3h].iter().enumerate() {
+            assert_eq!(
+                xsk.to_bytes().to_vec(),
+                unhex(OFFICIAL_XSK[i]),
+                "extended spending key at depth {} does not match the official ZIP-32 vector",
+                i
+            );
+        }
+    }
+
+    /// The legacy derivation must stay reachable and byte-for-byte what 6.0.0-6.0.6 produced
+    /// (index zero-padded to 32 bytes), so keys and addresses those releases created remain
+    /// derivable. Expected values were computed by an independent implementation of the formula.
+    #[test]
+    fn legacy_derivation_matches_the_old_padded_form_and_differs_from_zip32() {
+        let seed = test_seed();
+        let i1h = ChildIndex::try_from(1).unwrap();
+        let m = ExtendedSpendingKey::master(&seed).unwrap();
+
+        let standard = m.derive_child(i1h).unwrap().to_bytes();
+        let legacy = m.derive_child_legacy(i1h).unwrap().to_bytes();
+        assert_ne!(standard.to_vec(), legacy.to_vec());
+
+        assert_eq!(&legacy[41..], unhex("e82fd31179fc98ad574d0f514e502c8f17b4ae5920d95857c510cb406c7cdd0a").as_slice());
+        assert_eq!(&legacy[9..41], unhex("ceeb20f8cb13a29d7f8b1ea3c88fea74efd234b44577aa47d71dd8b79d273a0b").as_slice());
+
+        // The second legacy quirk, pinned so it can't drift: the legacy child's parent_fvk_tag is
+        // the fingerprint tag of the child's own full viewing key, ZIP-32's is the parent's.
+        let legacy_child = m.derive_child_legacy(i1h).unwrap();
+        let child_fvk: FullViewingKey = (&legacy_child.sk).into();
+        assert_eq!(legacy_child.parent_fvk_tag.0, FvkFingerprint::from(&child_fvk).tag().0);
+
+        let standard_child = m.derive_child(i1h).unwrap();
+        let parent_fvk: FullViewingKey = (&m.sk).into();
+        assert_eq!(standard_child.parent_fvk_tag.0, FvkFingerprint::from(&parent_fvk).tag().0);
+        assert_ne!(standard_child.parent_fvk_tag.0, legacy_child.parent_fvk_tag.0);
+    }
+
+    /// The wallet's account path m/32'/coin'/account' (here coin 1, account 0), derived both ways,
+    /// against independently computed values.
+    #[test]
+    fn account_path_matches_independent_computation() {
+        let seed = test_seed();
+        let path = [32u32, 1, 0].map(|i| ChildIndex::try_from(i).unwrap());
+
+        let standard = ExtendedSpendingKey::from_path(&seed, &path).unwrap().to_bytes();
+        assert_eq!(&standard[41..], unhex("2b36c09b3ce22a7515cf180c37f6e690f7d51aadd9e66cc61136e1771eb66cce").as_slice());
+        assert_eq!(&standard[9..41], unhex("f733058ddc0c94056200a17e329f13977f6d3716f2c630a2b6a47b049b09c529").as_slice());
+
+        let mut legacy = ExtendedSpendingKey::master(&seed).unwrap();
+        for i in path {
+            legacy = legacy.derive_child_legacy(i).unwrap();
+        }
+        let legacy = legacy.to_bytes();
+        assert_eq!(&legacy[41..], unhex("eab9a88741d2cc3e12d42b21f8697f1420407ae55b14dcd7d9078661ba4603d0").as_slice());
+        assert_eq!(&legacy[9..41], unhex("532e9aa02792395c8768e5b9f52403be7fe6508954a26caf4f57ed36483fdaa7").as_slice());
     }
 }

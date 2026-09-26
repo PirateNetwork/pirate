@@ -737,6 +737,178 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
     EXPECT_THROW(CallRPC("z_getnewaddress toomanyargs"), runtime_error);
 }
 
+// Releases 6.0.0-6.0.6 derived Ironwood keys with a non-ZIP-32 child derivation, so the keys and
+// addresses they created can't be reached by ZIP-32 derivation from the same seed. The default
+// derivation is now ZIP-32 (pinned by the known-answer tests in test_zip32.cpp); the optional
+// "legacy" argument of z_getnewaddresskey/z_getnewaddress reaches the old ones. These tests tie
+// the RPCs to Derive(), which the known-answer tests verify.
+struct IronwoodLegacyRpcFixture {
+    IronwoodLegacyRpcFixture()
+    {
+        SelectParams(CBaseChainParams::REGTEST);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    }
+    ~IronwoodLegacyRpcFixture()
+    {
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        SelectParams(CBaseChainParams::MAIN);
+    }
+};
+
+// The wallet's derivation of account `account` straight from its seed, for comparison.
+static std::optional<libzcash::IronwoodExtendedSpendingKeyPirate> WalletIronwoodAccountKey(
+    CWallet* wallet, uint32_t account, bool fLegacy)
+{
+    HDSeed seed;
+    EXPECT_TRUE(wallet->GetHDSeed(seed));
+    auto master = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, wallet->bip39Enabled);
+    return master.Derive(Params().BIP44CoinType(), account, fLegacy);
+}
+
+static std::string DefaultIronwoodAddress(const libzcash::IronwoodExtendedSpendingKeyPirate& xsk)
+{
+    auto xfvk = xsk.GetXFVK();
+    EXPECT_TRUE(xfvk.has_value());
+    libzcash::IronwoodPaymentAddress addr;
+    EXPECT_TRUE(xfvk->fvk.DeriveDefaultAddress(&addr));
+    return EncodePaymentAddress(addr);
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_getnewaddresskey_legacy_ironwood_derivation)
+{
+    IronwoodLegacyRpcFixture params;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+
+    auto expected = [&](uint32_t account, bool legacy) {
+        auto xsk = WalletIronwoodAccountKey(pwalletMain, account, legacy);
+        EXPECT_TRUE(xsk.has_value());
+        return DefaultIronwoodAddress(xsk.value());
+    };
+    ASSERT_NE(expected(0, false), expected(0, true)) << "legacy and ZIP-32 accounts must differ";
+
+    // Legacy keys walk the legacy accounts from 0, one per call...
+    EXPECT_EQ(CallRPC("z_getnewaddresskey ironwood true").get_str(), expected(0, true));
+    EXPECT_EQ(CallRPC("z_getnewaddresskey ironwood true").get_str(), expected(1, true));
+
+    // ...without consuming the ZIP-32 account counter or the primary key: the default derivation
+    // still starts at ZIP-32 account 0, whatever legacy keys were asked for first.
+    EXPECT_EQ(CallRPC("z_getnewaddresskey ironwood").get_str(), expected(0, false));
+    EXPECT_EQ(CallRPC("z_getnewaddresskey ironwood false").get_str(), expected(1, false));
+
+    // Both sequences carry on independently of each other.
+    EXPECT_EQ(CallRPC("z_getnewaddresskey ironwood true").get_str(), expected(2, true));
+    EXPECT_EQ(CallRPC("z_getnewaddresskey ironwood").get_str(), expected(2, false));
+
+    // The wallet holds a spending key for every address it handed out.
+    for (const std::string& a : {expected(0, true), expected(1, true), expected(2, true),
+                                 expected(0, false), expected(1, false), expected(2, false)}) {
+        auto decoded = DecodePaymentAddress(a);
+        ASSERT_TRUE(std::get_if<libzcash::IronwoodPaymentAddress>(&decoded) != nullptr) << a;
+        libzcash::IronwoodExtendedSpendingKeyPirate found;
+        EXPECT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&decoded), found)) << a;
+    }
+
+    // Misuse is rejected: legacy only exists for Ironwood, and must be a boolean.
+    EXPECT_THROW(CallRPC("z_getnewaddresskey sapling true"), runtime_error);
+    EXPECT_THROW(CallRPC("z_getnewaddresskey ironwood notabool"), runtime_error);
+    EXPECT_THROW(CallRPC("z_getnewaddresskey ironwood true extra"), runtime_error);
+}
+
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_getnewaddress_legacy_ironwood_diversified_addresses)
+{
+    IronwoodLegacyRpcFixture params;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+
+    auto legacy0 = WalletIronwoodAccountKey(pwalletMain, 0, true);
+    auto standard0 = WalletIronwoodAccountKey(pwalletMain, 0, false);
+    ASSERT_TRUE(legacy0.has_value());
+    ASSERT_TRUE(standard0.has_value());
+
+    // First use returns the legacy account's default address, then new diversified addresses of
+    // that same legacy key.
+    std::string first = CallRPC("z_getnewaddress ironwood true").get_str();
+    EXPECT_EQ(first, DefaultIronwoodAddress(legacy0.value()));
+    std::set<std::string> seen{first};
+    for (int i = 0; i < 3; i++) {
+        std::string a = CallRPC("z_getnewaddress ironwood true").get_str();
+        EXPECT_TRUE(seen.insert(a).second) << "diversified addresses must be distinct: " << a;
+
+        auto decoded = DecodePaymentAddress(a);
+        ASSERT_TRUE(std::get_if<libzcash::IronwoodPaymentAddress>(&decoded) != nullptr);
+        libzcash::IronwoodExtendedSpendingKeyPirate found;
+        ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&decoded), found));
+        EXPECT_TRUE(found.sk == legacy0->sk) << "address " << a << " does not belong to the legacy account key";
+    }
+
+    // The default (ZIP-32) primary key was not touched by any of that: its first address is the
+    // ZIP-32 account 0 default address, under a different key.
+    std::string standardFirst = CallRPC("z_getnewaddress ironwood").get_str();
+    EXPECT_EQ(standardFirst, DefaultIronwoodAddress(standard0.value()));
+    EXPECT_EQ(seen.count(standardFirst), 0u);
+    std::string standardSecond = CallRPC("z_getnewaddress ironwood").get_str();
+    auto decoded = DecodePaymentAddress(standardSecond);
+    ASSERT_TRUE(std::get_if<libzcash::IronwoodPaymentAddress>(&decoded) != nullptr);
+    libzcash::IronwoodExtendedSpendingKeyPirate found;
+    ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&decoded), found));
+    EXPECT_TRUE(found.sk == standard0->sk);
+    EXPECT_FALSE(found.sk == legacy0->sk);
+
+    EXPECT_THROW(CallRPC("z_getnewaddress sapling true"), runtime_error);
+    EXPECT_THROW(CallRPC("z_getnewaddress ironwood true extra"), runtime_error);
+}
+
+// A wallet created by releases 6.0.0-6.0.6 already holds a legacy-derived primary Ironwood key
+// (persisted, never re-derived). There is deliberately no migration: plain z_getnewaddress keeps
+// diversifying that primary key, exactly as before the upgrade, and only the explicit legacy
+// option reaches other legacy accounts.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_getnewaddress_keeps_using_an_existing_legacy_primary_key)
+{
+    IronwoodLegacyRpcFixture params;
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+
+    auto legacy0 = WalletIronwoodAccountKey(pwalletMain, 0, true);
+    auto standard0 = WalletIronwoodAccountKey(pwalletMain, 0, false);
+    ASSERT_TRUE(legacy0.has_value());
+    ASSERT_TRUE(standard0.has_value());
+
+    // What an upgraded 6.0.x wallet looks like: legacy account 0 as the primary key, the
+    // account counter already past it.
+    ASSERT_TRUE(pwalletMain->AddIronwoodZKey(legacy0.value()));
+    ASSERT_TRUE(pwalletMain->SetPrimaryIronwoodSpendingKey(legacy0.value()));
+
+    for (int i = 0; i < 4; i++) {
+        std::string a = CallRPC("z_getnewaddress ironwood").get_str();
+        auto decoded = DecodePaymentAddress(a);
+        ASSERT_TRUE(std::get_if<libzcash::IronwoodPaymentAddress>(&decoded) != nullptr);
+        libzcash::IronwoodExtendedSpendingKeyPirate found;
+        ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&decoded), found));
+        EXPECT_TRUE(found.sk == legacy0->sk) << "address " << a << " left the existing primary key";
+        EXPECT_FALSE(found.sk == standard0->sk);
+    }
+
+    // The explicit option finds the key the wallet already holds and issues from it, rather than
+    // deriving a second copy or skipping ahead to another account.
+    std::string viaLegacyOption = CallRPC("z_getnewaddress ironwood true").get_str();
+    auto decoded = DecodePaymentAddress(viaLegacyOption);
+    ASSERT_TRUE(std::get_if<libzcash::IronwoodPaymentAddress>(&decoded) != nullptr);
+    libzcash::IronwoodExtendedSpendingKeyPirate found;
+    ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&decoded), found));
+    EXPECT_TRUE(found.sk == legacy0->sk);
+}
+
 // Every z_getnewaddress call also silently registers this account's internal
 // (ZIP-32) change address in the wallet (see GenerateNewSaplingZKey/
 // GenerateNewIronwoodZKey), and z_listaddresses lists both with no way to

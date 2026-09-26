@@ -194,13 +194,23 @@ pub fn derive_master_key(seed: &[u8], out: &mut [u8; 73]) -> bool {
 }
 
 pub fn derive_child_key(xsk: &[u8; 73], coin_type: u32, account: u32, out: &mut [u8; 73]) -> bool {
+    derive_account_key(xsk, coin_type, account, false, out)
+}
+
+/// Same path as `derive_child_key`, using the non-ZIP-32 child derivation of releases 6.0.0
+/// through 6.0.6. Only for reaching keys those releases created.
+pub fn derive_child_key_legacy(xsk: &[u8; 73], coin_type: u32, account: u32, out: &mut [u8; 73]) -> bool {
+    derive_account_key(xsk, coin_type, account, true, out)
+}
+
+fn derive_account_key(xsk: &[u8; 73], coin_type: u32, account: u32, legacy: bool, out: &mut [u8; 73]) -> bool {
     let mut key = match ExtendedSpendingKey::from_bytes(xsk.as_ref()) {
         Ok(k) => k,
         Err(_) => return false,
     };
     for idx in [ZIP32_PURPOSE, coin_type, account] {
         key = match ChildIndex::try_from(idx) {
-            Ok(i) => match key.derive_child(i) {
+            Ok(i) => match if legacy { key.derive_child_legacy(i) } else { key.derive_child(i) } {
                 Ok(k) => k,
                 Err(_) => return false,
             },

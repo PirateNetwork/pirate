@@ -3610,21 +3610,30 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
         defaultType = ADDR_TYPE_IRONWOOD;
     }
 
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "z_getnewaddresskey ( type )\n"
+            "z_getnewaddresskey ( type legacy )\n"
             "This creates a new extended spending key and\n"
             "returns a new shielded address for receiving payments.\n"
             "\nWith no arguments, returns a Sapling address.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
             + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_IRONWOOD + "\"].\n"
+            "2. legacy         (boolean, optional, default=false) Ironwood only. Derive the new key from the\n"
+            "                 seed the way releases 6.0.0 through 6.0.6 did. That derivation is NOT ZIP-32 (the\n"
+            "                 child index was hashed padded to 32 bytes instead of 4), so no other ZIP-32 wallet\n"
+            "                 can derive these keys from the same seed. Only needed to reach or recover keys and\n"
+            "                 addresses those releases created. Repeated calls return successive legacy accounts.\n"
+            "                 Keys recovered this way from a seed are only found by a rescan (-rescan or rescanblockchain\n"
+            "                 from the start of Ironwood activity); until then the wallet does not see their funds.\n"
+            "                 Without this option a new key is standard ZIP-32.\n"
             "\nResult:\n"
             "\"" + chainName.ToString() + "_address\"    (string) The new shielded address.\n"
             "\nExamples:\n"
             + HelpExampleCli("z_getnewaddresskey", "")
             + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_SAPLING)
             + HelpExampleCli("z_getnewaddresskey", ADDR_TYPE_IRONWOOD)
+            + HelpExampleCli("z_getnewaddresskey", std::string(ADDR_TYPE_IRONWOOD) + " true")
             + HelpExampleRpc("z_getnewaddresskey", "")
         );
 
@@ -3635,6 +3644,14 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
     auto addrType = defaultType;
     if (params.size() > 0) {
         addrType = params[0].get_str();
+    }
+
+    bool fLegacy = false;
+    if (params.size() > 1) {
+        fLegacy = params[1].get_bool();
+    }
+    if (fLegacy && addrType != ADDR_TYPE_IRONWOOD) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "The legacy option only applies to Ironwood addresses");
     }
 
     if (addrType == ADDR_TYPE_SAPLING) {
@@ -3648,7 +3665,7 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
         if (!ironwoodActive) {
             throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
         }
-        auto zAddress = pwalletMain->GenerateNewIronwoodZKey();
+        auto zAddress = pwalletMain->GenerateNewIronwoodZKey(fLegacy);
         pwalletMain->SetZAddressBook(zAddress, "Ironwood", "");
         return EncodePaymentAddress(zAddress);
     } else {
@@ -3675,17 +3692,27 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         defaultType = ADDR_TYPE_IRONWOOD;
     }
 
-    if (fHelp || params.size() > 1)
+    if (fHelp || params.size() > 2)
         throw runtime_error(
-            "z_getnewaddress\n"
+            "z_getnewaddress ( type legacy )\n"
             "\nReturns a new diversified shielded address for receiving payments from the set primary key.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
             + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_IRONWOOD + "\"].\n"
+            "2. legacy         (boolean, optional, default=false) Ironwood only. Take the address from the\n"
+            "                 legacy account key, derived from the seed the way releases 6.0.0 through 6.0.6 did.\n"
+            "                 That derivation is NOT ZIP-32 (the child index was hashed padded to 32 bytes instead\n"
+            "                 of 4), so no other ZIP-32 wallet can derive these addresses from the same seed.\n"
+            "                 Only needed to reach or recover addresses those releases created; a wallet restored\n"
+            "                 from its seed needs a rescan before it sees funds sent to them.\n"
+            "                 Without this option the address comes from the wallet's primary Ironwood key. A wallet\n"
+            "                 created by releases 6.0.0 through 6.0.6 already has a legacy primary key, and keeps\n"
+            "                 issuing addresses from it; a wallet created by 6.0.7 or later has a standard ZIP-32 one.\n"
             "\nResult:\n"
             "\"" + strprintf("%s",chainName.symbol()) + "_address\"    (string) The new diversified shielded address.\n"
             "\nExamples:\n"
             + HelpExampleCli("z_getnewaddress","")
+            + HelpExampleCli("z_getnewaddress", std::string(ADDR_TYPE_IRONWOOD) + " true")
             + HelpExampleRpc("z_getnewaddress","")
         );
 
@@ -3696,6 +3723,14 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     auto addrType = defaultType;
     if (params.size() > 0) {
         addrType = params[0].get_str();
+    }
+
+    bool fLegacy = false;
+    if (params.size() > 1) {
+        fLegacy = params[1].get_bool();
+    }
+    if (fLegacy && addrType != ADDR_TYPE_IRONWOOD) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "The legacy option only applies to Ironwood addresses");
     }
 
     if (addrType == ADDR_TYPE_SAPLING) {
@@ -3709,7 +3744,7 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
         if (!ironwoodActive) {
             throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
         }
-        auto zAddress = pwalletMain->GenerateNewIronwoodDiversifiedAddress();
+        auto zAddress = pwalletMain->GenerateNewIronwoodDiversifiedAddress(fLegacy);
         pwalletMain->SetZAddressBook(zAddress, "Ironwood", "");
         return EncodePaymentAddress(zAddress);
     } else {

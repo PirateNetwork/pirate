@@ -1,4 +1,5 @@
 // Copyright (c) 2018 The Zcash developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -497,7 +498,7 @@ IronwoodExtendedSpendingKeyPirate IronwoodExtendedSpendingKeyPirate::Master(cons
 
 }
 
-std::optional<IronwoodExtendedSpendingKeyPirate> IronwoodExtendedSpendingKeyPirate::Derive(uint32_t bip44CoinType, uint32_t account) const
+std::optional<IronwoodExtendedSpendingKeyPirate> IronwoodExtendedSpendingKeyPirate::Derive(uint32_t bip44CoinType, uint32_t account, bool fLegacy) const
 {
     //Datastreams for serialization
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION); //sending stream
@@ -518,7 +519,11 @@ std::optional<IronwoodExtendedSpendingKeyPirate> IronwoodExtendedSpendingKeyPira
     ss >> xsk_t_in;
 
     //Call rust FFI
-    rustCompleted = ironwood_keys::derive_child_key(xsk_t_in, bip44CoinType, account, xsk_t_out);
+    if (fLegacy) {
+        rustCompleted = ironwood_keys::derive_child_key_legacy(xsk_t_in, bip44CoinType, account, xsk_t_out);
+    } else {
+        rustCompleted = ironwood_keys::derive_child_key(xsk_t_in, bip44CoinType, account, xsk_t_out);
+    }
 
     //Deserialize rust result on success
     if (rustCompleted) {

@@ -1,4 +1,5 @@
 // Copyright (c) 2018 The Zcash developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -340,7 +341,12 @@ struct IronwoodExtendedSpendingKeyPirate {
     }
 
     static IronwoodExtendedSpendingKeyPirate Master(const HDSeed& seed, bool bip39Enabled = true);
-    std::optional<IronwoodExtendedSpendingKeyPirate> Derive(uint32_t bip44CoinType, uint32_t account) const;
+    //! Derives the account key m/32'/bip44CoinType'/account' (ZIP-32). With fLegacy, uses the
+    //! non-ZIP-32 child derivation that releases 6.0.0-6.0.6 used - only for reaching keys those
+    //! releases created. It differs in two ways: the child index is zero-padded to 32 bytes
+    //! before hashing, and the child's parent_fvk_tag is taken from the child's own full
+    //! viewing key instead of the parent's.
+    std::optional<IronwoodExtendedSpendingKeyPirate> Derive(uint32_t bip44CoinType, uint32_t account, bool fLegacy = false) const;
     std::optional<IronwoodExtendedFullViewingKeyPirate> GetXFVK() const;
 
     friend bool operator==(const IronwoodExtendedSpendingKeyPirate& a, const IronwoodExtendedSpendingKeyPirate& b)

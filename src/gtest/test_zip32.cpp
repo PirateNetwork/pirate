@@ -7,15 +7,21 @@
 
 //#include "miner.h"
 #include "zcash/address/zip32.h"
+#include "util/strencodings.h"
 
 // ZIP 32 hierarchical deterministic key derivation. TestVectors below covers
 // SaplingExtendedSpendingKey derivation against known-good vectors (master
-// key, hardened child derivation, XFVK conversion). IronwoodStructuralDerivation
-// covers IronwoodExtendedSpendingKeyPirate::Derive, this fork's own
-// second-generation shielded pool - there are no published known-good test
-// vectors for it (it's Pirate-specific, not an upstream Zcash ZIP 32 scheme),
-// so that test checks structural invariants (depth/chaincode change on
-// derivation, distinct addresses per account index) rather than exact values.
+// key, hardened child derivation, XFVK conversion). The Ironwood tests cover
+// IronwoodExtendedSpendingKeyPirate, this fork's shielded pool, whose key
+// derivation is the Orchard ZIP 32 scheme (personalization "ZcashIP32Orchard",
+// PRF^expand domain 0x81), so the official Orchard ZIP 32 test vectors apply to it:
+// IronwoodMasterMatchesOfficialOrchardVector and IronwoodAccountDerivationKnownAnswer pin
+// the exact key bytes, and IronwoodStructuralDerivation checks structural invariants.
+// (This file used to say no vectors exist because the scheme is "Pirate-specific"; that
+// was wrong, and it is how releases 6.0.0-6.0.6 shipped a child derivation that hashed
+// the index padded to 32 bytes instead of ZIP 32's 4 - the structural checks alone
+// could not notice. The full official path vectors are exercised in the Rust tests of
+// src/rust/src/ironwood_protocol/zip32.rs.)
 
 // Derivation path is m -> m/1h -> m/1h/2h, following
 // https://github.com/zcash-hackworks/zcash-test-vectors/blob/master/zcash_test_vectors/zip_0032.py,
@@ -133,12 +139,10 @@ TEST(ZIP32, TestVectors) {
     EXPECT_FALSE(m_1_2hv.Derive(3));
 }
 
-// IronwoodExtendedSpendingKeyPirate::Derive was never called anywhere in the
-// gtest suite prior to this - every other test touching an Ironwood extended
-// key only called Master(). No published test vectors exist for this scheme
-// (see file comment above), so this checks derivation actually changes the
-// key material deterministically and distinct accounts yield distinct keys,
-// rather than asserting exact byte values.
+// Structural properties of IronwoodExtendedSpendingKeyPirate::Derive:
+// derivation changes the key material deterministically and distinct
+// accounts yield distinct keys. Exact byte values are pinned by the
+// known-answer tests below.
 TEST(ZIP32, IronwoodStructuralDerivation) {
     std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed {
         0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
@@ -185,4 +189,60 @@ TEST(ZIP32, IronwoodStructuralDerivation) {
     EXPECT_EQ(fvkOpt.value().depth, account0.depth);
     EXPECT_EQ(fvkOpt.value().chaincode, account0.chaincode);
     EXPECT_EQ(fvkOpt.value().childIndex, account0.childIndex);
+}
+
+static std::vector<unsigned char> BytesOf(const uint256& v) {
+    return std::vector<unsigned char>(v.begin(), v.end());
+}
+
+// Master key for seed 0..31 against the official ZIP 32 Orchard test vector
+// (zcash-test-vectors orchard_zip32.py, the vector the orchard crate tests against).
+TEST(ZIP32, IronwoodMasterMatchesOfficialOrchardVector) {
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+    HDSeed seed(rawSeed);
+
+    auto m = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, false);
+    EXPECT_EQ(BytesOf(m.sk.sk), ParseHex("7eee3c1017870990a3dd6891b82f80be8976c1e7dc20d60817a5e88e8b2cd4b8"));
+    EXPECT_EQ(BytesOf(m.chaincode), ParseHex("ab8b7a00509ef20e469b5292b61d474b7cffcb1657924cda720250ae40526677"));
+}
+
+// The account key m/32'/coin'/account' (coin type 1, account 0) against values computed by an
+// independent implementation of the ZIP 32 formula
+// (I = PRF^expand(c_par, [0x81] || sk_par || I2LEOSP(i)), i a 4-byte hardened index):
+// the default derivation must match it, and the legacy one - the non-ZIP-32 derivation of
+// releases 6.0.0-6.0.6, which hashed the index padded to 32 bytes - must match its own
+// independently computed values and differ from the default.
+TEST(ZIP32, IronwoodAccountDerivationKnownAnswer) {
+    std::vector<unsigned char, secure_allocator<unsigned char>> rawSeed {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+        17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31};
+    HDSeed seed(rawSeed);
+    auto m = libzcash::IronwoodExtendedSpendingKeyPirate::Master(seed, false);
+
+    auto standard = m.Derive(1, 0);
+    ASSERT_TRUE(standard.has_value());
+    EXPECT_EQ(BytesOf(standard->sk.sk), ParseHex("2b36c09b3ce22a7515cf180c37f6e690f7d51aadd9e66cc61136e1771eb66cce"));
+    EXPECT_EQ(BytesOf(standard->chaincode), ParseHex("f733058ddc0c94056200a17e329f13977f6d3716f2c630a2b6a47b049b09c529"));
+    EXPECT_EQ(standard->depth, 3);
+    // The tag is the first 4 bytes of the PARENT's (m/32'/1') FVK fingerprint, little-endian.
+    EXPECT_EQ(standard->parentFVKTag, 0x024e75f0u);
+    EXPECT_EQ(standard->childIndex, 0u | HARDENED_KEY_LIMIT);
+
+    auto legacy = m.Derive(1, 0, /* fLegacy */ true);
+    ASSERT_TRUE(legacy.has_value());
+    EXPECT_EQ(BytesOf(legacy->sk.sk), ParseHex("eab9a88741d2cc3e12d42b21f8697f1420407ae55b14dcd7d9078661ba4603d0"));
+    EXPECT_EQ(BytesOf(legacy->chaincode), ParseHex("532e9aa02792395c8768e5b9f52403be7fe6508954a26caf4f57ed36483fdaa7"));
+    EXPECT_EQ(legacy->depth, 3);
+    // Releases 6.0.0-6.0.6 took the tag from the child's own FVK instead.
+    EXPECT_EQ(legacy->parentFVKTag, 0x0c712922u);
+    EXPECT_EQ(legacy->childIndex, 0u | HARDENED_KEY_LIMIT);
+
+    EXPECT_FALSE(standard->sk == legacy->sk);
+
+    // Both stay reachable side by side: the default is not affected by asking for legacy.
+    auto standardAgain = m.Derive(1, 0);
+    ASSERT_TRUE(standardAgain.has_value());
+    EXPECT_TRUE(standardAgain.value() == standard.value());
 }
