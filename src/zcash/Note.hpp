@@ -225,7 +225,13 @@ public:
     Zip212Enabled get_zip_212_enabled() const {
         return zip_212_enabled;
     }
-    
+
+    // Needed to reconstruct an equal SaplingNote later without decrypting again -
+    // see SaplingNoteData's in-memory note cache.
+    uint256 get_rseed() const {
+        return rseed;
+    }
+
     // Set cached values from decryption
     void set_cached_cmu(const uint256& cmu_val) const {
         cached_cmu = cmu_val;

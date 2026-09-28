@@ -25,6 +25,7 @@
 
 #include "init.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <thread>
@@ -907,6 +908,200 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_getnewaddress_keeps_using_an_existing_leg
     libzcash::IronwoodExtendedSpendingKeyPirate found;
     ASSERT_TRUE(pwalletMain->GetIronwoodExtendedSpendingKey(*std::get_if<libzcash::IronwoodPaymentAddress>(&decoded), found));
     EXPECT_TRUE(found.sk == legacy0->sk);
+}
+
+// z_getbalance and every other RPC that reports confirmations used to call tx_height() per
+// wallet transaction, which re-reads the transaction from disk through -txindex just to learn
+// which block it's in - even though the wallet already knows (CMerkleTx::hashBlock) and
+// GetDepthInMainChain() already resolves that same block in memory. On a wallet with several
+// thousand transactions this dominates every z_getbalance call (measured ~11.6s of cs_main held
+// on a real report). Every call site now gets both the depth and the height from a single
+// GetDepthInMainChain(pindexRet) call; GetTxHeightInMainChain() does the same for callers that
+// only have a txid, with no disk access either way.
+TEST_F(rpc_wallet_tests_bitcoin, wallet_tx_height_in_main_chain_matches_confirming_block_no_disk_lookup)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    // Fabricate a confirmed block at a known height directly in mapBlockIndex/chainActive,
+    // the same way test_mempool.cpp does - GetDepthInMainChain() only needs the block to be
+    // found there and merkle-verified, not to have gone through real block validation.
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1;
+    CTransaction confirmedTx(mtx);
+    CBlock block;
+    block.vtx.push_back(confirmedTx);
+
+    CBlockIndex* pindex = new CBlockIndex(block);
+    pindex->nHeight = 12345;
+    uint256 blockHash = block.GetHash();
+    mapBlockIndex[blockHash] = pindex;
+    chainActive.SetTip(pindex);
+
+    CWalletTx wtx(pwalletMain, confirmedTx);
+    wtx.hashBlock = blockHash;
+    wtx.nIndex = 0;
+    wtx.fMerkleVerified = true; // bypass merkle-branch reconstruction, irrelevant to this test
+
+    const CBlockIndex* pindexRet = nullptr;
+    ASSERT_GT(wtx.GetDepthInMainChain(pindexRet), 0) << "test setup: transaction must be confirmed";
+    ASSERT_NE(pindexRet, nullptr);
+    EXPECT_EQ(pindexRet->nHeight, 12345);
+
+    pwalletMain->mapWallet[confirmedTx.GetHash()] = wtx;
+    EXPECT_EQ(pwalletMain->GetTxHeightInMainChain(confirmedTx.GetHash()), 12345);
+
+    // An unconfirmed transaction (no hashBlock) falls back to height 0 - the same fallback
+    // tx_height() produced when it couldn't find a confirming block.
+    CMutableTransaction mtxUnconfirmed;
+    mtxUnconfirmed.vout.resize(1);
+    mtxUnconfirmed.vout[0].nValue = 2;
+    pwalletMain->mapWallet[mtxUnconfirmed.GetHash()] = CWalletTx(pwalletMain, CTransaction(mtxUnconfirmed));
+    EXPECT_EQ(pwalletMain->GetTxHeightInMainChain(mtxUnconfirmed.GetHash()), 0);
+
+    // A hash that isn't one of the wallet's own transactions also falls back to 0.
+    EXPECT_EQ(pwalletMain->GetTxHeightInMainChain(uint256S("00112233445566778899aabbccddeeff00112233445566778899aabbccddee")), 0);
+}
+
+// GetFilteredNotes used to trial-decrypt every Sapling/Ironwood note in the wallet before
+// checking whether its address matched the caller's filter, even though the wallet already
+// knows a note's address once it has been seen (SaplingNoteData::address /
+// fNoteDataInitialized, cached at note-discovery time - see initalizeArcTx and
+// FindMySaplingNotes). A z_getbalance call for one address in a large wallet paid for
+// decrypting every other address's notes too. This proves the fast path actually skips
+// decryption for a non-matching note, rather than merely returning the same answer: the
+// note's underlying Sapling output is deliberately garbage (test_only_invalid_bundle) and
+// cannot decrypt under any key, so if GetFilteredNotes ever reaches the decrypt call for it,
+// the immediately-following `assert(optPlaintext != std::nullopt)` aborts the process.
+TEST_F(rpc_wallet_tests_bitcoin, GetFilteredNotes_skips_decryption_for_notes_that_fail_the_cached_address_filter)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+
+    libzcash::SaplingPaymentAddress addrOfNote = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingIncomingViewingKey ivkOfNote;
+    ASSERT_TRUE(pwalletMain->GetSaplingIncomingViewingKey(addrOfNote, ivkOfNote));
+    libzcash::SaplingPaymentAddress queriedAddr = pwalletMain->GenerateNewSaplingZKey();
+    ASSERT_NE(addrOfNote, queriedAddr);
+
+    CMutableTransaction mtx;
+    mtx.fOverwintered = true;
+    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+    mtx.nVersion = SAPLING_TX_VERSION;
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(/* spends */ 0, /* outputs */ 1, /* valueBalance */ 0);
+    CTransaction ctx(mtx);
+    CWalletTx wtx(pwalletMain, ctx);
+
+    SaplingNoteData nd(ivkOfNote);
+    nd.address = addrOfNote;
+    nd.value = 1000;
+    nd.fNoteDataInitialized = true;
+    wtx.mapSaplingNoteData[SaplingOutPoint(ctx.GetHash(), 0)] = nd;
+
+    // Fabricate a confirmed block, the same way the test above does.
+    CBlock block;
+    block.vtx.push_back(ctx);
+    CBlockIndex* pindex = new CBlockIndex(block);
+    pindex->nHeight = 500;
+    uint256 blockHash = block.GetHash();
+    mapBlockIndex[blockHash] = pindex;
+    chainActive.SetTip(pindex);
+    wtx.hashBlock = blockHash;
+    wtx.nIndex = 0;
+    wtx.fMerkleVerified = true;
+    ASSERT_GT(wtx.GetDepthInMainChain(), 0) << "test setup: transaction must be confirmed";
+
+    pwalletMain->mapWallet[ctx.GetHash()] = wtx;
+
+    std::vector<SaplingNoteEntry> saplingEntries;
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
+    std::set<libzcash::PaymentAddress> filterAddresses = {queriedAddr};
+    // If this reaches AttemptDecryptSaplingOutput for the note above, the process aborts.
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, 1);
+
+    EXPECT_TRUE(saplingEntries.empty());
+    EXPECT_TRUE(ironwoodEntries.empty());
+}
+
+// The test above proves decryption is skipped for a note the filter rejects. This proves
+// the stronger, more useful claim: decryption is skipped even for a note that IS returned,
+// as long as the caller doesn't ask for its memo. Every field needed to build the returned
+// SaplingNote (address, value, rseed, zip212, rcm, cmu) comes from the cache; the underlying Sapling
+// output is the same deliberately-undecryptable garbage as above, so if GetFilteredNotes
+// ever reached a decrypt call here (for the note object OR for a memo it wasn't asked for),
+// the process would abort exactly as in the test above.
+TEST_F(rpc_wallet_tests_bitcoin, GetFilteredNotes_builds_a_matching_note_entirely_from_cache_without_decrypting)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+
+    libzcash::SaplingPaymentAddress addrOfNote = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingIncomingViewingKey ivkOfNote;
+    ASSERT_TRUE(pwalletMain->GetSaplingIncomingViewingKey(addrOfNote, ivkOfNote));
+
+    CMutableTransaction mtx;
+    mtx.fOverwintered = true;
+    mtx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+    mtx.nVersion = SAPLING_TX_VERSION;
+    mtx.saplingBundle = sapling::test_only_invalid_bundle(/* spends */ 0, /* outputs */ 1, /* valueBalance */ 0);
+    CTransaction ctx(mtx);
+    CWalletTx wtx(pwalletMain, ctx);
+
+    uint256 rseed = uint256S("1234000000000000000000000000000000000000000000000000000000005678");
+    uint256 rcm = uint256S("aaaa000000000000000000000000000000000000000000000000000000009999");
+    uint256 cmu = uint256S("bbbb000000000000000000000000000000000000000000000000000000008888");
+    SaplingNoteData nd(ivkOfNote);
+    nd.address = addrOfNote;
+    nd.value = 1000;
+    nd.rseed = rseed;
+    nd.zip212Enabled = libzcash::Zip212Enabled::AfterZip212;
+    nd.rcm = rcm;
+    nd.cmu = cmu;
+    nd.fNoteDataInitialized = true;
+    wtx.mapSaplingNoteData[SaplingOutPoint(ctx.GetHash(), 0)] = nd;
+
+    CBlock block;
+    block.vtx.push_back(ctx);
+    CBlockIndex* pindex = new CBlockIndex(block);
+    pindex->nHeight = 500;
+    uint256 blockHash = block.GetHash();
+    mapBlockIndex[blockHash] = pindex;
+    chainActive.SetTip(pindex);
+    wtx.hashBlock = blockHash;
+    wtx.nIndex = 0;
+    wtx.fMerkleVerified = true;
+    ASSERT_GT(wtx.GetDepthInMainChain(), 0) << "test setup: transaction must be confirmed";
+
+    pwalletMain->mapWallet[ctx.GetHash()] = wtx;
+
+    std::vector<SaplingNoteEntry> saplingEntries;
+    std::vector<IronwoodNoteEntry> ironwoodEntries;
+    std::set<libzcash::PaymentAddress> filterAddresses = {addrOfNote};
+    // includeMemo left at its default (false): if this decrypted anyway (for the note or an
+    // unrequested memo), the process aborts, same as the test above.
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, 1);
+
+    ASSERT_EQ(saplingEntries.size(), 1u);
+    EXPECT_TRUE(ironwoodEntries.empty());
+    const SaplingNoteEntry& entry = saplingEntries[0];
+    EXPECT_TRUE(entry.address == addrOfNote);
+    EXPECT_EQ(entry.note.value(), 1000u);
+    EXPECT_EQ(entry.note.get_rseed(), rseed);
+    EXPECT_EQ(entry.note.get_zip_212_enabled(), libzcash::Zip212Enabled::AfterZip212);
+    // rcm()/cmu() do NOT recompute from rseed - they only return whatever was cached
+    // on the note object (see SaplingNote::rcm()/cmu()'s doc comments). A note built
+    // from the constructor alone would report rcm()==0, cmu()==nullopt regardless of
+    // rseed, silently breaking any spend built from it - GetFilteredNotes must restore
+    // both from SaplingNoteData via set_cached_rcm()/set_cached_cmu().
+    EXPECT_EQ(entry.note.rcm(), rcm);
+    ASSERT_TRUE(entry.note.cmu().has_value());
+    EXPECT_EQ(entry.note.cmu().value(), cmu);
+    // No memo was requested, so it comes back as the zero-filled default, not decrypted.
+    EXPECT_TRUE(std::all_of(entry.memo.begin(), entry.memo.end(), [](unsigned char c) { return c == 0; }));
 }
 
 // Every z_getnewaddress call also silently registers this account's internal

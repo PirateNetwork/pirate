@@ -262,6 +262,160 @@ TEST(TransactionBuilder, Invoke)
     EXPECT_TRUE(results3.validationPassed);
 }
 
+// CWallet::GetFilteredNotes reconstructs a SaplingNote purely from its constructor
+// (d, pk_d, value, rseed, zip212) when the wallet already has all of this cached,
+// to avoid re-decrypting every note on every call. But SaplingNote::rcm()/cmu() do
+// NOT recompute from those fields - they only ever return whatever Rust set on the
+// note object during decryption (see SaplingNote::cmu()/rcm()'s doc comments, and
+// SaplingNote.Random's note on this exact limitation in test_sapling_note.cpp). A
+// note built from the constructor alone therefore has rcm()==0, cmu()==nullopt -
+// wrong but not obviously so, since value/address/rseed are all still correct.
+// GetFilteredNotes closes this by also caching rcm/cmu at note-discovery time and
+// restoring them onto the reconstructed note via set_cached_rcm()/set_cached_cmu().
+// This proves that restoration actually reproduces the values a real decryption
+// gives, using a REAL shielded output (not the synthetic garbage bundles the
+// wallet-level regression tests use, since those can never decrypt at all) - and
+// proves it at the exact layer the bug manifests: ConvertRawSaplingSpend's call
+// into the Rust builder, which recomputes the Merkle root from the note's
+// commitment and throws if that commitment doesn't match the real one
+// (AddSaplingSpendRaw itself only checks the anchor is consistent across spends -
+// it never touches rcm, so it cannot catch a wrong one on its own). This is still
+// cheap: no proof is generated until Build().
+TEST(TransactionBuilder, SaplingNoteCacheReconstructionMatchesRealDecryption)
+{
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct UpgradeReverter {
+        ~UpgradeReverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+        }
+    } upgradeReverter;
+    auto consensusParams = Params().GetConsensus();
+
+    CBasicKeyStore keystore;
+    CKey tsk = DecodeSecret(tSecretRegtest);
+    ASSERT_TRUE(tsk.IsValid());
+    keystore.AddKey(tsk);
+    auto scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(consensusParams, 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.nExpiryHeight = 0;
+    txNew.vout[0].nValue = 50000;
+    CTransaction coinbaseTx(txNew);
+
+    CCoinsView baseView;
+    CCoinsViewCache view(&baseView);
+    UpdateCoins(coinbaseTx, view, 1);
+
+    SaplingWallet saplingWallet;
+    SaplingMerkleFrontier saplingFrontier;
+    saplingWallet.InitNoteCommitmentTree(saplingFrontier);
+
+    auto sk = libzcash::SaplingSpendingKey::random();
+    auto expsk = sk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey fvk;
+    expsk.DeriveFVK(&fvk);
+    SaplingIncomingViewingKey ivk;
+    fvk.DeriveIVK(&ivk);
+    libzcash::diversifier_t d = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    SaplingPaymentAddress pk;
+    ASSERT_TRUE(ivk.DeriveAddress(&pk, d));
+
+    libzcash::SaplingExtendedSpendingKey extsk = {};
+    extsk.expsk = expsk;
+
+    auto builder1 = TransactionBuilder(consensusParams, 1, &keystore);
+    builder1.InitializeSapling(uint256());
+    builder1.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    builder1.AddSaplingOutputRaw(pk, 40000, {});
+    builder1.ConvertRawSaplingOutput(fvk.ovk);
+    auto maybe_tx1 = builder1.Build();
+    ASSERT_TRUE(maybe_tx1.IsTx());
+    auto tx1 = maybe_tx1.GetTxOrThrow();
+
+    UpdateCoins(tx1, view, 1);
+    ASSERT_TRUE(tx1.GetSaplingBundle().IsPresent());
+    saplingFrontier.AppendBundle(tx1.GetSaplingBundle());
+    view.PushAnchor(saplingFrontier);
+    saplingWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
+    auto vOutputs = tx1.GetSaplingOutputs();
+    for (int j = 0; j < vOutputs.size(); j++) {
+        saplingWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vOutputs[j], true);
+    }
+
+    // Real decryption is the ground truth this test checks the cache against.
+    int realOutputIndex = -1;
+    std::optional<libzcash::SaplingNotePlaintext> maybe_pt;
+    for (int j = 0; j < vOutputs.size(); j++) {
+        maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], ivk);
+        if (maybe_pt) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+    auto realNote = maybe_pt.value().note(ivk).value();
+    ASSERT_TRUE(realNote.cmu().has_value());
+
+    // Exactly what GetFilteredNotes's population sites cache, and exactly what its
+    // fast path reconstructs from that cache - see CWallet::GetFilteredNotes and
+    // SaplingNoteData in src/wallet/wallet.h/.cpp.
+    libzcash::SaplingNote cacheNote(realNote.d, realNote.pk_d, realNote.value(), realNote.get_rseed(), realNote.get_zip_212_enabled());
+    cacheNote.set_cached_rcm(realNote.rcm());
+    cacheNote.set_cached_cmu(realNote.cmu().value());
+
+    EXPECT_EQ(cacheNote.rcm(), realNote.rcm());
+    ASSERT_TRUE(cacheNote.cmu().has_value());
+    EXPECT_EQ(cacheNote.cmu().value(), realNote.cmu().value());
+
+    // ak/nk must be valid Jubjub points, so this reuses the note's own already-valid
+    // fvk rather than inventing arbitrary bytes - any real fvk works equally well for
+    // checking both notes give the same nullifier under it.
+    auto realNullifier = realNote.nullifier(fvk, 7);
+    auto cacheNullifier = cacheNote.nullifier(fvk, 7);
+    ASSERT_TRUE(realNullifier.has_value());
+    ASSERT_TRUE(cacheNullifier.has_value());
+    EXPECT_EQ(realNullifier.value(), cacheNullifier.value());
+
+    // Decisive check, at the exact layer the bug manifests: converting the raw spend
+    // calls into the Rust builder, which recomputes the Merkle root from the note's
+    // commitment and throws AnchorMismatch (as a C++ exception, via cxx) if it
+    // doesn't match. AddSaplingSpendRaw alone does NOT exercise this - it only
+    // checks anchor consistency across spends already added, never the commitment -
+    // so passing it is a precondition here, not the proof. Both this and
+    // ConvertRawSaplingSpend are cheap: no proof is generated until Build().
+    libzcash::MerklePath saplingMerklePath;
+    ASSERT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), realOutputIndex, saplingMerklePath));
+    uint256 anchor;
+    ASSERT_TRUE(saplingWallet.GetPathRootWithCMU(saplingMerklePath, uint256::FromRawBytes(vOutputs[realOutputIndex].cmu()), anchor));
+
+    auto builderReal = TransactionBuilder(consensusParams, 2);
+    builderReal.InitializeSapling(anchor);
+    ASSERT_TRUE(builderReal.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex), pk, realNote.value(), realNote.rcm(), saplingMerklePath, anchor));
+    EXPECT_TRUE(builderReal.ConvertRawSaplingSpend(extsk));
+
+    auto builderCache = TransactionBuilder(consensusParams, 2);
+    builderCache.InitializeSapling(anchor);
+    ASSERT_TRUE(builderCache.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex), pk, cacheNote.value(), cacheNote.rcm(), saplingMerklePath, anchor));
+    EXPECT_TRUE(builderCache.ConvertRawSaplingSpend(extsk))
+        << "a note rebuilt from GetFilteredNotes' cache must pass the same anchor/commitment check a really-decrypted note does";
+
+    // Negative control: a note with a genuinely wrong rcm passes AddSaplingSpendRaw
+    // (it doesn't check rcm) but must fail ConvertRawSaplingSpend's anchor check -
+    // otherwise the two EXPECT_TRUEs above would hold no matter what rcm was given.
+    auto builderWrongRcm = TransactionBuilder(consensusParams, 2);
+    builderWrongRcm.InitializeSapling(anchor);
+    ASSERT_TRUE(builderWrongRcm.AddSaplingSpendRaw(SaplingOutPoint(tx1.GetHash(), realOutputIndex), pk, cacheNote.value(), uint256(), saplingMerklePath, anchor));
+    EXPECT_ANY_THROW(builderWrongRcm.ConvertRawSaplingSpend(extsk));
+}
+
 // Phase 4 protocol-coverage audit: AddIronwoodSpendRaw/ConvertRawIronwoodSpend
 // (and, less critically, InitializeIronwood/AddIronwoodOutputRaw/
 // ConvertRawIronwoodOutput) had zero direct coverage anywhere in the gtest

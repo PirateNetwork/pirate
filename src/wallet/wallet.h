@@ -451,13 +451,13 @@ public:
      * We initialize the height to -1 for the same reason as we do in SproutNoteData.
      * See the comment in that class for a full description.
      */
-    SaplingNoteData() : nullifier(), value {0}, fNoteDataInitialized {false} {
+    SaplingNoteData() : nullifier(), value {0}, zip212Enabled {libzcash::Zip212Enabled::AfterZip212}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0}, fNoteDataInitialized {false} {
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk) : ivk {ivk}, nullifier(), value {0}, zip212Enabled {libzcash::Zip212Enabled::AfterZip212}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
-    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0}, fNoteDataInitialized {false} {
+    SaplingNoteData(libzcash::SaplingIncomingViewingKey ivk, uint256 n) : ivk {ivk}, nullifier(n), value {0}, zip212Enabled {libzcash::Zip212Enabled::AfterZip212}, fNoteDataInitialized {false} {
         setPosition(UINT64_MAX); // Use UINT64_MAX as sentinel for unset position
     }
 
@@ -467,6 +467,25 @@ public:
     //In Memory Only
     CAmount value;
     libzcash::SaplingPaymentAddress address;
+    // Everything else needed to reconstruct this note's libzcash::SaplingNote without
+    // decrypting it again (see SaplingNote's constructor) - cached alongside
+    // value/address, at the same population sites, under the same fNoteDataInitialized
+    // guard. The memo is deliberately NOT cached here: at 512 bytes it would dwarf
+    // these fields for every note the wallet ever holds, while only a couple of RPCs
+    // (z_listunspent, z_listreceivedbyaddress) ever read it - GetFilteredNotes decrypts
+    // it on demand instead, only for notes that already survived every filter.
+    uint256 rseed;
+    libzcash::Zip212Enabled zip212Enabled;
+    // SaplingNote::rcm()/cmu() do NOT recompute from rseed - they only ever return
+    // whatever was cached on the note object during Rust decryption (see
+    // SaplingNote::cmu()/rcm() and SaplingNotePlaintext::note()'s doc comments, and the
+    // note on SaplingNote.Random in test_sapling_note.cpp). A note built from the
+    // constructor alone has rcm()==0 and cmu()==nullopt, which breaks spending (the
+    // builder needs the real commitment) even though value/address/rseed are all
+    // correct. These are cached here so GetFilteredNotes can restore them via
+    // set_cached_rcm()/set_cached_cmu() on the reconstructed note.
+    uint256 rcm;
+    uint256 cmu;
     bool fNoteDataInitialized;
 
     ADD_SERIALIZE_METHODS;
@@ -529,6 +548,14 @@ public:
     //In Memory Only
     CAmount value;
     libzcash::IronwoodPaymentAddress address;
+    // Everything else needed to reconstruct this note's libzcash::IronwoodNote without
+    // decrypting it again (see IronwoodNote's constructor) - cached alongside
+    // value/address, at the same population sites, under the same fNoteDataInitialized
+    // guard. The memo is deliberately NOT cached here - see the matching comment on
+    // SaplingNoteData.
+    uint256 rho;
+    uint256 rseed;
+    uint256 cmx;
     bool fNoteDataInitialized;
 
     ADD_SERIALIZE_METHODS;
@@ -2343,13 +2370,26 @@ public:
     //Get Address balance for the GUI
     void getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &balances, int minDepth, bool requireSpendingKey);
 
-    /* Find notes filtered by payment address, min depth, ability to spend */
+    //! Height of a wallet transaction's confirming block by txid, or 0 if it isn't one of this
+    //! wallet's transactions or isn't confirmed on the active chain. Resolves via the same
+    //! GetDepthInMainChain(pindexRet) overload used everywhere else in this file (in memory) -
+    //! for callers that only have a txid (e.g. a note's outpoint) rather than the CWalletTx
+    //! itself, so a second, separately-named accessor isn't needed on CMerkleTx.
+    int GetTxHeightInMainChain(const uint256& hash) const;
+
+    /* Find notes filtered by payment address, min depth, ability to spend.
+       includeMemo defaults to false: the memo is not cached on the note (it would cost
+       512 bytes per note, dwarfing everything else the wallet keeps in memory for it,
+       for a field almost nothing reads), so getting it costs a trial decryption -
+       paid only for notes that already survived every other filter, not the whole
+       wallet. Pass true only when the caller actually reads the returned memo. */
     void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
                           std::vector<IronwoodNoteEntry>& ironwoodEntries,
                           std::string address,
                           int minDepth=1,
                           bool ignoreSpent=true,
-                          bool requireSpendingKey=true);
+                          bool requireSpendingKey=true,
+                          bool includeMemo=false);
 
     /* Find notes filtered by payment addresses, min depth, if they are spent,
        if a spending key is required, and if they are locked.
@@ -2358,7 +2398,9 @@ public:
        aggregate value of the working set >= minAggregateValue, so the lock is held
        for the minimum time necessary to satisfy the caller's value requirement.
        Pass minAggregateValue=0 to disable early exit (both heaps filled from the full
-       wallet scan before returning). */
+       wallet scan before returning).
+       includeMemo: see the note on the address-filtered overload above - same
+       default, same reasoning. */
     void GetFilteredNotes(std::vector<SaplingNoteEntry>& saplingEntries,
                           std::vector<IronwoodNoteEntry>& ironwoodEntries,
                           std::set<libzcash::PaymentAddress>& filterAddresses,
@@ -2368,7 +2410,8 @@ public:
                           bool requireSpendingKey=true,
                           bool ignoreLocked=true,
                           int maxNotes=0,
-                          CAmount minAggregateValue=0);
+                          CAmount minAggregateValue=0,
+                          bool includeMemo=false);
 };
 
 /** A key allocated from the key pool. */

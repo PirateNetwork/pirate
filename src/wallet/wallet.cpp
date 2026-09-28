@@ -7206,10 +7206,16 @@ static void DecryptIronwoodNoteWorker(
             IronwoodNoteData nd;
             nd.ivk = ivk;
 
-            //Cache Address and value - in Memory Only
-            auto note = result.value();
-            nd.value = note.value();
-            nd.address = note.GetAddress();
+            //Cache Address, value, and everything needed to rebuild the IronwoodNote
+            //(rho/rseed/cmx) without decrypting again - in Memory Only. The memo is
+            //deliberately not cached - see the comment on IronwoodNoteData.
+            auto notePt = result.value();
+            auto ironwoodNote = notePt.note().value();
+            nd.value = notePt.value();
+            nd.address = notePt.GetAddress();
+            nd.rho = ironwoodNote.rho();
+            nd.rseed = ironwoodNote.rseed();
+            nd.cmx = ironwoodNote.cmx();
             nd.fNoteDataInitialized = true;
 
             LogPrintf("\n\nIronwood Transaction Found %s, %i\n\n", vHash[i].ToString(), vPosition[i]);
@@ -7378,10 +7384,22 @@ static void DecryptSaplingNoteWorker(
             SaplingNoteData nd;
             nd.ivk = ivk;
 
-            //Cache Address and value - in Memory Only
-            auto note = result.value();
-            nd.value = note.value();
+            //Cache Address, value, and everything needed to rebuild the SaplingNote
+            //(rseed/zip212/rcm/cmu) without decrypting again - in Memory Only. The memo
+            //is deliberately not cached - see the comment on SaplingNoteData.
+            auto notePt = result.value();
+            auto saplingNote = notePt.note(ivk).value();
+            nd.value = notePt.value();
             nd.address = address;
+            nd.rseed = saplingNote.get_rseed();
+            nd.zip212Enabled = saplingNote.get_zip_212_enabled();
+            // rcm()/cmu() only ever return whatever Rust set on this note during the
+            // decrypt just above - see the comment on SaplingNoteData::rcm. Always
+            // populated here since AttemptDecryptSaplingOutput just succeeded.
+            nd.rcm = saplingNote.rcm();
+            auto cmuOpt = saplingNote.cmu();
+            assert(cmuOpt.has_value());
+            nd.cmu = cmuOpt.value();
             nd.fNoteDataInitialized = true;
 
             if (nd.value >= minTxValue) {
@@ -9440,7 +9458,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
             //Check for unspent inputs or spend less than N Blocks ago. (Sapling)
             for (auto & pair : pwtx->mapSaplingNoteData) {
-              SaplingNoteData nd = pair.second;
+              const SaplingNoteData& nd = pair.second;
               if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetSaplingSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent sapling input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
@@ -9477,7 +9495,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
             //Check for unspent inputs or spend less than N Blocks ago. (Ironwood)
             for (auto & pair : pwtx->mapIronwoodNoteData) {
-              IronwoodNoteData nd = pair.second;
+              const IronwoodNoteData& nd = pair.second;
               if (!nd.fNoteDataInitialized || !nd.nullifier || pwalletMain->GetIronwoodSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent ironwood input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
@@ -9515,7 +9533,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
             //Check for unspent inputs or spend less than N Blocks ago. (Sprout)
             for (auto & pair : pwtx->mapSproutNoteData) {
-              SproutNoteData nd = pair.second;
+              const SproutNoteData& nd = pair.second;
               if (!nd.nullifier || pwalletMain->GetSproutSpendDepth(*nd.nullifier) <= fDeleteTransactionsAfterNBlocks) {
                 LogPrint("deletetx","DeleteTx - Unspent sprout input tx %s\n", pwtx->GetHash().ToString());
                 deleteTx = false;
@@ -9679,16 +9697,28 @@ bool CWallet::initalizeArcTx() {
                 auto nd = wtx.mapSaplingNoteData.at(op);
                 auto vOutputs = wtx.GetSaplingOutputs();
                 bool decryptSuccess = false;
-                // nd.ivk is in-memory only and empty after DB load; try all wallet IVKs
+                // nd.ivk itself is serialized and survives a DB load, but this loop doesn't
+                // rely on it - it re-derives the note against every wallet IVK instead.
                 for (auto ivkIt = setSaplingIncomingViewingKeys.begin(); ivkIt != setSaplingIncomingViewingKeys.end(); ++ivkIt) {
                     SaplingIncomingViewingKey ivk = ivkIt->first;
                     auto maybe_pt = SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[i], ivk);
                     if (maybe_pt) {
                         SaplingPaymentAddress address;
                         assert(ivk.DeriveAddress(&address, maybe_pt.value().d));
+                        auto saplingNote = maybe_pt.value().note(ivk).value();
                         nd.ivk = ivk;
                         nd.value = maybe_pt.value().value();
                         nd.address = address;
+                        nd.rseed = saplingNote.get_rseed();
+                        nd.zip212Enabled = saplingNote.get_zip_212_enabled();
+                        // See the comment on SaplingNoteData::rcm - always populated
+                        // here since AttemptDecryptSaplingOutput just succeeded.
+                        nd.rcm = saplingNote.rcm();
+                        {
+                            auto cmuOpt = saplingNote.cmu();
+                            assert(cmuOpt.has_value());
+                            nd.cmu = cmuOpt.value();
+                        }
                         nd.fNoteDataInitialized = true;
                         it->second.mapSaplingNoteData[op] = nd;
                         saplingInitialized++;
@@ -9716,14 +9746,19 @@ bool CWallet::initalizeArcTx() {
                 auto nd = wtx.mapIronwoodNoteData.at(op);
                 auto vActions = wtx.GetIronwoodActions();
                 bool decryptSuccess = false;
-                // nd.ivk is in-memory only and empty after DB load; try all wallet IVKs
+                // nd.ivk itself is serialized and survives a DB load, but this loop doesn't
+                // rely on it - it re-derives the note against every wallet IVK instead.
                 for (auto ivkIt = setIronwoodIncomingViewingKeys.begin(); ivkIt != setIronwoodIncomingViewingKeys.end(); ++ivkIt) {
                     IronwoodIncomingViewingKey ivk = ivkIt->first;
                     auto maybe_pt = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[i], ivk);
                     if (maybe_pt) {
+                        auto ironwoodNote = maybe_pt.value().note().value();
                         nd.ivk = ivk;
                         nd.value = maybe_pt.value().value();
                         nd.address = maybe_pt.value().GetAddress();
+                        nd.rho = ironwoodNote.rho();
+                        nd.rseed = ironwoodNote.rseed();
+                        nd.cmx = ironwoodNote.cmx();
                         nd.fNoteDataInitialized = true;
                         it->second.mapIronwoodNoteData[op] = nd;
                         ironwoodInitialized++;
@@ -13304,7 +13339,7 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
     LOCK2(cs_main, cs_wallet);
 
     for (auto & item : mapWallet) {
-        CWalletTx wtx = item.second;
+        const CWalletTx& wtx = item.second;
 
         // Filter the transactions before checking for notes
         if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
@@ -13316,7 +13351,7 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
 
         for (auto & pair : wtx.mapSaplingNoteData) {
             SaplingOutPoint op = pair.first;
-            SaplingNoteData nd = pair.second;
+            const SaplingNoteData& nd = pair.second;
 
             if (nd.nullifier && IsSaplingSpent(*nd.nullifier)) {
                 continue;
@@ -13338,7 +13373,7 @@ void CWallet::getZAddressBalances(std::map<libzcash::PaymentAddress, CAmount> &b
 
         for (auto & pair : wtx.mapIronwoodNoteData) {
             IronwoodOutPoint op = pair.first;
-            IronwoodNoteData nd = pair.second;
+            const IronwoodNoteData& nd = pair.second;
 
             if (nd.nullifier && IsIronwoodSpent(*nd.nullifier)) {
                 continue;
@@ -13510,6 +13545,22 @@ bool CWallet::LoadCryptedIronwoodWallet(const CKeyingMaterial& vchSecret) {
 }
 
 /**
+ * @brief Height of a wallet transaction's confirming block, looked up by txid
+ */
+int CWallet::GetTxHeightInMainChain(const uint256& hash) const {
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
+
+    std::map<uint256, CWalletTx>::const_iterator it = mapWallet.find(hash);
+    if (it == mapWallet.end())
+        return 0;
+
+    const CBlockIndex* pindexRet = nullptr;
+    it->second.GetDepthInMainChain(pindexRet);
+    return pindexRet ? pindexRet->nHeight : 0;
+}
+
+/**
  * @brief Find unspent notes in the wallet filtered by payment address and minimum depth
  * @param saplingEntries[out] Vector to store found Sapling note entries
  * @param ironwoodEntries[out] Vector to store found Ironwood note entries
@@ -13527,7 +13578,8 @@ void CWallet::GetFilteredNotes(
     std::string address,
     int minDepth,
     bool ignoreSpent,
-    bool requireSpendingKey)
+    bool requireSpendingKey,
+    bool includeMemo)
 {
     std::set<PaymentAddress> filterAddresses;
 
@@ -13535,7 +13587,7 @@ void CWallet::GetFilteredNotes(
         filterAddresses.insert(DecodePaymentAddress(address));
     }
 
-    GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, minDepth, INT_MAX, ignoreSpent, requireSpendingKey);
+    GetFilteredNotes(saplingEntries, ironwoodEntries, filterAddresses, minDepth, INT_MAX, ignoreSpent, requireSpendingKey, true, 0, 0, includeMemo);
 }
 
 /**
@@ -13578,7 +13630,8 @@ void CWallet::GetFilteredNotes(
     bool requireSpendingKey,
     bool ignoreLocked,
     int maxNotes,
-    CAmount minAggregateValue)
+    CAmount minAggregateValue,
+    bool includeMemo)
 {
     LOCK2(cs_main, cs_wallet);
 
@@ -13646,38 +13699,54 @@ void CWallet::GetFilteredNotes(
     for (auto & p : mapWallet) {
         if (earlyExit) break;
 
-        CWalletTx wtx = p.second;
+        // Every use of wtx below only reads it - no copy needed. mapWallet is
+        // std::map, so this reference stays valid for the rest of the iteration
+        // even if something nested inserts elsewhere in the map (std::map never
+        // invalidates references to elements other than the one erased).
+        const CWalletTx& wtx = p.second;
 
         // Skip transactions that are not final or still maturing
         if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
             continue;
 
-        const int chainDepth = wtx.GetDepthInMainChain();
+        const CBlockIndex* pindexTxRet = nullptr;
+        const int chainDepth = wtx.GetDepthInMainChain(pindexTxRet);
         const int nDepth = fUseDpowConfs
-            ? komodo_dpowconfs(tx_height(wtx.GetHash()), chainDepth)
+            ? komodo_dpowconfs(pindexTxRet ? pindexTxRet->nHeight : 0, chainDepth)
             : chainDepth;
         if (nDepth < minDepth || nDepth > maxDepth)
             continue;
 
         // ── Sapling notes ────────────────────────────────────────────────────
-        if (searchSapling) {
+        if (searchSapling && !wtx.mapSaplingNoteData.empty()) {
+            // rust::Vec<sapling::Output> wraps a non-copyable opaque type, so it can't
+            // be held in a std::optional for a lazy fetch - fetched once per
+            // transaction that has any wallet-owned Sapling note, same as before.
+            // Only consumed below for a note whose cache was never populated.
             auto vOutputs = wtx.GetSaplingOutputs();
 
             for (auto & pair : wtx.mapSaplingNoteData) {
                 if (earlyExit) break;
 
                 SaplingOutPoint op = pair.first;
-                SaplingNoteData nd = pair.second;
+                const SaplingNoteData& nd = pair.second;
 
-                auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
-                assert(optPlaintext != std::nullopt);
-
-                auto notePt = optPlaintext.value();
+                // The wallet already knows everything needed to reconstruct this note
+                // once it has been seen (set at note-discovery time, or by the
+                // post-load re-derivation pass - see initalizeArcTx): address, value,
+                // and (via rseed/zip212Enabled) the SaplingNote itself. Every filter
+                // runs on that cached data, and a note that passes all of them is
+                // built straight from the cache - no decryption at all. If that cache
+                // was somehow never populated, falls back to the old behavior:
+                // decrypt first, then derive the address and build the note from the
+                // decrypted plaintext.
+                bool haveCachedNote = nd.fNoteDataInitialized;
                 SaplingPaymentAddress pa;
-                assert(nd.ivk.DeriveAddress(&pa, notePt.d));
-
-                if (!(filterAddresses.empty() || filterAddresses.count(pa)))
-                    continue;
+                if (haveCachedNote) {
+                    pa = nd.address;
+                    if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                        continue;
+                }
                 if (ignoreSpent && nd.nullifier && IsSaplingSpent(*nd.nullifier))
                     continue;
                 if (requireSpendingKey) {
@@ -13689,8 +13758,46 @@ void CWallet::GetFilteredNotes(
                 if (ignoreLocked && IsLockedNote(op))
                     continue;
 
-                auto note = notePt.note(nd.ivk).value();
-                SaplingNoteEntry entry { op, pa, note, notePt.memo(), chainDepth };
+                libzcash::SaplingNote note = haveCachedNote
+                    ? libzcash::SaplingNote(pa.d, pa.pk_d, nd.value, nd.rseed, nd.zip212Enabled)
+                    : libzcash::SaplingNote(libzcash::diversifier_t(), uint256(), 0, uint256(), libzcash::Zip212Enabled::AfterZip212);
+                if (haveCachedNote) {
+                    // rcm()/cmu() only ever return whatever was cached on the note
+                    // object at construction time - see the comment on
+                    // SaplingNoteData::rcm - so a note built from the constructor
+                    // alone would report rcm()==0 and cmu()==nullopt, silently
+                    // breaking any spend built from it. Restore both from the cache.
+                    note.set_cached_rcm(nd.rcm);
+                    note.set_cached_cmu(nd.cmu);
+                }
+                std::array<unsigned char, ZC_MEMO_SIZE> memo{};
+
+                if (!haveCachedNote) {
+                    // Only a note whose cache was never populated reaches the trial
+                    // decryption unconditionally - needed here for the actual Note
+                    // object and address, neither of which is cached; the memo comes
+                    // along for free from the same decryption.
+                    auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                    assert(optPlaintext != std::nullopt);
+                    auto notePt = optPlaintext.value();
+
+                    assert(nd.ivk.DeriveAddress(&pa, notePt.d));
+                    if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                        continue;
+
+                    note = notePt.note(nd.ivk).value();
+                    memo = notePt.memo();
+                } else if (includeMemo) {
+                    // The memo is the one thing not cached on the note (see
+                    // SaplingNoteData) - this note has already passed every filter,
+                    // so this decryption is paid at most once per note actually
+                    // returned, not once per note the wallet holds.
+                    auto optPlaintext = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[op.n], nd.ivk);
+                    assert(optPlaintext != std::nullopt);
+                    memo = optPlaintext.value().memo();
+                }
+
+                SaplingNoteEntry entry { op, pa, note, memo, chainDepth };
 
                 if (!bounded) {
                     saplingEntries.push_back(entry);
@@ -13745,25 +13852,28 @@ void CWallet::GetFilteredNotes(
         if (earlyExit) break;
 
         // ── Ironwood notes ────────────────────────────────────────────────────
-        if (searchIronwood) {
+        if (searchIronwood && !wtx.mapIronwoodNoteData.empty()) {
+            // Same non-copyable-opaque-type constraint as vOutputs above - fetched
+            // once per transaction, only consumed for an uncached note.
             auto vActions = wtx.GetIronwoodActions();
 
             for (auto & pair : wtx.mapIronwoodNoteData) {
                 if (earlyExit) break;
 
                 IronwoodOutPoint op = pair.first;
-                IronwoodNoteData nd = pair.second;
+                const IronwoodNoteData& nd = pair.second;
 
-                auto optDeserialized = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], nd.ivk);
-                assert(optDeserialized != std::nullopt);
-
-                auto notePt = optDeserialized.value();
-                auto pa   = notePt.GetAddress();
-                auto memo = notePt.memo();
-                auto note = notePt.note().value();
-
-                if (!(filterAddresses.empty() || filterAddresses.count(pa)))
-                    continue;
+                // Same cached-note fast path as the Sapling loop above: address,
+                // value, and (via rho/rseed/cmx) the IronwoodNote itself are all
+                // cached, so a note that passes every filter is built straight from
+                // that cache with no decryption at all.
+                bool haveCachedNote = nd.fNoteDataInitialized;
+                libzcash::IronwoodPaymentAddress pa;
+                if (haveCachedNote) {
+                    pa = nd.address;
+                    if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                        continue;
+                }
                 if (ignoreSpent && nd.nullifier && IsIronwoodSpent(*nd.nullifier))
                     continue;
                 if (requireSpendingKey) {
@@ -13774,6 +13884,36 @@ void CWallet::GetFilteredNotes(
                 }
                 if (ignoreLocked && IsLockedNote(op))
                     continue;
+
+                libzcash::IronwoodNote note = haveCachedNote
+                    ? libzcash::IronwoodNote(pa, nd.value, nd.rho, nd.rseed, nd.cmx)
+                    : libzcash::IronwoodNote(libzcash::IronwoodPaymentAddress(), 0, uint256(), uint256(), uint256());
+                std::array<unsigned char, ZC_MEMO_SIZE> memo{};
+
+                if (!haveCachedNote) {
+                    // Only a note whose cache was never populated reaches the trial
+                    // decryption unconditionally - needed here for the actual Note
+                    // object and address, neither of which is cached; the memo comes
+                    // along for free from the same decryption.
+                    auto optDeserialized = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], nd.ivk);
+                    assert(optDeserialized != std::nullopt);
+                    auto notePt = optDeserialized.value();
+
+                    pa = notePt.GetAddress();
+                    if (!(filterAddresses.empty() || filterAddresses.count(pa)))
+                        continue;
+
+                    memo = notePt.memo();
+                    note = notePt.note().value();
+                } else if (includeMemo) {
+                    // The memo is the one thing not cached on the note (see
+                    // IronwoodNoteData) - this note has already passed every filter,
+                    // so this decryption is paid at most once per note actually
+                    // returned, not once per note the wallet holds.
+                    auto optDeserialized = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&vActions[op.n], nd.ivk);
+                    assert(optDeserialized != std::nullopt);
+                    memo = optDeserialized.value().memo();
+                }
 
                 IronwoodNoteEntry entry { op, pa, note, memo, chainDepth };
 

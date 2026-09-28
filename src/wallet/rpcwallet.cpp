@@ -921,9 +921,10 @@ UniValue getreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey&
 
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
             if (txout.scriptPubKey == scriptPubKey) {
-                int nDepth    = wtx.GetDepthInMainChain();
+                const CBlockIndex* pindexRet = nullptr;
+                int nDepth    = wtx.GetDepthInMainChain(pindexRet);
                 if( nMinDepth > 1 ) {
-                    int nHeight    = tx_height(wtx.GetHash());
+                    int nHeight    = pindexRet ? pindexRet->nHeight : 0;
                     int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
                     if (dpowconfs >= nMinDepth) {
                         nAmount   += txout.nValue; // komodo_interest?
@@ -1006,21 +1007,24 @@ CAmount GetAccountBalance(CWalletDB& walletdb, const string& strAccount, int nMi
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
-        if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < 0)
+        if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
+            continue;
+        const CBlockIndex* pindexRet = nullptr;
+        int nDepth    = wtx.GetDepthInMainChain(pindexRet);
+        if (nDepth < 0)
             continue;
 
         CAmount nReceived, nSent, nFee;
         wtx.GetAccountAmounts(strAccount, nReceived, nSent, nFee, filter);
 
-        int nDepth    = wtx.GetDepthInMainChain();
         if( nMinDepth > 1 ) {
-            int nHeight    = tx_height(wtx.GetHash());
+            int nHeight    = pindexRet ? pindexRet->nHeight : 0;
             int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
             if (nReceived != 0 && dpowconfs >= nMinDepth) {
                 nBalance += nReceived;
             }
         } else {
-            if (nReceived != 0 && wtx.GetDepthInMainChain() >= nMinDepth) {
+            if (nReceived != 0 && nDepth >= nMinDepth) {
                 nBalance += nReceived;
             }
         }
@@ -1190,7 +1194,11 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
         for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
         {
             const CWalletTx& wtx = (*it).second;
-            if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0 || wtx.GetDepthInMainChain() < 0)
+            if (!CheckFinalTx(wtx) || wtx.GetBlocksToMaturity() > 0)
+                continue;
+            const CBlockIndex* pindexRet = nullptr;
+            int nDepth    = wtx.GetDepthInMainChain(pindexRet);
+            if (nDepth < 0)
                 continue;
 
             CAmount allFee;
@@ -1199,9 +1207,8 @@ UniValue getbalance(const UniValue& params, bool fHelp, const CPubKey& mypk)
             list<COutputEntry> listSent;
             wtx.GetAmounts(listReceived, listSent, allFee, strSentAccount, filter);
 
-            int nDepth    = wtx.GetDepthInMainChain();
             if( nMinDepth > 1 ) {
-                 int nHeight    = tx_height(wtx.GetHash());
+                 int nHeight    = pindexRet ? pindexRet->nHeight : 0;
                  int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
                  if (dpowconfs >= nMinDepth) {
                     BOOST_FOREACH(const COutputEntry& r, listReceived)
@@ -1598,9 +1605,10 @@ UniValue ListReceived(const UniValue& params, bool fByAccounts)
         if (wtx.IsCoinBase() || !CheckFinalTx(wtx))
             continue;
 
-        int nDepth    = wtx.GetDepthInMainChain();
+        const CBlockIndex* pindexRet = nullptr;
+        int nDepth    = wtx.GetDepthInMainChain(pindexRet);
         if( nMinDepth > 1 ) {
-            int nHeight   = tx_height(wtx.GetHash());
+            int nHeight   = pindexRet ? pindexRet->nHeight : 0;
             int dpowconfs = komodo_dpowconfs(nHeight, nDepth);
             if (dpowconfs < nMinDepth)
                 continue;
@@ -3043,9 +3051,10 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
     BOOST_FOREACH(const COutput& out, vecOutputs) {
-        int nDepth    = out.tx->GetDepthInMainChain();
+        const CBlockIndex* pindexRet = nullptr;
+        int nDepth    = out.tx->GetDepthInMainChain(pindexRet);
         if( nMinDepth > 1 ) {
-            int nHeight    = tx_height(out.tx->GetHash());
+            int nHeight    = pindexRet ? pindexRet->nHeight : 0;
             int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
             if (dpowconfs < nMinDepth || dpowconfs > nMaxDepth)
                 continue;
@@ -3265,7 +3274,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
     //Get All Notes
     std::vector<SaplingNoteEntry> saplingEntries;
     std::vector<IronwoodNoteEntry> ironwoodEntries;
-    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false);
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, zaddrs, nMinDepth, nMaxDepth, true, !fIncludeWatchonly, false, 0, 0, /* includeMemo */ true);
     std::map<libzcash::SaplingPaymentAddress, std::vector<SaplingNoteEntry>> mapResultsSapling;
 
     for (auto & entry : saplingEntries) {
@@ -3330,7 +3339,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
                 UniValue obj(UniValue::VOBJ);
 
-                int nHeight   = tx_height(entry.op.hash);
+                int nHeight   = pwalletMain->GetTxHeightInMainChain(entry.op.hash);
                 int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
 
                 // Only return notarized results when minconf>1
@@ -3373,7 +3382,7 @@ UniValue z_listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
             UniValue obj(UniValue::VOBJ);
 
-            int nHeight   = tx_height(entry.op.hash);
+            int nHeight   = pwalletMain->GetTxHeightInMainChain(entry.op.hash);
             int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
 
             // Only return notarized results when minconf>1
@@ -3907,9 +3916,10 @@ CAmount getBalanceTaddr(std::string transparentAddress, int minDepth=1, bool ign
     pwalletMain->AvailableCoins(vecOutputs, false, NULL, true);
 
     BOOST_FOREACH(const COutput& out, vecOutputs) {
-        int nDepth    = out.tx->GetDepthInMainChain();
+        const CBlockIndex* pindexRet = nullptr;
+        int nDepth    = out.tx->GetDepthInMainChain(pindexRet);
         if( minDepth > 1 ) {
-            int nHeight    = tx_height(out.tx->GetHash());
+            int nHeight    = pindexRet ? pindexRet->nHeight : 0;
             int dpowconfs  = komodo_dpowconfs(nHeight, nDepth);
             if (dpowconfs < minDepth) {
                 continue;
@@ -4014,7 +4024,7 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
     UniValue result(UniValue::VARR);
     std::vector<SaplingNoteEntry> saplingEntries;
     std::vector<IronwoodNoteEntry> ironwoodEntries;
-    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress, nMinDepth, false, false);
+    pwalletMain->GetFilteredNotes(saplingEntries, ironwoodEntries, fromaddress, nMinDepth, false, false, /* includeMemo */ true);
 
     if (std::get_if<libzcash::SaplingPaymentAddress>(&zaddr) != nullptr) {
 
@@ -4026,7 +4036,7 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
         for (SaplingNoteEntry & entry : saplingEntries) {
             UniValue obj(UniValue::VOBJ);
 
-            int nHeight   = tx_height(entry.op.hash);
+            int nHeight   = pwalletMain->GetTxHeightInMainChain(entry.op.hash);
             int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
             // Only return notarized results when minconf>1
             if (nMinDepth > 1 && dpowconfs == 1)
@@ -4057,7 +4067,7 @@ UniValue z_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubK
         for (IronwoodNoteEntry & entry : ironwoodEntries) {
             UniValue obj(UniValue::VOBJ);
 
-            int nHeight   = tx_height(entry.op.hash);
+            int nHeight   = pwalletMain->GetTxHeightInMainChain(entry.op.hash);
             int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
             // Only return notarized results when minconf>1
             if (nMinDepth > 1 && dpowconfs == 1)
@@ -4253,7 +4263,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     for (auto & entry : saplingEntries) {
         //Get Note depths
-        int nHeight   = tx_height(entry.op.hash);
+        int nHeight   = pwalletMain->GetTxHeightInMainChain(entry.op.hash);
         int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
 
         //Map all balances by address
@@ -4290,7 +4300,7 @@ UniValue z_getbalances(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     for (auto & entry : ironwoodEntries) {
         //Get Note depths
-        int nHeight   = tx_height(entry.op.hash);
+        int nHeight   = pwalletMain->GetTxHeightInMainChain(entry.op.hash);
         int dpowconfs = komodo_dpowconfs(nHeight, entry.confirmations);
 
         //Map all balances by address
@@ -4798,15 +4808,6 @@ bool rpcwallet__find_unspent_notes(std::string fromaddress_,  int mindepth_)
     for (auto entry : saplingEntries)
     {
         z_sapling_inputs_.push_back(entry);
-        std::string data(entry.memo.begin(), entry.memo.end());
-
-        //printf("rpcwallet__find_unspent_notes() Unspent note: (txid=%s, vShieldedSpend=%d, amount=%s, memo=%s)\n",
-        //    //getId().c_str(),
-        //    entry.op.hash.ToString().substr(0, 10).c_str(),
-        //    entry.op.n,
-        //    FormatMoney(entry.note.value()).c_str(),
-        //    HexStr(data).substr(0, 10).c_str() );
-        //    fflush(stdout);
     }
 
     if (z_sapling_inputs_.empty())
