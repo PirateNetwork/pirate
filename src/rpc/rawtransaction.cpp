@@ -1339,6 +1339,17 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
 
         result.push_back(Pair("rawinputs",inputs));
         result.push_back(Pair("rawoutputs",outputs));
+        // Surface the fee and any instructed change address so a human (or the
+        // offline-signing dialog) reviewing these build instructions before
+        // signing can actually see where the bulk of the spent value is headed,
+        // rather than only ever seeing the visible payment output(s) above.
+        result.push_back(Pair("fee", ValueFromAmount(tb.GetFee())));
+        result.push_back(Pair("feeZat", tb.GetFee()));
+        if (const auto& instructedSapling = tb.GetInstructedSaplingChangeAddress()) {
+            result.push_back(Pair("instructedchangeaddress", EncodePaymentAddress(*instructedSapling)));
+        } else if (const auto& instructedIronwood = tb.GetInstructedIronwoodChangeAddress()) {
+            result.push_back(Pair("instructedchangeaddress", EncodePaymentAddress(*instructedIronwood)));
+        }
     } else {
         result.push_back(Pair("rawtype","raw"));
         TxToJSON(tx, uint256(), result, false, 0, 0, 0, false);
@@ -2092,12 +2103,42 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   //wallet ends up signing them; pwalletMain may have its own -changeaddress
   //setting entirely unrelated to this send, or none at all, and it has no way to
   //know which is which here regardless.
+  //
+  //Security: the blob is untrusted input in the offline-signing model (the whole
+  //point of signing offline is that the machine which built the blob is NOT
+  //trusted with spend authority), so an instructed change address must never be
+  //honored on faith — a tampered or maliciously-crafted blob could otherwise
+  //redirect the bulk of the spent value to an attacker's address while a
+  //decoderawtransaction-style review of the blob's visible inputs/outputs looks
+  //unremarkable. Require that pwalletMain itself holds the *spending* key for
+  //the instructed address (HaveSpendingKeyForPaymentAddress -- the same check
+  //init.cpp applies to a -changeaddress override), not merely an incoming
+  //viewing key: a wallet that has only ever imported someone else's viewing
+  //key (for tracking/auditing) would otherwise pass an IsMine-style check
+  //while still being unable to ever spend the resulting change note, silently
+  //burning it exactly as if it had gone to an attacker outright. Refuse to
+  //sign rather than silently falling back, since a legitimate blob's
+  //instructed address is documented to always agree with what this wallet
+  //would have derived anyway.
   if (const auto& saplingChangeAddr = tb.GetInstructedSaplingChangeAddress()) {
+      if (!HaveSpendingKeyForPaymentAddress(pwalletMain)(*saplingChangeAddr)) {
+          throw JSONRPCError(RPC_WALLET_ERROR,
+              "Build instructions specify a Sapling change address not controlled "
+              "by this wallet; refusing to sign a transaction that would send "
+              "change to an address this wallet cannot verify as its own.");
+      }
       if (!saplingInitialized) {
           tb.InitializeSapling(uint256());
       }
       tb.SendChangeTo(*saplingChangeAddr, ovk);
   } else if (const auto& ironwoodChangeAddr = tb.GetInstructedIronwoodChangeAddress()) {
+      if (!HaveSpendingKeyForPaymentAddress(pwalletMain)(*ironwoodChangeAddr)) {
+          throw JSONRPCError(RPC_WALLET_ERROR,
+              "Build instructions specify an Ironwood change address not "
+              "controlled by this wallet; refusing to sign a transaction that "
+              "would send change to an address this wallet cannot verify as its "
+              "own.");
+      }
       if (!ironwoodInitialized) {
           tb.InitializeIronwood(false, true, uint256());
       }

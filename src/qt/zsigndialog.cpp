@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2024-2025 The Pirate Network developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -212,7 +213,7 @@ void ZSignDialog::on_signButton_clicked()
             int code = find_value(objError, "code").get_int();
             std::string message = find_value(objError, "message").get_str();
 
-            sMsg.asprintf("Transaction signing failed: %s\n",message.c_str());
+            sMsg = QString::asprintf("Transaction signing failed: %s\n",message.c_str());
             ui->teResult->setText(sMsg);
         }
         catch (const std::runtime_error&) // raised when converting to invalid type, i.e. missing code or message

@@ -2693,6 +2693,155 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_bakes_in_default_
     EXPECT_EQ(*instructed, expectedChangeAddr);
 }
 
+// Security regression test: z_buildrawtransaction used to honor an instructed
+// change address (tb.GetInstructedSaplingChangeAddress()/GetInstructedIronwood*)
+// taken straight from the build-instructions blob with no check that the
+// signing wallet actually controlled it. In the offline-signing model the
+// machine that builds the blob (z_createbuildinstructions/coincontrol) is
+// explicitly the untrusted party, so a compromised or malicious blob producer
+// could redirect the bulk of a spent note's value to an address of its own
+// choosing while the visible payment output looked unremarkable. This builds
+// a real, self-consistent note/witness (the Rust Sapling builder cross-checks
+// the supplied merkle path against its own anchor at add_spend() time, so a
+// merely correctly-sized placeholder path isn't enough) using the same
+// standalone SaplingWallet/SaplingMerkleFrontier machinery
+// TransactionBuilder.Invoke (test_transaction_builder.cpp) uses to fabricate
+// a spendable note without a real mined chain. The instructed change address
+// is then overwritten with one this wallet holds no key material for at all,
+// exactly as an attacker tampering with the blob would.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_z_buildrawtransaction_rejects_instructed_change_address_not_owned_by_wallet)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    SelectParams(CBaseChainParams::REGTEST);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    struct Reverter {
+        ~Reverter() {
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+            SelectParams(CBaseChainParams::MAIN);
+        }
+    } reverter;
+
+    if (!pwalletMain->HaveHDSeed()) {
+        pwalletMain->GenerateNewSeed();
+    }
+    // A real address this wallet holds the spending key for.
+    libzcash::SaplingPaymentAddress fromAddr = pwalletMain->GenerateNewSaplingZKey();
+    libzcash::SaplingExtendedSpendingKey fromExtsk;
+    ASSERT_TRUE(pwalletMain->GetSaplingExtendedSpendingKey(fromAddr, fromExtsk));
+    libzcash::SaplingIncomingViewingKey fromIvk;
+    ASSERT_TRUE(pwalletMain->GetSaplingIncomingViewingKey(fromAddr, fromIvk));
+
+    // A Sapling address this wallet has no key material for whatsoever - the
+    // attacker's destination.
+    auto foreignSk = libzcash::SaplingSpendingKey::random();
+    auto foreignExpsk = foreignSk.expanded_spending_key();
+    libzcash::SaplingFullViewingKey foreignFvk;
+    foreignExpsk.DeriveFVK(&foreignFvk);
+    libzcash::SaplingIncomingViewingKey foreignIvk;
+    foreignFvk.DeriveIVK(&foreignIvk);
+    libzcash::diversifier_t foreignD = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    libzcash::SaplingPaymentAddress foreignAddr;
+    ASSERT_TRUE(foreignIvk.DeriveAddress(&foreignAddr, foreignD));
+    ASSERT_FALSE(pwalletMain->HaveSaplingIncomingViewingKey(foreignAddr));
+
+    // Fund a dummy transparent input, then shield it to fromAddr - purely to
+    // get a real, provable Sapling output/note to spend; never mined or
+    // broadcast.
+    CBasicKeyStore fundingKeystore;
+    CKey tsk = DecodeSecret("UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1");
+    ASSERT_TRUE(tsk.IsValid());
+    fundingKeystore.AddKey(tsk);
+    CScript scriptPubKey = GetScriptForDestination(tsk.GetPubKey().GetID());
+
+    CMutableTransaction txNew = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 1);
+    txNew.vin.resize(1);
+    txNew.vin[0].prevout.SetNull();
+    txNew.vin[0].scriptSig = (CScript() << 1 << CScriptNum(1)) + COINBASE_FLAGS;
+    txNew.vout.resize(1);
+    txNew.vout[0].scriptPubKey = scriptPubKey;
+    txNew.vout[0].nValue = 50000;
+    txNew.nExpiryHeight = 0;
+    CTransaction coinbaseTx(txNew);
+
+    auto shieldBuilder = TransactionBuilder(Params().GetConsensus(), 1, &fundingKeystore);
+    shieldBuilder.InitializeSapling(uint256());
+    shieldBuilder.AddTransparentInput(COutPoint(coinbaseTx.GetHash(), 0), scriptPubKey, 50000);
+    ASSERT_TRUE(shieldBuilder.AddSaplingOutputRaw(fromAddr, 40000, {}));
+    ASSERT_TRUE(shieldBuilder.ConvertRawSaplingOutput(fromExtsk.expsk.ovk));
+    auto maybeTx1 = shieldBuilder.Build();
+    ASSERT_TRUE(maybeTx1.IsTx());
+    CTransaction tx1 = maybeTx1.GetTxOrThrow();
+
+    // Track tx1 in a standalone note-commitment tree/wallet (no real chain
+    // needed) to get a genuinely self-consistent merkle path + anchor.
+    SaplingWallet saplingWallet;
+    SaplingMerkleFrontier saplingFrontier;
+    saplingWallet.InitNoteCommitmentTree(saplingFrontier);
+    saplingWallet.CreateEmptyPositionsForTxid(2, tx1.GetHash());
+    auto vOutputs = tx1.GetSaplingOutputs();
+    for (int j = 0; j < (int)vOutputs.size(); j++) {
+        saplingWallet.AppendNoteCommitment(2, tx1.GetHash(), 0, j, &vOutputs[j], true);
+    }
+
+    // The builder pads to a 2-output privacy floor and shuffles real/dummy
+    // outputs together, so find the real one by trial decryption.
+    int realOutputIndex = -1;
+    std::optional<libzcash::SaplingNotePlaintext> maybe_pt;
+    for (int j = 0; j < (int)vOutputs.size(); j++) {
+        maybe_pt = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(vOutputs[j], fromIvk);
+        if (maybe_pt) {
+            realOutputIndex = j;
+            break;
+        }
+    }
+    ASSERT_NE(realOutputIndex, -1);
+    auto cmu = uint256::FromRawBytes(vOutputs[realOutputIndex].cmu());
+    auto maybe_note = maybe_pt.value().note(fromIvk);
+    ASSERT_TRUE(static_cast<bool>(maybe_note));
+    auto note = maybe_note.value();
+
+    libzcash::MerklePath saplingMerklePath;
+    ASSERT_TRUE(saplingWallet.GetMerklePathOfNote(tx1.GetHash(), realOutputIndex, saplingMerklePath));
+    uint256 anchor;
+    ASSERT_TRUE(saplingWallet.GetPathRootWithCMU(saplingMerklePath, cmu, anchor));
+
+    // Only stage the raw spend (AddSaplingSpendRaw) - do NOT call
+    // InitializeSapling/ConvertRawSaplingSpend here: those run on the signing
+    // side, inside z_buildrawtransaction itself (using tb.vSaplingSpends,
+    // which is what actually gets serialized into the blob format below).
+    // Converting here first would empty vSaplingSpends before serialization,
+    // producing a blob z_buildrawtransaction sees as spend-less.
+    TransactionBuilder tb(Params().GetConsensus(), 2);
+    ASSERT_TRUE(tb.AddSaplingSpendRaw(
+        SaplingOutPoint(tx1.GetHash(), realOutputIndex),
+        fromAddr,
+        note.value(),
+        note.rcm(),
+        saplingMerklePath,
+        anchor));
+
+    tb.SetInstructedSaplingChangeAddress(foreignAddr);
+    tb.SetFee(0);
+    tb.SetChecksum();
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << tb;
+    std::string hexTb = HexStr(ss.begin(), ss.end());
+
+    UniValue params(UniValue::VARR);
+    params.push_back(hexTb);
+
+    try {
+        z_buildrawtransaction(params, false, CPubKey());
+        FAIL() << "expected rejection of an instructed change address the wallet does not control";
+    } catch (const UniValue& objError) {
+        EXPECT_TRUE(find_error(objError, "not controlled by this wallet"));
+    }
+}
+
 TEST_F(rpc_wallet_tests_bitcoin, rpc_z_createbuildinstructions_rejects_insufficient_funds)
 {
     // Regression test: z_createbuildinstructions used to have no check that the

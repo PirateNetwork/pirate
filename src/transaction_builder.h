@@ -382,6 +382,7 @@ public:
     // Transaction Builder initialization functions
     void InitializeTransactionBuilder(const Consensus::Params& consensusParams, int nHeight);
     void SetFee(CAmount fee);
+    CAmount GetFee() const { return fee; }
     void SetMinConfirmations(int iMinConf);
     void SetExpiryHeight(int expHeight);
     void SetLockTime(uint32_t time) { this->mtx.nLockTime = time; }
