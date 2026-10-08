@@ -715,7 +715,6 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-ac_pubkey", _("Public key for receiving payments on the network"));
     strUsage += HelpMessageOpt("-ac_public", _("Transparent transactions only, default 0"));
     strUsage += HelpMessageOpt("-ac_reward", _("Block reward in satoshis, default is 0"));
-    strUsage += HelpMessageOpt("-ac_sapling", _("Sapling activation block height"));
     strUsage += HelpMessageOpt("-ac_script", _("P2SH/multisig address to receive founders rewards"));
     strUsage += HelpMessageOpt("-ac_staked", _("Percentage of blocks that are Proof-Of-Stake, default 0"));
     strUsage += HelpMessageOpt("-ac_supply", _("Starting supply, default is 0"));

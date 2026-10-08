@@ -4872,134 +4872,6 @@ bool static DisconnectTip(CValidationState &state, bool fBare = false) {
     return true;
 }
 
-int32_t komodo_activate_sapling(CBlockIndex *pindex)
-{
-    uint32_t blocktime,prevtime; CBlockIndex *prev; int32_t i,transition=0,height,prevht;
-    int32_t activation = 0;
-    if ( pindex == 0 )
-    {
-        LogPrint("sapling","komodo_activate_sapling null pindex\n");
-        return(0);
-    }
-    height = pindex->nHeight;
-    blocktime = (uint32_t)pindex->nTime;
-    //fprintf(stdout,"komodo_activate_sapling.%d starting blocktime %u cmp.%d\n",height,blocktime,blocktime > KOMODO_SAPLING_ACTIVATION);
-
-    // avoid trying unless we have at least 30 blocks
-    if (height < 30)
-        return(0);
-
-    for (i=0; i<30; i++)
-    {
-        if ( (prev= pindex->pprev) == 0 )
-            break;
-        pindex = prev;
-    }
-    if ( i != 30 )
-    {
-        LogPrint("sapling","couldnt go backwards 30 blocks\n");
-        return(0);
-    }
-    height = pindex->nHeight;
-    blocktime = (uint32_t)pindex->nTime;
-    //fprintf(stdout,"starting blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_SAPLING_ACTIVATION);
-    if ( blocktime > KOMODO_SAPLING_ACTIVATION ) // find the earliest transition
-    {
-        while ( (prev= pindex->pprev) != 0 )
-        {
-            prevht = prev->nHeight;
-            prevtime = (uint32_t)prev->nTime;
-            //fprintf(stderr,"(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_SAPLING_ACTIVATION,height,blocktime,blocktime > KOMODO_SAPLING_ACTIVATION);
-            if ( prevht+1 != height )
-            {
-                LogPrint("sapling","komodo_activate_sapling: unexpected non-contiguous ht %d vs %d\n",prevht,height);
-                return(0);
-            }
-            if ( prevtime <= KOMODO_SAPLING_ACTIVATION && blocktime > KOMODO_SAPLING_ACTIVATION )
-            {
-                activation = height + 60;
-                LogPrint("sapling","%s transition at %d (%d, %u) -> (%d, %u)\n",chainName.symbol().c_str(),height,prevht,prevtime,height,blocktime);
-            }
-            if ( prevtime < KOMODO_SAPLING_ACTIVATION-3600*24 )
-                break;
-            pindex = prev;
-            height = prevht;
-            blocktime = prevtime;
-        }
-    }
-    if ( activation != 0 )
-    {
-        komodo_setactivation(activation);
-        LogPrint("sapling","%s sapling activation at %d\n",chainName.symbol().c_str(),activation);
-        ASSETCHAINS_SAPLING = activation;
-    }
-    return activation;
-}
-
-int32_t komodo_activate_ironwood(CBlockIndex *pindex)
-{
-    uint32_t blocktime,prevtime; CBlockIndex *prev; int32_t i,transition=0,height,prevht;
-    int32_t activation = 0;
-    if ( pindex == 0 )
-    {
-        LogPrint("ironwood","komodo_activate_ironwood null pindex\n");
-        return(0);
-    }
-    height = pindex->nHeight;
-    blocktime = (uint32_t)pindex->nTime;
-    LogPrint("ironwood","komodo_activate_ironwood.%d starting blocktime %u cmp.%d\n",height,blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
-
-    // avoid trying unless we have at least 30 blocks
-    if (height < 30)
-        return(0);
-
-    for (i=0; i<30; i++)
-    {
-        if ( (prev= pindex->pprev) == 0 )
-            break;
-        pindex = prev;
-    }
-    if ( i != 30 )
-    {
-        LogPrint("ironwood","couldnt go backwards 30 blocks\n");
-        return(0);
-    }
-    height = pindex->nHeight;
-    blocktime = (uint32_t)pindex->nTime;
-    LogPrint("ironwood","KOMODO_IRONWOOD_ACTIVATION %u\n", KOMODO_IRONWOOD_ACTIVATION);
-    LogPrint("ironwood","starting ironwood blocktime %u cmp.%d\n",blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
-    if ( blocktime > KOMODO_IRONWOOD_ACTIVATION ) // find the earliest transition
-    {
-        while ( (prev= pindex->pprev) != 0 )
-        {
-            prevht = prev->nHeight;
-            prevtime = (uint32_t)prev->nTime;
-            LogPrint("ironwood","(%d, %u).%d -> (%d, %u).%d\n",prevht,prevtime,prevtime > KOMODO_IRONWOOD_ACTIVATION,height,blocktime,blocktime > KOMODO_IRONWOOD_ACTIVATION);
-            if ( prevht+1 != height )
-            {
-                LogPrint("ironwood","komodo_activate_ironwood: unexpected non-contiguous ht %d vs %d\n",prevht,height);
-                return(0);
-            }
-            if ( prevtime <= KOMODO_IRONWOOD_ACTIVATION && blocktime > KOMODO_IRONWOOD_ACTIVATION )
-            {
-                activation = height + 60;
-                LogPrint("ironwood","%s transition at %d (%d, %u) -> (%d, %u)\n",chainName.symbol().c_str(),height,prevht,prevtime,height,blocktime);
-            }
-            if ( prevtime < KOMODO_IRONWOOD_ACTIVATION-3600*24 )
-                break;
-            pindex = prev;
-            height = prevht;
-            blocktime = prevtime;
-        }
-    }
-    if ( activation != 0 )
-    {
-        komodo_setironwood(activation);
-        LogPrint("ironwood","%s ironwood activation at %d\n",chainName.symbol().c_str(),activation);
-        ASSETCHAINS_IRONWOOD = activation;
-    }
-    return activation;
-}
 static int64_t nTimeReadFromDisk = 0;
 static int64_t nTimeConnectTotal = 0;
 static int64_t nTimeFlush = 0;
@@ -5112,16 +4984,6 @@ bool ConnectTip(CValidationState &state, CBlockIndex *pindexNew, CBlock *pblock)
     else KOMODO_INSYNC = 0;
     if ( KOMODO_NSPV_FULLNODE )
     {
-        if ( ASSETCHAINS_SAPLING <= 0 && pindexNew->nTime > KOMODO_SAPLING_ACTIVATION - 24*3600 )
-            // Use Chainparams for regtest activation
-            if (Params().NetworkIDString() != "regtest") {
-                komodo_activate_sapling(pindexNew);
-            }
-        if ( ASSETCHAINS_IRONWOOD <= 0 && pindexNew->nTime > KOMODO_IRONWOOD_ACTIVATION - 24*3600 )
-            // Use Chainparams for regtest activation
-            if (Params().NetworkIDString() != "regtest") {
-                komodo_activate_ironwood(pindexNew);
-            }
         if ( ASSETCHAINS_CC != 0 && KOMODO_SNAPSHOT_INTERVAL != 0 && (pindexNew->nHeight % KOMODO_SNAPSHOT_INTERVAL) == 0 && pindexNew->nHeight >= KOMODO_SNAPSHOT_INTERVAL )
         {
             uint64_t start = time(NULL);
@@ -7284,26 +7146,6 @@ bool static LoadBlockIndexDB()
 	      progress);
 
     EnforceNodeDeprecation(chainActive.Height(), true);
-    CBlockIndex *pindex;
-    if ( (pindex= chainActive.Tip()) != 0 )
-    {
-        if ( ASSETCHAINS_SAPLING <= 0 )
-        {
-            fprintf(stdout,"set sapling height, if possible from ht.%d %u\n",(int32_t)pindex->nHeight,(uint32_t)pindex->nTime);
-            // Chainparam for regtest activation
-            if (Params().NetworkIDString() != "regtest") {
-                komodo_activate_sapling(pindex);
-            }
-        }
-        if ( ASSETCHAINS_IRONWOOD <= 0 )
-        {
-            fprintf(stdout,"set ironwood height, if possible from ht.%d %u\n",(int32_t)pindex->nHeight,(uint32_t)pindex->nTime);
-            // Chainparam for regtest activation
-            if (Params().NetworkIDString() != "regtest") {
-                komodo_activate_ironwood(pindex);
-            }
-        }
-    }
 
     // Validate that saplingFrontier root matches sapling merkle root
     if (!fReindex)
@@ -8324,7 +8166,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         if (nVersion < minVersion)
         {
             // disconnect from peers older than this proto version
-            LogPrintf("peer=%d using obsolete version %i; disconnecting\n", pfrom->id, pfrom->nVersion);
+            LogPrintf("peer=%d using obsolete version %i; disconnecting\n", pfrom->id, nVersion);
             pfrom->PushMessage(NetMsgType::REJECT, strCommand, REJECT_OBSOLETE,
                             strprintf("Version must be %d or greater", minVersion));
             pfrom->fDisconnect = true;

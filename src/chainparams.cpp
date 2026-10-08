@@ -671,18 +671,21 @@ int32_t MAX_BLOCK_SIZE(int32_t height)
     else return(2000000);
 }
 
+// Test-only direct setters for pCurrentParams's network-upgrade activation
+// heights on a mainnet-network-ID chain (PIRATE/PIRATETST), where
+// UpdateNetworkUpgradeParameters() can't be used since it's regtest-only.
+// Used by the gtest suite to flip Sapling/Overwinter/Ironwood on and off
+// around a test's setup; not reached by any runtime/production code path.
 void komodo_setactivation(int32_t height)
 {
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = height;
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = height;
-    ASSETCHAINS_SAPLING = height;
     fprintf(stdout,"SET SAPLING ACTIVATION height.%d\n",height);
 }
 
 void komodo_setironwood(int32_t height)
 {
     pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = height;
-    ASSETCHAINS_IRONWOOD = height;
     fprintf(stdout,"SET IRONWOOD ACTIVATION height.%d\n",height);
 }
 
@@ -716,6 +719,7 @@ const CChainParams::CCheckpointData GetACCheckPoints()
                 boost::assign::map_list_of
                 (	0,	Params(CBaseChainParams::MAIN).GetConsensus().hashGenesisBlock)
                 (	100000,	uint256S("0x0000000085ba91a4ef72274aa1e549399e9cda0c3f7070ea612d2a45007bdfe7"))
+                (	152855,	uint256S("0x00000001500922f7db74b9d82b745f84ebec28b0d5ea00d2a8af53207f3a63c1")) // Sapling activation block
                 (	200000,	uint256S("0x0000000097934aab530005e99148224c3c863f2c785e4934645972dd7c611f70"))
                 (	300000,	uint256S("0x000000001598dc03f64b36169a482dfa3d85a10d42cde06aa6cc6a75707389b2"))
                 (	400000,	uint256S("0x000000001352818dcd2bc7e348492b3e56cb271c916f1b66a8a90ceda3d9fbe9"))
@@ -742,11 +746,27 @@ const CChainParams::CCheckpointData GetACCheckPoints()
                 (	2500000,	uint256S("0x00000000795ed0c786dbd6d55e36cba9ec3e490c665cfa2a5b28071a842d5c21"))
                 (	2600000,	uint256S("0x00000000c135c9425c03741adef89d5d92474dcf1538ed426f02995b4f8d24e7"))
                 (	2700000,	uint256S("0x000000008f6b0e73d13d20da78cfff7ccb72c13ac45be315176e924681a38b3a"))
-                (	2798658,	uint256S("0x00000000d8edf022c326b06e89113a47b4fd037257c1d806d25238f8f5b86097")),
-                1708625140,     // * UNIX timestamp of last checkpoint block
-                5637396,       // * total number of transactions between genesis and last checkpoint (1708625140)
+                (	2798658,	uint256S("0x00000000d8edf022c326b06e89113a47b4fd037257c1d806d25238f8f5b86097"))
+                (	2800000,	uint256S("0x000000003164af0b17b0c2dcd79dca48693daebc3524f86997ef4d52c4ce0241"))
+                (	2900000,	uint256S("0x0000000017cca3b12a307cb9658326b55d8ef818a0a1b5ab328ad6bbb3edc992"))
+                (	3000000,	uint256S("0x00000000fde717387c6275c5ff1b011496cb222ba98e3a56317dc70abb73aa18"))
+                (	3100000,	uint256S("0x00000001c39e7d98a77ac14ae8c3ce4ec0439e62f98e9f502060039866407ae7"))
+                (	3200000,	uint256S("0x00000000ce67629a1fa5a67383751d791454d73c75c332095d4686815cf36074"))
+                (	3300000,	uint256S("0x000000002e062c6f9a8c319c35e615dca135051132f3921fa783cc7fe3612dac"))
+                (	3400000,	uint256S("0x000000021d07ab33047dbc83607f92b65a1a870c7527d7af645b7a1af5dff41e"))
+                (	3500000,	uint256S("0x000000019fc40484c68f6c5787792d90c97b1f852104393e6ddea32230abd1ca"))
+                (	3600000,	uint256S("0x000000001bc6a6b666f9a4f2a2746ff59042e5f3bf86deb87b804e86ba6214d5"))
+                (	3700000,	uint256S("0x0000000774191c2536e9f150291f53a1c0ad03b987da01534e1156f7f819fcd7"))
+                (	3800000,	uint256S("0x0000000752d3896323c7c1ca8fcc69415ebecdcbea39047877a870bc7ec972d7"))
+                (	3900000,	uint256S("0x000000039a2444f163febd12164bd3465ea3e048c0950262ae407ccd9bd09a63"))
+                (	4000000,	uint256S("0x0000000f1105018e94d1dacd70ed6cc77ded20c6aea820ab68aaf524e71d15a1"))
+                (	4100000,	uint256S("0x0000001e89783c338d6c0eeeda102388f4922efdf8793ccc0d5c4834fe301154"))
+                (	4161185,	uint256S("0x0000000b4ea249ba4c7c57724e0abdd8abf6fb719ef0806fe6c9ae1ee0534099")) // Ironwood activation block
+                (	4168315,	uint256S("0x0000000f5bebe1efa980c4e43598035e780d1959a510f35e527f9d2e3677ae4b")),
+                1791487184,     // * UNIX timestamp of last checkpoint block
+                7657920,       // * total number of transactions between genesis and last checkpoint (1791487184)
                                 //   (the tx=... number in the SetBestChain debug.log lines)
-                2777            // * estimated number of transactions per day after checkpoint
+                1058            // * estimated number of transactions per day after checkpoint
                                 //   total number of tx / (checkpoint block height / (24 * 24))
                 };
 
@@ -819,18 +839,25 @@ void *chainparams_commandline()
         pCurrentParams->pchMessageStart[3] = (ASSETCHAINS_MAGIC >> 24) & 0xff;
         fprintf(stdout,">>>>>>>>>> %s: p2p.%u rpc.%u magic.%08x %u %u coins\n",chainName.symbol().c_str(),ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT,ASSETCHAINS_MAGIC,ASSETCHAINS_MAGIC,(uint32_t)ASSETCHAINS_SUPPLY);
 
-        //Use defined activation heights when in non-regtest mode
+        //Use defined activation heights when in non-regtest mode. These are
+        //fixed, known-historical heights baked in directly - there is no
+        //runtime (-ac_sapling/-ac_overwinter/-ac_ironwood) override path any
+        //more; every other asset chain built from this codebase gets no
+        //Overwinter/Sapling/Ironwood activation at all (NO_ACTIVATION_HEIGHT,
+        //CMainParams's own default).
         if (Params().NetworkIDString() != "regtest") {
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = ASSETCHAINS_SAPLING;
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = ASSETCHAINS_OVERWINTER;
-            pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = ASSETCHAINS_IRONWOOD;
-
             if (chainName.isSymbol("PIRATE"))
             {
-                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 152855;
                 pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 152855;
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 152855;
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = 4161185;
                 pCurrentParams->consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000c46a0c07176634");
-
+            }
+            else if (chainName.isSymbol("PIRATETST"))
+            {
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight = 50;
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight = 100;
+                pCurrentParams->consensus.vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight = 200;
             }
 
             checkpointData = GetACCheckPoints();

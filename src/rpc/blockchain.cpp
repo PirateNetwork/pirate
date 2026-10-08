@@ -2225,7 +2225,7 @@ UniValue z_gettreestate(const UniValue& params, bool fHelp, const CPubKey& mypk)
     }
 
     //Sapling Frontier
-    int sapling_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight; /* ASSETCHAINS_SAPLING */
+    int sapling_activation_height = Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight;
     //if (sapling_activation_height > Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT)
     {
         UniValue sapling_result(UniValue::VOBJ);

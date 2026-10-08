@@ -1343,17 +1343,6 @@ void komodo_args(char *argv0)
         if ( (ASSETCHAINS_STAKED= GetArg("-ac_staked",0)) > 100 )
             ASSETCHAINS_STAKED = 100;
 
-
-		ASSETCHAINS_IRONWOOD = GetArg("-ac_ironwood", -1);
-        ASSETCHAINS_SAPLING = GetArg("-ac_sapling", -1);
-        if (ASSETCHAINS_SAPLING == -1)
-        {
-            ASSETCHAINS_OVERWINTER = GetArg("-ac_overwinter", -1);
-        }
-        else
-        {
-            ASSETCHAINS_OVERWINTER = GetArg("-ac_overwinter", ASSETCHAINS_SAPLING);
-        }
         if ( strlen(ASSETCHAINS_OVERRIDE_PUBKEY.c_str()) == 66 || ASSETCHAINS_SCRIPTPUB.size() > 1 )
         {
             if ( ASSETCHAINS_SUPPLY > 10000000000 )

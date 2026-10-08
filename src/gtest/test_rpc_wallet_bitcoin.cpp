@@ -1104,6 +1104,134 @@ TEST_F(rpc_wallet_tests_bitcoin, GetFilteredNotes_builds_a_matching_note_entirel
     EXPECT_TRUE(std::all_of(entry.memo.begin(), entry.memo.end(), [](unsigned char c) { return c == 0; }));
 }
 
+// DeleteWalletTransactions's conflicted-tx branch (GetDepthInMainChain() == -1,
+// i.e. not currently in the active chain AND not in the mempool - the ordinary,
+// transient state of any wallet tx sitting in a block a routine reorg just
+// displaced) used to skip the unspent-note/parent-presence safety checks
+// entirely and fall straight through to deletion, unmarking the note's position
+// in the Sapling/Ironwood note commitment tree and erasing the wallet's record of
+// the transaction. A note this wallet still considers unspent must survive that
+// pass exactly as it would if the tx were simply unconfirmed, instead of being
+// permanently lost to a momentary chain-tip blip (this is the root cause behind
+// "Merkle Path not found for Sapling note" reports from operators who enable
+// -deletetx/-deleteconflicttx on a busy wallet).
+TEST_F(rpc_wallet_tests_bitcoin, DeleteWalletTransactions_keeps_conflicted_tx_holding_an_unspent_sapling_note)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    struct RestoreDeleteTxFlags {
+        bool origEnabled, origConflictEnabled;
+        unsigned int origKeepLastN;
+        RestoreDeleteTxFlags()
+            : origEnabled(fTxDeleteEnabled), origConflictEnabled(fTxConflictDeleteEnabled),
+              origKeepLastN(fKeepLastNTransactions) {}
+        ~RestoreDeleteTxFlags() {
+            fTxDeleteEnabled = origEnabled;
+            fTxConflictDeleteEnabled = origConflictEnabled;
+            fKeepLastNTransactions = origKeepLastN;
+        }
+    } restoreFlags;
+
+    fTxDeleteEnabled = true;
+    fTxConflictDeleteEnabled = true;
+    // Isolate the fix under test: with this at 0, nothing but the unspent-note
+    // check can save the transaction below from deletion.
+    fKeepLastNTransactions = 0;
+
+    // DeleteWalletTransactions needs a chain tip to reorder against; it has
+    // nothing to do with the conflicted tx itself, which deliberately has no
+    // hashBlock (see CMerkleTx::GetDepthInMainChainINTERNAL).
+    if (!chainActive.Tip()) {
+        CBlock tipBlock;
+        CMutableTransaction tipMtx;
+        tipMtx.vout.resize(1);
+        tipMtx.vout[0].nValue = 1;
+        tipBlock.vtx.push_back(CTransaction(tipMtx));
+        CBlockIndex* tipIndex = new CBlockIndex(tipBlock);
+        tipIndex->nHeight = 1;
+        mapBlockIndex[tipBlock.GetHash()] = tipIndex;
+        chainActive.SetTip(tipIndex);
+    }
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1000;
+    CTransaction ctx(mtx);
+    CWalletTx wtx(pwalletMain, ctx);
+    // No hashBlock set, and never added to the mempool below: GetDepthInMainChain()
+    // returns -1, exactly like a tx whose confirming block a reorg just displaced.
+    ASSERT_EQ(wtx.GetDepthInMainChain(), -1) << "test setup: transaction must read as conflicted";
+
+    SaplingNoteData nd;
+    nd.fNoteDataInitialized = true;
+    nd.nullifier = uint256S("1111111111111111111111111111111111111111111111111111111111111111");
+    wtx.mapSaplingNoteData[SaplingOutPoint(ctx.GetHash(), 0)] = nd;
+    // Never referenced by any other wallet tx's nullifier set, so
+    // GetSaplingSpendDepth(*nd.nullifier) correctly reports it unspent.
+    ASSERT_EQ(pwalletMain->GetSaplingSpendDepth(*nd.nullifier), 0);
+
+    pwalletMain->mapWallet[ctx.GetHash()] = wtx;
+
+    pwalletMain->DeleteWalletTransactions(chainActive.Tip(), /* fRescan = */ false);
+
+    EXPECT_EQ(pwalletMain->mapWallet.count(ctx.GetHash()), 1u)
+        << "a conflicted tx holding an unspent Sapling note must not be deleted";
+}
+
+// Companion to the test above: a conflicted tx that holds no note data at all
+// (nothing for any of the unspent-note checks to find) must still be deleted,
+// the same as before the fix - guards against a future "fix" that makes every
+// conflicted tx immortal instead of routing it through the real checks.
+TEST_F(rpc_wallet_tests_bitcoin, DeleteWalletTransactions_still_deletes_a_conflicted_tx_with_no_wallet_notes)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+
+    struct RestoreDeleteTxFlags {
+        bool origEnabled, origConflictEnabled;
+        unsigned int origKeepLastN;
+        RestoreDeleteTxFlags()
+            : origEnabled(fTxDeleteEnabled), origConflictEnabled(fTxConflictDeleteEnabled),
+              origKeepLastN(fKeepLastNTransactions) {}
+        ~RestoreDeleteTxFlags() {
+            fTxDeleteEnabled = origEnabled;
+            fTxConflictDeleteEnabled = origConflictEnabled;
+            fKeepLastNTransactions = origKeepLastN;
+        }
+    } restoreFlags;
+
+    fTxDeleteEnabled = true;
+    fTxConflictDeleteEnabled = true;
+    fKeepLastNTransactions = 0;
+
+    if (!chainActive.Tip()) {
+        CBlock tipBlock;
+        CMutableTransaction tipMtx;
+        tipMtx.vout.resize(1);
+        tipMtx.vout[0].nValue = 1;
+        tipBlock.vtx.push_back(CTransaction(tipMtx));
+        CBlockIndex* tipIndex = new CBlockIndex(tipBlock);
+        tipIndex->nHeight = 1;
+        mapBlockIndex[tipBlock.GetHash()] = tipIndex;
+        chainActive.SetTip(tipIndex);
+    }
+
+    CMutableTransaction mtx;
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = 1000;
+    CTransaction ctx(mtx);
+    CWalletTx wtx(pwalletMain, ctx);
+    ASSERT_EQ(wtx.GetDepthInMainChain(), -1) << "test setup: transaction must read as conflicted";
+    // Deliberately no mapSaplingNoteData/mapIronwoodNoteData/mapSproutNoteData
+    // entries, and no vout IsMine - nothing for any unspent-note check to find.
+
+    pwalletMain->mapWallet[ctx.GetHash()] = wtx;
+
+    pwalletMain->DeleteWalletTransactions(chainActive.Tip(), /* fRescan = */ false);
+
+    EXPECT_EQ(pwalletMain->mapWallet.count(ctx.GetHash()), 0u)
+        << "a conflicted tx with no wallet notes should still be deleted";
+}
+
 // Every z_getnewaddress call also silently registers this account's internal
 // (ZIP-32) change address in the wallet (see GenerateNewSaplingZKey/
 // GenerateNewIronwoodZKey), and z_listaddresses lists both with no way to

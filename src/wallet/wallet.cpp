@@ -9431,6 +9431,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
           CWalletTx* pwtx = item.second;
           const uint256& wtxid = pwtx->GetHash();
           bool deleteTx = true;
+          bool txIsConflicted = false;
           txCount += 1;
           int wtxDepth = pwtx->GetDepthInMainChain();
 
@@ -9443,18 +9444,28 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             deleteTx = false;
             txSaveCount++;
             continue;
-          } else if (wtxDepth == -1) {
+          }
+
+          if (wtxDepth == -1) {
             //Enabled by default
             if (!fTxConflictDeleteEnabled) {
               LogPrint("deletetx","DeleteTx - Conflict delete is not enabled tx %s\n", pwtx->GetHash().ToString());
               deleteTx = false;
               txSaveCount++;
               continue;
-            } else {
-              removeArcTxs.push_back(wtxid);
-              txConflictCount++;
             }
-          } else {
+            // A depth of -1 means the tx is not currently in the active chain or the
+            // mempool -- this is also the transient state of any wallet tx sitting in a
+            // block that a routine reorg just displaced, before it reconfirms or is
+            // re-broadcast. Run it through the same unspent-note/parent-presence checks
+            // below rather than deleting it unconditionally: a note this wallet still
+            // considers unspent (or that's mid-spend in an in-flight shielded operation)
+            // must not be erased and unmarked from the note commitment tree just because
+            // of a momentary chain-tip blip.
+            txIsConflicted = true;
+          }
+
+          {
 
             //Check for unspent inputs or spend less than N Blocks ago. (Sapling)
             for (auto & pair : pwtx->mapSaplingNoteData) {
@@ -9610,6 +9621,15 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
               txSaveCount++;
               continue;
             }
+          }
+
+          // Only now, having confirmed none of this transaction's notes are still
+          // unspent (or awaiting a parent still held in the wallet), queue this
+          // genuinely-conflicted tx's archive record (mapArcTxs) for removal
+          // alongside the wallet tx itself.
+          if (txIsConflicted) {
+            removeArcTxs.push_back(wtxid);
+            txConflictCount++;
           }
 
           //Collect everything else for deletion

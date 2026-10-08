@@ -78,9 +78,6 @@ extern std::vector<std::string> ASSETCHAINS_STOCKS;
 
 extern uint32_t ASSETCHAINS_EQUIHASH;
 extern uint32_t ASSETCHAINS_ALGO;
-extern int32_t ASSETCHAINS_SAPLING;
-extern int32_t ASSETCHAINS_OVERWINTER;
-extern int32_t ASSETCHAINS_IRONWOOD;
 extern int32_t ASSETCHAINS_STAKED;
 extern uint64_t ASSETCHAINS_COMMISSION;
 extern uint64_t ASSETCHAINS_SUPPLY;

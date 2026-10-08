@@ -87,7 +87,7 @@ extern uint16_t ASSETCHAINS_P2PPORT,ASSETCHAINS_RPCPORT;
 extern uint32_t ASSETCHAINS_CC;
 extern uint32_t ASSETCHAINS_MAGIC,ASSETCHAINS_ALGO;
 extern uint64_t ASSETCHAINS_COMMISSION,ASSETCHAINS_SUPPLY;
-extern int32_t ASSETCHAINS_SAPLING,ASSETCHAINS_STAKED;
+extern int32_t ASSETCHAINS_STAKED;
 extern uint64_t ASSETCHAINS_ENDSUBSIDY[],ASSETCHAINS_REWARD[],ASSETCHAINS_HALVING[],ASSETCHAINS_DECAY[],ASSETCHAINS_NOTARY_PAY[];
 extern std::string NOTARY_PUBKEY,NOTARY_ADDRESS; extern uint8_t NOTARY_PUBKEY33[];
 
@@ -303,8 +303,8 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
         obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
 #endif
-        obj.push_back(Pair("sapling", ASSETCHAINS_SAPLING));
-        obj.push_back(Pair("ironwood", ASSETCHAINS_IRONWOOD));
+        obj.push_back(Pair("sapling", Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight));
+        obj.push_back(Pair("ironwood", Params().GetConsensus().vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight));
     }
     obj.push_back(Pair("timeoffset",    0));
     obj.push_back(Pair("connections",   (int)vNodes.size()));
