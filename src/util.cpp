@@ -270,11 +270,20 @@ bool LogAcceptCategory(const char* category)
             // thread_specific_ptr automatically deletes the set when the thread ends.
         }
         const set<string>& setCategories = *ptrCategory.get();
+        bool fExplicitCategory = setCategories.count(string(category)) != 0;
 
+        // threadlock logs every lock wait/take/release with thread IDs -
+        // far too verbose to fold into blanket debug=1/debug=, so it only
+        // turns on when named explicitly (debug=threadlock).
+        if (string(category) == "threadlock")
+        {
+            if (!fExplicitCategory)
+                return false;
+        }
         // if not debugging everything and not debugging specific category, LogPrint does nothing.
-        if (setCategories.count(string("")) == 0 &&
+        else if (setCategories.count(string("")) == 0 &&
             setCategories.count(string("1")) == 0 &&
-            setCategories.count(string(category)) == 0)
+            !fExplicitCategory)
             return false;
     }
     return true;

@@ -17,6 +17,7 @@
 
 #include <cstring>
 #include <stdint.h>
+#include <thread>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -539,5 +540,55 @@ TEST_F(util_tests_bitcoin, accumulatebytes_AppendsAcrossMultipleCallsAndNullTerm
     EXPECT_STREQ(s.ptr, "hello world");
 
     free(s.ptr);
+}
+
+// threadlock logs every lock wait/take/release with thread IDs - too
+// verbose to fold into blanket debug=1/debug=, so it must only turn on when
+// named explicitly (debug=threadlock), while every other category keeps the
+// normal blanket-or-named behavior.
+//
+// LogAcceptCategory caches each thread's view of -debug the first time it's
+// called on that thread (see its own comment - the cache is a
+// thread_specific_ptr, intentionally never refreshed) - so each scenario
+// below runs on a freshly spawned thread to get an accurate read of the
+// -debug value just set, rather than observing a stale cache left by a
+// previous scenario or an earlier test on this same thread.
+TEST_F(util_tests_bitcoin, LogAcceptCategory_ThreadlockExcludedFromBlanketDebug)
+{
+    auto checkOnFreshThread = [](const char* category) {
+        bool result = false;
+        std::thread t([&]() { result = LogAcceptCategory(category); });
+        t.join();
+        return result;
+    };
+
+    bool origFDebug = fDebug;
+    std::vector<std::string> origDebugArgs = mapMultiArgs["-debug"];
+    fDebug = true;
+
+    // debug=1 (blanket): everything except threadlock.
+    mapMultiArgs["-debug"] = {"1"};
+    EXPECT_TRUE(checkOnFreshThread("net"));
+    EXPECT_FALSE(checkOnFreshThread("threadlock"));
+
+    // debug= (blanket, empty-string form): same as debug=1.
+    mapMultiArgs["-debug"] = {""};
+    EXPECT_TRUE(checkOnFreshThread("net"));
+    EXPECT_FALSE(checkOnFreshThread("threadlock"));
+
+    // debug=threadlock: only threadlock turns on, nothing else - not even
+    // other named categories that weren't also listed.
+    mapMultiArgs["-debug"] = {"threadlock"};
+    EXPECT_TRUE(checkOnFreshThread("threadlock"));
+    EXPECT_FALSE(checkOnFreshThread("net"));
+
+    // debug=1,threadlock: explicitly opting threadlock back in on top of
+    // the blanket still works.
+    mapMultiArgs["-debug"] = {"1", "threadlock"};
+    EXPECT_TRUE(checkOnFreshThread("net"));
+    EXPECT_TRUE(checkOnFreshThread("threadlock"));
+
+    fDebug = origFDebug;
+    mapMultiArgs["-debug"] = origDebugArgs;
 }
 

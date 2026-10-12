@@ -614,9 +614,9 @@ std::string HelpMessage(HelpMessageMode mode)
         strUsage += HelpMessageOpt("-nuparams=hexBranchId:activationHeight", "Use given activation height for specified network upgrade (regtest-only)");
     }
     string debugCategories = "addrman, alert, bench, coindb, db, deletetx, estimatefee, http, libevent, lock, mempool, net, partitioncheck, pow, proxy, prune, "
-                             "rand, reindex, rpc, selectcoins, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
+                             "rand, reindex, rpc, selectcoins, threadlock, tor, zmq, zrpc, zrpcunsafe (implies zrpc)"; // Don't translate these
     strUsage += HelpMessageOpt("-debug=<category>", strprintf(_("Output debugging information (default: %u, supplying <category> is optional)"), 0) + ". " +
-        _("If <category> is not supplied or if <category> = 1, output all debugging information.") + " " + _("<category> can be:") + " " + debugCategories + ".");
+        _("If <category> is not supplied or if <category> = 1, output all debugging information except threadlock, which logs every lock wait/take/release and is too verbose to enable that way - use -debug=threadlock to turn it on explicitly.") + " " + _("<category> can be:") + " " + debugCategories + ".");
     strUsage += HelpMessageOpt("-experimentalfeatures", _("Enable use of experimental features"));
     strUsage += HelpMessageOpt("-help-debug", _("Show all debugging options (usage: --help -help-debug)"));
     strUsage += HelpMessageOpt("-logips", strprintf(_("Include IP addresses in debug output (default: %u)"), 0));
