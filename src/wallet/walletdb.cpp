@@ -1126,45 +1126,6 @@ void CWalletDB::ListAccountCreditDebit(const string& strAccount, list<CAccountin
 }
 
 
-class CWalletScanState {
-public:
-    unsigned int nKeys;
-    unsigned int nCKeys;
-    unsigned int nKeyMeta;
-    unsigned int nSaplingKeys;
-    unsigned int nCSaplingKeys;
-    unsigned int nSaplingKeyMeta;
-    unsigned int nCSaplingKeyMeta;
-    unsigned int nSaplingAddrs;
-    unsigned int nCSaplingAddrs;
-    unsigned int nIronwoodKeys;
-    unsigned int nCIronwoodKeys;
-    unsigned int nIronwoodKeyMeta;
-    unsigned int nCIronwoodKeyMeta;
-    unsigned int nIronwoodAddrs;
-    unsigned int nCIronwoodAddrs;
-    unsigned int nArcTx;
-    unsigned int nWalletTx;
-    bool fIsEncrypted;
-    bool fAnyUnordered;
-    bool fNeedIronwoodScopeRederivation;
-    bool fNeedZapAndRescan;
-    int nFileVersion;
-    vector<uint256> vWalletUpgrade;
-
-    CWalletScanState() {
-        nKeys = nCKeys = nKeyMeta = 0;
-        nSaplingKeys = nCSaplingKeys = nSaplingKeyMeta = nCSaplingKeyMeta = nSaplingAddrs = nCSaplingAddrs = 0;
-        nIronwoodKeys = nCIronwoodKeys = nIronwoodKeyMeta = nCIronwoodKeyMeta = nIronwoodAddrs = nCIronwoodAddrs = 0;
-        nArcTx = nWalletTx = 0;
-        fIsEncrypted = false;
-        fAnyUnordered = false;
-        fNeedIronwoodScopeRederivation = false;
-        fNeedZapAndRescan = false;
-        nFileVersion = 0;
-    }
-};
-
 bool
 ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
              CWalletScanState &wss, string& strType, string& strErr)
@@ -2489,6 +2450,36 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
                 LogPrintf("Loading Error %s - %s\n", strType, strErr);
                 return false;
             }
+        }
+        else if (strType == "mkey" || strType == "chdseed" ||
+                 strType == "zkey" || strType == "czkey" || strType == "zkeymeta" ||
+                 strType == "vkey" || strType == "cpool" ||
+                 strType == "acentry" || strType == "arczcop" ||
+                 strType == "bestblock" || strType == "iscrypted" ||
+                 strType == "minversion" || strType == "walletbirthday" ||
+                 strType == "witnesscachesize" || strType == "walletbip39enabled")
+        {
+            // Known record type that this main LoadWallet pass intentionally
+            // does not act on: either consumed earlier via a dedicated reader
+            // (ReadCryptedSeedValue/LoadCryptedSeedFromDB for mkey/chdseed, a
+            // direct Read() for simple scalars like bestblock/minversion/
+            // walletbip39enabled), only ever touched by the legacy sprout zap
+            // path (zkey/czkey/vkey/zkeymeta/arczcop), or otherwise inert here
+            // (cpool/acentry/witnesscachesize). Nothing to do.
+        }
+        else
+        {
+            // Unrecognized record type - most likely written by a newer
+            // wallet version than this binary understands. There is no safe
+            // way from here to know whether it holds key material, so
+            // IsKeyType() (checked by the caller) correctly can't classify
+            // it as a key type either; it's treated as a non-critical,
+            // recoverable condition (DB_NONCRITICAL_ERROR) rather than
+            // corruption, so the wallet keeps loading with the rest of its
+            // data intact and this one record simply left alone on disk.
+            strErr = strprintf("Unrecognized wallet.dat record type '%s' - possibly written by a newer wallet version. Skipping this record.", strType);
+            LogPrintf("Loading Warning %s - %s\n", strType, strErr);
+            return false;
         }
 
     } catch (const std::exception& e)

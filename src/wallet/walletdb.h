@@ -443,4 +443,46 @@ private:
 bool BackupWallet(const CWallet& wallet, const std::string& strDest);
 void ThreadFlushWalletDB(const std::string& strFile);
 
+class CWalletScanState {
+public:
+    unsigned int nKeys;
+    unsigned int nCKeys;
+    unsigned int nKeyMeta;
+    unsigned int nSaplingKeys;
+    unsigned int nCSaplingKeys;
+    unsigned int nSaplingKeyMeta;
+    unsigned int nCSaplingKeyMeta;
+    unsigned int nSaplingAddrs;
+    unsigned int nCSaplingAddrs;
+    unsigned int nIronwoodKeys;
+    unsigned int nCIronwoodKeys;
+    unsigned int nIronwoodKeyMeta;
+    unsigned int nCIronwoodKeyMeta;
+    unsigned int nIronwoodAddrs;
+    unsigned int nCIronwoodAddrs;
+    unsigned int nArcTx;
+    unsigned int nWalletTx;
+    bool fIsEncrypted;
+    bool fAnyUnordered;
+    bool fNeedIronwoodScopeRederivation;
+    bool fNeedZapAndRescan;
+    int nFileVersion;
+    std::vector<uint256> vWalletUpgrade;
+
+    CWalletScanState() {
+        nKeys = nCKeys = nKeyMeta = 0;
+        nSaplingKeys = nCSaplingKeys = nSaplingKeyMeta = nCSaplingKeyMeta = nSaplingAddrs = nCSaplingAddrs = 0;
+        nIronwoodKeys = nCIronwoodKeys = nIronwoodKeyMeta = nCIronwoodKeyMeta = nIronwoodAddrs = nCIronwoodAddrs = 0;
+        nArcTx = nWalletTx = 0;
+        fIsEncrypted = false;
+        fAnyUnordered = false;
+        fNeedIronwoodScopeRederivation = false;
+        fNeedZapAndRescan = false;
+        nFileVersion = 0;
+    }
+};
+
+bool ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
+                   CWalletScanState& wss, std::string& strType, std::string& strErr);
+
 #endif // BITCOIN_WALLET_WALLETDB_H
