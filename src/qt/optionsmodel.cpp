@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022-2025 Pirate developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -189,18 +190,6 @@ void OptionsModel::Init(bool resetSettings)
         settings.setValue("fListen", DEFAULT_LISTEN);
     if (!SoftSetBoolArg("-listen", settings.value("fListen").toBool()))
         addOverriddenOption("-listen");
-
-    if (!settings.contains("fEncrypted"))
-        settings.setValue("fEncrypted", false);
-    if (settings.value("fEncrypted").toBool() == true) {
-        if (!SoftSetArg("-tlsenforcement", std::string("1"))) {
-            addOverriddenOption("-tlsenforcement");
-        }
-    } else {
-        if (!SoftSetArg("-tlsenforcement", std::string("0"))) {
-            addOverriddenOption("-tlsenforcement");
-        }
-    }
 
     if (!settings.contains("fUseProxy"))
         settings.setValue("fUseProxy", false);
@@ -460,8 +449,6 @@ QVariant OptionsModel::data(const QModelIndex & index, int role) const
             return settings.value("nThreadsScriptVerif");
         case Listen:
             return settings.value("fListen");
-        case EncryptedP2P:
-            return settings.value("fEncrypted");
         default:
             return QVariant();
         }
@@ -747,12 +734,6 @@ bool OptionsModel::setData(const QModelIndex & index, const QVariant & value, in
         case Listen:
             if (settings.value("fListen") != value) {
                 settings.setValue("fListen", value);
-                setRestartRequired(true);
-            }
-            break;
-        case EncryptedP2P:
-            if (settings.value("fEncrypted") != value) {
-                settings.setValue("fEncrypted", value);
                 setRestartRequired(true);
             }
             break;

@@ -520,14 +520,12 @@ std::string HelpMessage(HelpMessageMode mode)
     strUsage += HelpMessageOpt("-torautostart", strprintf(_("Automatically launch and manage a bundled Tor daemon so Tor works without a separately running instance (default: %u)"), DEFAULT_TOR_AUTOSTART));
     strUsage += HelpMessageOpt("-torpath=<path>", _("Path to the tor binary to use instead of auto-detection"));
 #endif
-    strUsage += HelpMessageOpt("-tlsenforcement=<0 or 1>", _("Only connect to TLS compatible peers. (default: 0)"));
-    strUsage += HelpMessageOpt("-tlsfallbacknontls=<0 or 1>", _("If a TLS connection fails, the next connection attempt of the same peer (based on IP address) takes place without TLS (default: 1)"));
     strUsage += HelpMessageOpt("-tlsvalidate=<0 or 1>", _("Connect to peers only with valid certificates (default: 0)"));
     strUsage += HelpMessageOpt("-tlskeypath=<path>", _("Full path to a private key"));
     strUsage += HelpMessageOpt("-tlskeypwd=<password>", _("Password for a private key encryption (default: not set, i.e. private key will be stored unencrypted)"));
     strUsage += HelpMessageOpt("-tlscertpath=<path>", _("Full path to a certificate"));
     strUsage += HelpMessageOpt("-tlstrustdir=<path>", _("Full path to a trusted certificates directory"));
-    strUsage += HelpMessageOpt("-plaintextpeer=<ip>", _("Bypass the TLS connection and allow an unencrypted connection for this ip. Overrides tlsenforcement for this ip."));
+    strUsage += HelpMessageOpt("-plaintextpeer=<ip>", _("Whitelist an unencrypted (non-TLS) P2P connection for this IP. TLS is otherwise required for every peer, with no other exception."));
     strUsage += HelpMessageOpt("-whitebind=<addr>", _("Bind to given address and whitelist peers connecting to it. Use [host]:port notation for IPv6"));
     strUsage += HelpMessageOpt("-whitelist=<netmask>", _("Whitelist peers connecting from the given netmask or IP address. Can be specified multiple times.") +
         " " + _("Whitelisted peers cannot be DoS banned and their transactions are always relayed, even if they are already in the mempool, useful e.g. for a gateway"));
@@ -1246,21 +1244,6 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     // when specifying an explicit binding address, you want to listen on it
     // even when -connect or -proxy is specified
-
-    // Check plaintext peers
-
-    if (mapMultiArgs.count("-plaintextpeer")) {
-        const std::vector<std::string>& vAllow = mapMultiArgs["-plaintextpeer"];
-        BOOST_FOREACH (std::string strAllow, vAllow) {
-            CSubNet subnet;
-            LookupSubNet(strAllow.c_str(), subnet);
-            if (!subnet.IsValid()) {
-                return InitError(strprintf(_("Invalid -plaintextpeer %s."), strAllow));
-            } else {
-                LogPrintf("Whitelisting unencrypted p2p connection for %s\n", strAllow);
-            }
-        }
-    }
 
     if (mapArgs.count("-bind")) {
         if (SoftSetBoolArg("-listen", true))
@@ -1982,8 +1965,35 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             return InitError(strprintf(_("Cannot find trusted certificates directory: '%s'"), pathTLSTrustredDir.string()));
     }
 
-    if (!usingGUI) {
-        SoftSetArg("-tlsenforcement", std::string("0"));
+    // TLS is required for every P2P connection with no general exception;
+    // these two no longer exist, so fail loudly rather than silently
+    // ignoring a conf file written for an older version. -plaintextpeer is
+    // the one deliberate, static per-IP exception that's kept - see below.
+    if (mapArgs.count("-tlsenforcement")) {
+        return InitError("Deprecated parameter -tlsenforcement is no longer supported. TLS is always required for P2P connections.");
+    }
+    if (mapArgs.count("-tlsfallbacknontls")) {
+        return InitError("Deprecated parameter -tlsfallbacknontls is no longer supported. There is no plaintext fallback.");
+    }
+
+    // Check plaintext peers. A single exact address, not a range: parsed as
+    // one host (not a subnet, which would validate things like "10.0.0.0/8"
+    // that can never match the exact-address check actually made at
+    // connection time) and stored in its canonical form, so a non-canonical
+    // but equivalent way of writing the same address (long-form IPv6,
+    // IPv4-mapped, etc.) still matches then too.
+
+    if (mapMultiArgs.count("-plaintextpeer")) {
+        const std::vector<std::string>& vAllow = mapMultiArgs["-plaintextpeer"];
+        BOOST_FOREACH (std::string strAllow, vAllow) {
+            CNetAddr addr;
+            if (!LookupHost(strAllow.c_str(), addr, false)) {
+                return InitError(strprintf(_("Invalid -plaintextpeer %s."), strAllow));
+            } else {
+                CNode::AddPlaintextPeer(addr.ToStringIP());
+                LogPrintf("Whitelisting unencrypted p2p connection for %s\n", addr.ToStringIP());
+            }
+        }
     }
 
 #if ENABLE_ZMQ
@@ -1998,7 +2008,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     {
         std::vector<boost::filesystem::path> vImportFiles;
         threadGroup.create_thread(boost::bind(&ThreadImport, vImportFiles));
-        StartNode(threadGroup, scheduler);
+        if (!StartNode(threadGroup, scheduler)) {
+            return InitError(_("Failed to start the network (TLS credentials/initialization failed)."));
+        }
         pcoinsTip = new CCoinsViewCache(pcoinscatcher);
         InitBlockIndex();
         SetRPCWarmupFinished();
@@ -3083,7 +3095,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     StartEmbeddedI2Pd(threadGroup);
 #endif
 
-    StartNode(threadGroup, scheduler);
+    if (!StartNode(threadGroup, scheduler)) {
+        return InitError(_("Failed to start the network (TLS credentials/initialization failed)."));
+    }
 
 #ifdef ENABLE_MINING
     // Generate coins in the background

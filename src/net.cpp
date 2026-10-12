@@ -79,9 +79,10 @@ using namespace tls;
 #endif
 #endif
 
-#define USE_TLS
-
-#if defined(USE_TLS) && !defined(TLS1_3_VERSION)
+// TLS is mandatory for every P2P connection (see ConnectNode/the inbound
+// accept path and StartNode below) - not an optional, conditionally-compiled
+// feature, so this is a hard build-time requirement rather than a toggle.
+#ifndef TLS1_3_VERSION
     // minimum secure protocol is 1.3
     // TLS1_3_VERSION is defined in openssl/tls1.h
     #error "ERROR: Your OpenSSL version does not support TLS v1.3"
@@ -215,17 +216,6 @@ CNodeSignals& GetNodeSignals() { return g_signals; }
 
 // OpenSSL server and client contexts
 SSL_CTX *tls_ctx_server, *tls_ctx_client;
-
-static bool operator==(_NODE_ADDR a, _NODE_ADDR b)
-{
-    return (a.ipAddr == b.ipAddr);
-}
-
-static std::vector<NODE_ADDR> vNonTLSNodesInbound;
-static CCriticalSection cs_vNonTLSNodesInbound;
-
-static std::vector<NODE_ADDR> vNonTLSNodesOutbound;
-static CCriticalSection cs_vNonTLSNodesOutbound;
 
 bool HasAvailableAddNodeSlots()
 {
@@ -527,6 +517,18 @@ bool ShouldRejectLocalNonOnionInbound(const CNetAddr& addr, bool fOnionListener,
     return addr.IsLocal() && !fOnionListener && !fAllowLocalIp;
 }
 
+//! Whether an inbound connection from addr may skip TLS under -plaintextpeer.
+//! Always false for a Tor hidden-service connection (fOnionListener), for
+//! the same reason ShouldRejectLocalNonOnionInbound treats one specially:
+//! the onion listener forwards every remote peer to 127.0.0.1 locally, so if
+//! that address happened to be allowlisted (e.g. for local pool software),
+//! every inbound onion peer on the whole internet would silently skip TLS
+//! too - the address alone can't tell a real local peer from a Tor one.
+bool ShouldExemptInboundFromTls(const CNetAddr& addr, bool fOnionListener)
+{
+    return !fOnionListener && CNode::IsPlaintextPeer(addr.ToStringIP());
+}
+
 bool IsPrivacyPeer(bool fInbound, const CNetAddr& addr)
 {
     // Inbound Tor connections always arrive loopback-forwarded from the
@@ -802,7 +804,6 @@ bool PickDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
     return false;
 }
 
-CNode::eTlsOption CNode::tlsFallbackNonTls = CNode::eTlsOption::FALLBACK_UNSET;
 CNode::eTlsOption CNode::tlsValidate       = CNode::eTlsOption::FALLBACK_UNSET;
 
 uint64_t CNode::nTotalBytesRecv = 0;
@@ -983,66 +984,19 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
 
         SSL *ssl = NULL;
 
-#ifdef USE_TLS
-
         {
-            LOCK(cs_vNonTLSNodesOutbound);
-
-            NODE_ADDR nodeAddr(addrConnect.ToStringIP());
-            bool bUseTLS = (find(vNonTLSNodesOutbound.begin(),vNonTLSNodesOutbound.end(),nodeAddr) == vNonTLSNodesOutbound.end());
-            bool bTlsEnforcement = (GetBoolArg("-tlsenforcement", true) || GetArg("-tlsenforcement", "") == "1");
-            unsigned long err_code = 0;
-
-            //Check for plaintext peer
-            const std::vector<std::string>& vAllow = mapMultiArgs["-plaintextpeer"];
-            bool plaintextpeer = (std::find(vAllow.begin(), vAllow.end(), addrConnect.ToStringIP()) != vAllow.end());
-
-            /* TCP connection is ready. Do client side SSL. */
-            if (CNode::GetTlsFallbackNonTls()) {
-                LogPrint("tls", "%s():%d - handling connection to %s\n", __func__, __LINE__,  addrConnect.ToStringIP());
-                if (plaintextpeer) {
-                    LogPrint("tls", "%s():%d - handling plaintext peer connection to %s\n", __func__, __LINE__,  addrConnect.ToStringIP());
-                    // Further reconnection will be made in non-TLS (unencrypted) mode
-                    if (!bUseTLS)  {// Already in the list
-                        vNonTLSNodesOutbound.push_back(NODE_ADDR(addrConnect.ToStringIP(), GetTimeMillis()));
-                        LogPrintf("%s():%d - err_code %x, adding plaintextpeer connection to %s vNonTLSNodesOutbound list (sz=%d)\n",__func__, __LINE__, err_code, addrConnect.ToStringIP(), vNonTLSNodesOutbound.size());
-                    }
-                } else {
-                    if (bUseTLS) {
-                        ssl = tlsmanager.connect(hSocket, addrConnect, err_code);
-                        if (!ssl) {
-                            if (err_code == TLSManager::SELECT_TIMEDOUT) {
-                                // can fail for timeout in select on fd, that is not a ssl error and we should not
-                                // consider this node as non TLS
-                                LogPrint("tls", "%s():%d - Connection to %s timedout\n",__func__, __LINE__, addrConnect.ToStringIP());
-                            } else {
-                                //Do not allow unencrypted connection if TLS Enforcement is set
-                                if (!bTlsEnforcement) {
-                                    // Further reconnection will be made in non-TLS (unencrypted) mode
-                                    vNonTLSNodesOutbound.push_back(NODE_ADDR(addrConnect.ToStringIP(), GetTimeMillis()));
-                                    LogPrint("tls", "%s():%d - err_code %x, adding connection to %s vNonTLSNodesOutbound list (sz=%d)\n",__func__, __LINE__, err_code, addrConnect.ToStringIP(), vNonTLSNodesOutbound.size());
-                                }
-                            }
-                            CloseSocket(hSocket);
-                            return NULL;
-                        }
-                    }
-                }
-            } else {
-                if (plaintextpeer) {
-                    // Further reconnection will be made in non-TLS (unencrypted) mode
-                    if (!bUseTLS)  {// Already in the list
-                        vNonTLSNodesOutbound.push_back(NODE_ADDR(addrConnect.ToStringIP(), GetTimeMillis()));
-                            LogPrintf("%s():%d - err_code %x, adding plaintextpeer connection to %s vNonTLSNodesOutbound list (sz=%d)\n",__func__, __LINE__, err_code, addrConnect.ToStringIP(), vNonTLSNodesOutbound.size());
-                    }
-                } else {
-                    unsigned long err_code = 0;
-                    ssl = tlsmanager.connect(hSocket, addrConnect, err_code);
-                    if(!ssl) {
-                        LogPrint("tls", "%s():%d - err_code %x, connection to %s failed)\n",__func__, __LINE__, err_code, addrConnect.ToStringIP());
-                        CloseSocket(hSocket);
-                        return NULL;
-                    }
+            // TLS is mandatory for every peer except an operator-whitelisted
+            // -plaintextpeer IP (e.g. pool software on a local/trusted
+            // address) - no general fallback, no discovered/remembered
+            // exceptions, just this static per-IP allowlist.
+            bool plaintextpeer = CNode::IsPlaintextPeer(addrConnect.ToStringIP());
+            if (!plaintextpeer) {
+                unsigned long err_code = 0;
+                ssl = tlsmanager.connect(hSocket, addrConnect, err_code);
+                if (!ssl) {
+                    LogPrint("tls", "%s():%d - err_code %x, connection to %s failed\n", __func__, __LINE__, err_code, addrConnect.ToStringIP());
+                    CloseSocket(hSocket);
+                    return NULL;
                 }
             }
         }
@@ -1059,7 +1013,6 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
                 return NULL;
             }
         }
-#endif  // USE_TLS
 
         // Add node
         CNode* pnode = new CNode(hSocket, addrConnect, pszDest ? pszDest : "", false, ssl);
@@ -1338,6 +1291,19 @@ bool CNode::IsWhitelistedRange(const CNetAddr &addr) {
 void CNode::AddWhitelistedRange(const CSubNet &subnet) {
     LOCK(cs_vWhitelistedRange);
     vWhitelistedRange.push_back(subnet);
+}
+
+std::vector<std::string> CNode::vPlaintextPeers;
+CCriticalSection CNode::cs_vPlaintextPeers;
+
+bool CNode::IsPlaintextPeer(const std::string &strAddrIP) {
+    LOCK(cs_vPlaintextPeers);
+    return (std::find(vPlaintextPeers.begin(), vPlaintextPeers.end(), strAddrIP) != vPlaintextPeers.end());
+}
+
+void CNode::AddPlaintextPeer(const std::string &strAddrIP) {
+    LOCK(cs_vPlaintextPeers);
+    vPlaintextPeers.push_back(strAddrIP);
 }
 
 void CNode::copyStats(CNodeStats &stats, const std::vector<bool> &m_asmap)
@@ -1921,65 +1887,20 @@ SSL *ssl = NULL;
 
 SetSocketNonBlocking(hSocket, true);
 
-#ifdef USE_TLS
-
     {
-        LOCK(cs_vNonTLSNodesInbound);
-
-        NODE_ADDR nodeAddr(addr.ToStringIP());
-        bool bTlsEnforcement = (GetBoolArg("-tlsenforcement", true) || GetArg("-tlsenforcement", "") == "1");
-        bool bUseTLS = (find(vNonTLSNodesInbound.begin(), vNonTLSNodesInbound.end(), nodeAddr) == vNonTLSNodesInbound.end());
-        unsigned long err_code = 0;
-
-        //Check for plaintext peer
-        const std::vector<std::string>& vAllow = mapMultiArgs["-plaintextpeer"];
-        bool plaintextpeer = (std::find(vAllow.begin(), vAllow.end(), addr.ToStringIP()) != vAllow.end());
-
-
-        /* TCP connection is ready. Do server side SSL. */
-        if (CNode::GetTlsFallbackNonTls()) {
-            LogPrint("tls", "%s():%d - handling connection to %s\n", __func__, __LINE__,  addr.ToStringIP());
-            if (plaintextpeer) {
-                LogPrint("tls", "%s():%d - handling plaintext peer connection to %s\n", __func__, __LINE__,  addr.ToStringIP());
-                // Further reconnection will be made in non-TLS (unencrypted) mode
-                if (!bUseTLS)  {// Already in the list
-                    vNonTLSNodesInbound.push_back(NODE_ADDR(addr.ToStringIP(), GetTimeMillis()));
-                    LogPrint("tls", "%s():%d - err_code %x, adding connection from %s vNonTLSNodesInbound list (sz=%d)\n",__func__, __LINE__, err_code, addr.ToStringIP(), vNonTLSNodesInbound.size());
-                }
-            } else {
-                ssl = tlsmanager.accept( hSocket, addr, err_code);
-                if(!ssl) {
-                    if (err_code == TLSManager::SELECT_TIMEDOUT) {
-                        // can fail also for timeout in select on fd, that is not a ssl error and we should not
-                        // consider this node as non TLS
-                        LogPrint("tls", "%s():%d - Connection from %s timedout\n", __func__, __LINE__, addr.ToStringIP());
-                    } else {
-                        //Do not allow unencrypted connection if TLS Enforcement is set
-                        if (!bTlsEnforcement) {
-                            // Further reconnection will be made in non-TLS (unencrypted) mode
-                            vNonTLSNodesInbound.push_back(NODE_ADDR(addr.ToStringIP(), GetTimeMillis()));
-                            LogPrint("tls", "%s():%d - err_code %x, adding connection from %s vNonTLSNodesInbound list (sz=%d)\n",__func__, __LINE__, err_code, addr.ToStringIP(), vNonTLSNodesInbound.size());
-                        }
-                    }
-                    CloseSocket(hSocket);
-                    return;
-                }
-            }
-        } else {
-            if (plaintextpeer) {
-                // Further reconnection will be made in non-TLS (unencrypted) mode
-                if (!bUseTLS)  {// Already in the list
-                    vNonTLSNodesInbound.push_back(NODE_ADDR(addr.ToStringIP(), GetTimeMillis()));
-                    LogPrint("tls", "%s():%d - err_code %x, adding connection from %s vNonTLSNodesInbound list (sz=%d)\n",__func__, __LINE__, err_code, addr.ToStringIP(), vNonTLSNodesInbound.size());
-                }
-            } else {
-                unsigned long err_code = 0;
-                ssl = tlsmanager.accept( hSocket, addr, err_code);
-                if(!ssl) {
-                    LogPrint("tls", "%s():%d - err_code %x, failure accepting connection from %s\n",__func__, __LINE__, err_code, addr.ToStringIP());
-                    CloseSocket(hSocket);
-                    return;
-                }
+        // TLS is mandatory for every peer except an operator-whitelisted
+        // -plaintextpeer IP (e.g. pool software on a local/trusted address) -
+        // no general fallback, no discovered/remembered exceptions, just
+        // this static per-IP allowlist, and never for a Tor connection (see
+        // ShouldExemptInboundFromTls).
+        bool plaintextpeer = ShouldExemptInboundFromTls(addr, fOnionListener);
+        if (!plaintextpeer) {
+            unsigned long err_code = 0;
+            ssl = tlsmanager.accept(hSocket, addr, err_code);
+            if (!ssl) {
+                LogPrint("tls", "%s():%d - err_code %x, failure accepting connection from %s\n", __func__, __LINE__, err_code, addr.ToStringIP());
+                CloseSocket(hSocket);
+                return;
             }
         }
     }
@@ -1996,7 +1917,6 @@ SetSocketNonBlocking(hSocket, true);
             return;
         }
     }
-#endif // USE_TLS
 
     CNode* pnode = new CNode(hSocket, addr, "", true, ssl);
     pnode->AddRef();
@@ -2018,18 +1938,6 @@ SetSocketNonBlocking(hSocket, true);
     }
 }
 
-#if defined(USE_TLS)
-void ThreadNonTLSPoolsCleaner()
-{
-    while (true)
-    {
-        tlsmanager.cleanNonTLSPool(vNonTLSNodesInbound,  cs_vNonTLSNodesInbound);
-        tlsmanager.cleanNonTLSPool(vNonTLSNodesOutbound, cs_vNonTLSNodesOutbound);
-        MilliSleep(DEFAULT_CONNECT_TIMEOUT);  // sleep and sleep_for are interruption points, which will throw boost::thread_interrupted
-    }
-}
-
-#endif // USE_TLS
 
 void ThreadSocketHandler()
 {
@@ -2811,30 +2719,6 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
 
     CNode* pnode = ConnectNode(addrConnect, pszDest, fAddNode, i2p_pool_idx);
     boost::this_thread::interruption_point();
-
-#if defined(USE_TLS)
-    if (CNode::GetTlsFallbackNonTls())
-    {
-        if (!pnode)
-        {
-            string strDest;
-            int port;
-
-            if (!pszDest)
-                strDest = addrConnect.ToStringIP();
-                       else
-                SplitHostPort(string(pszDest), port, strDest);
-
-            if (tlsmanager.isNonTLSAddr(strDest, vNonTLSNodesOutbound, cs_vNonTLSNodesOutbound))
-            {
-                // Attempt to reconnect in non-TLS mode
-                pnode = ConnectNode(addrConnect, pszDest, fAddNode, i2p_pool_idx);
-                boost::this_thread::interruption_point();
-            }
-        }
-    }
-
-#endif
 
     if (!pnode)
         return false;
@@ -3641,7 +3525,7 @@ void LoadPeers() {
       fAddressesInitialized = true;
 }
 
-void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
+bool StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
 {
 
     if (GetBoolArg("-nspv_msg", DEFAULT_NSPV_PROCESSING)) {
@@ -3726,22 +3610,17 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
 
     Discover(threadGroup);
 
-#ifdef USE_TLS
-
     if (!tlsmanager.prepareCredentials())
     {
         LogPrintf("TLS: ERROR: %s: %s: Credentials weren't loaded. Node can't be started.\n", __FILE__, __func__);
-        return;
+        return false;
     }
 
     if (!tlsmanager.initialize())
     {
         LogPrintf("TLS: ERROR: %s: %s: TLS initialization failed. Node can't be started.\n", __FILE__, __func__);
-        return;
+        return false;
     }
-#else
-    LogPrintf("TLS is not used!\n");
-#endif
 
     // skip DNS seeds for staked chains.
     if ( is_STAKED(chainName.symbol()) != 0 )
@@ -3821,19 +3700,13 @@ void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler)
     // Process messages
     threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "msghand", &ThreadMessageHandler));
 
-    #if defined(USE_TLS)
-        if (CNode::GetTlsFallbackNonTls())
-        {
-            // Clean pools of addresses for non-TLS connections
-            threadGroup.create_thread(boost::bind(&TraceThread<void (*)()>, "poolscleaner", &ThreadNonTLSPoolsCleaner));
-        }
-    #endif
-
     // Dump network addresses
     scheduler.scheduleEvery(&DumpAddresses, DUMP_ADDRESSES_INTERVAL);
 
     // Purge terrible addresses from addrman
     scheduler.scheduleEvery(&SweepTerribleAddresses, SWEEP_TERRIBLE_ADDRESSES_INTERVAL);
+
+    return true;
 }
 
 bool StopNode()
@@ -4276,27 +4149,6 @@ CNode::CNode(SOCKET hSocketIn, const CAddress& addrIn, const std::string& addrNa
     GetNodeSignals().InitializeNode(GetId(), this);
 
     m_serializer = std::unique_ptr<V1TransportSerializer>(new V1TransportSerializer());
-}
-
-bool CNode::GetTlsFallbackNonTls()
-{
-    if (tlsFallbackNonTls == eTlsOption::FALLBACK_UNSET)
-    {
-        // one time only setting of static class attribute
-        if ( GetBoolArg("-tlsfallbacknontls", true))
-        {
-            LogPrint("tls", "%s():%d - Non-TLS connections will be used in case of failure of TLS\n",
-                __func__, __LINE__);
-            tlsFallbackNonTls = eTlsOption::FALLBACK_TRUE;
-        }
-        else
-        {
-            LogPrint("tls", "%s():%d - Non-TLS connections will NOT be used in case of failure of TLS\n",
-                __func__, __LINE__);
-            tlsFallbackNonTls = eTlsOption::FALLBACK_FALSE;
-        }
-    }
-    return (tlsFallbackNonTls == eTlsOption::FALLBACK_TRUE);
 }
 
 bool CNode::GetTlsValidate()

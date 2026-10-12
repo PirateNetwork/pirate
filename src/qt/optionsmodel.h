@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2022-2025 Pirate developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -59,7 +60,6 @@ public:
         DatabaseCache,                  // int
         SaplingConsolidationEnabled,    // bool
         Listen,                         // bool
-        EncryptedP2P,                   // bool
         IncomingI2P,                    // bool
         ProxyUseI2P,                    // bool
         ProxyIPI2P,                     // QString

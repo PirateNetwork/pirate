@@ -215,9 +215,6 @@ shortfalls:
          Under Wallet Functions, make sure these radio button are checked:
            * Enable offline signing
              * Spend (Online mode)
-         Select the Network tab
-         Make sure these radio button are checked:
-           * Only connect to encrypted peers.
        Press OK to apply the configuration. If any of the options were changed
        the application will shutdown, otherwise select File, Exit
              

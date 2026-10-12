@@ -154,7 +154,10 @@ void DumpAddresses();
 //! Remove terrible (stale/never-successful) addresses from addrman - see
 //! CAddrMan::SweepTerrible() for what qualifies.
 void SweepTerribleAddresses();
-void StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
+// Returns false if TLS credentials/initialization failed - the caller must
+// treat that as a fatal startup error, since there is no plaintext fallback
+// to run networking without them.
+bool StartNode(boost::thread_group& threadGroup, CScheduler& scheduler);
 bool StopNode();
 void SocketSendData(CNode *pnode);
 SSL_CTX* create_context(bool server_side);
@@ -274,6 +277,10 @@ bool ShouldCountTowardInboundFromIPCap(bool fIsI2P, int existingPoolIdx, uint32_
 //! Whether a new inbound connection should be hard-rejected for being a
 //! local (loopback), non-Tor connection - see net.cpp.
 bool ShouldRejectLocalNonOnionInbound(const CNetAddr& addr, bool fOnionListener, bool fAllowLocalIp);
+//! Whether an inbound connection from addr may skip TLS under
+//! -plaintextpeer - never true for a Tor hidden-service connection, see
+//! net.cpp.
+bool ShouldExemptInboundFromTls(const CNetAddr& addr, bool fOnionListener);
 bool IsPeerAddrLocalGood(CNode *pnode);
 void AdvertizeLocal(CNode *pnode);
 bool AddLocal(const CService& addr, int nScore = LOCAL_NONE);
@@ -780,6 +787,15 @@ protected:
     static std::vector<CSubNet> vWhitelistedRange;
     static CCriticalSection cs_vWhitelistedRange;
 
+    // -plaintextpeer: exact addresses (never ranges - this is a deliberate
+    // per-IP exception, not a general bypass) TLS is not required for, e.g.
+    // local pool software that will never speak it. Stored as each address's
+    // canonical ToStringIP() form, computed once at init, so a config entry
+    // written in a non-canonical form (long-form IPv6, IPv4-mapped, etc.)
+    // still matches at connection time.
+    static std::vector<std::string> vPlaintextPeers;
+    static CCriticalSection cs_vPlaintextPeers;
+
     // Basic fuzz-testing
     void Fuzz(int nChance); // modifies ssSend
 
@@ -788,7 +804,6 @@ protected:
         FALLBACK_FALSE = 1,
         FALLBACK_TRUE = 2
     };
-    static eTlsOption tlsFallbackNonTls;
     static eTlsOption tlsValidate;
 
 public:
@@ -1140,6 +1155,15 @@ public:
     static bool IsWhitelistedRange(const CNetAddr &ip);
     static void AddWhitelistedRange(const CSubNet &subnet);
 
+    // -plaintextpeer lookup. strAddrIP must already be in ToStringIP() form.
+    // Never true for a Tor hidden-service inbound connection - every such
+    // connection is forwarded to 127.0.0.1 locally regardless of who the
+    // real remote peer is, so that address can't be trusted to identify it;
+    // callers on the inbound accept path must gate this on !fOnionListener
+    // themselves rather than rely on this function to know about it.
+    static bool IsPlaintextPeer(const std::string &strAddrIP);
+    static void AddPlaintextPeer(const std::string &strAddrIP);
+
     // Network stats
     static void RecordBytesRecv(uint64_t bytes);
     static void RecordBytesSent(uint64_t bytes);
@@ -1147,8 +1171,7 @@ public:
     static uint64_t GetTotalBytesRecv();
     static uint64_t GetTotalBytesSent();
 
-    // returns the value of the tlsfallbacknontls and tlsvalidate flags set at zend startup (see init.cpp)
-    static bool GetTlsFallbackNonTls();
+    // returns the value of the tlsvalidate flag set at zend startup (see init.cpp)
     static bool GetTlsValidate();
 };
 

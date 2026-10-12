@@ -584,48 +584,6 @@ SSL* TLSManager::accept(SOCKET hSocket, const CAddress& addr, unsigned long& err
 
     return ssl;
 }
-/**
- * @brief Determines whether a string exists in the non-TLS address pool.
- *
- * @param strAddr The address.
- * @param vPool Pool to search in.
- * @param cs reference to the corresponding CCriticalSection.
- * @return true returns true if address exists in the given pool.
- * @return false returns false if address doesnt exist in the given pool.
- */
-bool TLSManager::isNonTLSAddr(const string& strAddr, const vector<NODE_ADDR>& vPool, CCriticalSection& cs)
-{
-    LOCK(cs);
-    return (find(vPool.begin(), vPool.end(), NODE_ADDR(strAddr)) != vPool.end());
-}
-/**
- * @brief Removes non-TLS node addresses based on timeout.
- *
- * @param vPool
- * @param cs
- */
-void TLSManager::cleanNonTLSPool(std::vector<NODE_ADDR>& vPool, CCriticalSection& cs)
-{
-    LOCK(cs);
-
-    vector<NODE_ADDR> vDeleted;
-
-    BOOST_FOREACH (NODE_ADDR nodeAddr, vPool) {
-        if ((GetTimeMillis() - nodeAddr.time) >= 900000) {
-            vDeleted.push_back(nodeAddr);
-            LogPrint("tls", "TLS: Node %s is deleted from the non-TLS pool\n", nodeAddr.ipAddr);
-        }
-    }
-
-    BOOST_FOREACH (NODE_ADDR nodeAddrDeleted, vDeleted) {
-        vPool.erase(
-            remove(
-                vPool.begin(),
-                vPool.end(),
-                nodeAddrDeleted),
-            vPool.end());
-    }
-}
 
 /**
  * @brief Handles send and recieve functionality in TLS Sockets.

@@ -20,17 +20,6 @@ using namespace std;
 
 namespace tls
 {
-typedef struct _NODE_ADDR {
-    std::string ipAddr;
-    int64_t time; // time in msec, of an attempt to connect via TLS
-
-    _NODE_ADDR(std::string _ipAddr, int64_t _time = 0) : ipAddr(_ipAddr), time(_time) {}
-bool operator==(const _NODE_ADDR b) const
-{
-    return (ipAddr == b.ipAddr);
-}
-} NODE_ADDR, *PNODE_ADDR;
-
 /**
  * @brief A class to wrap some of zen specific TLS functionalities used in the net.cpp
  *
@@ -54,8 +43,6 @@ public:
 
      bool prepareCredentials();
      SSL* accept(SOCKET hSocket, const CAddress& addr, unsigned long& err_code);
-     bool isNonTLSAddr(const string& strAddr, const vector<NODE_ADDR>& vPool, CCriticalSection& cs);
-     void cleanNonTLSPool(std::vector<NODE_ADDR>& vPool, CCriticalSection& cs);
      int threadSocketHandler(CNode* pnode, fd_set& fdsetRecv, fd_set& fdsetSend, fd_set& fdsetError);
      bool initialize();
 };

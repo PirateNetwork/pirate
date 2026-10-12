@@ -1108,6 +1108,65 @@ TEST_F(net_tests_bitcoin, ShouldRejectLocalNonOnionInbound_Behavior)
     EXPECT_FALSE(ShouldRejectLocalNonOnionInbound(nonLocal, /* fOnionListener */ true, /* fAllowLocalIp */ false));
 }
 
+// A -plaintextpeer-allowlisted address must still require TLS when the
+// connection actually arrived via the Tor hidden-service listener, since
+// every Tor-forwarded peer appears to come from 127.0.0.1 regardless of who
+// they really are - allowlisting loopback for local pool software must not
+// silently exempt the entire Tor-facing internet too.
+TEST_F(net_tests_bitcoin, ShouldExemptInboundFromTls_NeverExemptsOnionListener)
+{
+    CNetAddr allowlisted, notAllowlisted;
+    ASSERT_TRUE(LookupHost("203.0.113.203", allowlisted, false));
+    ASSERT_TRUE(LookupHost("203.0.113.204", notAllowlisted, false));
+    CNode::AddPlaintextPeer(allowlisted.ToStringIP());
+
+    // Allowlisted, not via the Tor listener: exempt from TLS.
+    EXPECT_TRUE(ShouldExemptInboundFromTls(allowlisted, /* fOnionListener */ false));
+
+    // Allowlisted, but via the Tor listener: TLS is still required - this is
+    // the exact case that would otherwise expose every onion peer.
+    EXPECT_FALSE(ShouldExemptInboundFromTls(allowlisted, /* fOnionListener */ true));
+
+    // Not allowlisted at all: never exempt, Tor listener or not.
+    EXPECT_FALSE(ShouldExemptInboundFromTls(notAllowlisted, /* fOnionListener */ false));
+    EXPECT_FALSE(ShouldExemptInboundFromTls(notAllowlisted, /* fOnionListener */ true));
+}
+
+// -plaintextpeer is a static, process-lifetime allowlist (like
+// vWhitelistedRange) with no way to remove an entry once added, so this uses
+// its own TEST-NET-3 (RFC 5737) addresses that no other test in this binary
+// could plausibly also add, to avoid cross-test interference under
+// --gtest_shuffle.
+//
+// Addresses are stored in canonical ToStringIP() form (see init.cpp's
+// -plaintextpeer validation, which parses via LookupHost before calling
+// AddPlaintextPeer) specifically so two different textual spellings of the
+// same address both match - this proves that part of the fix, not just the
+// trivial exact-string-equality case.
+TEST_F(net_tests_bitcoin, PlaintextPeer_ExactMatchAndCanonicalForm)
+{
+    CNetAddr addedForm, sameAddrDifferentSpelling, neverAdded;
+    ASSERT_TRUE(LookupHost("203.0.113.201", addedForm, false));
+    ASSERT_TRUE(LookupHost("::ffff:203.0.113.201", sameAddrDifferentSpelling, false));
+    ASSERT_TRUE(LookupHost("203.0.113.202", neverAdded, false));
+
+    // The IPv4-mapped IPv6 spelling must canonicalize to the same
+    // ToStringIP() as the plain IPv4 form - otherwise storing/comparing by
+    // canonical form wouldn't actually fix anything over the old raw-string
+    // comparison.
+    ASSERT_EQ(addedForm.ToStringIP(), sameAddrDifferentSpelling.ToStringIP());
+
+    EXPECT_FALSE(CNode::IsPlaintextPeer(addedForm.ToStringIP()))
+        << "must not already be allowlisted before this test adds it";
+
+    CNode::AddPlaintextPeer(addedForm.ToStringIP());
+
+    EXPECT_TRUE(CNode::IsPlaintextPeer(addedForm.ToStringIP()));
+    EXPECT_TRUE(CNode::IsPlaintextPeer(sameAddrDifferentSpelling.ToStringIP()))
+        << "a differently-spelled form of the same address must still match";
+    EXPECT_FALSE(CNode::IsPlaintextPeer(neverAdded.ToStringIP()));
+}
+
 TEST_F(net_tests_bitcoin, IsPrivacyPeer_Behavior)
 {
     CNetAddr clearnet;

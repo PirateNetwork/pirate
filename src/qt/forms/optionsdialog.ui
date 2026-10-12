@@ -338,16 +338,6 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <item>
-        <widget class="QCheckBox" name="requireTLS">
-         <property name="toolTip">
-          <string>Accept connections from outside.</string>
-         </property>
-         <property name="text">
-          <string>Only connect to encrypted peers</string>
-         </property>
-        </widget>
-       </item>
-       <item>
         <widget class="QCheckBox" name="mapPortUpnp">
          <property name="toolTip">
           <string>Automatically open the Pirate client port on the router. This only works when your router supports UPnP and it is enabled.</string>
