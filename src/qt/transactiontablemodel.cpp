@@ -60,9 +60,6 @@ static int column_alignments[] = {
  * Parent-child ordering MUST be preserved even when sort direction is
  * reversed (descending). Using idx as tiebreaker ensures children never
  * appear before their parent regardless of sort direction.
- * 
- * Memory address tiebreaker prevents unstable sorts that could corrupt
- * Qt model/view consistency when multiple records are otherwise equal.
  */
 struct TxLessThan
 {
@@ -79,12 +76,10 @@ struct TxLessThan
         if (!a.isParent && b.isParent) {
             return false;
         }
-        // Among children: sort by decomposition order (idx)
-        if (a.idx != b.idx) {
-            return a.idx < b.idx;
-        }
-        // Final tiebreaker: memory address for stable sort
-        return &a < &b;
+        // Among children: sort by decomposition order (idx). Records equal
+        // on every key must compare equal; an address-based tiebreaker is not
+        // a valid ordering since std::sort moves elements during the sort.
+        return a.idx < b.idx;
     }
     
     // Overload for binary search by hash

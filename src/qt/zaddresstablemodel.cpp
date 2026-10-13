@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -24,6 +25,7 @@
 
 #include <QFont>
 #include <QDebug>
+#include <QHash>
 #include <QTimer>
 
 const QString ZAddressTableModel::Send = "S";
@@ -78,6 +80,39 @@ struct ZAddressTableEntryLessThan
     }
 };
 
+/* Compare strings with embedded runs of ASCII digits ordered by numeric value,
+   so "Key Group 2" sorts before "Key Group 10". Strings that compare equal this
+   way (differing only in leading zeros) fall back to plain comparison so the
+   result is still a strict weak ordering. */
+static bool naturalLess(const QString &a, const QString &b)
+{
+    auto isDigit = [](QChar c) { return c >= QLatin1Char('0') && c <= QLatin1Char('9'); };
+    int i = 0, j = 0;
+    while (i < a.size() && j < b.size()) {
+        if (isDigit(a[i]) && isDigit(b[j])) {
+            int si = i, sj = j;
+            while (i < a.size() && isDigit(a[i])) ++i;
+            while (j < b.size() && isDigit(b[j])) ++j;
+            while (si < i - 1 && a[si] == QLatin1Char('0')) ++si;
+            while (sj < j - 1 && b[sj] == QLatin1Char('0')) ++sj;
+            int lenA = i - si, lenB = j - sj;
+            if (lenA != lenB)
+                return lenA < lenB;
+            int c = QStringView(a).mid(si, lenA).compare(QStringView(b).mid(sj, lenB));
+            if (c != 0)
+                return c < 0;
+        } else {
+            if (a[i] != b[j])
+                return a[i] < b[j];
+            ++i;
+            ++j;
+        }
+    }
+    if ((i < a.size()) != (j < b.size()))
+        return i >= a.size();
+    return a < b;
+}
+
 /* Determine address type from address purpose */
 static ZAddressTableEntry::Type translateTransactionType(const QString &strPurpose, bool isMine)
 {
@@ -100,10 +135,14 @@ public:
     CWallet *wallet;
     QList<ZAddressTableEntry> cachedAddressTable;
     ZAddressTableModel *parent;
+    int sortColumn;
+    Qt::SortOrder sortOrder;
 
     ZAddressTablePriv(CWallet *_wallet, ZAddressTableModel *_parent):
         wallet(_wallet),
-        parent(_parent)
+        parent(_parent),
+        sortColumn(-1),
+        sortOrder(Qt::AscendingOrder)
     {
     }
 
@@ -171,8 +210,9 @@ public:
                                 cachedAddressTable[j].groupKey == entry.groupKey) {
                                 // Recalculate group total balance
                                 CAmount totalBalance = 0;
-                                for (int k = j + 1; k < cachedAddressTable.size() && 
-                                     !cachedAddressTable[k].isGroup; k++) {
+                                for (int k = j + 1; k < cachedAddressTable.size() &&
+                                     !cachedAddressTable[k].isGroup &&
+                                     cachedAddressTable[k].groupKey == entry.groupKey; k++) {
                                     totalBalance += cachedAddressTable[k].balance;
                                 }
                                 cachedAddressTable[j].balance = totalBalance;
@@ -345,13 +385,18 @@ public:
             // Add ungrouped addresses at the end
             cachedAddressTable.append(ungroupedAddresses);
         }
-        // Don't sort after grouping as it would break the parent-child structure
-        // Sorting is handled by the sort() method which maintains grouping
+        // Re-apply the view's last requested sort so a rebuilt table (an address
+        // added or removed) matches the order the header indicator shows.
+        if (sortColumn >= 0)
+            sort(sortColumn, sortOrder);
     }
 
     // Custom sort that maintains group structure
     void sort(int column, Qt::SortOrder order)
     {
+        sortColumn = column;
+        sortOrder = order;
+
         // Separate groups from ungrouped entries
         QList<QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>> groups;
         QList<ZAddressTableEntry> ungrouped;
@@ -379,96 +424,66 @@ public:
             }
         }
         
-        // Sort groups based on the column (using group header values)
-        std::sort(groups.begin(), groups.end(), 
-            [column, order](const QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>& a,
-                           const QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>& b) {
-                const ZAddressTableEntry& aEntry = a.first;
-                const ZAddressTableEntry& bEntry = b.first;
-                bool result;
-                
-                switch(column) {
-                    case ZAddressTableModel::isMine:
-                        result = aEntry.mine < bEntry.mine;
-                        break;
-                    case ZAddressTableModel::Balance:
-                        result = aEntry.balance < bEntry.balance;
-                        break;
-                    case ZAddressTableModel::Address:
-                        result = aEntry.address < bEntry.address;
-                        break;
-                    case ZAddressTableModel::Label:
-                        result = aEntry.label < bEntry.label;
-                        break;
-                    default:
-                        result = false;
-                }
-                
-                return (order == Qt::AscendingOrder) ? result : !result;
+        // Descending order must swap the operands rather than negate the
+        // result: !(a < b) is true for equal elements, which violates the
+        // strict weak ordering std::sort requires and lets its unguarded
+        // partition run off the end of the list.
+        auto columnLess = [column](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+            switch(column) {
+                case ZAddressTableModel::isMine:
+                    return a.mine < b.mine;
+                case ZAddressTableModel::Balance:
+                    return a.balance < b.balance;
+                case ZAddressTableModel::Scope:
+                    return a.scope < b.scope;
+                case ZAddressTableModel::Address:
+                    return naturalLess(a.address, b.address);
+                case ZAddressTableModel::Label:
+                    return naturalLess(a.label, b.label);
+                default:
+                    return false;
+            }
+        };
+        auto orderedLess = [columnLess, order](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+            return (order == Qt::AscendingOrder) ? columnLess(a, b) : columnLess(b, a);
+        };
+
+        // Sort groups based on the column (using group header values). Headers
+        // tie on columns they don't carry (e.g. Scope is always empty), so break
+        // ties by group name to keep group order fixed across re-sorts.
+        std::sort(groups.begin(), groups.end(),
+            [orderedLess](const QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>& a,
+                          const QPair<ZAddressTableEntry, QList<ZAddressTableEntry>>& b) {
+                if (orderedLess(a.first, b.first))
+                    return true;
+                if (orderedLess(b.first, a.first))
+                    return false;
+                return naturalLess(a.first.address, b.first.address);
             });
-        
+
         // Sort children within each group: Change addresses always last, then by column
+        const QString changeScope = QObject::tr("Change");
         for (auto& group : groups) {
             QList<ZAddressTableEntry>& children = group.second;
             std::stable_sort(children.begin(), children.end(),
-                [column, order](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
-                    bool aChange = (a.scope == QObject::tr("Change"));
-                    bool bChange = (b.scope == QObject::tr("Change"));
+                [orderedLess, &changeScope](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+                    bool aChange = (a.scope == changeScope);
+                    bool bChange = (b.scope == changeScope);
                     // Change always last regardless of sort order
                     if (aChange != bChange)
                         return aChange < bChange;  // Normal before Change
-                    
-                    // Within same scope group, sort by the requested column
-                    bool result;
-                    switch(column) {
-                        case ZAddressTableModel::isMine:
-                            result = a.mine < b.mine;
-                            break;
-                        case ZAddressTableModel::Balance:
-                            result = a.balance < b.balance;
-                            break;
-                        case ZAddressTableModel::Scope:
-                            result = a.scope < b.scope;
-                            break;
-                        case ZAddressTableModel::Address:
-                            result = a.address < b.address;
-                            break;
-                        case ZAddressTableModel::Label:
-                            result = a.label < b.label;
-                            break;
-                        default:
-                            result = false;
-                    }
-                    return (order == Qt::AscendingOrder) ? result : !result;
+                    return orderedLess(a, b);
                 });
         }
-        
+
         // Sort ungrouped entries
         std::sort(ungrouped.begin(), ungrouped.end(),
-            [column, order](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
-                bool result;
-                
-                switch(column) {
-                    case ZAddressTableModel::isMine:
-                        result = a.mine < b.mine;
-                        break;
-                    case ZAddressTableModel::Balance:
-                        result = a.balance < b.balance;
-                        break;
-                    case ZAddressTableModel::Scope:
-                        result = a.scope < b.scope;
-                        break;
-                    case ZAddressTableModel::Address:
-                        result = a.address < b.address;
-                        break;
-                    case ZAddressTableModel::Label:
-                        result = a.label < b.label;
-                        break;
-                    default:
-                        result = false;
-                }
-                
-                return (order == Qt::AscendingOrder) ? result : !result;
+            [orderedLess](const ZAddressTableEntry& a, const ZAddressTableEntry& b) {
+                if (orderedLess(a, b))
+                    return true;
+                if (orderedLess(b, a))
+                    return false;
+                return naturalLess(a.address, b.address);
             });
         
         // Rebuild table maintaining group structure
@@ -661,7 +676,45 @@ int ZAddressTableModel::columnCount(const QModelIndex &parent) const
 void ZAddressTableModel::sort(int column, Qt::SortOrder order)
 {
     Q_EMIT layoutAboutToBeChanged();
+
+    // Record which entry each persistent index (selection, current item) points
+    // at before the sort frees the entries, then move it to that entry's new
+    // row. A group header is identified by its groupKey, an address row by its
+    // address, which is unique in the table.
+    const QModelIndexList oldIndexes = persistentIndexList();
+    QList<QPair<bool, QString>> oldKeys;
+    oldKeys.reserve(oldIndexes.size());
+    for (const QModelIndex &idx : oldIndexes) {
+        const ZAddressTableEntry *rec = priv->index(idx.row());
+        if (rec)
+            oldKeys.append(qMakePair(rec->isGroup, rec->isGroup ? rec->groupKey : rec->address));
+        else
+            oldKeys.append(qMakePair(false, QString()));
+    }
+
     priv->sort(column, order);
+
+    QHash<QString, int> groupRows, addressRows;
+    for (int row = 0; row < priv->size(); row++) {
+        const ZAddressTableEntry *rec = priv->index(row);
+        if (rec->isGroup)
+            groupRows.insert(rec->groupKey, row);
+        else
+            addressRows.insert(rec->address, row);
+    }
+
+    QModelIndexList newIndexes;
+    newIndexes.reserve(oldIndexes.size());
+    for (int i = 0; i < oldIndexes.size(); i++) {
+        const QHash<QString, int> &rows = oldKeys[i].first ? groupRows : addressRows;
+        auto it = rows.constFind(oldKeys[i].second);
+        if (oldKeys[i].second.isEmpty() || it == rows.constEnd())
+            newIndexes.append(QModelIndex());
+        else
+            newIndexes.append(index(it.value(), oldIndexes[i].column(), QModelIndex()));
+    }
+    changePersistentIndexList(oldIndexes, newIndexes);
+
     Q_EMIT layoutChanged();
 }
 
