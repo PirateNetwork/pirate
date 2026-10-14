@@ -1437,6 +1437,28 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_async_operations_parallel_wait)
     EXPECT_EQ(numOperations, gCounter.load());
 }
 
+// A cancelled operation never runs main(), and closing the queue alone keeps it
+// alive in the queue's map. StopRPC() relies on removeAllOperations() to destroy
+// such operations (and release any note locks they took when created) while the
+// wallet still exists, instead of during static destruction after it's deleted.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_async_queue_remove_all_destroys_cancelled_operations)
+{
+    std::shared_ptr<AsyncRPCQueue> q = std::make_shared<AsyncRPCQueue>();
+    std::weak_ptr<AsyncRPCOperation> queued;
+    {
+        std::shared_ptr<AsyncRPCOperation> op(new CountOperation());
+        queued = op;
+        q->addOperation(op);
+    }
+    q->closeAndWait();
+    ASSERT_FALSE(queued.expired()) << "closing the queue must not be what destroys the operation";
+    EXPECT_TRUE(queued.lock()->isCancelled());
+
+    q->removeAllOperations();
+    EXPECT_TRUE(queued.expired());
+    EXPECT_TRUE(q->getAllOperationIds().empty());
+}
+
 // This tests the queue shutting down immediately
 TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_async_operations_parallel_cancel)
 {

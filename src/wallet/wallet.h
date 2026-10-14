@@ -2414,6 +2414,31 @@ public:
                           bool includeMemo=false);
 };
 
+/**
+ * Note locks held by one transaction-building operation. Notes must be locked
+ * in the same cs_wallet critical section that selected them, so no other
+ * operation can select them in between. Every lock taken here is released by
+ * Release() or, at the latest, by the destructor, so an early return or an
+ * exception during building or proving can't leave notes locked.
+ */
+class CNoteLockGuard
+{
+public:
+    explicit CNoteLockGuard(CWallet* walletIn) : pwallet(walletIn) {}
+    ~CNoteLockGuard() { Release(); }
+    CNoteLockGuard(const CNoteLockGuard&) = delete;
+    CNoteLockGuard& operator=(const CNoteLockGuard&) = delete;
+
+    void Lock(const SaplingOutPoint& op);
+    void Lock(const IronwoodOutPoint& op);
+    void Release();
+
+private:
+    CWallet* pwallet;
+    std::vector<SaplingOutPoint> saplingLocked;
+    std::vector<IronwoodOutPoint> ironwoodLocked;
+};
+
 /** A key allocated from the key pool. */
 class CReserveKey
 {

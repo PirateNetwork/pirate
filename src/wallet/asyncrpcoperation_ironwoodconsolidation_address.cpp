@@ -1,4 +1,5 @@
 // Copyright (c) 2025 Pirate Chain Development Team
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -178,6 +179,7 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         // GetFilteredNotes uses a dual-heap streaming algorithm to return up to maxNotes_
         // notes (half smallest + half largest by value) for this address, exiting early
         // as soon as the aggregate value meets the fee_ + 1 threshold.
+        CNoteLockGuard noteLocks(pwalletMain);
         std::vector<SaplingNoteEntry> saplingEntries;
         std::vector<IronwoodNoteEntry> ironwoodEntries;
         {
@@ -187,14 +189,8 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
                                           maxNotes_, fee_ + 1);
             // Lock immediately so no other async operation can select the same notes.
             for (const auto& e : ironwoodEntries)
-                pwalletMain->LockNote(e.op);
+                noteLocks.Lock(e.op);
         }
-
-        auto unlockIronwoodEntries = [&]() {
-            LOCK2(cs_main, pwalletMain->cs_wallet);
-            for (const auto& e : ironwoodEntries)
-                pwalletMain->UnlockNote(e.op);
-        };
 
         // Compute total aggregate value of this iteration's working set.
         CAmount amountToSend = 0;
@@ -209,14 +205,12 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         if (ironwoodEntries.size() < 2) {
             LogPrint("zrpcunsafe", "%s: Not enough notes to consolidate (need at least 2, found %d)\n",
                      getId(), (int)ironwoodEntries.size());
-            unlockIronwoodEntries();
             break;
         }
         if (amountToSend <= fee_) {
             LogPrint("zrpcunsafe", "%s: Working set aggregate value %s does not exceed fee %s — "
                      "all selected notes are dust relative to fee, nothing to consolidate\n",
                      getId(), FormatMoney(amountToSend), FormatMoney(fee_));
-            unlockIronwoodEntries();
             break;
         }
 
@@ -241,7 +235,6 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
             LOCK2(cs_main, pwalletMain->cs_wallet);
             if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
                 LogPrint("zrpcunsafe", "%s: Merkle Path not found for Ironwood notes. Stopping.\n", getId());
-                unlockIronwoodEntries();
                 break;
             }
         }
@@ -271,7 +264,6 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
             }
         }
         if (buildFailed) {
-            unlockIronwoodEntries();
             break;
         }
 
@@ -280,7 +272,6 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         // Step 2: Convert raw spends using spending key
         if (!builder.ConvertRawIronwoodSpend(spendingKey_)) {
             LogPrint("zrpcunsafe", "%s: Converting Raw Ironwood Spends failed. Stopping.\n", getId());
-            unlockIronwoodEntries();
             break;
         }
 
@@ -290,20 +281,17 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         // Add consolidated output using raw method then convert
         if (!builder.AddIronwoodOutputRaw(address_, outputAmount, std::nullopt)) {
             LogPrint("zrpcunsafe", "%s: Adding Raw Ironwood Output failed. Stopping.\n", getId());
-            unlockIronwoodEntries();
             break;
         }
 
         libzcash::IronwoodFullViewingKey fvk;
         if (!spendingKey_.sk.DeriveFVK(&fvk)) {
             LogPrint("zrpcunsafe", "%s: Failed to get FVK from spending key. Stopping.\n", getId());
-            unlockIronwoodEntries();
             break;
         }
         libzcash::IronwoodOutgoingViewingKey ovk;
         if (!fvk.DeriveOVK(&ovk)) {
             LogPrint("zrpcunsafe", "%s: Failed to get OVK from FVK. Stopping.\n", getId());
-            unlockIronwoodEntries();
             break;
         }
         builder.ConvertRawIronwoodOutput(ovk.ovk);
@@ -312,7 +300,6 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         auto buildResult = builder.Build();
         if (!buildResult.IsTx()) {
             LogPrint("zrpcunsafe", "%s: Failed to build consolidation transaction: %s. Stopping.\n", getId(), buildResult.GetError());
-            unlockIronwoodEntries();
             break;
         }
         auto tx = buildResult.GetTxOrThrow();
@@ -320,7 +307,6 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
         // Check for cancellation before committing
         if (isCancelled() || ShutdownRequested()) {
             LogPrint("zrpcunsafe", "%s: Canceled or shutdown. Stopping.\n", getId());
-            unlockIronwoodEntries();
             break;
         }
 
@@ -329,14 +315,12 @@ bool AsyncRPCOperation_ironwoodconsolidation_address::main_impl() {
             LOCK2(cs_main, pwalletMain->cs_wallet);
             if (!pwalletMain->CommitAutomatedTx(tx)) {
                 LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
-                unlockIronwoodEntries();
                 break;
             }
         }
 
         LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n",
                  getId(), tx.GetHash().ToString());
-        unlockIronwoodEntries();
         amountConsolidated += outputAmount;
         numTxCreated++;
         processedNotes += (int)ironwoodEntries.size();

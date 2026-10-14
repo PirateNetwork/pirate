@@ -1,5 +1,6 @@
 // Copyright (c) 2017 The Zcash developers
 // Copyright (c) 2022-2025 Pirate developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -156,6 +157,7 @@ private:
     std::vector<MergeToAddressInputUTXO> utxoInputs_;                    ///< Transparent UTXO inputs
     std::vector<MergeToAddressInputSaplingNote> saplingNoteInputs_;      ///< Sapling note inputs
     std::vector<MergeToAddressInputIronwoodNote> ironwoodNoteInputs_;      ///< Ironwood note inputs
+    CNoteLockGuard noteLocks_;                                              ///< Locks on the note inputs
 
     // Transaction building
     TransactionBuilder builder_;           ///< Builder for constructing the transaction
@@ -195,20 +197,12 @@ private:
      */
     void lock_sapling_notes();
 
-    /**
-     * @brief Unlock Sapling notes to make them available again
-     */
-    void unlock_sapling_notes();
 
     /**
      * @brief Lock Ironwood notes to prevent double-spending
      */
     void lock_ironwood_notes();
 
-    /**
-     * @brief Unlock Ironwood notes to make them available again
-     */
-    void unlock_ironwood_notes();
 
 };
 

@@ -1,5 +1,6 @@
 // Copyright (c) 2016 The Zcash developers
 // Copyright (c) 2022-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -103,6 +104,7 @@ AsyncRPCOperation_sendmany::AsyncRPCOperation_sendmany(
       isFromSaplingAddress_(false),
       isFromIronwoodAddress_(false),
       hasOfflineSpendingKey(false),
+      noteLocks_(pwalletMain),
       builder_(TransactionBuilder(consensusParams, blockHeight, pwalletMain))
 {
     assert(fee_ >= 0);
@@ -219,6 +221,10 @@ void AsyncRPCOperation_sendmany::main()
         set_error_message("Unknown error occurred during send");
     }
 
+    // Release the selected notes on every outcome. After a successful broadcast
+    // the wallet already records them as spent, so they stay unselectable.
+    noteLocks_.Release();
+
     // Stop timing and set final operation state
     stop_execution_clock();
 
@@ -266,17 +272,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         return false;
     }
 
-    // Unlock all locked notes on any exit path — failure or success.
-    // After a successful broadcast the transaction is committed and
-    // GetFilteredNotes will naturally exclude the spent notes; for failures
-    // the notes must be freed so other operations can select them.
-    auto unlock_notes = [&]() {
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        for (const auto& e : saplingInputs_)
-            pwalletMain->UnlockNote(e.op);
-        for (const auto& e : ironwoodInputs_)
-            pwalletMain->UnlockNote(e.op);
-    };
 
     // STEP 2: Calculate total input and output amounts.
     // Calculate total Sapling inputs
@@ -311,7 +306,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         set_error_code(RPC_WALLET_INSUFFICIENT_FUNDS);
         set_error_message(strprintf("Insufficient shielded funds, have %s, need %s",
                                     FormatMoney(totalSaplingInputs), FormatMoney(totalTargetAmount)));
-        unlock_notes();
         return false;
     }
 
@@ -319,7 +313,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         set_error_code(RPC_WALLET_INSUFFICIENT_FUNDS);
         set_error_message(strprintf("Insufficient shielded funds, have %s, need %s",
                                     FormatMoney(totalIronwoodInputs), FormatMoney(totalTargetAmount)));
-        unlock_notes();
         return false;
     }
 
@@ -350,7 +343,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!extskPtr) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Invalid Sapling spending key type. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
         extsk = *extskPtr;
@@ -359,7 +351,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!extsk.expsk.DeriveFVK(&fvk)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Failed to derive FVK from Sapling spending key. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
         ovk = fvk.ovk;
@@ -396,7 +387,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Merkle Path not found for Sapling note. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
 
@@ -404,7 +394,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
             if (!builder_.AddSaplingSpendRaw(ops[i], saplingInputs_[selectedIdx[i]].address, notes[i].value(), notes[i].rcm(), saplingMerklePaths[i], anchor)) {
                 set_error_code(RPC_WALLET_ERROR);
                 set_error_message(strprintf("%s: Adding Raw Sapling Spend failed. Stopping.", getId()));
-                unlock_notes();
                 return false;
             }
         }
@@ -413,7 +402,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!builder_.ConvertRawSaplingSpend(extsk)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Converting Raw Sapling Spends failed.", getId()));
-            unlock_notes();
             return false;
         }
     } else {
@@ -433,7 +421,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!extskPtr) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Invalid Ironwood spending key type. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
         extsk = *extskPtr;
@@ -442,7 +429,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!fvkOpt) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: FVK not found for Ironwood spending key. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
 
@@ -451,7 +437,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!fvk.DeriveOVK(&ovkObj)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: OVK not found for Ironwood spending key. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
 
@@ -487,7 +472,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!pwalletMain->GetIronwoodNoteMerklePaths(ops, ironwoodMerklePaths, anchor)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Merkle Path not found for Ironwood note. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
 
@@ -496,7 +480,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
             if (!builder_.AddIronwoodSpendRaw(entry.op, entry.address, entry.note.value(), entry.note.rho(), entry.note.rseed(), ironwoodMerklePaths[i], anchor)) {
                 set_error_code(RPC_WALLET_ERROR);
                 set_error_message(strprintf("%s: Adding Raw Ironwood Spend failed. Stopping.", getId()));
-                unlock_notes();
                 return false;
             }
         }
@@ -506,7 +489,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!builder_.ConvertRawIronwoodSpend(extsk)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Converting Raw Ironwood Spends failed.", getId()));
-            unlock_notes();
             return false;
         }
 
@@ -521,7 +503,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
     if (ovk.IsNull()) {
         set_error_code(RPC_WALLET_ERROR);
         set_error_message(strprintf("%s: OVK was not properly initialized for this address type.", getId()));
-        unlock_notes();
         return false;
     }
 
@@ -574,7 +555,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!builder_.AddSaplingOutputRaw(saplingPaymentAddress, outputValue, memo)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Adding Raw Sapling Output failed. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
     }
@@ -583,7 +563,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
     if (!builder_.ConvertRawSaplingOutput(ovk)) {
         set_error_code(RPC_WALLET_ERROR);
         set_error_message(strprintf("%s: Converting Raw Sapling Outputs failed.", getId()));
-        unlock_notes();
         return false;
     }
 
@@ -606,7 +585,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!builder_.AddIronwoodOutputRaw(ironwoodPaymentAddress, outputValue, memo)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Adding Raw Ironwood Output failed. Stopping.", getId()));
-            unlock_notes();
             return false;
         }
     }
@@ -616,7 +594,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (!builder_.ConvertRawIronwoodOutput(ovk)) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message(strprintf("%s: Converting Raw Ironwood Outputs failed.", getId()));
-            unlock_notes();
             return false;
         }
     }
@@ -626,7 +603,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
     if (!builder_.IsValidSize()) {
         set_error_code(RPC_WALLET_ERROR);
         set_error_message(strprintf("%s: Transaction too large: estimated size exceeds the protocol maximum.", getId()));
-        unlock_notes();
         return false;
     }
 
@@ -635,7 +611,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
     if (!buildResult.IsTx()) {
         set_error_code(RPC_WALLET_ERROR);
         set_error_message(strprintf("%s: Failed to build transaction.", getId()));
-        unlock_notes();
         return false;
     }
     tx_ = buildResult.GetTxOrThrow();
@@ -652,7 +627,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         if (broadcastResult.isNull()) {
             set_error_code(RPC_WALLET_ERROR);
             set_error_message("sendrawtransaction did not return an error or a txid.");
-            unlock_notes();
             return false;
         }
 
@@ -671,7 +645,6 @@ bool AsyncRPCOperation_sendmany::main_impl()
         set_result(result);
     }
 
-    unlock_notes();
     return true;
 }
 
@@ -705,9 +678,9 @@ bool AsyncRPCOperation_sendmany::find_unspent_notes()
         }
         // Lock immediately so no other async operation can select the same notes.
         for (const auto& e : saplingNoteEntries)
-            pwalletMain->LockNote(e.op);
+            noteLocks_.Lock(e.op);
         for (const auto& e : ironwoodNoteEntries)
-            pwalletMain->LockNote(e.op);
+            noteLocks_.Lock(e.op);
     }
 
     // Process Sapling note entries

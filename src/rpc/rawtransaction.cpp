@@ -1,6 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2015 The Bitcoin Core developers
 // Copyright (c) 2024-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1847,6 +1848,14 @@ UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
                     throw JSONRPCError(RPC_TRANSACTION_ERROR, state.GetRejectReason());
                 }
             }
+#ifdef ENABLE_WALLET
+            // The mempool only notifies wallets from the txnotify thread, up to a
+            // second later. Record the spend now so an async operation that
+            // releases its note locks right after this returns can't have those
+            // notes reselected in the meantime.
+            if (pwalletMain)
+                pwalletMain->SyncTransactions({tx}, NULL, chainActive.Tip()->nHeight + 1);
+#endif
         } else if (fHaveChain) {
             throw JSONRPCError(RPC_TRANSACTION_ALREADY_IN_CHAIN, "transaction already in block chain");
         }

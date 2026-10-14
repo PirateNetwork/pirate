@@ -1,6 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Copyright (c) 2022-2025 Pirate developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -3365,6 +3366,11 @@ bool CWallet::CommitAutomatedTx(const CTransaction& tx) {
   if(!wtx.AcceptToMemoryPool(false)) {
       return false;
   }
+
+  // The mempool only notifies wallets from the txnotify thread, up to a second
+  // later. Record the spend now so the caller can release its note locks
+  // without another operation reselecting those notes in the meantime.
+  SyncTransactions({tx}, NULL, chainActive.Tip()->nHeight + 1);
 
   // push to network
   if (!wtx.RelayWalletTransaction()) {
@@ -12887,6 +12893,37 @@ void CWallet::UnlockAllIronwoodNotes()
 {
     AssertLockHeld(cs_wallet);
     setLockedIronwoodNotes.clear();
+}
+
+// A note another operation already holds is left alone and not recorded, so
+// Release() only ever unlocks the notes this guard locked itself.
+void CNoteLockGuard::Lock(const SaplingOutPoint& op)
+{
+    if (pwallet->IsLockedNote(op))
+        return;
+    pwallet->LockNote(op);
+    saplingLocked.push_back(op);
+}
+
+void CNoteLockGuard::Lock(const IronwoodOutPoint& op)
+{
+    if (pwallet->IsLockedNote(op))
+        return;
+    pwallet->LockNote(op);
+    ironwoodLocked.push_back(op);
+}
+
+void CNoteLockGuard::Release()
+{
+    if (saplingLocked.empty() && ironwoodLocked.empty())
+        return;
+    LOCK2(cs_main, pwallet->cs_wallet);
+    for (const auto& op : saplingLocked)
+        pwallet->UnlockNote(op);
+    for (const auto& op : ironwoodLocked)
+        pwallet->UnlockNote(op);
+    saplingLocked.clear();
+    ironwoodLocked.clear();
 }
 
 bool CWallet::IsLockedNote(const IronwoodOutPoint& output) const

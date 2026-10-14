@@ -13,6 +13,9 @@
 #include "pubkey.h"
 #include "transaction_builder.h"
 #include "zcash/Address.hpp"
+#include "core_io.h"
+#include "init.h"
+#include "rpc/server.h"
 #include "cc/eval.h"
 #include "cc/utils.h"
 
@@ -218,7 +221,7 @@ static const std::string tSecretRegtestBlockConnect = "UuRoAgHmjHZqexxVAPjzW8N6h
 // the *same* block has no recognized anchor yet to spend against. This is also why
 // TestSpendInSameBlock/TestDoubleSpendInSameBlock (a related, unconfirmed-transfer
 // scenario) were removed rather than adapted - this project has no 0-conf concept at all.
-static void CheckSaplingBlockConnection(bool subtreeBoundary)
+static void CheckSaplingBlockConnection(bool subtreeBoundary, bool spendInEarlierBlock = false)
 {
     TestChain chain;
     chainName = assetchain("TST");
@@ -458,11 +461,47 @@ static void CheckSaplingBlockConnection(bool subtreeBoundary)
     CBlock blockC;
     blockC.vtx.push_back(CTransaction(coinbaseCNew));
     blockC.vtx.push_back(spendTxA);
-    blockC.vtx.push_back(spendTxB);
     CValidationState stateC;
     CBlockIndex indexC;
     indexC.pprev = &indexB;
     indexC.nHeight = heightC;
+
+    if (spendInEarlierBlock) {
+        // Block C confirms spendTxA on its own; block D then tries spendTxB, which
+        // spends the same note against the nullifier set block C just committed.
+        saplingFrontier.AppendBundle(spendTxA.GetSaplingBundle());
+        blockC.hashBlockCommitments = saplingFrontier.root();
+        uint256 hashC = blockC.GetHash();
+        indexC.phashBlock = &hashC;
+        mapBlockIndex[hashC] = &indexC;
+        struct MapIndexEraserC {
+            uint256 hash;
+            ~MapIndexEraserC() { mapBlockIndex.erase(hash); }
+        } eraseIndexC{hashC};
+        ASSERT_TRUE(chain.ConnectBlock(blockC, stateC, &indexC, true, false)) << stateC.GetRejectReason();
+        chain.GetCoinsViewCache()->SetBestBlock(hashC);
+
+        int32_t heightD = heightC + 1;
+        CMutableTransaction coinbaseDNew = CreateNewContextualCMutableTransaction(consensusParams, heightD);
+        coinbaseDNew.vin.resize(1);
+        coinbaseDNew.vin[0].prevout.SetNull();
+        coinbaseDNew.vin[0].scriptSig = (CScript() << heightD << CScriptNum(1)) + COINBASE_FLAGS;
+        coinbaseDNew.vout.resize(1);
+        coinbaseDNew.vout[0].nValue = GetBlockSubsidy(heightD, consensusParams);
+        coinbaseDNew.nExpiryHeight = 0;
+        CBlock blockD;
+        blockD.vtx.push_back(CTransaction(coinbaseDNew));
+        blockD.vtx.push_back(spendTxB);
+        CValidationState stateD;
+        CBlockIndex indexD;
+        indexD.pprev = &indexC;
+        indexD.nHeight = heightD;
+        EXPECT_FALSE(chain.ConnectBlock(blockD, stateD, &indexD, true, false));
+        EXPECT_EQ(stateD.GetRejectReason(), "bad-txns-sapling-duplicate-nullifier");
+        return;
+    }
+
+    blockC.vtx.push_back(spendTxB);
     EXPECT_FALSE(chain.ConnectBlock(blockC, stateC, &indexC, true, false));
     EXPECT_EQ(stateC.GetRejectReason(), "bad-txns-sapling-duplicate-nullifier");
 }
@@ -472,12 +511,17 @@ TEST(test_block, TestSaplingSameBlockDuplicateNullifierRejected)
     CheckSaplingBlockConnection(false);
 }
 
+TEST(test_block, TestSaplingNullifierSpentInEarlierBlockRejected)
+{
+    CheckSaplingBlockConnection(false, /* spendInEarlierBlock = */ true);
+}
+
 TEST(test_block, TestSaplingSubtreeBoundaryWithUnregisteredBlockIndex)
 {
     CheckSaplingBlockConnection(true);
 }
 
-static void CheckIronwoodBlockConnection(bool subtreeBoundary)
+static void CheckIronwoodBlockConnection(bool subtreeBoundary, bool spendInEarlierBlock = false)
 {
     TestChain chain;
     chainName = assetchain("TST");
@@ -727,13 +771,70 @@ static void CheckIronwoodBlockConnection(bool subtreeBoundary)
     CBlock blockC;
     blockC.vtx.push_back(CTransaction(coinbaseCNew));
     blockC.vtx.push_back(spendTxA);
-    blockC.vtx.push_back(spendTxB);
     CValidationState stateC;
     CBlockIndex indexC;
     indexC.pprev = &indexB;
     indexC.nHeight = heightC;
-    EXPECT_FALSE(chain.ConnectBlock(blockC, stateC, &indexC, true, false));
-    EXPECT_EQ(stateC.GetRejectReason(), "bad-txns-ironwood-duplicate-nullifier");
+
+    // The second spend must be rejected, and the double-spend logged without
+    // enabling any -debug category, the same as a Sapling double-spend.
+    auto expectSecondSpendRejected = [&](const CBlock& block, CBlockIndex& index) {
+        ASSERT_FALSE(LogAcceptCategory("consensus"));
+        struct RestorePrintToConsole {
+            bool saved = fPrintToConsole;
+            ~RestorePrintToConsole() { fPrintToConsole = saved; }
+        } restorePrintToConsole;
+        fPrintToConsole = true;
+        CValidationState state;
+        testing::internal::CaptureStdout();
+        bool connected = chain.ConnectBlock(block, state, &index, true, false);
+        std::string logged = testing::internal::GetCapturedStdout();
+
+        EXPECT_FALSE(connected);
+        EXPECT_EQ(state.GetRejectReason(), "bad-txns-ironwood-duplicate-nullifier");
+        EXPECT_NE(logged.find("Ironwood double-spend detected txid=" + spendTxB.GetHash().ToString()), std::string::npos)
+            << "logged output was:\n" << logged;
+    };
+
+    if (spendInEarlierBlock) {
+        // Block C confirms spendTxA on its own; block D then tries spendTxB, which
+        // spends the same note against the nullifier set block C just committed.
+        {
+            uint32_t branchIdC = CurrentEpochBranchId(heightC - 1, consensusParams);
+            uint256 hashChainHistoryRootC = chain.GetCoinsViewCache()->GetHistoryRoot(branchIdC);
+            blockC.hashBlockCommitments = DeriveBlockCommitmentsHash(hashChainHistoryRootC, blockC.BuildAuthDataMerkleTree());
+        }
+        uint256 hashC = blockC.GetHash();
+        indexC.phashBlock = &hashC;
+        mapBlockIndex[hashC] = &indexC;
+        struct MapIndexEraserC {
+            uint256 hash;
+            ~MapIndexEraserC() { mapBlockIndex.erase(hash); }
+        } eraseIndexC{hashC};
+        ASSERT_TRUE(chain.ConnectBlock(blockC, stateC, &indexC, true, false)) << stateC.GetRejectReason();
+        chain.GetCoinsViewCache()->SetBestBlock(hashC);
+
+        int32_t heightD = heightC + 1;
+        CMutableTransaction coinbaseDNew = CreateNewContextualCMutableTransaction(consensusParams, heightD);
+        coinbaseDNew.vin.resize(1);
+        coinbaseDNew.vin[0].prevout.SetNull();
+        coinbaseDNew.vin[0].scriptSig = (CScript() << heightD << CScriptNum(1)) + COINBASE_FLAGS;
+        coinbaseDNew.vout.resize(1);
+        coinbaseDNew.vout[0].nValue = GetBlockSubsidy(heightD, consensusParams);
+        coinbaseDNew.nExpiryHeight = 0;
+        coinbaseDNew.nLockTime = heightD; // see coinbaseB's nLockTime comment above
+        CBlock blockD;
+        blockD.vtx.push_back(CTransaction(coinbaseDNew));
+        blockD.vtx.push_back(spendTxB);
+        CBlockIndex indexD;
+        indexD.pprev = &indexC;
+        indexD.nHeight = heightD;
+        expectSecondSpendRejected(blockD, indexD);
+        return;
+    }
+
+    blockC.vtx.push_back(spendTxB);
+    expectSecondSpendRejected(blockC, indexC);
 }
 
 // AcceptToMemoryPool() (main.cpp) has its own, earlier duplicate-nullifier guard, ahead
@@ -753,6 +854,11 @@ TEST(test_block, TestIronwoodSameBlockDuplicateNullifierRejected)
 TEST(test_block, TestIronwoodSubtreeBoundaryWithUnregisteredBlockIndex)
 {
     CheckIronwoodBlockConnection(true);
+}
+
+TEST(test_block, TestIronwoodNullifierSpentInEarlierBlockRejected)
+{
+    CheckIronwoodBlockConnection(false, /* spendInEarlierBlock = */ true);
 }
 
 TEST(test_mempool, TestSaplingMempoolDuplicateNullifierRejected)
@@ -2037,6 +2143,71 @@ TEST(test_block, TestProcessBadBlock)
     EXPECT_EQ(state.GetRejectReason(), "bad-txnmrklroot");
     // Verify transaction is still in mempool
     EXPECT_EQ(mempool.size(), 1);
+}
+
+// The mempool only tells wallets about a newly accepted transaction from the
+// txnotify thread, up to a second later (and that thread never runs under
+// gtest). Every async transaction builder unlocks its notes right after
+// committing, so the commit path itself must record the spend in the spending
+// wallet; otherwise its inputs are briefly both unlocked and unspent, and a
+// concurrent sweep/consolidation/send can select them again.
+static void ExpectSpendingWalletSeesInputSpentOnCommit(bool viaSendRawTransaction)
+{
+    TestChain chain;
+    // See TestStopAt's comment: KMD-default chainName at height 1 produces an
+    // unconstructable coinbase under the current Rust digest FFI.
+    chainName = assetchain("TST");
+    auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
+    auto alice = std::make_shared<TestWallet>("alice");
+    // A node's wallet broadcasts by default (-walletbroadcast); CommitAutomatedTx relays.
+    notary->SetBroadcastTransactions(true);
+    chain.generateBlock(notary);
+    chain.IncrementChainTime();
+    mempool.clear();
+
+    TransactionInProcess fundAlice = notary->CreateSpendTransaction(alice, 100000, 0, /* commit = */ false);
+    const CTransaction tx = fundAlice.transaction;
+    ASSERT_FALSE(tx.vin.empty());
+    const COutPoint input = tx.vin[0].prevout;
+    ASSERT_FALSE(mempool.exists(tx.GetHash()));
+    {
+        LOCK2(cs_main, notary->cs_wallet);
+        ASSERT_FALSE(notary->IsSpent(input.hash, input.n));
+    }
+
+    if (viaSendRawTransaction) {
+        struct RestoreWalletMain {
+            CWallet* saved = pwalletMain;
+            ~RestoreWalletMain() { pwalletMain = saved; }
+        } restoreWalletMain;
+        pwalletMain = notary.get();
+
+        UniValue params(UniValue::VARR);
+        params.push_back(EncodeHexTx(tx));
+        EXPECT_EQ(sendrawtransaction(params, false, CPubKey()).get_str(), tx.GetHash().GetHex());
+    } else {
+        LOCK2(cs_main, notary->cs_wallet);
+        ASSERT_TRUE(notary->CommitAutomatedTx(tx));
+    }
+
+    EXPECT_TRUE(mempool.exists(tx.GetHash()));
+    {
+        LOCK2(cs_main, notary->cs_wallet);
+        EXPECT_EQ(notary->mapWallet.count(tx.GetHash()), 1u);
+        EXPECT_TRUE(notary->IsSpent(input.hash, input.n))
+            << "the spending wallet must see its input as spent before the commit call returns";
+    }
+    mempool.clear();
+}
+
+TEST(test_mempool, CommitAutomatedTxMarksInputSpentImmediately)
+{
+    ExpectSpendingWalletSeesInputSpentOnCommit(/* viaSendRawTransaction = */ false);
+}
+
+TEST(test_mempool, SendRawTransactionMarksInputSpentImmediately)
+{
+    ExpectSpendingWalletSeesInputSpentOnCommit(/* viaSendRawTransaction = */ true);
 }
 
 // A coin import (one input whose prevout.n is 1,000,000,000) is IsMint() like a

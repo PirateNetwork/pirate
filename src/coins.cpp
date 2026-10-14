@@ -1,4 +1,5 @@
 // Copyright (c) 2012-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1202,7 +1203,7 @@ tl::expected<void, UnsatisfiedShieldedReq> CCoinsViewCache::CheckShieldedRequire
         if (GetNullifier(nullifier, IRONWOODFRONTIER)) { // Prevent double spends
             auto txid = tx.GetHash().ToString();
             auto nf = nullifier.ToString();
-            LogPrint("consensus", "Ironwood double-spend detected txid=%s nf=%s\n", txid, nf);
+            LogPrintf("Ironwood double-spend detected txid=%s nf=%s\n", txid, nf);
             return tl::unexpected(UnsatisfiedShieldedReq::IronwoodDuplicateNullifier);
         }
     }

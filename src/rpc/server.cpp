@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -717,6 +718,12 @@ void StopRPC()
     // Tells async queue to cancel all operations and shutdown.
     LogPrintf("%s: waiting for async rpc workers to stop\n", __func__);
     getAsyncRPCQueue()->closeAndWait();
+
+    // Destroy every operation now, while the wallet still exists. A cancelled
+    // operation never runs main(), and one that took note locks when it was
+    // created (z_mergetoaddress) releases them from its destructor; left in the
+    // queue's static map, that would only happen after the wallet is deleted.
+    getAsyncRPCQueue()->removeAllOperations();
 }
 
 bool IsRPCRunning()

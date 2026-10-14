@@ -1418,6 +1418,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
     }
     fCheckBlockIndex = GetBoolArg("-checkblockindex", chainparams.DefaultConsistencyChecks());
     fCheckpointsEnabled = GetBoolArg("-checkpoints", true);
+    if (fCheckpointsEnabled)
+        LogPrintf("Checkpoints enabled: proof and script verification is skipped for blocks at or below the last checkpoint\n");
+    else
+        LogPrintf("Checkpoints disabled (-checkpoints=0): every block is fully verified\n");
 
     // -par=0 means autodetect, but nScriptCheckThreads==0 means no concurrency
     nScriptCheckThreads = GetArg("-par", DEFAULT_SCRIPTCHECK_THREADS);

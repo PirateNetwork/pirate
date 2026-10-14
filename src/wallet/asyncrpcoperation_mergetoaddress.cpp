@@ -1,5 +1,6 @@
 // Copyright (c) 2017 The Zcash developers
 // Copyright (c) 2022-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -95,7 +96,8 @@ AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
     UniValue contextInfo) : tx_(contextualTx), 
                             utxoInputs_(utxoInputs),
                             saplingNoteInputs_(saplingNoteInputs), 
-                            ironwoodNoteInputs_(ironwoodNoteInputs), 
+                            ironwoodNoteInputs_(ironwoodNoteInputs),
+                            noteLocks_(pwalletMain),
                             recipient_(recipient), 
                             fee_(fee), 
                             contextinfo_(contextInfo),
@@ -168,12 +170,11 @@ AsyncRPCOperation_mergetoaddress::AsyncRPCOperation_mergetoaddress(
 /**
  * @brief Destructor with automatic resource cleanup
  * 
- * Resources are unlocked explicitly in main() for immediate availability
- * rather than in destructor following RAII principles.
+ * Resources are unlocked explicitly in main() for immediate availability.
+ * noteLocks_ also releases the note locks here if main() never ran.
  */
 AsyncRPCOperation_mergetoaddress::~AsyncRPCOperation_mergetoaddress()
 {
-    // No explicit cleanup required - resources unlocked in main()
 }
 
 //==============================================================================
@@ -191,8 +192,7 @@ void AsyncRPCOperation_mergetoaddress::main()
     // Early exit if operation was cancelled
     if (isCancelled()) {
         unlock_utxos();
-        unlock_sapling_notes();
-        unlock_ironwood_notes();
+        noteLocks_.Release();
         return;
     }
 
@@ -260,12 +260,8 @@ void AsyncRPCOperation_mergetoaddress::main()
 
     // Clean up locked resources
     unlock_utxos();
-    unlock_sapling_notes();
-    unlock_ironwood_notes();
+    noteLocks_.Release();
 }
-
-// Known issues (TODO items):
-// 1. #1277 Spendable notes are not locked, so an operation running in parallel could also try to use them.
 
 /**
  * @brief Core implementation of multi-protocol merge operation
@@ -825,21 +821,7 @@ void AsyncRPCOperation_mergetoaddress::lock_sapling_notes()
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
     for (auto saplingNote : saplingNoteInputs_) {
-        pwalletMain->LockNote(std::get<0>(saplingNote));
-    }
-}
-
-/**
- * @brief Unlock Sapling notes to restore availability for other operations
- * 
- * Releases locks on previously locked Sapling notes, making them available
- * for other wallet operations. Should be called after operation completion.
- */
-void AsyncRPCOperation_mergetoaddress::unlock_sapling_notes()
-{
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (auto saplingNote : saplingNoteInputs_) {
-        pwalletMain->UnlockNote(std::get<0>(saplingNote));
+        noteLocks_.Lock(std::get<0>(saplingNote));
     }
 }
 
@@ -853,20 +835,6 @@ void AsyncRPCOperation_mergetoaddress::lock_ironwood_notes()
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
     for (auto ironwoodNote : ironwoodNoteInputs_) {
-        pwalletMain->LockNote(std::get<0>(ironwoodNote));
-    }
-}
-
-/**
- * @brief Unlock Ironwood notes to restore availability for other operations
- * 
- * Releases locks on previously locked Ironwood notes, making them available
- * for other wallet operations. Should be called after operation completion.
- */
-void AsyncRPCOperation_mergetoaddress::unlock_ironwood_notes()
-{
-    LOCK2(cs_main, pwalletMain->cs_wallet);
-    for (auto ironwoodNote : ironwoodNoteInputs_) {
-        pwalletMain->UnlockNote(std::get<0>(ironwoodNote));
+        noteLocks_.Lock(std::get<0>(ironwoodNote));
     }
 }

@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -64,6 +65,7 @@ public:
     std::shared_ptr<AsyncRPCOperation> popOperationForId(AsyncRPCOperationId);
     void addOperation(const std::shared_ptr<AsyncRPCOperation> &ptrOperation);
     std::vector<AsyncRPCOperationId> getAllOperationIds() const;
+    void removeAllOperations(); // drop every stored operation, destroying any not still held elsewhere
 
 private:
     // addWorker() will spawn a new thread on run())

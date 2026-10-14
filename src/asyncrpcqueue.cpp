@@ -1,4 +1,5 @@
 // Copyright (c) 2016 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -212,6 +213,15 @@ std::vector<AsyncRPCOperationId> AsyncRPCQueue::getAllOperationIds() const {
         v.push_back(entry.first);
     }
     return v;
+}
+
+void AsyncRPCQueue::removeAllOperations() {
+    AsyncRPCOperationMap removed;
+    {
+        std::lock_guard<std::mutex> guard(lock_);
+        removed.swap(operation_map_);
+    }
+    // Operations are destroyed here, outside lock_.
 }
 
 /**

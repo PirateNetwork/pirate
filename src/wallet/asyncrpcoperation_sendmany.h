@@ -1,5 +1,6 @@
 // Copyright (c) 2016 The Zcash developers
 // Copyright (c) 2022-2025 Pirate developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -154,6 +155,7 @@ private:
     // Input notes (populated by find_unspent_notes(), sorted descending by value)
     std::vector<SaplingNoteEntry> saplingInputs_;      ///< Selected Sapling input notes
     std::vector<IronwoodNoteEntry> ironwoodInputs_;      ///< Selected Ironwood input notes
+    CNoteLockGuard noteLocks_;             ///< Locks on the selected notes, released when main() finishes
 
     TransactionBuilder builder_;           ///< Builds the transaction incrementally
     CTransaction tx_;                      ///< Final constructed transaction

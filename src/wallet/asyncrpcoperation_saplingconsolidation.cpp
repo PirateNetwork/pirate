@@ -1,4 +1,5 @@
 // Copyright (c) 2022-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -204,6 +205,7 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 LogPrint("zrpcunsafe", "%s: Stopping consolidation inner loop (cancelled or shutdown).", getId());
                 break;
             }
+            CNoteLockGuard noteLocks(pwalletMain);
             std::vector<SaplingNoteEntry> saplingEntries;
             std::vector<IronwoodNoteEntry> ironwoodEntries;
             {
@@ -215,17 +217,10 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                                               maxQuantity, fSaplingConsolidationTxFee + 1);
                 // Lock immediately so no other async operation can select the same notes.
                 for (const auto& e : saplingEntries)
-                    pwalletMain->LockNote(e.op);
+                    noteLocks.Lock(e.op);
             }
 
-            auto unlockSaplingEntries = [&]() {
-                LOCK2(cs_main, pwalletMain->cs_wallet);
-                for (const auto& e : saplingEntries)
-                    pwalletMain->UnlockNote(e.op);
-            };
-
             if ((int)saplingEntries.size() < minQuantity) {
-                unlockSaplingEntries();
                 break;
             }
 
@@ -234,7 +229,6 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 amountToSend += CAmount(e.note.value());
 
             if (amountToSend <= fSaplingConsolidationTxFee) {
-                unlockSaplingEntries();
                 break;
             }
 
@@ -253,7 +247,6 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->GetSaplingNoteMerklePaths(ops, saplingMerklePaths, anchor)) {
                     LogPrint("zrpcunsafe", "%s: Merkle Path not found for Sapling note. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             }
@@ -274,14 +267,12 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 }
             }
             if (buildFailed) {
-                unlockSaplingEntries();
                 break;
             }
 
             builder.InitializeSapling(anchor);
             if (!builder.ConvertRawSaplingSpend(extsk)) {
                 LogPrint("zrpcunsafe", "%s: Failed to convert raw Sapling spends. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
 
@@ -289,7 +280,6 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
 
             if (!builder.AddSaplingOutputRaw(addr, outputAmount)) {
                 LogPrint("zrpcunsafe", "%s: Failed to add Sapling output. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
 
@@ -298,7 +288,6 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 extsk.expsk.DeriveFVK(&fvk);
                 if (!builder.ConvertRawSaplingOutput(fvk.ovk)) {
                     LogPrint("zrpcunsafe", "%s: Failed to convert raw Sapling output. Stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             }
@@ -306,14 +295,12 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
             auto buildResult = builder.Build();
             if (!buildResult.IsTx()) {
                 LogPrint("zrpcunsafe", "%s: Failed to build consolidation transaction. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
             auto tx = buildResult.GetTxOrThrow();
 
             if (isCancelled() || ShutdownRequested()) {
                 LogPrint("zrpcunsafe", "%s: Canceled. Stopping.\n", getId());
-                unlockSaplingEntries();
                 break;
             }
 
@@ -321,12 +308,10 @@ bool AsyncRPCOperation_saplingconsolidation::main_impl() {
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit consolidation transaction, stopping.\n", getId());
-                    unlockSaplingEntries();
                     break;
                 }
             }
             LogPrint("zrpcunsafe", "%s: Committed consolidation transaction with txid=%s\n", getId(), tx.GetHash().ToString());
-            unlockSaplingEntries();
             amountConsolidated += outputAmount;
             numTxCreated++;
             consolidationTxIds.push_back(tx.GetHash().ToString());

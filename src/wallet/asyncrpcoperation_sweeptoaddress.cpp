@@ -1,4 +1,5 @@
 // Copyright (c) 2022-2025 The Pirate Network developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -13,6 +14,7 @@
 #include "asyncrpcoperation_sweeptoaddress.h"
 #include "init.h"
 #include "key_io.h"
+#include "rpc/protocol.h"
 #include "sync.h"
 #include "tinyformat.h"
 #include "transaction_builder.h"
@@ -190,6 +192,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
     }
 
     int numTxCreated = 0;
+    int numCommitFailed = 0;
     std::vector<std::string> sweepTxIds;
     CAmount amountSwept = 0;
     const int maxQuantity = 50;
@@ -214,6 +217,9 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         allFilterAddresses.insert(addr);
     }
 
+    // Holds the selected notes locked until main_impl() returns or throws, after
+    // every sweep transaction has been committed.
+    CNoteLockGuard noteLocks(pwalletMain);
     std::vector<SaplingNoteEntry> allSaplingEntries;
     std::vector<IronwoodNoteEntry> allIronwoodEntries;
     if (!allFilterAddresses.empty()) {
@@ -222,19 +228,13 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                                       allFilterAddresses,
                                       11, INT_MAX, true, true, true,
                                       0, 0);
-    }
-
-    auto unlockAllFetchedNotes = [&]() {
-        if (allSaplingEntries.empty() && allIronwoodEntries.empty()) {
-            return;
-        }
-
-        LOCK2(cs_main, pwalletMain->cs_wallet);
+        // Lock immediately so no other async operation can select the same notes
+        // while this sweep builds proofs for them.
         for (const auto& entry : allSaplingEntries)
-            pwalletMain->UnlockNote(entry.op);
+            noteLocks.Lock(entry.op);
         for (const auto& entry : allIronwoodEntries)
-            pwalletMain->UnlockNote(entry.op);
-    };
+            noteLocks.Lock(entry.op);
+    }
 
     std::vector<AddressSweepWork> saplingWork;
     std::map<libzcash::SaplingPaymentAddress, size_t> saplingWorkIndexByAddress;
@@ -398,6 +398,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit sweep transaction, stopping.\n", getId());
+                    numCommitFailed++;
                     break;
                 }
             }
@@ -537,6 +538,7 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
                 LOCK2(cs_main, pwalletMain->cs_wallet);
                 if (!pwalletMain->CommitAutomatedTx(tx)) {
                     LogPrint("zrpcunsafe", "%s: Failed to commit Ironwood sweep transaction, stopping.\n", getId());
+                    numCommitFailed++;
                     break;
                 }
             }
@@ -548,10 +550,15 @@ bool AsyncRPCOperation_sweeptoaddress::main_impl()
         }
     }
 
-    unlockAllFetchedNotes();
-
     LogPrint("zrpcunsafe", "%s: Created %d transactions with total output amount=%s to single destination\n", getId(), numTxCreated, FormatMoney(amountSwept));
     setSweepResult(numTxCreated, amountSwept, sweepTxIds);
+
+    if (numCommitFailed > 0) {
+        set_error_code(RPC_WALLET_ERROR);
+        set_error_message(strprintf("%d sweep transaction(s) rejected by the mempool and not sent, %d sent; see debug.log for the rejection reason",
+                                    numCommitFailed, numTxCreated));
+        return false;
+    }
     return true;
 }
 
