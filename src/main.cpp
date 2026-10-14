@@ -4075,7 +4075,11 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             return state.DoS(100, error("ConnectBlock(): GetValueOut too big"),REJECT_INVALID,"tx valueout is too big");
         }
 
-        if (tx.IsMint())
+        // Only the coinbase may skip input validation here. A coin import is also
+        // IsMint(), but it must take the else branch so ContextualCheckInputs runs
+        // VerifyCoinImport; otherwise any import-shaped transaction would mint its
+        // outputs with no proof of a burn.
+        if (tx.IsCoinBase())
         {
             // Add the output value of the coinbase transaction to the chain supply
             // delta. This includes fees, which are then canceled out by the fee

@@ -13,6 +13,8 @@
 #include "pubkey.h"
 #include "transaction_builder.h"
 #include "zcash/Address.hpp"
+#include "cc/eval.h"
+#include "cc/utils.h"
 
 #include <thread>
 #include <gtest/gtest.h>
@@ -2035,4 +2037,69 @@ TEST(test_block, TestProcessBadBlock)
     EXPECT_EQ(state.GetRejectReason(), "bad-txnmrklroot");
     // Verify transaction is still in mempool
     EXPECT_EQ(mempool.size(), 1);
+}
+
+// A coin import (one input whose prevout.n is 1,000,000,000) is IsMint() like a
+// coinbase, but unlike a coinbase it must prove a burn: ConnectBlock has to send it
+// through ContextualCheckInputs -> VerifyCoinImport. A block carrying an import-
+// shaped transaction with no valid burn proof would otherwise mint its outputs from
+// nothing; on a private chain they can pay the CRYPTO777 address, whose key is public.
+static void ExpectForgedImportBlockRejected(const CScript& importScriptSig, bool withImportPayload)
+{
+    TestChain chain;
+    // See TestStopAt's comment: KMD-default chainName at height 1 produces an
+    // unconstructable coinbase under the current Rust digest FFI.
+    chainName = assetchain("TST");
+    auto notary = std::make_shared<TestWallet>(chain.getNotaryKey(), "notary");
+    chain.generateBlock(notary);
+    ASSERT_GT(chain.GetIndex()->nHeight, 0);
+
+    int32_t newHeight = chain.GetIndex()->nHeight + 1;
+    auto consensusParams = Params().GetConsensus();
+
+    CMutableTransaction coinbase = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    coinbase.vin.resize(1);
+    coinbase.vin[0].prevout.SetNull();
+    coinbase.vin[0].scriptSig = (CScript() << newHeight << CScriptNum(1)) + COINBASE_FLAGS;
+    coinbase.vout.resize(1);
+    coinbase.vout[0].nValue = GetBlockSubsidy(newHeight, consensusParams);
+    coinbase.nExpiryHeight = 0;
+
+    CMutableTransaction forged = CreateNewContextualCMutableTransaction(consensusParams, newHeight);
+    forged.vin.resize(1);
+    forged.vin[0].prevout = COutPoint(uint256S("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"), 1000000000);
+    forged.vin[0].scriptSig = importScriptSig;
+    forged.vout.push_back(CTxOut(1000 * COIN, CScript() << ParseHex(CRYPTO777_PUBSECPSTR) << OP_CHECKSIG));
+    if (withImportPayload) {
+        // Real imports carry the burn proof and burn tx in a trailing OP_RETURN;
+        // this one is well-placed but meaningless.
+        forged.vout.push_back(CTxOut(0, CScript() << OP_RETURN << ParseHex("e20102030405060708090a0b0c0d0e0f")));
+    }
+    forged.nExpiryHeight = 0;
+    CTransaction forgedTx(forged);
+    ASSERT_TRUE(forgedTx.IsCoinImport());
+    ASSERT_FALSE(forgedTx.IsCoinBase());
+
+    CBlock block;
+    block.vtx.push_back(CTransaction(coinbase));
+    block.vtx.push_back(forgedTx);
+    CValidationState state;
+    CBlockIndex newIndex;
+    newIndex.pprev = chain.GetIndex();
+    newIndex.nHeight = newHeight;
+    EXPECT_FALSE(chain.ConnectBlock(block, state, &newIndex, true, false))
+        << "a block minting coins through a forged import must not connect";
+    EXPECT_EQ(state.GetRejectReason(), "invalid-coin-import");
+}
+
+TEST(test_block, TestForgedCoinImportRejected)
+{
+    ExpectForgedImportBlockRejected(CScript() << OP_0 << OP_0, /* withImportPayload = */ false);
+}
+
+// Same, but with the scriptSig a real import uses, so rejection has to come from
+// evaluating the (bogus) import rather than from the scriptSig shape check.
+TEST(test_block, TestForgedCoinImportWithImportScriptSigRejected)
+{
+    ExpectForgedImportBlockRejected(CScript() << E_MARSHAL(ss << EVAL_IMPORTCOIN), /* withImportPayload = */ true);
 }
