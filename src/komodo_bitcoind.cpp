@@ -509,18 +509,25 @@ int32_t komodo_verifynotarization(const char *symbol,const char *dest,int32_t he
                     {
                         //printf("HEX.(%s) vs hash.%s\n",hexstr,NOTARIZED_HASH.ToString().c_str());
                         len = strlen(hexstr) >> 1;
-                        decode_hex(script,len,hexstr);
-                        if ( script[1] == 0x4c )
+                        // decode_hex writes len bytes into the fixed _script buffer;
+                        // refuse an over-long script from the remote daemon rather
+                        // than overflow it. (<, to leave room for the odd-length
+                        // extra byte and the 0x4c/0x4d pointer adjustments below.)
+                        if ( len > 0 && len < (int32_t)sizeof(_script) )
                         {
-                            script++;
-                            len--;
+                            decode_hex(script,len,hexstr);
+                            if ( script[1] == 0x4c )
+                            {
+                                script++;
+                                len--;
+                            }
+                            else if ( script[1] == 0x4d )
+                            {
+                                script += 2;
+                                len -= 2;
+                            }
+                            retval = komodo_verifynotarizedscript(height,script,len,NOTARIZED_HASH);
                         }
-                        else if ( script[1] == 0x4d )
-                        {
-                            script += 2;
-                            len -= 2;
-                        }
-                        retval = komodo_verifynotarizedscript(height,script,len,NOTARIZED_HASH);
                     }
                 }
             }

@@ -403,12 +403,24 @@ CAmount GetCoinImportValue(const CTransaction &tx)
                 for (auto v : burnTx.vout)
                     if (v.scriptPubKey.IsPayToCryptoCondition() &&
                         CTxOut(v.nValue, v.scriptPubKey) == MakeTokensCC1vout(nonfungibleEvalCode, v.nValue, pubkey2pk(ParseHex(CC_BURNPUBKEY))))  // burned to dead pubkey
+                    {
                         ccBurnOutputs += v.nValue;
+                        // burnTx is attacker-supplied data; stop if the running sum
+                        // leaves the valid money range so the caller never sees an
+                        // out-of-range value-in.
+                        if (!MoneyRange(ccBurnOutputs))
+                            return 0;
+                    }
 
-                return ccBurnOutputs + burnTx.vout.back().nValue;   // total token burned value
+                CAmount total = ccBurnOutputs + burnTx.vout.back().nValue;   // total token burned value
+                return MoneyRange(total) ? total : 0;
             }
             else
-                return burnTx.vout.back().nValue; // coin burned value
+            {
+                // burnTx is attacker-supplied data; never return an out-of-range value.
+                CAmount coinValue = burnTx.vout.back().nValue; // coin burned value
+                return MoneyRange(coinValue) ? coinValue : 0;
+            }
         }
     }
     return 0;
