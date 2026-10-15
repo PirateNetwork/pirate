@@ -565,8 +565,25 @@ bool CScript::IsCheckLockTimeVerify(int64_t *unlockTime) const
 
     if (this->GetOp2(it, op, &unlockTimeParam))
     {
-        if (unlockTimeParam.size() >= 0 && unlockTimeParam.size() < 6 &&
-            (*this)[unlockTimeParam.size() + 1] == OP_CHECKLOCKTIMEVERIFY)
+        // A real CLTV output is exactly: <direct push of a <=5-byte locktime>
+        // OP_CHECKLOCKTIMEVERIFY OP_DROP <standard payment script>. Require all
+        // three fixed parts so ExtractDestination's scriptPubKey[0] + 3 offset
+        // (which skips push-opcode + locktime + OP_CLTV + OP_DROP) lands exactly
+        // on the payment script:
+        //  - op == size rejects a non-canonical push (e.g. OP_PUSHDATA1 0x4c),
+        //    which would otherwise make (*this)[size + 1] read pushed data rather
+        //    than the following opcode;
+        //  - the OP_DROP check rejects a direct push followed by anything other
+        //    than OP_DROP, which would otherwise let a non-CLTV script parse as
+        //    CLTV and have a payment template parked in dead pushed data at [0]+3.
+        // Either gap let a crafted hashlock output be mis-addressed to a
+        // whitelisted (notary/CRYPTO777) address and bypass the ac_private
+        // transparent-output restriction.
+        if (unlockTimeParam.size() >= 1 && unlockTimeParam.size() < 6 &&
+            (size_t)op == unlockTimeParam.size() &&
+            this->size() > unlockTimeParam.size() + 2 &&
+            (*this)[unlockTimeParam.size() + 1] == OP_CHECKLOCKTIMEVERIFY &&
+            (*this)[unlockTimeParam.size() + 2] == OP_DROP)
         {
             int i = unlockTimeParam.size() - 1;
             for (*unlockTime = 0; i >= 0; i--)

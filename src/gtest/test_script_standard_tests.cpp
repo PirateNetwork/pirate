@@ -236,6 +236,61 @@ namespace TestScriptStandartTests {
         ASSERT_TRUE(!ExtractDestination(s, address));
     }
 
+    // A legitimate CLTV output pushes the locktime with a direct push and is
+    // detected as CLTV; ExtractDestination then returns the address of the
+    // script after OP_CHECKLOCKTIMEVERIFY OP_DROP.
+    TEST(TestScriptStandartTests, script_standard_CLTV_direct_push_extracts_dest) {
+        CKey key; key.MakeNewKey(true);
+        CPubKey pubkey = key.GetPubKey();
+
+        CScript dest;
+        dest << OP_DUP << OP_HASH160 << ToByteVector(pubkey.GetID()) << OP_EQUALVERIFY << OP_CHECKSIG;
+
+        CScript s;
+        s << ToByteVector(std::vector<unsigned char>{0x40, 0x9c, 0x00, 0x00}) // 4-byte locktime, direct push
+          << OP_CHECKLOCKTIMEVERIFY << OP_DROP;
+        s.insert(s.end(), dest.begin(), dest.end());
+
+        ASSERT_TRUE(s.IsCheckLockTimeVerify());
+        CTxDestination address;
+        ASSERT_TRUE(ExtractDestination(s, address));
+        ASSERT_TRUE(std::get_if<CKeyID>(&address) &&
+                    *std::get_if<CKeyID>(&address) == pubkey.GetID());
+    }
+
+    // A script that fakes a CLTV prefix with OP_PUSHDATA1 so that the pushed data
+    // byte equals OP_CHECKLOCKTIMEVERIFY (0xb1), and parks a P2PKH template in
+    // dead pushed data at scriptPubKey[0]+3, must NOT be read as CLTV and must NOT
+    // yield that embedded address. This is the mainnet mint-holding output, whose
+    // real executable script is an attacker-controlled hashlock; misreading it as
+    // CLTV reported the embedded CRYPTO777 address and bypassed the ac_private
+    // transparent-output restriction.
+    TEST(TestScriptStandartTests, script_standard_fake_CLTV_pushdata1_not_misaddressed) {
+        std::vector<unsigned char> raw = ParseHex(
+            "4c01b175a82035174c3d2af25de3dfbd0bdbf964337119c132dc0dd251681f93fa0c297e57ea88"
+            "61616161616161616161616161616161616161616161616161616161616161616161616161"
+            "611976a914f1dce4182fce875748c4986b240ff7d7bc3fffb088ac");
+        CScript exploit(raw.begin(), raw.end());
+
+        // Direct-push variant of the same bypass: a canonical 1-byte push (01 00)
+        // passes op == size, byte 2 is OP_CHECKLOCKTIMEVERIFY, but byte 3 is a
+        // push opcode rather than OP_DROP, and ExtractDestination's [0]+3 offset
+        // would land on the parked P2PKH template.
+        std::vector<unsigned char> raw2 = ParseHex(
+            "0100b11976a914f1dce4182fce875748c4986b240ff7d7bc3fffb088ac");
+        CScript exploit2(raw2.begin(), raw2.end());
+
+        CKeyID crypto777(uint160(ParseHex("f1dce4182fce875748c4986b240ff7d7bc3fffb0")));
+        for (const CScript& s : {exploit, exploit2}) {
+            EXPECT_FALSE(s.IsCheckLockTimeVerify())
+                << "a non-CLTV script (no canonical push + OP_CLTV + OP_DROP) must not be detected as CLTV";
+            CTxDestination address;
+            bool got = ExtractDestination(s, address);
+            EXPECT_FALSE(got && std::get_if<CKeyID>(&address) && *std::get_if<CKeyID>(&address) == crypto777)
+                << "the embedded, non-executable P2PKH template must not be reported as the destination";
+        }
+    }
+
     TEST(TestScriptStandartTests, script_standard_ExtractDestinations) {
 
         CKey keys[3];
