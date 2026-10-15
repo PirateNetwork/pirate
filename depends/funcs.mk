@@ -26,17 +26,18 @@ endef
 
 define fetch_file_inner
     ( mkdir -p $$($(1)_download_dir) && echo Fetching $(3) from $(2) && \
-    curl --connect-timeout 30 --retry 5 --retry-delay 5 --retry-max-time 600 -L -o "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)" && \
+    curl --fail --connect-timeout 30 --retry 5 --retry-delay 5 --retry-max-time 600 -L -o "$$($(1)_download_dir)/$(4).temp" "$(2)/$(3)" && \
     echo "$(5)  $$($(1)_download_dir)/$(4).temp" > $$($(1)_download_dir)/.$(4).hash && \
     $(build_SHA256SUM) -c $$($(1)_download_dir)/.$(4).hash && \
     mv $$($(1)_download_dir)/$(4).temp $$($(1)_source_dir)/$(4) && \
     rm -rf $$($(1)_download_dir) )
 endef
 
+# Mirrors use package archive names, not potentially ambiguous upstream tag names.
 define fetch_file
     ( test -f $$($(1)_source_dir)/$(4) || \
     ( $(call fetch_file_inner,$(1),$(2),$(3),$(4),$(5)) || \
-      $(call fetch_file_inner,$(1),$(FALLBACK_DOWNLOAD_PATH),$(3),$(4),$(5))))
+      $(call fetch_file_inner,$(1),$(FALLBACK_DOWNLOAD_PATH),$(4),$(4),$(5))))
 endef
 
 define vendor_crate_deps
