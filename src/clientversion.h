@@ -44,8 +44,8 @@
 // (top of the file) by hand; the actual build never reads these.
 #define CLIENT_VERSION_MAJOR 6
 #define CLIENT_VERSION_MINOR 0
-#define CLIENT_VERSION_REVISION 9
-#define CLIENT_VERSION_BUILD 50
+#define CLIENT_VERSION_REVISION 10
+#define CLIENT_VERSION_BUILD 1
 
 //! Set to true for release, false for prerelease or test build
 #define CLIENT_VERSION_IS_RELEASE true
