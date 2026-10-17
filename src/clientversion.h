@@ -79,7 +79,7 @@
 #include <string>
 #include <vector>
 
-static const int MIN_INDEX_VERSION = 6000027;   //Client will reindex if levelDB version below this value
+static const int MIN_INDEX_VERSION = 6001000;   //Client will reindex if levelDB version below this value (6.0.10.00)
 static const int MIN_WALLET_TX_VERSION = 6000027;  //Wallet will zap transactions and rescan if below this value
 
 static const int CLIENT_VERSION =

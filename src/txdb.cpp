@@ -1,6 +1,7 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Copyright (c) 2016-2022 The Zcash developers
+// Copyright (c) 2026 Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -433,13 +434,17 @@ bool CBlockTreeDB::WriteVersion() {
 
 bool CBlockTreeDB::ReadVersion(bool &fReindexing) const {
     if (!Exists(DB_VERSION)) {
+        LogPrintf("Block index version: none stored, will reindex (client version %d, min index version %d)\n", CLIENT_VERSION, MIN_INDEX_VERSION);
         fReindexing = true;
         return true;
     } else {
         int db_version;
         Read(DB_VERSION, db_version);
         if (db_version < MIN_INDEX_VERSION) {
+            LogPrintf("Block index version: %d < min index version %d, will reindex (client version %d)\n", db_version, MIN_INDEX_VERSION, CLIENT_VERSION);
             fReindexing = true;
+        } else {
+            LogPrintf("Block index version: %d (client version %d, min index version %d), no reindex needed\n", db_version, CLIENT_VERSION, MIN_INDEX_VERSION);
         }
     }
     return true;
