@@ -2428,11 +2428,6 @@ void ThreadOpenConnections()
             // ThreadOpenTorConnections(), so a regular slot never goes to one (and is never
             // left idle waiting for one).
             //
-            // Checked before the connected-group test below, which ends the whole pass: a
-            // candidate this thread would never dial must not be able to do that (with several
-            // of the 16 Tor groups held by the Tor thread, about that share of onion picks
-            // would otherwise cut every pass short).
-            //
             // Counted separately from nTries, which also paces the diversity budget and the
             // relaxations below: on an addrman full of onion/I2P entries, skipped candidates must
             // not use those up.
@@ -2442,15 +2437,18 @@ void ThreadOpenConnections()
                 continue;
             }
 
-            if (setConnected.count(addr.GetGroup(addrman.m_asmap)) || IsLocal(addr))
-                break;
-
             // If we didn't find an appropriate destination after trying 100 addresses fetched from addrman,
             // stop this loop, and let the outer loop run again (which sleeps, adds seed nodes, recalculates
             // already-connected network ranges, ...) before trying new addrman addresses.
             nTries++;
             if (nTries > 100)
                 break;
+
+            // Count rejected groups toward the bounded search, but keep looking:
+            // ending the pass here can repeatedly reset the diversity fallback
+            // before it ever allows another peer on an already-covered network.
+            if (setConnected.count(addr.GetGroup(addrman.m_asmap)) || IsLocal(addr))
+                continue;
 
             if (!IsReachable(addr)) {
                 continue;
