@@ -462,6 +462,8 @@ namespace {
 
             BOOST_FOREACH(const QueuedBlock& entry, state->vBlocksInFlight)
             mapBlocksInFlight.erase(entry.hash);
+            // Cancelled requests must not inflate other peers' download timeouts.
+            nQueuedValidatedHeaders -= state->nBlocksInFlightValidHeaders;
             EraseOrphansFor(nodeid);
             nPreferredDownload -= state->fPreferredDownload;
 
