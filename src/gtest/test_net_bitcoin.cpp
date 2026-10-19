@@ -629,14 +629,15 @@ TEST_F(net_tests_bitcoin, GetUnderTargetReachableNetworks_ReturnsUnreachedReacha
 {
     // Every network is reachable by default in this test binary, and with no
     // outbound connections yet (an empty count map), every interface network
-    // still needs to reach MIN_OUTBOUND_PER_REACHABLE_NETWORK.
+    // still needs to reach its floor.
     std::map<Network, int> empty;
     std::set<Network> underTarget = GetUnderTargetReachableNetworks(empty);
     EXPECT_EQ(underTarget, (std::set<Network>{NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS}));
 
-    // Networks that already have enough outbound connections drop out of the set.
+    // Networks that already have enough outbound connections drop out of the set. IPv4 uses its
+    // own, higher floor (MIN_OUTBOUND_IPV4); the others use MIN_OUTBOUND_PER_REACHABLE_NETWORK.
     std::map<Network, int> counts{
-        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV4, MIN_OUTBOUND_IPV4},
         {NET_IPV6, MIN_OUTBOUND_PER_REACHABLE_NETWORK + 5},
         {NET_ONION, 0},
         {NET_I2P, MIN_OUTBOUND_PER_REACHABLE_NETWORK - 1},
@@ -644,6 +645,18 @@ TEST_F(net_tests_bitcoin, GetUnderTargetReachableNetworks_ReturnsUnreachedReacha
     };
     underTarget = GetUnderTargetReachableNetworks(counts);
     EXPECT_EQ(underTarget, (std::set<Network>{NET_ONION, NET_I2P}));
+
+    // IPv4's floor is higher than the others: a count that satisfies every other network still
+    // leaves IPv4 under target, so a node keeps building out IPv4 after the rest are covered.
+    ASSERT_GT(MIN_OUTBOUND_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK);
+    std::map<Network, int> ipv4Low{
+        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV6, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_ONION, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_I2P, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_CJDNS, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+    };
+    EXPECT_EQ(GetUnderTargetReachableNetworks(ipv4Low), (std::set<Network>{NET_IPV4}));
 
     // Unreachable networks never appear, no matter their (irrelevant) count.
     SetReachable(NET_I2P, false);
@@ -762,7 +775,7 @@ TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_ExcludesI2PAlwa
     // I2P is excluded even when it is genuinely under target (the regression: an under-target
     // I2P used to keep the set non-empty and throttle IPv4/IPv6 every pass).
     const std::map<Network, int> i2pUnder{
-        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV4, MIN_OUTBOUND_IPV4},
         {NET_IPV6, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
         {NET_ONION, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
         {NET_I2P, 0},
@@ -772,9 +785,10 @@ TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_ExcludesI2PAlwa
         << "an under-target I2P must not appear in the regular dialer's set";
     EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(i2pUnder, true), std::set<Network>{});
 
-    // Everything else is untouched: clearnet/other networks below their floor still appear.
+    // Everything else is untouched: clearnet/other networks below their floor still appear. IPv4
+    // is held at its own (higher) floor here so the focus stays on the I2P/Tor exclusion.
     const std::map<Network, int> counts{
-        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV4, MIN_OUTBOUND_IPV4},
         {NET_IPV6, 0},
         {NET_ONION, 0},
         {NET_I2P, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
@@ -787,6 +801,91 @@ TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_ExcludesI2PAlwa
     SetReachable(NET_IPV6, false);
     EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, true), std::set<Network>{});
     SetReachable(NET_IPV6, true); // reset - global state shared with every other test in this binary
+}
+
+// The regular dialer's per-network dial backoff: a network that is reachable in config but whose
+// every outbound attempt fails (the real case being IPv6 on an IPv4-only host) must stop commanding
+// the diversity budget, while a network that connects keeps its priority.
+TEST_F(net_tests_bitcoin, NetworkDialBackoff_PerNetworkAndUntracked)
+{
+    NoteNetworkDialReachable(NET_IPV4); // process-wide state: start clean
+    NoteNetworkDialReachable(NET_IPV6);
+    const int64_t t0 = 7000000;
+
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_IPV6, t0));
+
+    // Backoff is keyed per network: an IPv6 failure must not suspend IPv4.
+    NoteNetworkDialFailure(NET_IPV6, t0);
+    EXPECT_TRUE(IsNetworkDialSuspended(NET_IPV6, t0));
+    EXPECT_TRUE(IsNetworkDialSuspended(NET_IPV6, t0 + DIAL_BACKOFF_BASE_SECONDS - 1));
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_IPV6, t0 + DIAL_BACKOFF_BASE_SECONDS));
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_IPV4, t0));
+
+    // Any successful connect clears it outright.
+    NoteNetworkDialReachable(NET_IPV6);
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_IPV6, t0));
+
+    // IPv4 is never suspended, however many times its dials fail: it is the backbone network and
+    // must always keep its diversity priority, so a failure is a no-op for it.
+    for (int i = 0; i < 10; ++i)
+        NoteNetworkDialFailure(NET_IPV4, t0);
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_IPV4, t0));
+
+    // Networks dialed through a daemon (onion/I2P) have their own backoffs and are deliberately not
+    // tracked here, so calls for them are no-ops and never report suspended.
+    NoteNetworkDialFailure(NET_ONION, t0);
+    NoteNetworkDialFailure(NET_I2P, t0);
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_ONION, t0));
+    EXPECT_FALSE(IsNetworkDialSuspended(NET_I2P, t0));
+
+    NoteNetworkDialReachable(NET_IPV4); // don't leave anything suspended for other tests
+    NoteNetworkDialReachable(NET_IPV6);
+}
+
+// The payoff: a backed-off network is dropped from the regular dialer's diversity set, so it can no
+// longer make the dialer skip the networks it CAN reach for the whole budget, pass after pass.
+TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_DropsBackedOffNetworks)
+{
+    NoteNetworkDialReachable(NET_IPV4); // process-wide state: start clean
+    NoteNetworkDialReachable(NET_IPV6);
+
+    const int64_t t0 = 5000000;
+    // Both clearnet networks below their floor; Tor dialed on its own thread, so onion is already
+    // excluded and only IPv4/IPv6 are in play here.
+    const std::map<Network, int> counts{
+        {NET_IPV4, 0},
+        {NET_IPV6, 0},
+        {NET_I2P, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_CJDNS, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+    };
+
+    // Nothing backed off: both clearnet networks claim the diversity budget.
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, /* fDedicatedTor */ true, t0),
+              (std::set<Network>{NET_IPV4, NET_IPV6}));
+
+    // A dead IPv6 route backs IPv6 off: it drops out of the set (no longer starving IPv4), IPv4 stays.
+    NoteNetworkDialFailure(NET_IPV6, t0);
+    ASSERT_TRUE(IsNetworkDialSuspended(NET_IPV6, t0));
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, true, t0),
+              (std::set<Network>{NET_IPV4}))
+        << "a backed-off network must not command the regular dialer's diversity budget";
+
+    // Once the backoff window passes, IPv6 gets another shot at the budget (Option B deliberately
+    // keeps retrying it occasionally rather than disabling it outright).
+    const int64_t tResume = t0 + DIAL_BACKOFF_BASE_SECONDS;
+    ASSERT_FALSE(IsNetworkDialSuspended(NET_IPV6, tResume));
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, true, tResume),
+              (std::set<Network>{NET_IPV4, NET_IPV6}));
+
+    // A successful connect restores its priority immediately.
+    NoteNetworkDialFailure(NET_IPV6, tResume);
+    ASSERT_TRUE(IsNetworkDialSuspended(NET_IPV6, tResume));
+    NoteNetworkDialReachable(NET_IPV6);
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(counts, true, tResume),
+              (std::set<Network>{NET_IPV4, NET_IPV6}));
+
+    NoteNetworkDialReachable(NET_IPV4); // don't leave anything suspended for other tests
+    NoteNetworkDialReachable(NET_IPV6);
 }
 
 TEST_F(net_tests_bitcoin, ShouldSkipForNetworkDiversity_Behavior)

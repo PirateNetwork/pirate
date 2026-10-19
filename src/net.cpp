@@ -661,8 +661,12 @@ bool IsReachable(const CNetAddr& addr)
     return IsReachable(net);
 }
 
-std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& outboundCountByNetwork,
-                                                   int nMinPerNetwork)
+int GetMinOutboundForNetwork(Network net)
+{
+    return net == NET_IPV4 ? MIN_OUTBOUND_IPV4 : MIN_OUTBOUND_PER_REACHABLE_NETWORK;
+}
+
+std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& outboundCountByNetwork)
 {
     static const Network kInterfaceNetworks[] = {NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS};
 
@@ -674,7 +678,7 @@ std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& 
         const auto it = outboundCountByNetwork.find(net);
         if (it != outboundCountByNetwork.end()) nCount = it->second;
 
-        if (nCount < nMinPerNetwork) underTarget.insert(net);
+        if (nCount < GetMinOutboundForNetwork(net)) underTarget.insert(net);
     }
     return underTarget;
 }
@@ -698,7 +702,7 @@ bool UseDedicatedTorSlots(int nTorOutboundReserved, bool fClearnetReachable)
 }
 
 std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network, int>& outboundCountByNetwork,
-                                                         bool fDedicatedTor)
+                                                         bool fDedicatedTor, int64_t nNow)
 {
     std::set<Network> underTarget = GetUnderTargetReachableNetworks(outboundCountByNetwork);
     // The regular dialer (ThreadOpenConnections) never dials I2P - that is the
@@ -711,7 +715,27 @@ std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network,
     underTarget.erase(NET_I2P);
     if (fDedicatedTor)
         underTarget.erase(NET_ONION);
+
+    // Drop any network currently in dial backoff. It is reachable in config but every recent
+    // outbound attempt failed - the clearest case being IPv6 on a host with no IPv6 route, where
+    // the count never climbs off zero so the network stays under target forever. Left in the set
+    // it would keep this dialer skipping the networks it CAN reach for the whole diversity budget,
+    // every pass, in favour of candidates that only fail. It is still dialed when selected normally;
+    // it just no longer claims the budget, and a single successful connect clears the backoff and
+    // restores its priority.
+    for (auto it = underTarget.begin(); it != underTarget.end(); ) {
+        if (IsNetworkDialSuspended(*it, nNow))
+            it = underTarget.erase(it);
+        else
+            ++it;
+    }
     return underTarget;
+}
+
+std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network, int>& outboundCountByNetwork,
+                                                         bool fDedicatedTor)
+{
+    return GetUnderTargetNetworksForRegularDialer(outboundCountByNetwork, fDedicatedTor, GetTime());
 }
 
 bool ShouldSkipForDedicatedTor(Network net, bool fDedicatedTor)
@@ -790,6 +814,36 @@ bool IsI2PDialingSuspended(int64_t nNow) { return g_i2pDialBackoff.IsSuspended(n
 void NoteTorProxyFailure(int64_t nNow) { g_torDialBackoff.NoteFailure(nNow); }
 void NoteTorProxyReachable() { g_torDialBackoff.NoteReachable(); }
 bool IsTorDialingSuspended(int64_t nNow) { return g_torDialBackoff.IsSuspended(nNow); }
+
+//! One backoff per network the regular dialer dials directly and is allowed to back off. Onion and
+//! I2P are dialed through a daemon and have their own backoffs above. IPv4 is deliberately excluded:
+//! it is the backbone network (and carries the highest outbound floor, MIN_OUTBOUND_IPV4), so it
+//! must always keep its diversity priority and is never suspended - a run of IPv4 failures means
+//! bad luck with peers, not a network the node cannot reach.
+static CDialBackoff g_networkDialBackoff[NET_MAX];
+
+static bool IsDialBackoffTrackedNetwork(Network net)
+{
+    return net == NET_IPV6 || net == NET_CJDNS;
+}
+
+void NoteNetworkDialFailure(Network net, int64_t nNow)
+{
+    if (!IsDialBackoffTrackedNetwork(net)) return;
+    g_networkDialBackoff[net].NoteFailure(nNow);
+}
+
+void NoteNetworkDialReachable(Network net)
+{
+    if (!IsDialBackoffTrackedNetwork(net)) return;
+    g_networkDialBackoff[net].NoteReachable();
+}
+
+bool IsNetworkDialSuspended(Network net, int64_t nNow)
+{
+    if (!IsDialBackoffTrackedNetwork(net)) return false;
+    return g_networkDialBackoff[net].IsSuspended(nNow);
+}
 
 bool PickDialCandidate(const std::vector<CAddrInfo>& vCandidates, int64_t nNow,
                        const std::function<bool(const CAddrInfo&)>& fUsable, CAddress& addrOut)
@@ -1020,6 +1074,19 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
             NoteTorProxyFailure(GetTime());
         else
             NoteTorProxyReachable();
+    }
+
+    // Clearnet peers (IPv4/IPv6/CJDNS) are dialed directly here, not through a daemon. Record the
+    // per-network outcome so a network reachable in config but with no working route on this host -
+    // the classic case being IPv6 on an IPv4-only host, where every connect() fails at once - backs
+    // off and stops commanding the regular dialer's diversity budget (see NoteNetworkDialFailure).
+    // A proxy-level failure is the proxy's fault, not the network's, so it is not counted (mirrors
+    // the Tor block above); connectThroughNameProxy has no resolved address to key on here.
+    if (!connectThroughNameProxy && !addrConnect.IsTor() && addrConnect.GetNetwork() != NET_I2P) {
+        if (connected)
+            NoteNetworkDialReachable(addrConnect.GetNetwork());
+        else if (!proxyConnectionFailed)
+            NoteNetworkDialFailure(addrConnect.GetNetwork(), GetTime());
     }
 
 
@@ -2463,9 +2530,9 @@ void ThreadOpenConnections()
             }
 
             // Give under-represented reachable networks priority until they
-            // catch up to MIN_OUTBOUND_PER_REACHABLE_NETWORK, or until we've
-            // spent DIVERSITY_TRY_BUDGET attempts looking (whichever comes
-            // first - an under-target network may simply have no usable
+            // catch up to their per-network floor (GetMinOutboundForNetwork),
+            // or until we've spent DIVERSITY_TRY_BUDGET attempts looking
+            // (whichever comes first - an under-target network may simply have no usable
             // addresses in addrman yet, and this must not starve connections
             // entirely while waiting for one to show up).
             if (ShouldSkipForNetworkDiversity(addr.GetNetwork(), underTargetNetworks, nTries, DIVERSITY_TRY_BUDGET)) {

@@ -303,8 +303,18 @@ CAddress GetLocalAddress(const CNetAddr *paddrPeer = NULL);
 //! Minimum number of outbound connections ThreadOpenConnections tries to keep
 //! on every currently-reachable network (IPv4/IPv6/Tor/I2P/CJDNS), so a
 //! multi-interface node doesn't end up with all its outbound slots on
-//! whichever network happens to be best represented in addrman.
+//! whichever network happens to be best represented in addrman. IPv4 carries a
+//! higher floor of its own (MIN_OUTBOUND_IPV4) - see GetMinOutboundForNetwork.
 static const int MIN_OUTBOUND_PER_REACHABLE_NETWORK = 2;
+
+//! IPv4 is the network nearly every peer can reach, so the node keeps dialing IPv4 peers until it
+//! has this many before settling for just the diversity minimum. A higher floor here means a node
+//! whose other networks are thin or down still builds a solid IPv4 backbone.
+static const int MIN_OUTBOUND_IPV4 = 6;
+
+//! The outbound floor for one network: MIN_OUTBOUND_IPV4 for IPv4, otherwise the shared
+//! MIN_OUTBOUND_PER_REACHABLE_NETWORK.
+int GetMinOutboundForNetwork(Network net);
 
 //! How many candidates ThreadOpenConnections will search through while
 //! restricting itself to under-target networks before giving up on the
@@ -316,10 +326,9 @@ static const int DIVERSITY_TRY_BUDGET = 40;
 /**
  * Given the current outbound connection count per network, return the set of
  * currently-reachable networks (IPv4/IPv6/Tor/I2P/CJDNS) that haven't yet
- * reached MIN_OUTBOUND_PER_REACHABLE_NETWORK outbound connections.
+ * reached their outbound floor (see GetMinOutboundForNetwork).
  */
-std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& outboundCountByNetwork,
-                                                   int nMinPerNetwork = MIN_OUTBOUND_PER_REACHABLE_NETWORK);
+std::set<Network> GetUnderTargetReachableNetworks(const std::map<Network, int>& outboundCountByNetwork);
 
 /**
  * Whether a connection candidate on `net` should be skipped this attempt in
@@ -387,6 +396,19 @@ void NoteTorProxyFailure(int64_t nNow);
 void NoteTorProxyReachable();
 bool IsTorDialingSuspended(int64_t nNow);
 
+//! Per-network backoff for the secondary networks the regular dialer dials directly (IPv6/CJDNS). A
+//! failure is an outbound connect() that failed for a reason other than a proxy being down; any
+//! successful connect clears it. Unlike the I2P/Tor backoffs these do not stop the network being
+//! dialed - they only drop it from the regular dialer's diversity set (see
+//! GetUnderTargetNetworksForRegularDialer), so a network that is reachable in config but has no
+//! working route on this host (e.g. IPv6 on an IPv4-only host, where every dial fails at once)
+//! stops commanding the diversity budget against candidates that can only fail. IPv4 is never
+//! tracked (it is the backbone network and must always keep its priority), and calls for any other
+//! network are no-ops. (Consulted by ThreadOpenConnections.)
+void NoteNetworkDialFailure(Network net, int64_t nNow);
+void NoteNetworkDialReachable(Network net);
+bool IsNetworkDialSuspended(Network net, int64_t nNow);
+
 /**
  * Choose the I2P peer to dial from candidates already in random order (see
  * CAddrMan::SelectCandidates). Candidates rejected by fUsable are never
@@ -433,8 +455,14 @@ bool UseDedicatedTorSlots(int nTorOutboundReserved, bool fClearnetReachable);
  * Networks whose outbound count is below the diversity floor, as far as the *regular* dialer is
  * concerned: like GetUnderTargetReachableNetworks(), but without Tor when Tor is dialed by its
  * own thread - the regular dialer can't fix a Tor shortfall, so steering it toward onion
- * candidates it will then skip would only waste its search budget.
+ * candidates it will then skip would only waste its search budget. Also without any network
+ * currently in dial backoff (see IsNetworkDialSuspended), so a reachable-but-unroutable network
+ * can't keep the set non-empty and starve the networks the node can actually reach.
+ *
+ * The nNow overload takes the current time for the backoff check; the other uses GetTime().
  */
+std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network, int>& outboundCountByNetwork,
+                                                         bool fDedicatedTor, int64_t nNow);
 std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network, int>& outboundCountByNetwork,
                                                          bool fDedicatedTor);
 
