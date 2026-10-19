@@ -655,7 +655,11 @@ bool ConnectSocket(const CService &addrDest, SOCKET& hSocketRet, int nTimeout, b
     if (outProxyConnectionFailed)
         *outProxyConnectionFailed = false;
 
-    if (GetProxy(addrDest.GetNetwork(), proxy))
+    // Private and loopback IPs report NET_UNROUTABLE for peer grouping, but
+    // must still use their address family's configured proxy when dialing.
+    const Network network = addrDest.IsIPv4() ? NET_IPV4 :
+        addrDest.IsIPv6() ? NET_IPV6 : addrDest.GetNetwork();
+    if (GetProxy(network, proxy))
         return ConnectThroughProxy(proxy, addrDest.ToStringIP(), addrDest.GetPort(), hSocketRet, nTimeout, outProxyConnectionFailed);
     else // no proxy needed (none set for target network)
         return ConnectSocketDirectly(addrDest, hSocketRet, nTimeout);

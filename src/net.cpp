@@ -900,13 +900,56 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
     // identity - used to tag the resulting CNode below.
     uint32_t nUsedI2PPoolGeneration = 0;
 
-    if (!addrConnect.IsValid()) {
-        return NULL;
+    // Name-based callers pass an empty address. Resolve it before checking
+    // validity/reachability, and dial the selected address without resolving
+    // it again (a second lookup could select a network disallowed by -onlynet).
+    bool connectThroughNameProxy = false;
+    if (pszDest) {
+        const bool haveNameProxy = HaveNameProxy();
+        int port = Params().GetDefaultPort();
+        std::string hostname;
+        SplitHostPort(std::string(pszDest), port, hostname);
+        std::string lowerHostname = ToLower(hostname);
+        while (!lowerHostname.empty() && lowerHostname.back() == '.')
+            lowerHostname.pop_back();
+        const bool specialName =
+            (lowerHostname.size() >= 6 && lowerHostname.compare(lowerHostname.size() - 6, 6, ".onion") == 0) ||
+            (lowerHostname.size() >= 4 && lowerHostname.compare(lowerHostname.size() - 4, 4, ".i2p") == 0);
+        const bool allowLookup = fNameLookup && !haveNameProxy && !specialName &&
+            (IsReachable(NET_IPV4) || IsReachable(NET_IPV6));
+
+        std::vector<CService> candidates;
+        if (Lookup(pszDest, candidates, port, allowLookup, 256)) {
+            std::vector<CService> allowed;
+            for (const CService& candidate : candidates) {
+                // GetNetwork() classifies private IPs as unroutable; still
+                // enforce their actual address family for -onlynet.
+                const Network network = candidate.IsIPv4() ? NET_IPV4 :
+                    candidate.IsIPv6() ? NET_IPV6 : candidate.GetNetwork();
+                if (candidate.IsValid() && IsReachable(network) &&
+                    !(IsLocal(candidate) && !(fAddNode && GetBoolArg("-allowlocalip", false))) &&
+                    !CNode::IsBanned(candidate) &&
+                    !FindNode(static_cast<CNetAddr>(candidate)) && !FindNode(candidate))
+                    allowed.push_back(candidate);
+            }
+            if (allowed.empty())
+                return NULL;
+            addrConnect = CAddress(allowed[GetRand(allowed.size())]);
+        } else {
+            // Never leak proxy-resolved names or malformed privacy addresses
+            // to local DNS. A remote DNS answer cannot be checked against a
+            // restricted IP family, so fail closed unless both are allowed.
+            if (!haveNameProxy || specialName || !IsReachable(NET_IPV4) || !IsReachable(NET_IPV6)) {
+                LogPrint("net", "Cannot resolve destination within the allowed networks: %s\n", pszDest);
+                return NULL;
+            }
+            addrConnect = CAddress();
+            connectThroughNameProxy = true;
+        }
     }
 
-    if (!IsReachable(addrConnect)) {
+    if (!connectThroughNameProxy && (!addrConnect.IsValid() || !IsReachable(addrConnect)))
         return NULL;
-    }
 
     // Use shorter timeout for addnode connections (15 seconds instead of default 60)
     int connectTimeout = fAddNode ? 15000 : nConnectTimeout;
@@ -954,7 +997,7 @@ CNode* ConnectNode(CAddress addrConnect, const char *pszDest, bool fAddNode, int
                     NoteI2PProxyReachable();
                 }
             }
-    } else if (pszDest) {
+    } else if (connectThroughNameProxy) {
         connected = ConnectSocketByName(addrConnect, hSocket, pszDest, Params().GetDefaultPort(), connectTimeout, &proxyConnectionFailed);
     }  else {
         connected = ConnectSocket(addrConnect, hSocket, connectTimeout, &proxyConnectionFailed);
@@ -2705,7 +2748,8 @@ bool OpenNetworkConnection(const CAddress& addrConnect, CSemaphoreGrant *grantOu
         return false;
     }
 
-    if (!IsReachable(addrConnect)) {
+    // A named destination has no concrete address until ConnectNode resolves it.
+    if (!pszDest && !IsReachable(addrConnect)) {
         return false;
     }
 
