@@ -44,12 +44,14 @@ then
 Usage:
 $0 --help
   Show this help message and exit.
-$0 [ --enable-lcov || --disable-tests ] [ --disable-mining ] [ --enable-debug ] [ --enable-system-command ] [ MAKEARGS... ]
+$0 [ --enable-lcov || --enable-tests || --disable-tests ] [ --disable-mining ] [ --enable-debug ] [ --enable-system-command ] [ MAKEARGS... ]
   Build Pirate and most of its transitive dependencies from
   source. MAKEARGS are applied to both dependencies and Pirate itself.
+  The Pirate tests are not built by default. Pass --enable-tests to build
+  them, or --disable-tests to be explicit about the default.
   If --enable-lcov is passed, Pirate is configured to add coverage
-  instrumentation, thus enabling "make cov" to work.
-  If --disable-tests is passed instead, the Pirate tests are not built.
+  instrumentation, thus enabling "make cov" to work; this also builds the
+  tests, since coverage is measured by running them.
   If --disable-mining is passed, Pirate is configured to not build any mining
   code. It must be passed after the test arguments, if present.
   If --enable-debug is passed, Pirate is built with debugging information. It
@@ -64,15 +66,22 @@ fi
 # If --enable-lcov is the first argument, enable lcov coverage support:
 LCOV_ARG=''
 HARDENING_ARG='--enable-hardening'
-TEST_ARG=''
+# Tests are off by default for this headless node build. --enable-tests opts
+# back in, and --enable-lcov forces them on since "make cov" runs them.
+TEST_ARG='--enable-tests=no'
 if [ "x${1:-}" = 'x--enable-lcov' ]
 then
     LCOV_ARG='--enable-lcov'
     HARDENING_ARG='--disable-hardening'
+    TEST_ARG='--enable-tests=yes'
+    shift
+elif [ "x${1:-}" = 'x--enable-tests' ]
+then
+    TEST_ARG='--enable-tests=yes'
     shift
 elif [ "x${1:-}" = 'x--disable-tests' ]
 then
-    TEST_ARG='--enable-tests=yes'
+    TEST_ARG='--enable-tests=no'
     shift
 fi
 
@@ -110,10 +119,44 @@ then
     shift
 fi
 
+PREFIX="$PWD/depends/$HOST"
+ARTIFACTS_DIR="$PWD/artifacts"
+
 HOST="$HOST" BUILD="$BUILD" "$MAKE" "$@" -C ./depends/ V=1 NO_QT=1
 
 ./autogen.sh
 
-CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$DEBUGGING_ARG" "$CONFIGURE_FLAGS" --with-gui=no
+CONFIG_SITE="$PWD/depends/$HOST/share/config.site" ./configure --prefix="$PREFIX" "$HARDENING_ARG" "$LCOV_ARG" "$TEST_ARG" "$MINING_ARG" "$DEBUGGING_ARG" "$CONFIGURE_FLAGS" --with-gui=no
 
 "$MAKE" "$@"
+
+# --- Packaging (headless) -------------------------------------------------
+# Stage the finished binaries into a flat, repo-local artifacts/ folder via a
+# throwaway DESTDIR, re-rooting just the $PREFIX subtree. --prefix above points
+# into the depends tree so the build can find its dependencies; that is not
+# where a human wants the finished binaries.
+STAGING_DIR="$(mktemp -d)"
+"$MAKE" install DESTDIR="$STAGING_DIR"
+rm -rf "$ARTIFACTS_DIR"
+mkdir -p "$ARTIFACTS_DIR"
+cp -a "${STAGING_DIR}${PREFIX}/." "$ARTIFACTS_DIR/"
+rm -rf "$STAGING_DIR"
+
+# Strip only the artifacts/bin/ copies - the binaries a human or a downstream
+# packaging step actually consumes - leaving the originals under src/ with
+# whatever debug info this build produced.
+STRIP="$(sed -n 's/^STRIP *= *//p' Makefile | head -1)"
+if [ -n "$STRIP" ]; then
+    for f in "$ARTIFACTS_DIR"/bin/*; do
+        if [ -f "$f" ]; then
+            "$STRIP" "$f" 2>/dev/null || true
+        fi
+    done
+fi
+
+# Package the headless daemon/CLI bundle (pirated, pirate-cli, and whichever of
+# pirate-networking/pirate-tor/pirate-i2pd this build produced) into a .zip.
+# build-deb.sh is intentionally not called here: it packages the Qt desktop app
+# (requires pirate-qt plus a .desktop entry and icon) and has no meaning for a
+# headless build.
+./zcutil/build-zip.sh "$HOST" cli

@@ -701,6 +701,14 @@ std::set<Network> GetUnderTargetNetworksForRegularDialer(const std::map<Network,
                                                          bool fDedicatedTor)
 {
     std::set<Network> underTarget = GetUnderTargetReachableNetworks(outboundCountByNetwork);
+    // The regular dialer (ThreadOpenConnections) never dials I2P - that is the
+    // dedicated ThreadOpenI2PConnections()'s job, so every NET_I2P candidate is
+    // skipped there. Likewise NET_ONION when Tor has its own dialer. Leaving a
+    // network this dialer cannot serve in its under-target set would make it
+    // spend its diversity budget (DIVERSITY_TRY_BUDGET tries per pass) skipping
+    // the clearnet candidates it CAN dial in favour of one it can never reach,
+    // throttling IPv4/IPv6 discovery.
+    underTarget.erase(NET_I2P);
     if (fDedicatedTor)
         underTarget.erase(NET_ONION);
     return underTarget;

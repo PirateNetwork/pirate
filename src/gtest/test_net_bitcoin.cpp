@@ -744,19 +744,35 @@ TEST_F(net_tests_bitcoin, ShouldSkipForDedicatedTor_Behavior)
         EXPECT_FALSE(ShouldSkipForDedicatedTor(net, false)) << "net=" << net;
 }
 
-// The regular dialer must not be steered toward Tor candidates it will then skip, or every pass
-// would burn its search budget on them.
-TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_ExcludesTorOnlyWhenDedicated)
+// The regular dialer never dials I2P (always, its own thread does) or Tor (when Tor is
+// dedicated), so neither may stay in the set it steers its diversity budget by - otherwise
+// every pass would burn DIVERSITY_TRY_BUDGET tries skipping the clearnet candidates it CAN
+// dial in favour of one it can never reach, throttling IPv4/IPv6 discovery.
+TEST_F(net_tests_bitcoin, GetUnderTargetNetworksForRegularDialer_ExcludesI2PAlwaysAndTorWhenDedicated)
 {
     const std::map<Network, int> empty;
 
-    // Tor still needs peers, but only the regular dialer's set is affected by who dials them.
+    // With no outbound yet, I2P is still dropped from the regular dialer's set (it can't dial
+    // it); Tor is dropped only when it has a dedicated dialer.
     EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(empty, /* fDedicatedTor */ false),
-              (std::set<Network>{NET_IPV4, NET_IPV6, NET_ONION, NET_I2P, NET_CJDNS}));
+              (std::set<Network>{NET_IPV4, NET_IPV6, NET_ONION, NET_CJDNS}));
     EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(empty, true),
-              (std::set<Network>{NET_IPV4, NET_IPV6, NET_I2P, NET_CJDNS}));
+              (std::set<Network>{NET_IPV4, NET_IPV6, NET_CJDNS}));
 
-    // Everything else is untouched: networks that met their floor still drop out.
+    // I2P is excluded even when it is genuinely under target (the regression: an under-target
+    // I2P used to keep the set non-empty and throttle IPv4/IPv6 every pass).
+    const std::map<Network, int> i2pUnder{
+        {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_IPV6, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_ONION, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+        {NET_I2P, 0},
+        {NET_CJDNS, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
+    };
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(i2pUnder, false), std::set<Network>{})
+        << "an under-target I2P must not appear in the regular dialer's set";
+    EXPECT_EQ(GetUnderTargetNetworksForRegularDialer(i2pUnder, true), std::set<Network>{});
+
+    // Everything else is untouched: clearnet/other networks below their floor still appear.
     const std::map<Network, int> counts{
         {NET_IPV4, MIN_OUTBOUND_PER_REACHABLE_NETWORK},
         {NET_IPV6, 0},
