@@ -762,9 +762,12 @@ const CChainParams::CCheckpointData GetACCheckPoints()
                 (	4000000,	uint256S("0x0000000f1105018e94d1dacd70ed6cc77ded20c6aea820ab68aaf524e71d15a1"))
                 (	4100000,	uint256S("0x0000001e89783c338d6c0eeeda102388f4922efdf8793ccc0d5c4834fe301154"))
                 (	4161185,	uint256S("0x0000000b4ea249ba4c7c57724e0abdd8abf6fb719ef0806fe6c9ae1ee0534099")) // Ironwood activation block
-                (	4168315,	uint256S("0x0000000f5bebe1efa980c4e43598035e780d1959a510f35e527f9d2e3677ae4b")),
-                1791487184,     // * UNIX timestamp of last checkpoint block
-                7657920,       // * total number of transactions between genesis and last checkpoint (1791487184)
+                (	4176943,	uint256S("0x00000011da8b8c2e77e680f651cc3c0b820a8bf823fe4e89e13d5d309318215f")) // last pre-restart block
+                (	4176944,	uint256S("0x0000000c02546d3eba29212be93f5ad3141a3017194fac1a65fa8920aa350da6")) // fork point
+                (	4176945,	uint256S("0x00000007cf016224dc6e7b7101dc3d7e4cd792f7dbbce18003ff577e399acca1")) // 6.0.10 restart (chain resumed 2026-10-19)
+                (	4177100,	uint256S("0x0000003495c13f24d4629d61ad70aaaf4387dcd2ba1a104d4a9d3a88fbfe6fb3")), // post-restart lock-in
+                1792527043,     // * UNIX timestamp of last checkpoint block
+                7669575,       // * total number of transactions between genesis and last checkpoint (1792527043)
                                 //   (the tx=... number in the SetBestChain debug.log lines)
                 1058            // * estimated number of transactions per day after checkpoint
                                 //   total number of tx / (checkpoint block height / (24 * 24))
