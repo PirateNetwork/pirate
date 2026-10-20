@@ -745,7 +745,7 @@ public:
     // addrman/trust decisions, only for display/debugging.
     CService addrFromPeer;
     int nVersion;
-    int lasthdrsreq,sendhdrsreq;
+    int lasthdrsreq;
     /** Timestamps (seconds) of the last GETBLOCKS and GETHEADERS received from this peer,
      *  used to enforce a minimum inter-request interval. */
     int64_t nLastGetBlocksRecv;
