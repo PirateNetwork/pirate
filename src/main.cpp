@@ -378,6 +378,8 @@ namespace {
         int64_t nNextHeadersRequestTime;
         //! A block announcement arrived after the outstanding request was sent.
         bool fHeadersRequestRefresh;
+        //! Steady-clock time (microseconds) of the last stale-tip getheaders queued to this peer, or 0.
+        int64_t nLastStalePoll;
         //! Since when we're stalling block download progress (in microseconds), or 0.
         int64_t nStallingSince;
         list<QueuedBlock> vBlocksInFlight;
@@ -400,6 +402,7 @@ namespace {
             nHeadersRequestTime = 0;
             nNextHeadersRequestTime = 0;
             fHeadersRequestRefresh = false;
+            nLastStalePoll = 0;
             nStallingSince = 0;
             nBlocksInFlight = 0;
             nBlocksInFlightValidHeaders = 0;
@@ -9669,6 +9672,22 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 state.pindexHeadersRequest = NULL;
                 state.nHeadersRequestTime = 0;
                 state.fHeadersRequestRefresh = false;
+            }
+        }
+
+        // Out of IBD the request machine only queues getheaders from inv announcements, the
+        // one-shot sync start, and continuations; if announcements stop arriving the tip can sit
+        // behind the network with nothing ever re-queued. When the active tip has not advanced for
+        // HEADERS_STALE_TIP_BLOCKS block intervals, proactively queue a getheaders past our best
+        // header (gently rate-limited per peer via HEADERS_REPOLL_MIN), then let the paced machine
+        // below send it. Dormant while the tip is fresh, so it adds no traffic on a healthy node.
+        if (!fReindex && !fImporting && !pto->fClient && pindexBestHeader != 0 && !IsInitialBlockDownload() &&
+            chainActive.Tip() != 0 &&
+            chainActive.Tip()->GetBlockTime() < GetTime() - (int64_t)HEADERS_STALE_TIP_BLOCKS * Params().GetConsensus().nPowTargetSpacing) {
+            const int64_t nStaleNow = GetHeadersRequestTime();
+            if (nStaleNow - state.nLastStalePoll > HEADERS_REPOLL_MIN * 1000000) {
+                state.nLastStalePoll = nStaleNow;
+                QueueHeadersRequest(state, pindexBestHeader);
             }
         }
 
