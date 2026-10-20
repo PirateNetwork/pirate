@@ -369,6 +369,8 @@ namespace {
         int64_t nSyncStartTime;
         //! Time (microseconds) headers were last accepted from this peer.
         int64_t nLastHeadersReceived;
+        //! Time (microseconds) we last sent a stale-tip re-ask getheaders to this peer, or 0.
+        int64_t nLastGetheaders;
         //! Since when we're stalling block download progress (in microseconds), or 0.
         int64_t nStallingSince;
         list<QueuedBlock> vBlocksInFlight;
@@ -387,6 +389,7 @@ namespace {
             fSyncStarted = false;
             nSyncStartTime = 0;
             nLastHeadersReceived = 0;
+            nLastGetheaders = 0;
             nStallingSince = 0;
             nBlocksInFlight = 0;
             nBlocksInFlightValidHeaders = 0;
@@ -9020,12 +9023,6 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        {
-            CNodeState *nodestate = State(pfrom->GetId());
-            if (nodestate)
-                nodestate->nLastHeadersReceived = GetTimeMicros();
-        }
-
         if (nCount == 0) {
             // Nothing interesting. Stop asking this peers for more headers.
             return true;
@@ -9078,8 +9075,16 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
         }
 
-        if (pindexLast)
+        if (pindexLast) {
             UpdateBlockAvailability(pfrom->GetId(), pindexLast->GetBlockHash());
+            // Count this as header-sync progress only now that the batch was actually accepted.
+            // A batch whose headers were all rejected (an invalid-chain peer replaying a block we
+            // have marked failed) returns above without reaching here, so it can no longer keep a
+            // useless or stalled sync peer holding the single sync slot past HEADERS_SYNC_TIMEOUT.
+            CNodeState *st = State(pfrom->GetId());
+            if (st)
+                st->nLastHeadersReceived = GetTimeMicros();
+        }
 
         /* debug log */
         // if (!hasNewHeaders && nCount == MAX_HEADERS_RESULTS && pindexLast) {
@@ -9575,6 +9580,24 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                          pto->id, sinceLastHeaders / 1000000.0);
                 state.fSyncStarted = false;
                 nSyncStarted--;
+            }
+        }
+
+        // Out of IBD the node otherwise only learns new blocks from inv pushes; a missed
+        // announcement (or peers that never announce to us) can leave the tip stuck with no way to
+        // recover. If the active tip has not advanced for HEADERS_STALE_TIP_BLOCKS block intervals,
+        // actively re-ask each peer for headers past our best header (rate-limited per peer via
+        // HEADERS_REPOLL_MIN), so the node pulls the chain forward instead of waiting for a push.
+        // Dormant while the tip is fresh, so it adds no traffic on a healthy, synced node.
+        if (!fReindex && !fImporting && !pto->fClient && pindexBestHeader != 0 && !IsInitialBlockDownload()) {
+            const int64_t nStaleTip = (int64_t)HEADERS_STALE_TIP_BLOCKS * Params().GetConsensus().nPowTargetSpacing;
+            const int64_t nNow = GetTimeMicros();
+            if (chainActive.Tip() != 0 &&
+                chainActive.Tip()->GetBlockTime() < GetTime() - nStaleTip &&
+                nNow - state.nLastGetheaders > HEADERS_REPOLL_MIN * 1000000) {
+                state.nLastGetheaders = nNow;
+                LogPrint("net", "stale tip re-ask getheaders (%d) to peer=%d\n", pindexBestHeader->nHeight, pto->id);
+                pto->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexBestHeader), uint256());
             }
         }
 
