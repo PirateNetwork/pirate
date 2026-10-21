@@ -67,6 +67,7 @@
 #include <cstring>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <sstream>
 #include <map>
 #include <unordered_map>
@@ -359,7 +360,7 @@ namespace {
         std::vector<CBlockReject> rejects;
         //! The best known block we know this peer has announced.
         CBlockIndex *pindexBestKnownBlock;
-        //! The hash of the last unknown block this peer has announced.
+        //! Latest announced block not yet selected as this peer's download target.
         uint256 hashLastUnknownBlock;
         //! The last full block we both have.
         CBlockIndex *pindexLastCommonBlock;
@@ -369,6 +370,16 @@ namespace {
         int64_t nSyncStartTime;
         //! Time (microseconds) headers were last accepted from this peer.
         int64_t nLastHeadersReceived;
+        //! Cursor for one queued or unanswered getheaders request; null when idle.
+        const CBlockIndex *pindexHeadersRequest;
+        //! Steady-clock time (microseconds) that request was sent, or zero while queued.
+        int64_t nHeadersRequestTime;
+        //! Earliest steady-clock time (microseconds) another getheaders may be sent.
+        int64_t nNextHeadersRequestTime;
+        //! A block announcement arrived after the outstanding request was sent.
+        bool fHeadersRequestRefresh;
+        //! Steady-clock time (microseconds) of the last stale-tip getheaders queued to this peer, or 0.
+        int64_t nLastStalePoll;
         //! Since when we're stalling block download progress (in microseconds), or 0.
         int64_t nStallingSince;
         list<QueuedBlock> vBlocksInFlight;
@@ -387,6 +398,11 @@ namespace {
             fSyncStarted = false;
             nSyncStartTime = 0;
             nLastHeadersReceived = 0;
+            pindexHeadersRequest = NULL;
+            nHeadersRequestTime = 0;
+            nNextHeadersRequestTime = 0;
+            fHeadersRequestRefresh = false;
+            nLastStalePoll = 0;
             nStallingSince = 0;
             nBlocksInFlight = 0;
             nBlocksInFlightValidHeaders = 0;
@@ -403,6 +419,82 @@ namespace {
         if (it == mapNodeState.end())
             return NULL;
         return &it->second;
+    }
+
+    // All outbound getheaders paths share one request per peer. Requests fetch
+    // through the peer's tip, so announcements can be coalesced without losing
+    // a newer stop hash or restarting an in-progress historical continuation.
+    void QueueHeadersRequest(CNodeState& state, const CBlockIndex *pindexStart) {
+        AssertLockHeld(cs_main);
+        if (!state.pindexHeadersRequest) {
+            state.pindexHeadersRequest = pindexStart;
+            state.nHeadersRequestTime = 0;
+        } else if (state.nHeadersRequestTime != 0) {
+            state.fHeadersRequestRefresh = true;
+        }
+    }
+
+    int64_t GetHeadersRequestTime() {
+        return std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    }
+
+    bool SendHeadersRequest(CNode *pto, CNodeState& state) {
+        AssertLockHeld(cs_main);
+        if (!state.pindexHeadersRequest || pto->fDisconnect || pto->fClient ||
+            fImporting || fReindex || pto->nSendSize >= SendBufferSize())
+            return false;
+
+        const int64_t now = GetHeadersRequestTime();
+        if (now < state.nNextHeadersRequestTime ||
+            (state.nHeadersRequestTime != 0 &&
+             now - state.nHeadersRequestTime < HEADERS_SYNC_TIMEOUT * 1000000))
+            return false;
+
+        LogPrint("net", "%s getheaders (%d) to peer=%d\n",
+                 state.nHeadersRequestTime ? "retrying" : "sending",
+                 state.pindexHeadersRequest->nHeight, pto->id);
+        pto->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(state.pindexHeadersRequest), uint256());
+        state.nHeadersRequestTime = now;
+        state.nNextHeadersRequestTime = now + 1000000;
+        state.fHeadersRequestRefresh = false;
+        return true;
+    }
+
+    // Called only after a complete, successfully accepted headers response.
+    void HeadersReceived(CNodeState& state, const CBlockIndex *pindexLast, bool fullBatch) {
+        AssertLockHeld(cs_main);
+        // Unsolicited headers must not overwrite or keep postponing an unsent
+        // continuation. The received headers have still been validated normally.
+        if (state.pindexHeadersRequest && state.nHeadersRequestTime == 0)
+            return;
+
+        // A reply to an earlier retry can arrive after its continuation was
+        // sent. A nonempty response ending at that exact cursor cannot answer
+        // the current request: getheaders starts AFTER a matching locator hash.
+        // Preserve the outstanding request, its retry deadline, and any refresh.
+        if (pindexLast && pindexLast == state.pindexHeadersRequest)
+            return;
+
+        // Only an accepted, nonempty, non-stale batch counts as sync progress.
+        // Keep the existing IBD watchdog in its original wall-clock domain.
+        if (pindexLast)
+            state.nLastHeadersReceived = GetTimeMicros();
+
+        const bool refresh = state.fHeadersRequestRefresh;
+        state.pindexHeadersRequest = NULL;
+        state.nHeadersRequestTime = 0;
+        state.fHeadersRequestRefresh = false;
+        // Older peers silently drop same-second getheaders requests. Waiting
+        // from the response, not the send, also accommodates their network delay.
+        state.nNextHeadersRequestTime = GetHeadersRequestTime() + 1000000;
+
+        if (fullBatch && pindexLast) {
+            QueueHeadersRequest(state, pindexLast);
+        } else if (refresh) {
+            // A short/empty reply may have been prepared before a newer INV.
+            QueueHeadersRequest(state, pindexLast ? pindexLast : chainActive.Tip());
+        }
     }
 
     int GetHeight()
@@ -528,20 +620,31 @@ namespace {
         mapBlocksInFlight[hash] = std::make_pair(nodeid, it);
     }
 
-    /** Check whether the last unknown block a peer advertized is not yet known. */
+    /** Resolve the latest announcement without letting an invalid branch pin the peer's download target. */
     void ProcessBlockAvailability(NodeId nodeid) {
         AssertLockHeld(cs_main);
         
         CNodeState *state = State(nodeid);
         assert(state != NULL);
 
+        if (state->pindexBestKnownBlock && !state->pindexBestKnownBlock->IsValid(BLOCK_VALID_TREE)) {
+            state->pindexBestKnownBlock = NULL;
+            state->pindexLastCommonBlock = NULL;
+        }
+
         if (!state->hashLastUnknownBlock.IsNull()) {
             BlockMap::iterator itOld = mapBlockIndex.find(state->hashLastUnknownBlock);
             if (itOld != mapBlockIndex.end() && itOld->second != 0 && (itOld->second->nChainWork > 0))
             {
-                if (state->pindexBestKnownBlock == NULL || itOld->second->nChainWork >= state->pindexBestKnownBlock->nChainWork)
+                if (!itOld->second->IsValid(BLOCK_VALID_TREE)) {
+                    state->hashLastUnknownBlock.SetNull();
+                } else if (state->pindexBestKnownBlock == NULL || itOld->second->nChainWork >= state->pindexBestKnownBlock->nChainWork) {
                     state->pindexBestKnownBlock = itOld->second;
-                state->hashLastUnknownBlock.SetNull();
+                    state->hashLastUnknownBlock.SetNull();
+                }
+                // Retain a lower-work announcement as a fallback. The existing
+                // bounded download scan may still find an invalid ancestor of
+                // the higher-work target even when its tip looks valid.
             }
         }
     }
@@ -574,10 +677,23 @@ namespace {
             pb = pb->GetAncestor(pa->nHeight);
         }
 
-        while (pa != pb && pa && pb) {
-            pa = pa->pprev;
-            pb = pb->pprev;
+        if (pa == pb)
+            return pa;
+
+        // Invalid-target fallback can revisit a deep fork. Bound each search
+        // using the block index's skip ancestors instead of walking every block.
+        // Low is a shared ancestor height; high is different after alignment.
+        int low = 0;
+        int high = pa->nHeight;
+        while (low + 1 < high) {
+            const int height = low + (high - low) / 2;
+            if (pa->GetAncestor(height) == pb->GetAncestor(height))
+                low = height;
+            else
+                high = height;
         }
+        pa = pa->GetAncestor(low);
+        pb = pb->GetAncestor(low);
 
         // Eventually all chain branches meet at the genesis block.
         assert(pa == pb);
@@ -642,7 +758,12 @@ namespace {
             // already part of our chain (and therefore don't need it even if pruned).
             BOOST_FOREACH(CBlockIndex* pindex, vToFetch) {
                 if (!pindex->IsValid(BLOCK_VALID_TREE)) {
-                    // We consider the chain that this peer is on invalid.
+                    // Do not let a discarded higher-work branch permanently
+                    // hide another announced branch. Resolve the retained
+                    // candidate; normal bounded scheduling resumes next pass.
+                    state->pindexBestKnownBlock = NULL;
+                    state->pindexLastCommonBlock = NULL;
+                    ProcessBlockAvailability(nodeid);
                     return;
                 }
                 if (pindex->nStatus & BLOCK_HAVE_DATA || chainActive.Contains(pindex)) {
@@ -8674,18 +8795,14 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             if (inv.type == MSG_BLOCK) {
                 UpdateBlockAvailability(pfrom->GetId(), inv.hash);
                 if (!fAlreadyHave && !fImporting && !fReindex && !mapBlocksInFlight.count(inv.hash)) {
-                    // First request the headers preceding the announced block. In the normal fully-synced
-                    // case where a new block is announced that succeeds the current tip (no reorganization),
-                    // there are no such headers.
-                    // Secondly, and only when we are close to being synced, we request the announced block directly,
-                    // to avoid an extra round-trip. Note that we must *first* ask for the headers, so by the
-                    // time the block arrives, the header chain leading up to it is already validated. Not
-                    // doing this will result in the received block being rejected as an orphan in case it is
-                    // not a direct successor.
-                    LogPrint("net", "getheaders (%d) %s to peer=%d (triggered by INV)\n", pindexBestHeader->nHeight, inv.hash.ToString(), pfrom->id);
-                    pfrom->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexBestHeader), inv.hash);
+                    // Send the headers request before any direct block request,
+                    // so the peer can supply missing ancestors first. If header
+                    // pacing defers it, leave the body to the normal scheduler.
                     CNodeState *nodestate = State(pfrom->GetId());
-                    if (chainActive.Tip()->GetBlockTime() > GetTime() - chainparams.GetConsensus().nPowTargetSpacing * 20 &&
+                    QueueHeadersRequest(*nodestate, pindexBestHeader);
+                    const bool headersRequested = SendHeadersRequest(pfrom, *nodestate);
+                    if (headersRequested &&
+                        chainActive.Tip()->GetBlockTime() > GetTime() - chainparams.GetConsensus().nPowTargetSpacing * 20 &&
                         nodestate->nBlocksInFlight < MAX_BLOCKS_IN_TRANSIT_PER_PEER) {
                         vToFetch.push_back(inv);
                         // Mark block as in flight already, even though the actual "getdata" message only goes out
@@ -9005,13 +9122,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             return error("headers message size = %u", nCount);
         }
         
-        // Headers are always accepted into the block index regardless of how many
-        // blocks are currently in flight: AcceptBlockHeader is bounded (at most
-        // MAX_HEADERS_RESULTS headers per message) and cheap relative to full block
-        // validation, and dropping an already-received batch here has no recovery
-        // path other than a peer disconnect/reconnect. Backpressure during heavy
-        // block download is applied below, on the "request more" continuation
-        // instead, where deferring rather than discarding is safe.
+        // Never discard received headers because block downloads are busy.
+        // Outbound continuation requests are paced separately below.
         headers.resize(nCount);
         for (unsigned int n = 0; n < nCount; n++) {
             vRecv >> headers[n];
@@ -9020,14 +9132,8 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
 
         LOCK(cs_main);
 
-        {
-            CNodeState *nodestate = State(pfrom->GetId());
-            if (nodestate)
-                nodestate->nLastHeadersReceived = GetTimeMicros();
-        }
-
         if (nCount == 0) {
-            // Nothing interesting. Stop asking this peers for more headers.
+            HeadersReceived(*State(pfrom->GetId()), NULL, false);
             return true;
         }
 
@@ -9057,6 +9163,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         }
 
         CBlockIndex *pindexLast = NULL;
+        bool headersAccepted = true;
         BOOST_FOREACH(const CBlockHeader& header, headers) {
             //printf("size.%i, solution size.%i\n", (int)sizeof(header), (int)header.nSolution.size());
             //printf("hash.%s prevhash.%s nonce.%s\n", header.GetHash().ToString().c_str(), header.hashPrevBlock.ToString().c_str(), header.nNonce.ToString().c_str());
@@ -9068,6 +9175,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
             }
             int32_t futureblock;
             if (!AcceptBlockHeader(&futureblock,header, state, &pindexLast)) {
+                headersAccepted = false;
                 int nDoS;
                 if (state.IsInvalid(nDoS) && futureblock == 0)
                 {
@@ -9089,24 +9197,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv, 
         //             bytes_saved, pindexLast->nHeight, pfrom->id, headers.back().GetHash().ToString());
         // }
 
-        if (nCount == MAX_HEADERS_RESULTS && pindexLast && hasNewHeaders) {
-            // Headers message had its maximum size; the peer may have more headers.
-            // TODO: optimize: if pindexLast is an ancestor of chainActive.Tip or pindexBestHeader, continue
-            // from there instead.
-            //
-            // Always request the continuation immediately rather than throttling on
-            // mapBlocksInFlight: the known-header horizon (state->pindexBestKnownBlock,
-            // via UpdateBlockAvailability) gates FindNextBlocksToDownload's window, so
-            // pacing header requests to the block-in-flight count starves that window
-            // and stalls block download rather than protecting it.
-            if (pfrom->sendhdrsreq >= chainActive.Height()-MAX_HEADERS_RESULTS || pindexLast->nHeight != pfrom->sendhdrsreq)
-            {
-                pfrom->sendhdrsreq = (int32_t)pindexLast->nHeight;
-                LogPrint("net", "more getheaders (%d) to end to peer=%d (startheight:%d, blocks in-flight: %d)\n",
-                         pindexLast->nHeight, pfrom->id, pfrom->nStartingHeight, mapBlocksInFlight.size());
-                pfrom->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexLast), uint256());
-            }
-        }
+        if (headersAccepted)
+            HeadersReceived(*State(pfrom->GetId()), pindexLast,
+                            nCount == MAX_HEADERS_RESULTS && hasNewHeaders);
 
         CheckBlockIndex();
     }
@@ -9562,7 +9655,7 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                 state.nSyncStartTime = GetTimeMicros();
                 CBlockIndex *pindexStart = pindexBestHeader->pprev ? pindexBestHeader->pprev : pindexBestHeader;
                 LogPrint("net", "initial getheaders (%d) to peer=%d (startheight:%d) - Starting sync\n", pindexStart->nHeight, pto->id, pto->nStartingHeight);
-                pto->PushMessage(NetMsgType::GETHEADERS, chainActive.GetLocator(pindexStart), uint256());
+                QueueHeadersRequest(state, pindexStart);
             }
         } else if (state.fSyncStarted && !pto->fClient && !fImporting && !fReindex && IsInitialBlockDownload()) {
             // A designated sync peer that never delivers headers would otherwise hold
@@ -9575,8 +9668,32 @@ bool SendMessages(CNode* pto, bool fSendTrickle)
                          pto->id, sinceLastHeaders / 1000000.0);
                 state.fSyncStarted = false;
                 nSyncStarted--;
+                // Failover releases this peer's request as well as its sync slot.
+                state.pindexHeadersRequest = NULL;
+                state.nHeadersRequestTime = 0;
+                state.fHeadersRequestRefresh = false;
             }
         }
+
+        // Out of IBD the request machine only queues getheaders from inv announcements, the
+        // one-shot sync start, and continuations; if announcements stop arriving the tip can sit
+        // behind the network with nothing ever re-queued. When the active tip has not advanced for
+        // HEADERS_STALE_TIP_BLOCKS block intervals, proactively queue a getheaders past our best
+        // header (gently rate-limited per peer via HEADERS_REPOLL_MIN), then let the paced machine
+        // below send it. Dormant while the tip is fresh, so it adds no traffic on a healthy node.
+        if (!fReindex && !fImporting && !pto->fClient && pindexBestHeader != 0 && !IsInitialBlockDownload() &&
+            chainActive.Tip() != 0 &&
+            chainActive.Tip()->GetBlockTime() < GetTime() - (int64_t)HEADERS_STALE_TIP_BLOCKS * Params().GetConsensus().nPowTargetSpacing) {
+            const int64_t nStaleNow = GetHeadersRequestTime();
+            if (nStaleNow - state.nLastStalePoll > HEADERS_REPOLL_MIN * 1000000) {
+                state.nLastStalePoll = nStaleNow;
+                QueueHeadersRequest(state, pindexBestHeader);
+            }
+        }
+
+        // Retain paced continuations and retry unanswered requests even after IBD.
+        // An answered short/empty response is idle, not a reason to keep polling.
+        SendHeadersRequest(pto, state);
 
         // Resend wallet transactions that haven't gotten in a block yet
         // Except during reindex, importing and IBD, when old wallet

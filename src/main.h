@@ -110,6 +110,15 @@ static const unsigned int BLOCK_STALLING_TIMEOUT = 10;  // Increased from 2 to r
 /** Seconds to wait for a designated headers-sync peer to deliver any headers before releasing its
  *  sync slot so a fresh getheaders can be (re-)attempted, either to the same peer or another one. */
 static const int64_t HEADERS_SYNC_TIMEOUT = 30;
+/** Out of IBD the request machine only queues getheaders from inv announcements, the one-shot
+ *  sync start, and continuations. If the active tip has not advanced for this many block intervals
+ *  (a missed announcement, or peers that never announce to us), the node proactively queues a
+ *  getheaders so it can pull the chain forward instead of waiting for a push. Expressed in blocks;
+ *  multiplied by the consensus block spacing where used. */
+static const int HEADERS_STALE_TIP_BLOCKS = 10;
+/** Minimum seconds between such stale-tip getheaders to a given peer (gentler than the machine's
+ *  own 1s send pacing, so a genuinely quiet chain is not re-polled every second). */
+static const int64_t HEADERS_REPOLL_MIN = 30;
 /** Number of headers sent in one getheaders result. We rely on the assumption that if a peer sends
  *  less than this number, we reached its tip. Changing this value is a protocol upgrade. */
 static const unsigned int MAX_HEADERS_RESULTS = 160;
