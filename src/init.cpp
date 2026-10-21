@@ -2077,7 +2077,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         if (useBootstrap) {
             fReindex = false;
             //wipe transactions from wallet to create a clean slate
-            OverrideSetArg("-zappwallettxes","2");
+            OverrideSetArg("-zapwallettxes","1");
             boost::filesystem::remove_all(GetDataDir() / "blocks");
             boost::filesystem::remove_all(GetDataDir() / "chainstate");
             boost::filesystem::remove_all(GetDataDir() / "notarisations");
