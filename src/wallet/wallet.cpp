@@ -6955,24 +6955,15 @@ void CWallet::AddToWalletIfInvolvingMe(
             uint256 hash = vtx[i].GetHash();
 
             //Format Decrypted Sapling Note data for insertion into CWalletTx
-            mapSaplingNoteData_t mapSaplingNoteData;
-            for (mapSaplingNoteData_t::iterator it = saplingNoteData.begin(); it != saplingNoteData.end(); it++) {
-                SaplingOutPoint op = (*it).first;
-                SaplingNoteData nd = (*it).second;
-                if (op.hash == hash) {
-                      mapSaplingNoteData.insert(std::make_pair(op, nd));
-                }
-            }
+            // Outpoints are ordered by (transaction hash, output index).
+            mapSaplingNoteData_t mapSaplingNoteData(
+                saplingNoteData.lower_bound(SaplingOutPoint(hash, 0)),
+                saplingNoteData.upper_bound(SaplingOutPoint(hash, UINT32_MAX)));
 
             //Format Decrypted Ironwood Note data for insertion into CWalletTx
-            mapIronwoodNoteData_t mapIronwoodNoteData;
-            for (mapIronwoodNoteData_t::iterator it = ironwoodNoteData.begin(); it != ironwoodNoteData.end(); it++) {
-                IronwoodOutPoint op = (*it).first;
-                IronwoodNoteData nd = (*it).second;
-                if (op.hash == hash) {
-                      mapIronwoodNoteData.insert(std::make_pair(op, nd));
-                }
-            }
+            mapIronwoodNoteData_t mapIronwoodNoteData(
+                ironwoodNoteData.lower_bound(IronwoodOutPoint(hash, 0)),
+                ironwoodNoteData.upper_bound(IronwoodOutPoint(hash, UINT32_MAX)));
 
             bool fExisted = mapWallet.count(vtx[i].GetHash()) != 0;
 
