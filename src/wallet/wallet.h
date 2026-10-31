@@ -1206,8 +1206,10 @@ public:
 protected:
 
     template <typename WalletDB>
-    void SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
+    bool SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
         AssertLockHeld(cs_wallet);
+        // Retain the retry request and dirty records until the complete save commits.
+        fRunSetBestChain = true;
 
         int txCount = 0;
         int txSkippedCount = 0;
@@ -1219,12 +1221,23 @@ protected:
         int arcIronwoodOutPointSkipCount = 0;
         int paymentAddressCount = 0;
 
-        if (!walletdb.TxnBegin()) {
-            // This needs to be done atomically, so don't do it at all
-            LogPrintf("SetBestChain(): Couldn't start atomic write\n");
-            return;
-        }
         try {
+            // Abort any uncommitted writes, including failures while serializing
+            // or encrypting the witness trees. Commit consumes the DB handle.
+            struct TransactionGuard {
+                WalletDB& db;
+                bool active = false;
+                ~TransactionGuard() noexcept {
+                    if (active) {
+                        try { db.TxnAbort(); } catch (...) {}
+                    }
+                }
+            } transaction{walletdb};
+            if (!walletdb.TxnBegin()) {
+                LogPrintf("SetBestChain(): Couldn't start atomic write\n");
+                return false;
+            }
+            transaction.active = true;
 
             if (!IsCrypted()) {
                 for (std::pair<const uint256, CWalletTx>& wtxItem : mapWallet) {
@@ -1232,8 +1245,7 @@ protected:
                     // Write all transactions to disk
                       if (!walletdb.WriteTx(wtxItem.first, wtx, false)) {
                           LogPrintf("SetBestChain(): Failed to write CWalletTx, aborting atomic write\n");
-                          walletdb.TxnAbort();
-                          return;
+                          return false;
                       }
                       txCount++;
                 }
@@ -1247,10 +1259,8 @@ protected:
                     if (pArcTxPt->writeToDisk) {
                         if (!walletdb.WriteArcTx(txid, *pArcTxPt, false)) {
                             LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
-                        pArcTxPt->writeToDisk = false;
                         arcTxPointCount++;
                     } else {
                         arcTxPointSkipCount++;
@@ -1266,11 +1276,8 @@ protected:
                     // Write all archived sapling outpoint
                         if (!walletdb.WriteArcSaplingOp(nullifier, *op, false)) {
                             LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
-                        //Don't write this object again unless it changes
-                        op->writeToDisk = false;
                         arcSaplingOutPointCount++;
                     } else {
                         arcSaplingOutPointSkipCount++;
@@ -1287,11 +1294,8 @@ protected:
                     // Write all archived sapling outpoint
                         if (!walletdb.WriteArcIronwoodOp(nullifier, *op, false)) {
                             LogPrintf("SetBestChain(): Failed to write Archive Ironwood Outpoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
-                        //Don't write this object again unless it changes
-                        op->writeToDisk = false;
                         arcIronwoodOutPointCount++;
                     } else {
                         arcIronwoodOutPointSkipCount++;
@@ -1309,8 +1313,7 @@ protected:
                     // Write all archived sapling outpoint
                     if (!walletdb.WriteSaplingPaymentAddress(ivk, addr)) {
                         LogPrintf("SetBestChain(): Failed to write unsaved Sapling Payment address, aborting atomic write\n");
-                        walletdb.TxnAbort();
-                        return;
+                        return false;
                     }
                     paymentAddressCount++;
                 }
@@ -1323,16 +1326,14 @@ protected:
                     // Write all archived ironwood outpoint
                     if (!walletdb.WriteIronwoodPaymentAddress(ivk, addr, scope)) {
                         LogPrintf("SetBestChain(): Failed to write unsaved Ironwood Payment address, aborting atomic write\n");
-                        walletdb.TxnAbort();
-                        return;
+                        return false;
                     }
                     paymentAddressCount++;
                 }
 
                 if (!walletdb.WriteBestBlock(loc)) {
                     LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
-                    walletdb.TxnAbort();
-                    return;
+                    return false;
                 }
             } else {
                 LogPrintf("SetBestChain(): Attempting to SetBestChain while crypted.\n");
@@ -1348,14 +1349,12 @@ protected:
                         //Encrypt all wallet transactions in memory inorder to write to disk
                         if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
 
                         if (!walletdb.WriteCryptedTx(wtxItem.first, chash, vchCryptedSecret, false)) {
                             LogPrintf("SetBestChain(): Failed to write crypted CWalletTx, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
                         txCount++;
                     }
@@ -1374,19 +1373,15 @@ protected:
                             //Encrypt all archived transactions in memory inorder to write to disk
                             if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                                 LogPrintf("SetBestChain(): Failed to encrypt ArchiveTxPoint, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
+                                return false;
                             }
 
                             // Write all archived transactions to disk
                             if (!walletdb.WriteCryptedArcTx(txid, chash, vchCryptedSecret, false)) {
                                 LogPrintf("SetBestChain(): Failed to write ArchiveTxPoint, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
+                                return false;
                             }
 
-                            //Don't write this object again unless it changes
-                            pArcTxPt->writeToDisk = false;
                             arcTxPointCount++;
                         } else {
                             arcTxPointSkipCount++;
@@ -1404,18 +1399,14 @@ protected:
                         if (op->writeToDisk) {
                             if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                                 LogPrintf("SetBestChain(): Failed to encrypt Archive Sapling Outpoint, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
+                                return false;
                             }
 
                             // Write all archived sapling outpoint
                             if (!walletdb.WriteCryptedArcSaplingOp(nullifier, chash, vchCryptedSecret, false)) {
                                 LogPrintf("SetBestChain(): Failed to write Archive Sapling Outpoint, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
+                                return false;
                             }
-                            //Don't write this object again unless it changes
-                            op->writeToDisk = false;
                             arcSaplingOutPointCount++;
                         } else {
                             arcSaplingOutPointSkipCount++;
@@ -1434,18 +1425,14 @@ protected:
                         if (op->writeToDisk) {
                             if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                                 LogPrintf("SetBestChain(): Failed to encrypt Archive Ironwood Outpoint, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
+                                return false;
                             }
 
                             // Write all archived ironwood outpoint
                             if (!walletdb.WriteCryptedArcIronwoodOp(nullifier, chash, vchCryptedSecret, false)) {
                                 LogPrintf("SetBestChain(): Failed to write Archive Ironwood Outpoint, aborting atomic write\n");
-                                walletdb.TxnAbort();
-                                return;
+                                return false;
                             }
-                            //Don't write this object again unless it changes
-                            op->writeToDisk = false;
                             arcIronwoodOutPointCount++;
                         } else {
                             arcIronwoodOutPointSkipCount++;
@@ -1466,15 +1453,13 @@ protected:
 
                         if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to encrypt unsaved Sapling Payment address, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
 
                         // Write all unsaved Sapling Payment Addresses
                         if (!walletdb.WriteCryptedSaplingPaymentAddress(addr, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to write unsaved Sapling Payment address, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
                         paymentAddressCount++;
                     }
@@ -1491,130 +1476,126 @@ protected:
 
                         if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to encrypt unsaved Ironwood Payment address, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
 
                         // Write all unsaved Ironwood Payment Addresses
                         if (!walletdb.WriteCryptedIronwoodPaymentAddress(addr, chash, vchCryptedSecret)) {
                             LogPrintf("SetBestChain(): Failed to write unsaved Ironwood Payment address, aborting atomic write\n");
-                            walletdb.TxnAbort();
-                            return;
+                            return false;
                         }
                         paymentAddressCount++;
                     }
 
                     if (!walletdb.WriteBestBlock(loc)) {
                         LogPrintf("SetBestChain(): Failed to write best block, aborting atomic write\n");
-                        walletdb.TxnAbort();
-                        return;
+                        return false;
                     }
 
                 } else {
-                    walletdb.TxnAbort();
                     LogPrintf("SetBestChain(): Wallet is locked\n");
-                    return;
+                    return false;
                 }
             }
+            // Add persistence of Sapling incremental witness tree
+            saplingWallet.GarbageCollect();
+            if (IsCrypted() && !IsLocked()) {
+                // Wallet is encrypted - write encrypted witness trees
+                CDataStream ss(SER_DISK, CLIENT_VERSION);
+                ss << SaplingWalletNoteCommitmentTreeWriter(saplingWallet);
+            
+                std::vector<unsigned char> vchCryptedSecret;
+                CKeyingMaterial vchSecret(ss.begin(), ss.end());
+                // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
+                // tag verified on load. Stored in the record value under a stable key.
+                uint256 chash = HashWithFP(vchSecret);
+                std::string saplingTreeKey = "sapling_note_commitment_tree";
+                uint256 legacyChash = HashWithFP(saplingTreeKey);
+
+                if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                    LogPrintf("SetBestChain(): Failed to encrypt Sapling witnesses, aborting atomic write\n");
+                    return false;
+                }
+
+                if (!walletdb.WriteCryptedSaplingWitnesses(chash, vchCryptedSecret, legacyChash)) {
+                    LogPrintf("SetBestChain(): Failed to write encrypted Sapling witnesses, aborting atomic write\n");
+                    return false;
+                }
+            } else if (!IsCrypted()) {
+                // Wallet is not encrypted - write unencrypted witness trees
+                if (!walletdb.WriteSaplingWitnesses(saplingWallet)) {
+                    LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
+                    return false;
+                }
+            }
+
+            ironwoodWallet.GarbageCollect();
+            if (IsCrypted() && !IsLocked()) {
+                // Wallet is encrypted - write encrypted witness trees
+                CDataStream ss(SER_DISK, CLIENT_VERSION);
+                ss << IronwoodWalletNoteCommitmentTreeWriter(ironwoodWallet);
+            
+                std::vector<unsigned char> vchCryptedSecret;
+                CKeyingMaterial vchSecret(ss.begin(), ss.end());
+                // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
+                // tag verified on load. Stored in the record value under a stable key.
+                uint256 chash = HashWithFP(vchSecret);
+                std::string ironwoodTreeKey = "ironwood_note_commitment_tree";
+                uint256 legacyChash = HashWithFP(ironwoodTreeKey);
+
+                if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
+                    LogPrintf("SetBestChain(): Failed to encrypt Ironwood witnesses, aborting atomic write\n");
+                    return false;
+                }
+
+                if (!walletdb.WriteCryptedIronwoodWitnesses(chash, vchCryptedSecret, legacyChash)) {
+                    LogPrintf("SetBestChain(): Failed to write encrypted Ironwood witnesses, aborting atomic write\n");
+                    return false;
+                }
+            } else if (!IsCrypted()) {
+                // Wallet is not encrypted - write unencrypted witness trees
+                if (!walletdb.WriteIronwoodWitnesses(ironwoodWallet)) {
+                    LogPrintf("SetBestChain(): Failed to write Ironwood witnesses, aborting atomic write\n");
+                    return false;
+                }
+            }
+
+            transaction.active = false;
+            if (!walletdb.TxnCommit()) {
+                // Couldn't commit all to db, but in-memory state is fine
+                LogPrintf("SetBestChain(): Couldn't commit atomic write\n");
+                return false;
+            }
+
+            // These flags describe durable records, not writes merely queued in a transaction.
+            for (auto& item : mapArcTxs) item.second.writeToDisk = false;
+            for (auto& item : mapArcSaplingOutPoints) item.second.writeToDisk = false;
+            for (auto& item : mapArcIronwoodOutPoints) item.second.writeToDisk = false;
+
+            //Clear Unsaved Sapling Addresses after successful TxnCommit
+            mapUnsavedSaplingIncomingViewingKeys.clear();
+            mapUnsavedIronwoodIncomingViewingKeys.clear();
+            fRunSetBestChain = false;
+            walletHeight = height; //Set Wallet height to chain height.
+
+            //Wallet Stats
+            LogPrintf("SetBestChain(): SetBestChain was successful\n");
+            LogPrintf("SetBestChain():  %i - Transactions written\n", txCount);
+            LogPrintf("SetBestChain():  %i - Archived Tx Points written\n",arcTxPointCount);
+            LogPrintf("SetBestChain():  %i - Archived Points skipped\n", arcTxPointSkipCount);
+            LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
+            LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
+            LogPrintf("SetBestChain():  %i - Archived Ironwood Outpoints written\n", arcIronwoodOutPointCount);
+            LogPrintf("SetBestChain():  %i - Archived Ironwood Outpoints skipped\n", arcIronwoodOutPointSkipCount);
+            LogPrintf("SetBestChain():  %i - Payment Address written\n", paymentAddressCount);
+            return true;
         } catch (const std::exception &exc) {
-            // Unexpected failure
             LogPrintf("SetBestChain(): Unexpected error during atomic write: %s\n", exc.what());
-            walletdb.TxnAbort();
-            return;
+            return false;
+        } catch (...) {
+            LogPrintf("SetBestChain(): Unexpected error during atomic write\n");
+            return false;
         }
-
-        // Add persistence of Sapling incremental witness tree
-        saplingWallet.GarbageCollect();
-        if (IsCrypted() && !IsLocked()) {
-            // Wallet is encrypted - write encrypted witness trees
-            CDataStream ss(SER_DISK, CLIENT_VERSION);
-            ss << SaplingWalletNoteCommitmentTreeWriter(saplingWallet);
-            
-            std::vector<unsigned char> vchCryptedSecret;
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
-            // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
-            // tag verified on load. Stored in the record value under a stable key.
-            uint256 chash = HashWithFP(vchSecret);
-            std::string saplingTreeKey = "sapling_note_commitment_tree";
-            uint256 legacyChash = HashWithFP(saplingTreeKey);
-
-            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("SetBestChain(): Failed to encrypt Sapling witnesses, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
-            }
-
-            if (!walletdb.WriteCryptedSaplingWitnesses(chash, vchCryptedSecret, legacyChash)) {
-                LogPrintf("SetBestChain(): Failed to write encrypted Sapling witnesses, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
-            }
-        } else if (!IsCrypted()) {
-            // Wallet is not encrypted - write unencrypted witness trees
-            if (!walletdb.WriteSaplingWitnesses(saplingWallet)) {
-                LogPrintf("SetBestChain(): Failed to write Sapling witnesses, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
-            }
-        }
-
-        ironwoodWallet.GarbageCollect();
-        if (IsCrypted() && !IsLocked()) {
-            // Wallet is encrypted - write encrypted witness trees
-            CDataStream ss(SER_DISK, CLIENT_VERSION);
-            ss << IronwoodWalletNoteCommitmentTreeWriter(ironwoodWallet);
-            
-            std::vector<unsigned char> vchCryptedSecret;
-            CKeyingMaterial vchSecret(ss.begin(), ss.end());
-            // Content-bound, secret-salted hash: serves as the AES IV and as an integrity
-            // tag verified on load. Stored in the record value under a stable key.
-            uint256 chash = HashWithFP(vchSecret);
-            std::string ironwoodTreeKey = "ironwood_note_commitment_tree";
-            uint256 legacyChash = HashWithFP(ironwoodTreeKey);
-
-            if (!EncryptSerializedWalletObjects(vchSecret, chash, vchCryptedSecret)) {
-                LogPrintf("SetBestChain(): Failed to encrypt Ironwood witnesses, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
-            }
-
-            if (!walletdb.WriteCryptedIronwoodWitnesses(chash, vchCryptedSecret, legacyChash)) {
-                LogPrintf("SetBestChain(): Failed to write encrypted Ironwood witnesses, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
-            }
-        } else if (!IsCrypted()) {
-            // Wallet is not encrypted - write unencrypted witness trees
-            if (!walletdb.WriteIronwoodWitnesses(ironwoodWallet)) {
-                LogPrintf("SetBestChain(): Failed to write Ironwood witnesses, aborting atomic write\n");
-                walletdb.TxnAbort();
-                return;
-            }
-        }
-
-        if (!walletdb.TxnCommit()) {
-            // Couldn't commit all to db, but in-memory state is fine
-            LogPrintf("SetBestChain(): Couldn't commit atomic write\n");
-            return;
-        }
-
-        //Clear Unsaved Sapling Addresses after successful TxnCommit
-        mapUnsavedSaplingIncomingViewingKeys.clear();
-        mapUnsavedIronwoodIncomingViewingKeys.clear();
-        fRunSetBestChain = false;
-        walletHeight = height; //Set Wallet height to chain height.
-
-        //Wallet Stats
-        LogPrintf("SetBestChain(): SetBestChain was successful\n");
-        LogPrintf("SetBestChain():  %i - Transactions written\n", txCount);
-        LogPrintf("SetBestChain():  %i - Archived Tx Points written\n",arcTxPointCount);
-        LogPrintf("SetBestChain():  %i - Archived Points skipped\n", arcTxPointSkipCount);
-        LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints written\n", arcSaplingOutPointCount);
-        LogPrintf("SetBestChain():  %i - Archived Sapling Outpoints skipped\n", arcSaplingOutPointSkipCount);
-        LogPrintf("SetBestChain():  %i - Archived Ironwood Outpoints written\n", arcIronwoodOutPointCount);
-        LogPrintf("SetBestChain():  %i - Archived Ironwood Outpoints skipped\n", arcIronwoodOutPointSkipCount);
-        LogPrintf("SetBestChain():  %i - Payment Address written\n", paymentAddressCount);
-
     }
 
 private:
