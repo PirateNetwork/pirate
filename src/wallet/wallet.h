@@ -1208,6 +1208,8 @@ protected:
     template <typename WalletDB>
     bool SetBestChainINTERNAL(WalletDB& walletdb, const CBlockLocator& loc, const int& height) {
         AssertLockHeld(cs_wallet);
+        // Keep encryption state and key material stable for the complete snapshot.
+        LOCK(cs_KeyStore);
         // Retain the retry request and dirty records until the complete save commits.
         fRunSetBestChain = true;
 

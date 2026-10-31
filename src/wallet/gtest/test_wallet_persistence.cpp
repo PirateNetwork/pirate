@@ -9,11 +9,13 @@
 #include "wallet/walletdb.h"
 
 #include <functional>
+#include <atomic>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+#include <thread>
 
 // Use real Berkeley DB transactions. Failure injection leaves commit's handle
 // consumed, as Berkeley DB does, and snapshots check the complete durable DB.
@@ -99,6 +101,11 @@ class PersistenceTestWallet : public CWallet
 {
 public:
     PersistenceTestWallet() : CWallet("persistence-test.dat") {}
+    bool TryKeyStoreLock()
+    {
+        TRY_LOCK(cs_KeyStore, locked);
+        return static_cast<bool>(locked);
+    }
     template <class DB> bool Save(DB& db, const CBlockLocator& locator, int height)
     {
         return SetBestChainINTERNAL(db, locator, height);
@@ -272,4 +279,22 @@ TEST_F(WalletPersistenceTest, LockedEncryptedWalletDefersWithoutPlaintextWritesO
     EXPECT_EQ(original, database.Snapshot());
     EXPECT_EQ(0, database.plaintextWrites);
     EXPECT_EQ(1, database.aborts);
+}
+
+TEST_F(WalletPersistenceTest, EncryptionStateRemainsLockedThroughCommit)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    ASSERT_TRUE(wallet->EnableTestEncryption());
+    PersistenceFaultDB database(wallet->strWalletFile);
+    wallet->AdvanceTrees(0);
+    bool observed = false;
+    database.beforeCommit = [&] {
+        std::atomic<bool> acquired{true};
+        std::thread probe([&] { acquired = wallet->TryKeyStoreLock(); });
+        probe.join();
+        EXPECT_FALSE(acquired.load());
+        observed = true;
+    };
+    EXPECT_TRUE(wallet->Save(database, CBlockLocator(std::vector<uint256>{GetRandHash()}), 0));
+    EXPECT_TRUE(observed);
 }
