@@ -1051,6 +1051,8 @@ private:
  */
 class CWallet : public CCryptoKeyStore, public CValidationInterface
 {
+    friend class WalletSpendTrackingTest;
+
 protected:
     bool fBroadcastTransactions;
 private:

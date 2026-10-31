@@ -70,6 +70,7 @@
 #include "komodo_globals.h"
 #include "komodo_defs.h"
 
+#include <algorithm>
 #include <assert.h>
 #include <random>
 
@@ -4185,7 +4186,7 @@ int CWallet::GetIronwoodSpendDepth(const uint256& nullifier) const {
  * 
  * Records that a specific transparent UTXO is being spent by a transaction.
  * This function:
- * - Removes any existing entries for this outpoint (during rescan)
+ * - Retains distinct spenders while ignoring duplicate entries for the same transaction
  * - Adds the spending relationship to mapTxSpends
  * - Synchronizes metadata across all transactions that spend the same output
  * 
@@ -4194,10 +4195,11 @@ int CWallet::GetIronwoodSpendDepth(const uint256& nullifier) const {
  */
 void CWallet::AddToTransparentSpends(const COutPoint& outpoint, const uint256& wtxid)
 {
-    // Remove any existing entries for this outpoint to avoid duplicates during rescan
-    mapTxSpends.erase(outpoint);
-    
-    mapTxSpends.insert(make_pair(outpoint, wtxid));
+    const auto existing = mapTxSpends.equal_range(outpoint);
+    if (std::none_of(existing.first, existing.second,
+            [&wtxid](const TxSpends::value_type& spend) { return spend.second == wtxid; })) {
+        mapTxSpends.insert(make_pair(outpoint, wtxid));
+    }
 
     pair<TxSpends::iterator, TxSpends::iterator> range;
     range = mapTxSpends.equal_range(outpoint);
@@ -4211,7 +4213,7 @@ void CWallet::AddToTransparentSpends(const COutPoint& outpoint, const uint256& w
  * 
  * Records that a specific Sprout note is being spent by a transaction.
  * This function:
- * - Removes any existing entries for this nullifier (during rescan)
+ * - Retains distinct spenders while ignoring duplicate entries for the same transaction
  * - Adds the spending relationship to mapTxSproutNullifiers
  * - Synchronizes metadata across all transactions that spend the same nullifier
  * 
@@ -4220,10 +4222,11 @@ void CWallet::AddToTransparentSpends(const COutPoint& outpoint, const uint256& w
  */
 void CWallet::AddToSproutSpends(const uint256& nullifier, const uint256& wtxid)
 {
-    // Remove any existing entries for this nullifier to avoid duplicates during rescan
-    mapTxSproutNullifiers.erase(nullifier);
-    
-    mapTxSproutNullifiers.insert(make_pair(nullifier, wtxid));
+    const auto existing = mapTxSproutNullifiers.equal_range(nullifier);
+    if (std::none_of(existing.first, existing.second,
+            [&wtxid](const TxNullifiers::value_type& spend) { return spend.second == wtxid; })) {
+        mapTxSproutNullifiers.insert(make_pair(nullifier, wtxid));
+    }
 
     pair<TxNullifiers::iterator, TxNullifiers::iterator> range;
     range = mapTxSproutNullifiers.equal_range(nullifier);
@@ -4237,7 +4240,7 @@ void CWallet::AddToSproutSpends(const uint256& nullifier, const uint256& wtxid)
  * 
  * Records that a specific Sapling note is being spent by a transaction.
  * This function:
- * - Removes any existing entries for this nullifier (during rescan)
+ * - Retains distinct spenders while ignoring duplicate entries for the same transaction
  * - Adds the spending relationship to mapTxSaplingNullifiers
  * - Synchronizes metadata across all transactions that spend the same nullifier
  * 
@@ -4246,11 +4249,11 @@ void CWallet::AddToSproutSpends(const uint256& nullifier, const uint256& wtxid)
  */
 void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
 {
-    // Remove any existing entries for this nullifier to avoid duplicates during rescan
-    mapTxSaplingNullifiers.erase(nullifier);
-    
-    //Add the new spending relationship
-    mapTxSaplingNullifiers.insert(make_pair(nullifier, wtxid));
+    const auto existing = mapTxSaplingNullifiers.equal_range(nullifier);
+    if (std::none_of(existing.first, existing.second,
+            [&wtxid](const TxNullifiers::value_type& spend) { return spend.second == wtxid; })) {
+        mapTxSaplingNullifiers.insert(make_pair(nullifier, wtxid));
+    }
 
     pair<TxNullifiers::iterator, TxNullifiers::iterator> range;
     range = mapTxSaplingNullifiers.equal_range(nullifier);
@@ -4264,7 +4267,7 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
  * 
  * Records that a specific Ironwood note is being spent by a transaction.
  * This function:
- * - Removes any existing entries for this nullifier (during rescan)
+ * - Retains distinct spenders while ignoring duplicate entries for the same transaction
  * - Adds the spending relationship to mapTxIronwoodNullifiers
  * - Synchronizes metadata across all transactions that spend the same nullifier
  * 
@@ -4273,10 +4276,11 @@ void CWallet::AddToSaplingSpends(const uint256& nullifier, const uint256& wtxid)
  */
 void CWallet::AddToIronwoodSpends(const uint256& nullifier, const uint256& wtxid)
 {
-    // Remove any existing entries for this nullifier to avoid duplicates during rescan
-    mapTxIronwoodNullifiers.erase(nullifier);
-    
-    mapTxIronwoodNullifiers.insert(make_pair(nullifier, wtxid));
+    const auto existing = mapTxIronwoodNullifiers.equal_range(nullifier);
+    if (std::none_of(existing.first, existing.second,
+            [&wtxid](const TxNullifiers::value_type& spend) { return spend.second == wtxid; })) {
+        mapTxIronwoodNullifiers.insert(make_pair(nullifier, wtxid));
+    }
 
     pair<TxNullifiers::iterator, TxNullifiers::iterator> range;
     range = mapTxIronwoodNullifiers.equal_range(nullifier);
