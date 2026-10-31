@@ -109,12 +109,12 @@ public:
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
-    bool AppendNoteCommitments(const int nBlockHeight, const CTransaction tx, const int txidx) {
+    bool AppendNoteCommitments(const int nBlockHeight, const CTransaction& tx, const int txidx) {
         assert(nBlockHeight >= 0);
 
         if(tx.GetIronwoodActionsCount()>0) {
 
-            IronwoodBundle ironwoodBundle = tx.GetIronwoodBundle();
+            const auto& ironwoodBundle = tx.GetIronwoodBundle();
 
             if (!ironwood_wallet_append_bundle_commitments(
                     inner.get(),

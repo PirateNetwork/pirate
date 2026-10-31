@@ -120,12 +120,12 @@ public:
      *
      * Returns `false` if the caller attempts to insert a block out-of-order.
      */
-    bool AppendNoteCommitments(const int nBlockHeight, const CTransaction tx, const int txidx) {
+    bool AppendNoteCommitments(const int nBlockHeight, const CTransaction& tx, const int txidx) {
         assert(nBlockHeight >= 0);
 
         if(tx.GetSaplingOutputsCount()>0) {
 
-            SaplingBundle saplingBundle = tx.GetSaplingBundle();
+            const auto& saplingBundle = tx.GetSaplingBundle();
 
             if (!sapling_wallet_append_bundle_commitments(
                     inner.get(),
