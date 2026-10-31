@@ -92,6 +92,18 @@ public:
         }
     }
 
+    bool GetSaplingAnchorAt(const uint256& rt, SaplingMerkleTree& tree) const
+    {
+        if (rt == SaplingMerkleTree::empty_root()) {
+            tree = SaplingMerkleTree();
+            return true;
+        }
+        const auto it = mapSaplingAnchors_.find(rt);
+        if (it == mapSaplingAnchors_.end()) return false;
+        tree = it->second;
+        return true;
+    }
+
     bool GetIronwoodFrontierAnchorAt(const uint256& rt, IronwoodMerkleFrontier& tree) const
     {
         if (rt == IronwoodMerkleFrontier::empty_root()) {
@@ -141,6 +153,9 @@ public:
         switch (type) {
         case SPROUT:
             return hashBestSproutAnchor_;
+            break;
+        case SAPLING:
+            return hashBestSaplingAnchor_;
             break;
         case SAPLINGFRONTIER:
             return hashBestSaplingFrontierAnchor_;
@@ -227,6 +242,7 @@ public:
         }
 
         BatchWriteAnchors<SproutMerkleTree, CAnchorsSproutMap>(mapSproutAnchors, mapSproutAnchors_);
+        BatchWriteAnchors<SaplingMerkleTree, CAnchorsSaplingMap>(mapSaplingAnchors, mapSaplingAnchors_);
         BatchWriteAnchors<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap>(mapSaplingFrontierAnchors, mapSaplingFrontierAnchors_);
         BatchWriteAnchors<IronwoodMerkleFrontier, CAnchorsIronwoodFrontierMap>(mapIronwoodFrontierAnchors, mapIronwoodFrontierAnchors_);
 
@@ -238,6 +254,7 @@ public:
         mapSproutAnchors.clear();
         hashBestBlock_ = hashBlock;
         hashBestSproutAnchor_ = hashSproutAnchor;
+        hashBestSaplingAnchor_ = hashSaplingAnchor;
         hashBestSaplingFrontierAnchor_ = hashSaplingFrontierAnchor;
         hashBestIronwoodFrontierAnchor_ = hashIronwoodFrontierAnchor;
         return true;
@@ -256,6 +273,7 @@ public:
         // Manually recompute the dynamic usage of the whole data, and compare it.
         size_t ret = memusage::DynamicUsage(cacheCoins) +
                      memusage::DynamicUsage(cacheSproutAnchors) +
+                     memusage::DynamicUsage(cacheSaplingAnchors) +
                      memusage::DynamicUsage(cacheSaplingFrontierAnchors) +
                      memusage::DynamicUsage(cacheIronwoodFrontierAnchors) +
                      memusage::DynamicUsage(cacheSproutNullifiers) +
@@ -264,6 +282,9 @@ public:
                      memusage::DynamicUsage(historyCacheMap);
         for (CCoinsMap::iterator it = cacheCoins.begin(); it != cacheCoins.end(); it++) {
             ret += it->second.coins.DynamicMemoryUsage();
+        }
+        for (const auto& item : cacheSaplingAnchors) {
+            ret += item.second.tree.DynamicMemoryUsage();
         }
         EXPECT_EQ(DynamicMemoryUsage(), ret);
     }
@@ -375,6 +396,11 @@ bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SproutMerk
     return cache.GetSproutAnchorAt(rt, tree);
 }
 template <>
+bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SaplingMerkleTree& tree)
+{
+    return cache.GetSaplingAnchorAt(rt, tree);
+}
+template <>
 bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, SaplingMerkleFrontier& tree)
 {
     return cache.GetSaplingFrontierAnchorAt(rt, tree);
@@ -383,6 +409,66 @@ template <>
 bool GetAnchorAt(const CCoinsViewCacheTest& cache, const uint256& rt, IronwoodMerkleFrontier& tree)
 {
     return cache.GetIronwoodFrontierAnchorAt(rt, tree);
+}
+
+template <typename Tree>
+static void ReturnedAnchorRootSurvivesFlushAndRewind(ShieldedType type)
+{
+    CCoinsViewTest base;
+    CCoinsViewCacheTest cache(&base);
+    Tree tree;
+    const auto emptyRoot = tree.root();
+    EXPECT_EQ(emptyRoot, cache.PushAnchorAndGetRoot(tree));
+    EXPECT_EQ(emptyRoot, cache.GetBestAnchor(type));
+
+    AppendRandomLeaf(tree);
+    const auto expectedRoot = tree.root();
+    ASSERT_NE(emptyRoot, expectedRoot);
+    EXPECT_EQ(expectedRoot, cache.PushAnchorAndGetRoot(tree));
+    EXPECT_EQ(expectedRoot, cache.GetBestAnchor(type));
+    Tree restored;
+    ASSERT_TRUE(GetAnchorAt(cache, expectedRoot, restored));
+    CDataStream original(SER_DISK, CLIENT_VERSION), loaded(SER_DISK, CLIENT_VERSION);
+    original << tree;
+    loaded << restored;
+    EXPECT_EQ(original.str(), loaded.str());
+
+    // Returning an unchanged root must neither add entries nor change the tree.
+    const auto usage = cache.DynamicMemoryUsage();
+    EXPECT_EQ(expectedRoot, cache.PushAnchorAndGetRoot(tree));
+    EXPECT_EQ(usage, cache.DynamicMemoryUsage());
+    ASSERT_TRUE(cache.Flush());
+    ASSERT_TRUE(GetAnchorAt(cache, expectedRoot, restored));
+    EXPECT_EQ(expectedRoot, restored.root());
+
+    cache.PopAnchor(emptyRoot, type);
+    EXPECT_EQ(emptyRoot, cache.GetBestAnchor(type));
+    ASSERT_TRUE(cache.Flush());
+    EXPECT_FALSE(GetAnchorAt(cache, expectedRoot, restored));
+    EXPECT_EQ(expectedRoot, cache.PushAnchorAndGetRoot(tree));
+    ASSERT_TRUE(cache.Flush());
+    ASSERT_TRUE(GetAnchorAt(cache, expectedRoot, restored));
+    EXPECT_EQ(expectedRoot, restored.root());
+}
+
+TEST(TestCoins, ReturnedSproutAnchorRootSurvivesFlushAndRewind)
+{
+    ReturnedAnchorRootSurvivesFlushAndRewind<SproutMerkleTree>(SPROUT);
+}
+
+TEST(TestCoins, ReturnedSaplingAnchorRootSurvivesFlushAndRewind)
+{
+    ReturnedAnchorRootSurvivesFlushAndRewind<SaplingMerkleTree>(SAPLING);
+}
+
+TEST(TestCoins, ReturnedSaplingFrontierRootSurvivesFlushAndRewind)
+{
+    ReturnedAnchorRootSurvivesFlushAndRewind<SaplingMerkleFrontier>(SAPLINGFRONTIER);
+}
+
+TEST(TestCoins, ReturnedIronwoodFrontierRootSurvivesFlushAndRewind)
+{
+    ReturnedAnchorRootSurvivesFlushAndRewind<IronwoodMerkleFrontier>(IRONWOODFRONTIER);
 }
 
 void checkNullifierCache(const CCoinsViewCacheTest& cache, const TxWithNullifiers& txWithNullifiers, bool shouldBeInCache)

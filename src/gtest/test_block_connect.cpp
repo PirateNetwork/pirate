@@ -203,6 +203,125 @@ TEST(test_block, TestTurnstileIronwoodViolationRejected)
 
 static const std::string tSecretRegtestBlockConnect = "UuRoAgHmjHZqexxVAPjzW8N6hr3o7aETZqCZon2m8EYAmjmdTcj1";
 
+class BlockCommitmentRootTest : public BitcoinTestingSetup
+{
+protected:
+    void SelectTestParams() override { SelectParams(CBaseChainParams::REGTEST); }
+
+    void SetUp() override
+    {
+        BitcoinTestingSetup::SetUp();
+        savedCheckpoints = fCheckpointsEnabled;
+        fCheckpointsEnabled = false;
+        savedChainName = chainName;
+        chainName = assetchain("ROOTTEST");
+        const auto& upgrades = Params().GetConsensus().vUpgrades;
+        savedOverwinter = upgrades[Consensus::UPGRADE_OVERWINTER].nActivationHeight;
+        savedSapling = upgrades[Consensus::UPGRADE_SAPLING].nActivationHeight;
+        savedIronwood = upgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight;
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, 0);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, 0);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
+    }
+
+    void TearDown() override
+    {
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, savedOverwinter);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, savedSapling);
+        UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, savedIronwood);
+        fCheckpointsEnabled = savedCheckpoints;
+        chainName = savedChainName;
+        BitcoinTestingSetup::TearDown();
+    }
+
+    void CheckRootValidation(bool ironwood, bool corruptHeader, bool mismatchedTrees)
+    {
+        LOCK(cs_main);
+        const int height = chainActive.Height() + 1;
+        if (ironwood) UpdateNetworkUpgradeParameters(Consensus::UPGRADE_IRONWOOD, height);
+        CCoinsViewCache view(pcoinsTip);
+
+        // Independent legacy/frontier trees represent an existing non-empty
+        // Sapling history. A coinbase-only candidate must retain its exact root.
+        CMutableTransaction seed;
+        seed.saplingBundle = sapling::test_only_invalid_bundle(0, 1, 0);
+        const auto commitment = uint256::FromRawBytes(seed.saplingBundle.GetDetails().outputs()[0].cmu());
+        SaplingMerkleTree legacy;
+        SaplingMerkleFrontier frontier;
+        legacy.append(commitment);
+        if (!mismatchedTrees) frontier.append(commitment);
+        view.PushAnchor(legacy);
+        view.PushAnchor(frontier);
+        const auto expectedRoot = frontier.root();
+
+        auto coinbase = CreateNewContextualCMutableTransaction(Params().GetConsensus(), height);
+        coinbase.vin.resize(1);
+        coinbase.vin[0].prevout.SetNull();
+        coinbase.vin[0].scriptSig = CScript() << height << CScriptNum(1);
+        coinbase.vout.emplace_back(GetBlockSubsidy(height, Params().GetConsensus()), CScript());
+        coinbase.nExpiryHeight = 0;
+        CBlock block;
+        block.hashPrevBlock = chainActive.Tip()->GetBlockHash();
+        block.vtx.emplace_back(coinbase);
+        block.hashBlockCommitments = ironwood ?
+            DeriveBlockCommitmentsHash(
+                view.GetHistoryRoot(CurrentEpochBranchId(height - 1, Params().GetConsensus())),
+                block.BuildAuthDataMerkleTree()) : expectedRoot;
+        if (corruptHeader) block.hashBlockCommitments.begin()[0] ^= 1;
+
+        CBlockIndex index(block);
+        index.pprev = chainActive.Tip();
+        index.nHeight = height;
+        const auto previousBest = view.GetBestBlock();
+        CValidationState state;
+        const bool accepted = ::ConnectBlock(block, state, &index, view, true, false);
+        if (mismatchedTrees) {
+            EXPECT_FALSE(accepted);
+            EXPECT_EQ("bad-sapling-root-mismatch", state.GetRejectReason());
+        } else if (corruptHeader) {
+            EXPECT_FALSE(accepted);
+            EXPECT_EQ(ironwood ? "bad-block-commitments-hash" : "bad-sapling-root-in-block", state.GetRejectReason());
+        } else {
+            EXPECT_TRUE(accepted) << state.GetRejectReason();
+            EXPECT_EQ(expectedRoot, index.hashFinalSaplingRoot);
+            EXPECT_EQ(expectedRoot, view.GetBestAnchor(SAPLING));
+            EXPECT_EQ(expectedRoot, view.GetBestAnchor(SAPLINGFRONTIER));
+            if (ironwood) EXPECT_EQ(IronwoodMerkleFrontier::empty_root(), index.hashFinalIronwoodRoot);
+        }
+        EXPECT_EQ(previousBest, view.GetBestBlock());
+        EXPECT_EQ(chainActive.Tip()->GetBlockHash(), pcoinsTip->GetBestBlock());
+    }
+
+    bool savedCheckpoints;
+    assetchain savedChainName;
+    int savedOverwinter, savedSapling, savedIronwood;
+};
+
+TEST_F(BlockCommitmentRootTest, RetainsNonEmptySaplingRootWithoutNewCommitments)
+{
+    CheckRootValidation(false, false, false);
+}
+
+TEST_F(BlockCommitmentRootTest, RejectsWrongSaplingRootInHeader)
+{
+    CheckRootValidation(false, true, false);
+}
+
+TEST_F(BlockCommitmentRootTest, RejectsMismatchedLegacyAndFrontierRoots)
+{
+    CheckRootValidation(false, false, true);
+}
+
+TEST_F(BlockCommitmentRootTest, RetainsRootsAndBlockCommitmentAfterIronwoodActivation)
+{
+    CheckRootValidation(true, false, false);
+}
+
+TEST_F(BlockCommitmentRootTest, RejectsWrongBlockCommitmentAfterIronwoodActivation)
+{
+    CheckRootValidation(true, true, false);
+}
+
 // ContextualCheckShieldedInputs' duplicate-nullifier rejection (Consensus::CheckTxShieldedInputs,
 // "bad-txns-sapling/ironwood-duplicate-nullifier") is exercised per-transaction by
 // AcceptToMemoryPool, but ConnectBlock() runs it too, against a view that gets updated

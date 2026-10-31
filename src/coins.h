@@ -620,6 +620,10 @@ public:
     // and sets the current commitment root to this root.
     template<typename Tree> void PushAnchor(const Tree &tree);
 
+    // Adds the tree and returns the root computed for that exact tree. Callers
+    // can reuse it for block validation without repeating the tree hashing.
+    template<typename Tree> uint256 PushAnchorAndGetRoot(const Tree &tree);
+
     // Removes the current commitment root from mapAnchors and sets
     // the new current root.
     void PopAnchor(const uint256 &rt, ShieldedType type);
@@ -720,7 +724,7 @@ private:
 
     //! Generalized interface for pushing anchors
     template<typename Tree, typename Cache, typename CacheIterator, typename CacheEntry>
-    void AbstractPushAnchor(
+    uint256 AbstractPushAnchor(
         const Tree &tree,
         ShieldedType type,
         Cache &cacheAnchors,

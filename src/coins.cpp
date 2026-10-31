@@ -318,7 +318,7 @@ uint256 CCoinsViewCache::GetHistoryRoot(uint32_t epochId) const {
 }
 
 template<typename Tree, typename Cache, typename CacheIterator, typename CacheEntry>
-void CCoinsViewCache::AbstractPushAnchor(
+uint256 CCoinsViewCache::AbstractPushAnchor(
     const Tree &tree,
     ShieldedType type,
     Cache &cacheAnchors,
@@ -349,11 +349,12 @@ void CCoinsViewCache::AbstractPushAnchor(
 
         hash = newrt;
     }
+    return newrt;
 }
 
-template<> void CCoinsViewCache::PushAnchor(const SproutMerkleTree &tree)
+template<> uint256 CCoinsViewCache::PushAnchorAndGetRoot(const SproutMerkleTree &tree)
 {
-    AbstractPushAnchor<SproutMerkleTree, CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry>(
+    return AbstractPushAnchor<SproutMerkleTree, CAnchorsSproutMap, CAnchorsSproutMap::iterator, CAnchorsSproutCacheEntry>(
         tree,
         SPROUT,
         cacheSproutAnchors,
@@ -361,9 +362,9 @@ template<> void CCoinsViewCache::PushAnchor(const SproutMerkleTree &tree)
     );
 }
 
-template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleTree &tree)
+template<> uint256 CCoinsViewCache::PushAnchorAndGetRoot(const SaplingMerkleTree &tree)
 {
-    AbstractPushAnchor<SaplingMerkleTree, CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingMerkleCacheEntry>(
+    return AbstractPushAnchor<SaplingMerkleTree, CAnchorsSaplingMap, CAnchorsSaplingMap::iterator, CAnchorsSaplingMerkleCacheEntry>(
         tree,
         SAPLING,
         cacheSaplingAnchors,
@@ -371,9 +372,9 @@ template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleTree &tree)
     );
 }
 
-template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleFrontier &tree)
+template<> uint256 CCoinsViewCache::PushAnchorAndGetRoot(const SaplingMerkleFrontier &tree)
 {
-    AbstractPushAnchor<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry>(
+    return AbstractPushAnchor<SaplingMerkleFrontier, CAnchorsSaplingFrontierMap, CAnchorsSaplingFrontierMap::iterator, CAnchorsSaplingFrontierCacheEntry>(
         tree,
         SAPLINGFRONTIER,
         cacheSaplingFrontierAnchors,
@@ -381,14 +382,34 @@ template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleFrontier &tree)
     );
 }
 
-template<> void CCoinsViewCache::PushAnchor(const IronwoodMerkleFrontier &tree)
+template<> uint256 CCoinsViewCache::PushAnchorAndGetRoot(const IronwoodMerkleFrontier &tree)
 {
-    AbstractPushAnchor<IronwoodMerkleFrontier, CAnchorsIronwoodFrontierMap, CAnchorsIronwoodFrontierMap::iterator, CAnchorsIronwoodFrontierCacheEntry>(
+    return AbstractPushAnchor<IronwoodMerkleFrontier, CAnchorsIronwoodFrontierMap, CAnchorsIronwoodFrontierMap::iterator, CAnchorsIronwoodFrontierCacheEntry>(
         tree,
         IRONWOODFRONTIER,
         cacheIronwoodFrontierAnchors,
         hashIronwoodFrontierAnchor
     );
+}
+
+template<> void CCoinsViewCache::PushAnchor(const SproutMerkleTree &tree)
+{
+    PushAnchorAndGetRoot(tree);
+}
+
+template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleTree &tree)
+{
+    PushAnchorAndGetRoot(tree);
+}
+
+template<> void CCoinsViewCache::PushAnchor(const SaplingMerkleFrontier &tree)
+{
+    PushAnchorAndGetRoot(tree);
+}
+
+template<> void CCoinsViewCache::PushAnchor(const IronwoodMerkleFrontier &tree)
+{
+    PushAnchorAndGetRoot(tree);
 }
 
 template<>

@@ -4357,10 +4357,12 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     if ( ASSETCHAINS_STAKED != 0 && fCheckPOW && komodo_checkPOW(blockReward+stakeTxValue-notarypaycheque,1,(CBlock *)&block,pindex->nHeight) < 0 )
         return state.DoS(100, error("ConnectBlock: ac_staked chain failed slow komodo_checkPOW"),REJECT_INVALID, "failed-slow_checkPOW");
 
-    view.PushAnchor(sprout_tree);
-    view.PushAnchor(sapling_tree);
-    view.PushAnchor(sapling_frontier_tree);
-    view.PushAnchor(ironwood_frontier_tree);
+    // Insertion computes each root from the completed tree. Reuse those exact
+    // roots below; none of the trees change after this point.
+    const uint256 sproutRoot = view.PushAnchorAndGetRoot(sprout_tree);
+    const uint256 saplingRoot = view.PushAnchorAndGetRoot(sapling_tree);
+    const uint256 saplingFrontierRoot = view.PushAnchorAndGetRoot(sapling_frontier_tree);
+    const uint256 ironwoodFrontierRoot = view.PushAnchorAndGetRoot(ironwood_frontier_tree);
     if (!fJustCheck) {
         // Update pindex with the net change in transparent value and the chain's total
         // transparent value.
@@ -4391,7 +4393,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
             pindex->nChainTotalBurned = burnedAmountDelta;
         }
 
-        pindex->hashFinalSproutRoot = sprout_tree.root();
+        pindex->hashFinalSproutRoot = sproutRoot;
     }
 
     // Turnstile enforcement (ZIP 209): reject any block that would drive a shielded
@@ -4422,10 +4424,10 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     // same as the root of the Sapling tree
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         //Set the hashFinalSaplingRoot in the block index (equal to HahsBlockCommitments before Ironwood)
-        pindex->hashFinalSaplingRoot = sapling_frontier_tree.root();
+        pindex->hashFinalSaplingRoot = saplingFrontierRoot;
 
         // Validate that legacy Sapling tree root matches frontier tree root
-        if (sapling_tree.root() != sapling_frontier_tree.root()) {
+        if (saplingRoot != saplingFrontierRoot) {
             return state.DoS(100, error("ConnectBlock(): Sapling tree root mismatch between legacy and frontier trees"),
                            REJECT_INVALID, "bad-sapling-root-mismatch");
         }
@@ -4442,7 +4444,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
         //   these set to null.
     if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
         pindex->hashAuthDataRoot = hashAuthDataRoot.value();
-        pindex->hashFinalIronwoodRoot = ironwood_frontier_tree.root();
+        pindex->hashFinalIronwoodRoot = ironwoodFrontierRoot;
         pindex->hashChainHistoryRoot = hashChainHistoryRoot.value();
     }
 
@@ -4470,7 +4472,7 @@ bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockIndex* pin
     } else if (NetworkUpgradeActive(pindex->nHeight, chainparams.GetConsensus(), Consensus::UPGRADE_SAPLING)) {
         // If Sapling is active, block.hashBlockCommitments must be the
         // same as the root of the Sapling tree
-        if (block.hashBlockCommitments != sapling_frontier_tree.root()) {
+        if (block.hashBlockCommitments != saplingFrontierRoot) {
             return state.DoS(100,
                 error("ConnectBlock(): block's hashBlockCommitments is incorrect (should be Sapling tree root)"),
                 REJECT_INVALID, "bad-sapling-root-in-block");
