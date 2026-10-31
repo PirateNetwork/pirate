@@ -4,6 +4,18 @@ release-notes at release time)
 Notable changes
 ===============
 
+Wallet spend tracking
+---------------------
+
+- Wallets now retain every distinct transaction that spends an output or shielded
+  note. Previously, loading or updating an off-chain attempt could replace the
+  record of a confirmed spend, making an already-spent amount appear available
+  again. Repeated loads of the same transaction remain idempotent. This applies
+  to transparent outputs and Sprout, Sapling, and Ironwood notes.
+- Spend indexes are rebuilt when the wallet is opened, so this correction needs
+  an ordinary restart with the updated wallet, not a full rescan or reindex. It
+  does not change transaction validation, shielded proofs, or the wallet format.
+
 Low-level RPC changes
 ---------------------
 
