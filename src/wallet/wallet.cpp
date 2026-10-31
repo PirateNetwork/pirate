@@ -76,6 +76,7 @@
 
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/ref.hpp>
 #include <boost/thread.hpp>
 
 #ifdef __linux__ //linux only
@@ -7249,6 +7250,23 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
     return noteData;
 }
 
+// Borrowed work buckets and transaction outputs must outlive every worker,
+// including when a later thread cannot be started or cancellation is pending.
+class NoteDecryptionThreads
+{
+    boost::this_thread::disable_interruption interruptionGuard;
+public:
+    std::vector<boost::thread> threads;
+
+    explicit NoteDecryptionThreads(size_t capacity) { threads.reserve(capacity); }
+    ~NoteDecryptionThreads()
+    {
+        for (auto& thread : threads) {
+            if (thread.joinable()) thread.join();
+        }
+    }
+};
+
 /**
  * @brief Worker thread function for decrypting Ironwood notes
  * @param wallet Pointer to the wallet instance
@@ -7268,10 +7286,10 @@ mapSproutNoteData_t CWallet::FindMySproutNotes(const CTransaction &tx) const
  */
 static void DecryptIronwoodNoteWorker(
     const CWallet *wallet,
-    const std::vector<std::pair<const IronwoodIncomingViewingKey*, KeyScope>> vIvkWithScope,
-    const std::vector<ironwood_bundle::Action*> vIronwoodEncryptedAction,
-    const std::vector<uint32_t> vPosition,
-    const std::vector<uint256> vHash,
+    const std::vector<std::pair<const IronwoodIncomingViewingKey*, KeyScope>>& vIvkWithScope,
+    const std::vector<ironwood_bundle::Action*>& vIronwoodEncryptedAction,
+    const std::vector<uint32_t>& vPosition,
+    const std::vector<uint256>& vHash,
     const int &height,
     mapIronwoodNoteData_t *noteData,
     IronwoodIncomingViewingKeyMap *viewingKeysToAdd,
@@ -7390,18 +7408,18 @@ std::pair<mapIronwoodNoteData_t, IronwoodIncomingViewingKeyMap> CWallet::FindMyI
             }
         }
 
-        std::vector<boost::thread*> decryptionThreads;
-        for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
-            if(!vvIvkWithScope[i].empty()) {
-                decryptionThreads.emplace_back(new boost::thread(DecryptIronwoodNoteWorker, this, vvIvkWithScope[i], vvIronwoodEncryptedAction[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+        {
+            NoteDecryptionThreads decryptionThreads(vvIvkWithScope.size());
+            for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
+                if(!vvIvkWithScope[i].empty()) {
+                    decryptionThreads.threads.emplace_back(DecryptIronwoodNoteWorker, this,
+                        boost::cref(vvIvkWithScope[i]), boost::cref(vvIronwoodEncryptedAction[i]),
+                        boost::cref(vvPosition[i]), boost::cref(vvHash[i]), height,
+                        &noteData, &viewingKeysToAdd, i);
+                }
             }
         }
-
-        // Cleanup Threads
-        for (auto dthread : decryptionThreads) {
-            dthread->join();
-            delete dthread;
-        }
+        boost::this_thread::interruption_point();
 
         //Rest Vectors for next transaction
         for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
@@ -7442,10 +7460,10 @@ std::pair<mapIronwoodNoteData_t, IronwoodIncomingViewingKeyMap> CWallet::FindMyI
  */
 static void DecryptSaplingNoteWorker(
     const CWallet *wallet,
-    const std::vector<std::pair<const SaplingIncomingViewingKey*, KeyScope>> vIvkWithScope,
-    const std::vector<const sapling::Output*> vSaplingOutput,
-    const std::vector<uint32_t> vPosition,
-    const std::vector<uint256> vHash,
+    const std::vector<std::pair<const SaplingIncomingViewingKey*, KeyScope>>& vIvkWithScope,
+    const std::vector<const sapling::Output*>& vSaplingOutput,
+    const std::vector<uint32_t>& vPosition,
+    const std::vector<uint256>& vHash,
     const int &height,
     mapSaplingNoteData_t *noteData,
     SaplingIncomingViewingKeyMap *viewingKeysToAdd,
@@ -7574,18 +7592,18 @@ std::pair<mapSaplingNoteData_t, SaplingIncomingViewingKeyMap> CWallet::FindMySap
             }
         }
 
-        std::vector<boost::thread*> decryptionThreads;
-        for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
-            if(!vvIvkWithScope[i].empty()) {
-                decryptionThreads.emplace_back(new boost::thread(DecryptSaplingNoteWorker, this, vvIvkWithScope[i], vvSaplingOutput[i], vvPosition[i], vvHash[i], height, &noteData, &viewingKeysToAdd, i));
+        {
+            NoteDecryptionThreads decryptionThreads(vvIvkWithScope.size());
+            for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {
+                if(!vvIvkWithScope[i].empty()) {
+                    decryptionThreads.threads.emplace_back(DecryptSaplingNoteWorker, this,
+                        boost::cref(vvIvkWithScope[i]), boost::cref(vvSaplingOutput[i]),
+                        boost::cref(vvPosition[i]), boost::cref(vvHash[i]), height,
+                        &noteData, &viewingKeysToAdd, i);
+                }
             }
         }
-
-        // Cleanup Threads
-        for (auto dthread : decryptionThreads) {
-            dthread->join();
-            delete dthread;
-        }
+        boost::this_thread::interruption_point();
 
         //Reset Vectors for next transaction
         for (uint32_t i = 0; i < vvIvkWithScope.size(); i++) {

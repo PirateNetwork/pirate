@@ -587,6 +587,57 @@ TEST_P(WalletWitnessTest, CleanupFailureRetainsMarkedNotesAndTheirPaths)
     CheckNotes(*wallet, expected, 3);
 }
 
+TEST_P(WalletWitnessTest, NoteDiscoveryMatchesSingleWorkerAcrossTransactions)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    std::vector<CTransaction> transactions = blocks[1].vtx;
+    transactions.push_back(Shield(true, 5));
+    transactions.emplace_back();
+
+    for (CAmount minimum : {CAmount(1), CAmount(20001)}) {
+        minTxValue = minimum;
+        maxProcessingThreads = 1;
+        if (GetParam() == WitnessPool::Sapling) {
+            const auto serial = wallet->FindMySaplingNotes(transactions, 2);
+            ASSERT_EQ(minimum == 1 ? 7u : 0u, serial.first.size());
+            for (int threads : {2, 4}) {
+                maxProcessingThreads = threads;
+                const auto parallel = wallet->FindMySaplingNotes(transactions, 2);
+                EXPECT_EQ(serial.first, parallel.first);
+                EXPECT_EQ(serial.second, parallel.second);
+                for (const auto& item : serial.first) {
+                    const auto& actual = parallel.first.at(item.first);
+                    EXPECT_EQ(item.second.value, actual.value);
+                    EXPECT_EQ(item.second.address, actual.address);
+                    EXPECT_EQ(item.second.rseed, actual.rseed);
+                    EXPECT_EQ(item.second.zip212Enabled, actual.zip212Enabled);
+                    EXPECT_EQ(item.second.rcm, actual.rcm);
+                    EXPECT_EQ(item.second.cmu, actual.cmu);
+                    EXPECT_EQ(item.second.fNoteDataInitialized, actual.fNoteDataInitialized);
+                }
+            }
+        } else {
+            const auto serial = wallet->FindMyIronwoodNotes(transactions, 2);
+            ASSERT_EQ(minimum == 1 ? 7u : 0u, serial.first.size());
+            for (int threads : {2, 4}) {
+                maxProcessingThreads = threads;
+                const auto parallel = wallet->FindMyIronwoodNotes(transactions, 2);
+                EXPECT_EQ(serial.first, parallel.first);
+                EXPECT_EQ(serial.second, parallel.second);
+                for (const auto& item : serial.first) {
+                    const auto& actual = parallel.first.at(item.first);
+                    EXPECT_EQ(item.second.value, actual.value);
+                    EXPECT_EQ(item.second.address, actual.address);
+                    EXPECT_EQ(item.second.rho, actual.rho);
+                    EXPECT_EQ(item.second.rseed, actual.rseed);
+                    EXPECT_EQ(item.second.cmx, actual.cmx);
+                    EXPECT_EQ(item.second.fNoteDataInitialized, actual.fNoteDataInitialized);
+                }
+            }
+        }
+    }
+}
+
 TEST_P(WalletWitnessTest, LargeSaplingBundleStillRequiresValidProofsAndBindingSignature)
 {
     if (GetParam() != WitnessPool::Sapling) GTEST_SKIP();
