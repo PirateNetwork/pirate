@@ -2359,7 +2359,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "sapling-crypto"
 version = "0.7.0"
-source = "git+https://github.com/piratenetwork/sapling-crypto.git?rev=62fcf59a4d933244ee6280182c6cd3e5290e8a90#62fcf59a4d933244ee6280182c6cd3e5290e8a90"
+source = "git+https://github.com/piratenetwork/sapling-crypto.git?rev=45f4f837c72a7718ab64b5953ea2fec91d71a8d6#45f4f837c72a7718ab64b5953ea2fec91d71a8d6"
 dependencies = [
  "aes",
  "bellman",
@@ -2380,6 +2380,7 @@ dependencies = [
  "memuse",
  "rand 0.8.6",
  "rand_core 0.6.4",
+ "rayon",
  "redjubjub",
  "subtle 2.6.1",
  "tracing",

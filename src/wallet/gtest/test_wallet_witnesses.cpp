@@ -587,6 +587,40 @@ TEST_P(WalletWitnessTest, CleanupFailureRetainsMarkedNotesAndTheirPaths)
     CheckNotes(*wallet, expected, 3);
 }
 
+TEST_P(WalletWitnessTest, LargeSaplingBundleStillRequiresValidProofsAndBindingSignature)
+{
+    if (GetParam() != WitnessPool::Sapling) GTEST_SKIP();
+    const auto tx = Shield(true, 32);
+    const auto outputs = tx.GetSaplingOutputs();
+    ASSERT_GE(outputs.size(), 32u);
+    const CAmount inputValue = 33 * 20000 + 10000;
+    const auto check = [&](const CTransaction& candidate, bool wrongSighash, bool expectedPreparation) {
+        const PrecomputedTransactionData precomputed(candidate, {CTxOut(inputValue, fundingScript)});
+        uint256 sighash = SignatureHash(CScript(), candidate, NOT_AN_INPUT, SIGHASH_ALL, 0,
+            CurrentEpochBranchId(2, Params().GetConsensus()), precomputed);
+        if (wrongSighash) sighash.begin()[0] ^= 1;
+        auto batch = sapling::init_batch_validator(false);
+        const bool prepared = candidate.GetSaplingBundle().QueueAuthValidation(*batch, sighash);
+        EXPECT_EQ(expectedPreparation, prepared);
+        return prepared && batch->validate();
+    };
+    EXPECT_TRUE(check(tx, false, true));
+    EXPECT_FALSE(check(tx, true, true));
+    for (size_t index : {size_t(0), outputs.size() / 2, outputs.size() - 1}) {
+        // Another output's proof is well encoded, but attests to the wrong
+        // statement. Preparation must pass and final verification must fail.
+        CMutableTransaction wrongProof(tx);
+        sapling::test_only_replace_output_proof(wrongProof.saplingBundle.GetDetailsMut(), index,
+            outputs[(index + 1) % outputs.size()].zkproof());
+        EXPECT_FALSE(check(CTransaction(wrongProof), false, true));
+
+        CMutableTransaction malformed(tx);
+        sapling::test_only_replace_output_proof(malformed.saplingBundle.GetDetailsMut(), index,
+            std::array<uint8_t, 192>{});
+        EXPECT_FALSE(check(CTransaction(malformed), false, false));
+    }
+}
+
 TEST_P(WalletWitnessTest, MarkedNotesSurviveRebuildSerializationAndRewind)
 {
     LOCK2(cs_main, wallet->cs_wallet);
