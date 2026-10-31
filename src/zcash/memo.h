@@ -8,6 +8,7 @@
 
 #include <tl/expected.hpp>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string>
