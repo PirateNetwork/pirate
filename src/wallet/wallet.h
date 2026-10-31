@@ -30,12 +30,14 @@
 #include "main.h"
 #include "primitives/block.h"
 #include "primitives/transaction.h"
+#include "streams.h"
 #include "streams_rust.h"
 #include "tinyformat.h"
 #include "ui_interface.h"
 #include "util.h"
 #include "util/strencodings.h"
 #include "validationinterface.h"
+#include "version.h"
 #include "wallet/crypter.h"
 #include "wallet/ironwood.h"
 #include "wallet/sapling.h"
@@ -1899,13 +1901,27 @@ public:
     uint256 HashWithFP(WalletObject &wObj);
 
     template<typename WalletObject1>
-    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1);
+    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1) {
+        CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << wObj1;
+        return CKeyingMaterial(ss.begin(), ss.end());
+    }
 
     template<typename WalletObject1, typename WalletObject2>
-    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2);
+    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2) {
+        auto wObjs = std::make_pair(wObj1, wObj2);
+        CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << wObjs;
+        return CKeyingMaterial(ss.begin(), ss.end());
+    }
 
     template<typename WalletObject1, typename WalletObject2, typename WalletObject3>
-    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2, WalletObject3 &wObj3);
+    CKeyingMaterial SerializeForEncryptionInput(WalletObject1 &wObj1, WalletObject2 &wObj2, WalletObject3 &wObj3) {
+        auto wObjs = std::make_pair(std::make_pair(wObj1, wObj2), wObj3);
+        CSecureDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+        ss << wObjs;
+        return CKeyingMaterial(ss.begin(), ss.end());
+    }
 
     template<typename WalletObject1>
     void DeserializeFromDecryptionOutput(CKeyingMaterial &vchSecret, WalletObject1 &wObj1);
