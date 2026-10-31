@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 enum class WitnessPool { Sapling, Ironwood };
@@ -74,6 +75,12 @@ public:
     {
         return pool == WitnessPool::Sapling ? saplingWallet.GetMerklePathOfNote(txid, output, path) :
             ironwoodWallet.GetMerklePathOfNote(txid, output, path);
+    }
+
+    bool TrackedPosition(WitnessPool pool, const uint256& txid, int output, uint64_t& position)
+    {
+        return pool == WitnessPool::Sapling ? saplingWallet.IsNoteTracked(txid, output, position) :
+            ironwoodWallet.IsNoteTracked(txid, output, position);
     }
 
     bool PathRoot(WitnessPool pool, libzcash::MerklePath& path, const uint256& commitment, uint256& root)
@@ -216,9 +223,9 @@ protected:
         return *target.testIronwoodAddress;
     }
 
-    CTransaction Shield(bool mine)
+    CTransaction Shield(bool mine, int ownedOutputs = 2)
     {
-        const int outputs = mine ? 3 : 1;
+        const int outputs = mine ? ownedOutputs + 1 : 1;
         TransactionBuilder builder(Params().GetConsensus(), 2, &fundingKeys);
         builder.AddTransparentInput(COutPoint(GetRandHash(), 0), fundingScript, outputs * 20000 + 10000);
         if (GetParam() == WitnessPool::Sapling) {
@@ -227,7 +234,9 @@ protected:
             auto other = SaplingAddress(*foreign);
             if (mine && !builder.AddSaplingOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add owned Sapling output");
             if (!builder.AddSaplingOutputRaw(other, 20000, {})) throw std::runtime_error("Cannot add foreign Sapling output");
-            if (mine && !builder.AddSaplingOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add second owned Sapling output");
+            for (int i = 1; mine && i < ownedOutputs; ++i) {
+                if (!builder.AddSaplingOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add another owned Sapling output");
+            }
             libzcash::SaplingExtendedSpendingKey key;
             if (!foreign->GetSaplingExtendedSpendingKey(other, key) || !builder.ConvertRawSaplingOutput(key.expsk.ovk)) {
                 throw std::runtime_error("Cannot convert Sapling outputs");
@@ -238,7 +247,9 @@ protected:
             auto other = IronwoodAddress(*foreign);
             if (mine && !builder.AddIronwoodOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add owned Ironwood output");
             if (!builder.AddIronwoodOutputRaw(other, 20000, {})) throw std::runtime_error("Cannot add foreign Ironwood output");
-            if (mine && !builder.AddIronwoodOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add second owned Ironwood output");
+            for (int i = 1; mine && i < ownedOutputs; ++i) {
+                if (!builder.AddIronwoodOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add another owned Ironwood output");
+            }
             libzcash::IronwoodExtendedSpendingKeyPirate key;
             libzcash::IronwoodFullViewingKey viewing;
             libzcash::IronwoodOutgoingViewingKey outgoing;
@@ -345,6 +356,62 @@ protected:
         uint256 commitment;
         uint256 nullifier;
     };
+
+    struct SingleMarkResult {
+        bool tracked = false;
+        uint64_t position = UINT64_MAX;
+        uint256 root;
+        libzcash::MerklePath path;
+    };
+
+    // Reproduce the old validation strategy independently: a fresh tree for
+    // every note, with exactly one marked output and every commitment appended.
+    template <typename Backend, typename Frontier>
+    SingleMarkResult SingleMarkReference(const ExpectedNote& note, int throughHeight,
+                                         int owningHeight, const Frontier& frontier)
+    {
+        Backend reference;
+        reference.InitNoteCommitmentTree(frontier);
+        for (int height = owningHeight; height <= throughHeight; ++height) {
+            const auto& block = blocks.at(height - 1);
+            for (int txIndex = 0; txIndex < block.vtx.size(); ++txIndex) {
+                const auto& tx = block.vtx[txIndex];
+                if (tx.GetHash() == note.txid) {
+                    if (!reference.CreateEmptyPositionsForTxid(height, note.txid)) throw std::runtime_error("Cannot initialize single-mark reference");
+                    const auto append = [&](const auto& outputs) {
+                        for (int output = 0; output < outputs.size(); ++output) {
+                            if (!reference.AppendNoteCommitment(height, note.txid, txIndex, output,
+                                    &outputs[output], output == note.output)) {
+                                throw std::runtime_error("Cannot append single-mark reference output");
+                            }
+                        }
+                    };
+                    if constexpr (std::is_same_v<Backend, SaplingWallet>) append(tx.GetSaplingOutputs());
+                    else append(tx.GetIronwoodActions());
+                } else if (!reference.AppendNoteCommitments(height, tx, txIndex)) {
+                    throw std::runtime_error("Cannot append single-mark reference transaction");
+                }
+            }
+        }
+        SingleMarkResult result;
+        result.root = reference.GetLatestAnchor();
+        result.tracked = reference.IsNoteTracked(note.txid, note.output, result.position);
+        if (result.tracked && !reference.GetMerklePathOfNote(note.txid, note.output, result.path)) {
+            throw std::runtime_error("Single-mark reference lost its witness");
+        }
+        return result;
+    }
+
+    SingleMarkResult SingleMarkReference(const ExpectedNote& note, int throughHeight)
+    {
+        const int height = mapBlockIndex.at(wallet->mapWallet.at(note.txid).hashBlock)->nHeight;
+        if (GetParam() == WitnessPool::Sapling) {
+            const auto frontier = height > 1 ? saplingFrontiers.at(height - 2) : SaplingMerkleFrontier();
+            return SingleMarkReference<SaplingWallet>(note, throughHeight, height, frontier);
+        }
+        const auto frontier = height > 1 ? ironwoodFrontiers.at(height - 2) : IronwoodMerkleFrontier();
+        return SingleMarkReference<IronwoodWallet>(note, throughHeight, height, frontier);
+    }
 
     void SpendRebuiltNote(WitnessTestWallet& source, const ExpectedNote& expected)
     {
@@ -605,6 +672,65 @@ TEST_P(WalletWitnessTest, MarkedNotesSurviveRebuildSerializationAndRewind)
     EXPECT_THROW(badRoot->Increment(GetParam(), tip, blocks[2]), std::runtime_error);
     EXPECT_FALSE(badRoot->Validated(GetParam()));
     root = correctRoot;
+}
+
+TEST_P(WalletWitnessTest, TransactionValidationMatchesIndependentSingleNoteReplays)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlock({Shield(true, 3), Shield(false), Shield(true, 3)});
+    for (int height = 1; height <= 4; ++height) {
+        Discover(*wallet, height);
+        wallet->Increment(GetParam(), chainActive[height], blocks.at(height - 1));
+    }
+    const auto expected = NoteOracle();
+    ASSERT_EQ(8u, expected.size());
+    ASSERT_EQ(3u, wallet->mapWallet.size());
+    CheckNotes(*wallet, expected, 4);
+
+    for (const auto& note : expected) {
+        SCOPED_TRACE(::testing::Message() << note.txid.ToString() << ":" << note.output);
+        const auto reference = SingleMarkReference(note, 4);
+        ASSERT_TRUE(reference.tracked);
+        EXPECT_EQ(note.position, reference.position);
+        EXPECT_EQ(ExpectedRoot(4), reference.root);
+        uint64_t livePosition;
+        ASSERT_TRUE(wallet->TrackedPosition(GetParam(), note.txid, note.output, livePosition));
+        EXPECT_EQ(reference.position, livePosition);
+        libzcash::MerklePath livePath;
+        ASSERT_TRUE(wallet->Path(GetParam(), note.txid, note.output, livePath));
+        CDataStream expectedPath(SER_DISK, CLIENT_VERSION), actualPath(SER_DISK, CLIENT_VERSION);
+        expectedPath << reference.path;
+        actualPath << livePath;
+        EXPECT_EQ(std::vector<unsigned char>(expectedPath.begin(), expectedPath.end()),
+                  std::vector<unsigned char>(actualPath.begin(), actualPath.end()));
+    }
+    coins->frontierReads = 0;
+    EXPECT_TRUE(wallet->Validate(GetParam(), chainActive[4]));
+    EXPECT_EQ(3, coins->frontierReads); // Three transactions, eight owned notes.
+    CheckNotes(*wallet, expected, 4);
+
+    // Neither strategy can manufacture a tracked note beyond the transaction.
+    auto missing = expected.front();
+    missing.output = 1000;
+    EXPECT_FALSE(SingleMarkReference(missing, 4).tracked);
+    auto& tx = wallet->mapWallet.at(missing.txid);
+    if (GetParam() == WitnessPool::Sapling) tx.mapSaplingNoteData.emplace(SaplingOutPoint(missing.txid, missing.output), SaplingNoteData());
+    else tx.mapIronwoodNoteData.emplace(IronwoodOutPoint(missing.txid, missing.output), IronwoodNoteData());
+    EXPECT_FALSE(wallet->Validate(GetParam(), chainActive[4]));
+    if (GetParam() == WitnessPool::Sapling) tx.mapSaplingNoteData.erase(SaplingOutPoint(missing.txid, missing.output));
+    else tx.mapIronwoodNoteData.erase(IronwoodOutPoint(missing.txid, missing.output));
+
+    auto shifted = NewWallet("witness-differential-shifted.dat", 0);
+    for (int height = 1; height <= 4; ++height) Discover(*shifted, height);
+    shifted->InitFrontier(GetParam(), saplingFrontiers[0], ironwoodFrontiers[0], true);
+    for (int height = 2; height <= 4; ++height) shifted->Process(GetParam(), chainActive[height], blocks.at(height - 1));
+    for (const auto& note : expected) {
+        const auto reference = SingleMarkReference(note, 4);
+        uint64_t shiftedPosition;
+        ASSERT_TRUE(shifted->TrackedPosition(GetParam(), note.txid, note.output, shiftedPosition));
+        EXPECT_NE(reference.position, shiftedPosition);
+    }
+    EXPECT_FALSE(shifted->Validate(GetParam(), chainActive[4]));
 }
 
 INSTANTIATE_TEST_SUITE_P(ShieldedPools, WalletWitnessTest,
