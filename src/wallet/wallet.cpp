@@ -3403,6 +3403,7 @@ void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
     }
 }
 
+
 /**
  * @brief Set the wallet's birthday block height
  * @param nHeight The block height to set as the wallet's birthday
@@ -4777,35 +4778,47 @@ void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, c
  * This is a critical validation function that maintains wallet integrity
  * across different wallet backend implementations.
  */
-bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
+bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex, bool suppressProgress) {
 
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
     int64_t nNow = GetTime();
+    const int64_t progressStart = nNow;
+    int64_t lastProgressTime = nNow;
+    int lastProgressTransaction = 0;
     int valperc = 0;
     int t = -1;
     int walletSize = mapWallet.size();
     bool uiShown = false;
-
+    const std::string progressTitle = _("Validating Sapling note positions...");
+    const auto finishValidation = [&](bool valid) {
+        if (uiShown && !suppressProgress) {
+            uiInterface.ShowProgress(progressTitle, 100, false);
+        }
+        return valid;
+    };
 
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         uint256 txid = (*it).first;
         CWalletTx *pwtx = &(*it).second;
 
         t++;
-        valperc = (t * 100) / walletSize;
+        valperc = static_cast<int>(100LL * t / walletSize);
         if (GetTime() >= nNow + 60) {
             nNow = GetTime();
             LogPrintf("Validating Note Postions... Progress=%d\n", valperc );
         }
 
-        if (GetTime() >= nNow + 10) {
+        if ((suppressProgress || GetTime() >= progressStart + 10) &&
+            (t == 0 || t - lastProgressTransaction >= 100 || GetTime() >= lastProgressTime + 1)) {
+            if (!uiShown && !suppressProgress) {
+                uiInterface.ShowProgress(progressTitle, 0, false);
+            }
             uiShown = true;
-        }
-
-        if (uiShown) {
-            uiInterface.ShowProgress("Validating Note Postions...", std::max(1, std::min(99, valperc)), false);
+            lastProgressTime = GetTime();
+            lastProgressTransaction = t;
+            uiInterface.ShowProgress(progressTitle, std::max(1, std::min(99, valperc)), false);
         }
 
         //Exclude transactions with no Sapling Data
@@ -4815,6 +4828,12 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
 
         //Exclude transactions that are in invalid blocks
         if (mapBlockIndex.count(pwtx->hashBlock) == 0) {
+            continue;
+        }
+
+        // The tree only includes notes mined at or before the supplied height.
+        // During block processing this is the predecessor, before new appends.
+        if (!pindex || mapBlockIndex.at(pwtx->hashBlock)->nHeight > pindex->nHeight) {
             continue;
         }
 
@@ -4835,22 +4854,27 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
             uint64_t position;
 
             if(!saplingWallet.IsNoteTracked(op.hash, op.n, position)) {
-                return false;
+                return finishValidation(false);
             } else {
                 CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
 
                 //Create a new wallet to validate tracked merkle path
                 SaplingMerkleFrontier saplingCheckFrontierTree;
-                pcoinsTip->GetSaplingFrontierAnchorAt(pCheckIndex->pprev->hashFinalSaplingRoot, saplingCheckFrontierTree);
+                if (pCheckIndex->pprev && NetworkUpgradeActive(pCheckIndex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING) &&
+                    !pcoinsTip->GetSaplingFrontierAnchorAt(pCheckIndex->pprev->hashFinalSaplingRoot, saplingCheckFrontierTree)) {
+                    return finishValidation(false);
+                }
                 SaplingWallet saplingWalletCheck;
                 saplingWalletCheck.InitNoteCommitmentTree(saplingCheckFrontierTree);
 
                 MerklePath saplingCheckMerklePath;
-                uint64_t positionCheck;
+                uint64_t positionCheck = UINT64_MAX;
 
                 //Retrieve the full block to get all of the transaction commitments
                 CBlock checkBlock;
-                ReadBlockFromDisk(checkBlock, pCheckIndex, 1);
+                if (!ReadBlockFromDisk(checkBlock, pCheckIndex, 1)) {
+                    return finishValidation(false);
+                }
                 CBlock *pCheckBlock = &checkBlock;
 
                 //Calculate Merkle Path
@@ -4886,7 +4910,7 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
 
                 if (positionCheck != position) {
                     LogPrint("saplingwallet", "Sapling Wallet Validation failed, rebuilding witnesses\n");
-                    return false;
+                    return finishValidation(false);
                 } else {
                     pwtx->mapSaplingNoteData[op].setPosition(position);
                     UpdateSaplingNullifierNoteMapWithTx(pwtx);
@@ -4895,11 +4919,7 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
         }
     }
 
-    if (uiShown) {
-        uiInterface.ShowProgress(_("Validating Note Postions..."), 100, false);
-    }
-
-    return true;
+    return finishValidation(true);
 
 }
 
@@ -4922,35 +4942,47 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex) {
  * This is a critical validation function that maintains wallet integrity
  * across different wallet backend implementations for the Ironwood protocol.
  */
-bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex) {
+bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex, bool suppressProgress) {
 
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
     int64_t nNow = GetTime();
+    const int64_t progressStart = nNow;
+    int64_t lastProgressTime = nNow;
+    int lastProgressTransaction = 0;
     int valperc = 0;
     int t = -1;
     int walletSize = mapWallet.size();
     bool uiShown = false;
-
+    const std::string progressTitle = _("Validating Ironwood note positions...");
+    const auto finishValidation = [&](bool valid) {
+        if (uiShown && !suppressProgress) {
+            uiInterface.ShowProgress(progressTitle, 100, false);
+        }
+        return valid;
+    };
 
     for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
         uint256 txid = (*it).first;
         CWalletTx *pwtx = &(*it).second;
 
         t++;
-        valperc = (t * 100) / walletSize;
+        valperc = static_cast<int>(100LL * t / walletSize);
         if (GetTime() >= nNow + 60) {
             nNow = GetTime();
             LogPrintf("Validating Note Postions... Progress=%d\n", valperc );
         }
 
-        if (GetTime() >= nNow + 10) {
+        if ((suppressProgress || GetTime() >= progressStart + 10) &&
+            (t == 0 || t - lastProgressTransaction >= 100 || GetTime() >= lastProgressTime + 1)) {
+            if (!uiShown && !suppressProgress) {
+                uiInterface.ShowProgress(progressTitle, 0, false);
+            }
             uiShown = true;
-        }
-
-        if (uiShown) {
-            uiInterface.ShowProgress("Validating Note Postions...", std::max(1, std::min(99, valperc)), false);
+            lastProgressTime = GetTime();
+            lastProgressTransaction = t;
+            uiInterface.ShowProgress(progressTitle, std::max(1, std::min(99, valperc)), false);
         }
 
         //Exclude transactions with no Sapling Data
@@ -4960,6 +4992,12 @@ bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex) 
 
         //Exclude transactions that are in invalid blocks
         if (mapBlockIndex.count(pwtx->hashBlock) == 0) {
+            continue;
+        }
+
+        // The tree only includes notes mined at or before the supplied height.
+        // During block processing this is the predecessor, before new appends.
+        if (!pindex || mapBlockIndex.at(pwtx->hashBlock)->nHeight > pindex->nHeight) {
             continue;
         }
 
@@ -4980,22 +5018,27 @@ bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex) 
             uint64_t position;
 
             if(!ironwoodWallet.IsNoteTracked(op.hash, op.n, position)) {
-                return false;
+                return finishValidation(false);
             } else {
                 CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
 
                 //Create a new wallet to validate tracked merkle path
                 IronwoodMerkleFrontier ironwoodCheckFrontierTree;
-                pcoinsTip->GetIronwoodFrontierAnchorAt(pCheckIndex->pprev->hashFinalIronwoodRoot, ironwoodCheckFrontierTree);
+                if (pCheckIndex->pprev && NetworkUpgradeActive(pCheckIndex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) &&
+                    !pcoinsTip->GetIronwoodFrontierAnchorAt(pCheckIndex->pprev->hashFinalIronwoodRoot, ironwoodCheckFrontierTree)) {
+                    return finishValidation(false);
+                }
                 IronwoodWallet ironwoodWalletCheck;
                 ironwoodWalletCheck.InitNoteCommitmentTree(ironwoodCheckFrontierTree);
 
                 MerklePath ironwoodCheckMerklePath;
-                uint64_t positionCheck;
+                uint64_t positionCheck = UINT64_MAX;
 
                 //Retrieve the full block to get all of the transaction commitments
                 CBlock checkBlock;
-                ReadBlockFromDisk(checkBlock, pCheckIndex, 1);
+                if (!ReadBlockFromDisk(checkBlock, pCheckIndex, 1)) {
+                    return finishValidation(false);
+                }
                 CBlock *pCheckBlock = &checkBlock;
 
                 //Calculate Merkle Path
@@ -5031,7 +5074,7 @@ bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex) 
 
                 if (positionCheck != position) {
                     LogPrint("ironwoodwallet", "Ironwood Wallet Validation failed, rebuilding witnesses\n");
-                    return false;
+                    return finishValidation(false);
                 } else {
                     pwtx->mapIronwoodNoteData[op].setPosition(position);
                     UpdateIronwoodNullifierNoteMapWithTx(pwtx);
@@ -5040,11 +5083,7 @@ bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex) 
         }
     }
 
-    if (uiShown) {
-        uiInterface.ShowProgress(_("Validating Note Postions..."), 100, false);
-    }
-
-    return true;
+    return finishValidation(true);
 
 }
 
@@ -5097,14 +5136,14 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 
         //Rebuild wallet if anchor does not match, only check on wallet opening due to performance issues, or rescan without wallet reset
         if (lastCheckpoint == pindex->nHeight - 1 && !saplingWalletValidated) {
-            if (pindex->pprev->hashFinalSaplingRoot != saplingWallet.GetLatestAnchor()) {
+            if (pindex->pprev && pindex->pprev->hashFinalSaplingRoot != saplingWallet.GetLatestAnchor()) {
                 LogPrint("saplingwallet","Sapling Wallet - Sapling Root is out of sync with the blockchain, rebuild witnesses\n");
                 rebuildWallet = true;
             }
 
             //Should never run here, should only run at initialization
             if (!saplingWalletPositionsValidated) {
-                rebuildWallet = !ValidateSaplingWalletTrackedPositions(pindex);
+                rebuildWallet = !ValidateSaplingWalletTrackedPositions(pindex->pprev, suppressProgress) || rebuildWallet;
                 saplingWalletPositionsValidated = true;
             }
 
@@ -5116,22 +5155,30 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
             //Disable the RPC z_sendmany RPC while rebuilding
             fBuilingWitnessCache = true;
 
-            //Don't recheck after a rebuild
-            saplingWalletValidated = true;
+            // A failed or interrupted rebuild must still be checked on retry.
+            saplingWalletValidated = false;
+            saplingWalletPositionsValidated = false;
 
-            //Determine Start Height of Sapling Wallet
+            // Start at the oldest active-chain Sapling note that needs a witness.
+            // The preceding chain frontier contains all earlier commitments.
             for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
                 CWalletTx* pwtx = &(*it).second;
 
-                // Find the block it claims to be in
-                BlockMap::iterator mi = mapBlockIndex.find(pwtx->hashBlock);
-                if (mi == mapBlockIndex.end()) {
+                if (pwtx->mapSaplingNoteData.empty()) {
                     continue;
                 }
 
-                nMinimumHeight = std::min(mapBlockIndex[pwtx->hashBlock]->nHeight, nMinimumHeight);
+                // Find the block it claims to be in
+                BlockMap::iterator mi = mapBlockIndex.find(pwtx->hashBlock);
+                if (mi == mapBlockIndex.end() || !chainActive.Contains(mi->second) || mi->second->nHeight > pindex->nHeight) {
+                    continue;
+                }
+
+                nMinimumHeight = std::min(mi->second->nHeight, nMinimumHeight);
 
             }
+
+            nMinimumHeight = std::max(nMinimumHeight, Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight);
 
             LogPrint("\n\nsaplingwallet", "Sapling Wallet - rebuilding wallet from block %i\n\n", nMinimumHeight);
 
@@ -5147,16 +5194,21 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 
             //Create a new wallet
             SaplingMerkleFrontier saplingFrontierTree;
-            pcoinsTip->GetSaplingFrontierAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingFrontierTree);
+            if (pblockindex->pprev && NetworkUpgradeActive(pblockindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING) &&
+                !pcoinsTip->GetSaplingFrontierAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingFrontierTree)) {
+                throw std::runtime_error("Cannot rebuild Sapling wallet: preceding commitment frontier is unavailable");
+            }
             SaplingWalletReset();
             saplingWallet.InitNoteCommitmentTree(saplingFrontierTree);
 
             //Show in UI
-            int chainHeight = chainActive.Height();
-            bool uiShown = false;
-            const CChainParams& chainParams = Params();
-            double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
-            double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+            const int startHeight = pblockindex->nHeight;
+            const int targetHeight = pindex->nHeight;
+            int lastProgressHeight = startHeight;
+            bool progressReported = false;
+            if (!suppressProgress) {
+                uiInterface.ShowProgress(_("Rebuilding Sapling witnesses..."), 0, false);
+            }
 
             //Loop thru blocks to rebuild saplingWallet commitment tree
             while (pblockindex) {
@@ -5168,14 +5220,14 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 
                 //Report Progress to the GUI and log file
                 int witnessHeight = pblockindex->nHeight;
-                if (!suppressProgress && (witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
+                if (!progressReported || witnessHeight - lastProgressHeight >= 100 || GetTime() >= nNow1 + 1) {
                     nNow1 = GetTime();
-                    if (!uiShown) {
-                        uiShown = true;
-                        uiInterface.ShowProgress("Rebuilding Sapling Wallet", 0, false);
-                    }
-                    scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-                    uiInterface.ShowProgress(_(("Rebuilding Sapling Wallet for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                    lastProgressHeight = witnessHeight;
+                    progressReported = true;
+                    const int progress = static_cast<int>(100LL * (witnessHeight - startHeight) /
+                        (static_cast<int64_t>(targetHeight) - startHeight + 1));
+                    uiInterface.ShowProgress(strprintf(_("Rebuilding Sapling witnesses: block %d of %d..."),
+                        witnessHeight, targetHeight), std::max(1, std::min(99, progress)), false);
                 }
 
                 //exit loop if trying to shutdown
@@ -5185,10 +5237,15 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 
                 //Retrieve the full block to get all of the transaction commitments
                 CBlock block;
-                ReadBlockFromDisk(block, pblockindex, 1);
-                CBlock *pblock = &block;
+                const CBlock* scanBlock = pblock;
+                if (pblockindex != pindex || !scanBlock) {
+                    if (!ReadBlockFromDisk(block, pblockindex, 1)) {
+                        throw std::runtime_error("Cannot rebuild Sapling witnesses: block data is unavailable");
+                    }
+                    scanBlock = &block;
+                }
 
-                ProcessSaplingBlockTransactions(pblockindex, pblock);
+                ProcessSaplingBlockTransactions(pblockindex, scanBlock);
 
                 //Check completeness
                 if (pblockindex == pindex)
@@ -5198,8 +5255,13 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
                 pblockindex = chainActive.Next(pblockindex);
             }
 
-            if (!suppressProgress && uiShown) {
-                uiInterface.ShowProgress(_("Sapling Wallet Rebuild Complete..."), 100, false);
+            if (!suppressProgress) {
+                uiInterface.ShowProgress(_("Rebuilding Sapling witnesses..."), 100, false);
+            }
+
+            if (saplingWallet.GetLastCheckpointHeight() == pindex->nHeight) {
+                saplingWalletValidated = true;
+                saplingWalletPositionsValidated = true;
             }
 
         } else {
@@ -5207,7 +5269,9 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
             //Retrieve the full block to get all of the transaction commitments
             if (pblock == nullptr) {
                 CBlock block;
-                ReadBlockFromDisk(block, pindex, 1);
+                if (!ReadBlockFromDisk(block, pindex, 1)) {
+                    throw std::runtime_error("Cannot update Sapling witnesses: block data is unavailable");
+                }
                 ProcessSaplingBlockTransactions(pindex, &block);
             } else {
                 ProcessSaplingBlockTransactions(pindex, pblock);
@@ -5279,14 +5343,14 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
 
         //Rebuild wallet if anchor does not match, only check on wallet opening due to performance issues, or rescan without wallet reset
         if (lastCheckpoint == pindex->nHeight - 1 && !ironwoodWalletValidated) {
-            if (pindex->pprev->hashFinalIronwoodRoot != ironwoodWallet.GetLatestAnchor()) {
+            if (pindex->pprev && pindex->pprev->hashFinalIronwoodRoot != ironwoodWallet.GetLatestAnchor()) {
                 LogPrint("ironwoodwallet","Ironwood Wallet - Ironwood Root is out of sync with the blockchain, rebuild witnesses\n");
                 rebuildWallet = true;
             }
 
             //Should never run here, should only run at initialization
             if (!ironwoodWalletPositionsValidated) {
-                rebuildWallet = !ValidateIronwoodWalletTrackedPositions(pindex);
+                rebuildWallet = !ValidateIronwoodWalletTrackedPositions(pindex->pprev, suppressProgress) || rebuildWallet;
                 ironwoodWalletPositionsValidated = true;
             }
 
@@ -5298,22 +5362,30 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
             //Disable the RPC z_sendmany RPC while rebuilding
             fBuilingWitnessCache = true;
 
-            //Don't recheck after a rebuild
-            ironwoodWalletValidated = true;
+            // A failed or interrupted rebuild must still be checked on retry.
+            ironwoodWalletValidated = false;
+            ironwoodWalletPositionsValidated = false;
 
-            //Determine Start Height of Sapling Wallet
+            // Start at the oldest active-chain Ironwood note that needs a witness.
+            // Other pools and blocks before activation cannot contain such notes.
             for (map<uint256, CWalletTx>::iterator it = mapWallet.begin(); it != mapWallet.end(); ++it) {
                 CWalletTx* pwtx = &(*it).second;
 
-                // Find the block it claims to be in
-                BlockMap::iterator mi = mapBlockIndex.find(pwtx->hashBlock);
-                if (mi == mapBlockIndex.end()) {
+                if (pwtx->mapIronwoodNoteData.empty()) {
                     continue;
                 }
 
-                nMinimumHeight = std::min(mapBlockIndex[pwtx->hashBlock]->nHeight, nMinimumHeight);
+                // Find the block it claims to be in
+                BlockMap::iterator mi = mapBlockIndex.find(pwtx->hashBlock);
+                if (mi == mapBlockIndex.end() || !chainActive.Contains(mi->second) || mi->second->nHeight > pindex->nHeight) {
+                    continue;
+                }
+
+                nMinimumHeight = std::min(mi->second->nHeight, nMinimumHeight);
 
             }
+
+            nMinimumHeight = std::max(nMinimumHeight, Params().GetConsensus().vUpgrades[Consensus::UPGRADE_IRONWOOD].nActivationHeight);
 
             LogPrint("\n\nironwoodwallet", "Ironwood Wallet - rebuilding wallet from block %i\n\n", nMinimumHeight);
 
@@ -5329,16 +5401,21 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
 
             //Create a new wallet
             IronwoodMerkleFrontier ironwoodFrontierTree;
-            pcoinsTip->GetIronwoodFrontierAnchorAt(pblockindex->pprev->hashFinalIronwoodRoot, ironwoodFrontierTree);
+            if (pblockindex->pprev && NetworkUpgradeActive(pblockindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) &&
+                !pcoinsTip->GetIronwoodFrontierAnchorAt(pblockindex->pprev->hashFinalIronwoodRoot, ironwoodFrontierTree)) {
+                throw std::runtime_error("Cannot rebuild Ironwood wallet: preceding commitment frontier is unavailable");
+            }
             IronwoodWalletReset();
             ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontierTree);
 
             //Show in UI
-            int chainHeight = chainActive.Height();
-            bool uiShown = false;
-            const CChainParams& chainParams = Params();
-            double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false);
-            double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+            const int startHeight = pblockindex->nHeight;
+            const int targetHeight = pindex->nHeight;
+            int lastProgressHeight = startHeight;
+            bool progressReported = false;
+            if (!suppressProgress) {
+                uiInterface.ShowProgress(_("Rebuilding Ironwood witnesses..."), 0, false);
+            }
 
             //Loop thru blocks to rebuild saplingWallet commitment tree
             while (pblockindex) {
@@ -5350,14 +5427,14 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
 
                 //Report Progress to the GUI and log file
                 int witnessHeight = pblockindex->nHeight;
-                if (!suppressProgress && (witnessHeight % 100 == 0 || GetTime() >= nNow1 + 15) && witnessHeight < chainHeight - 5 ) {
+                if (!progressReported || witnessHeight - lastProgressHeight >= 100 || GetTime() >= nNow1 + 1) {
                     nNow1 = GetTime();
-                    if (!uiShown) {
-                        uiShown = true;
-                        uiInterface.ShowProgress("Rebuilding Ironwood Wallet", 0, false);
-                    }
-                    scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pblockindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-                    uiInterface.ShowProgress(_(("Rebuilding Ironwood Wallet for block " + std::to_string(witnessHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                    lastProgressHeight = witnessHeight;
+                    progressReported = true;
+                    const int progress = static_cast<int>(100LL * (witnessHeight - startHeight) /
+                        (static_cast<int64_t>(targetHeight) - startHeight + 1));
+                    uiInterface.ShowProgress(strprintf(_("Rebuilding Ironwood witnesses: block %d of %d..."),
+                        witnessHeight, targetHeight), std::max(1, std::min(99, progress)), false);
                 }
 
                 //exit loop if trying to shutdown
@@ -5367,10 +5444,15 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
 
                 //Retrieve the full block to get all of the transaction commitments
                 CBlock block;
-                ReadBlockFromDisk(block, pblockindex, 1);
-                CBlock *pblock = &block;
+                const CBlock* scanBlock = pblock;
+                if (pblockindex != pindex || !scanBlock) {
+                    if (!ReadBlockFromDisk(block, pblockindex, 1)) {
+                        throw std::runtime_error("Cannot rebuild Ironwood witnesses: block data is unavailable");
+                    }
+                    scanBlock = &block;
+                }
 
-                ProcessIronwoodBlockTransactions(pblockindex, pblock);
+                ProcessIronwoodBlockTransactions(pblockindex, scanBlock);
 
                 //Check completeness
                 if (pblockindex == pindex)
@@ -5380,8 +5462,13 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
                 pblockindex = chainActive.Next(pblockindex);
             }
 
-            if (!suppressProgress && uiShown) {
-                uiInterface.ShowProgress(_("Witness Cache Complete..."), 100, false);
+            if (!suppressProgress) {
+                uiInterface.ShowProgress(_("Rebuilding Ironwood witnesses..."), 100, false);
+            }
+
+            if (ironwoodWallet.GetLastCheckpointHeight() == pindex->nHeight) {
+                ironwoodWalletValidated = true;
+                ironwoodWalletPositionsValidated = true;
             }
 
         } else {
@@ -5389,7 +5476,9 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
             //Retrieve the full block to get all of the transaction commitments
             if (pblock == nullptr) {
                 CBlock block;
-                ReadBlockFromDisk(block, pindex, 1);
+                if (!ReadBlockFromDisk(block, pindex, 1)) {
+                    throw std::runtime_error("Cannot update Ironwood witnesses: block data is unavailable");
+                }
                 ProcessIronwoodBlockTransactions(pindex, &block);
             } else {
                 ProcessIronwoodBlockTransactions(pindex, pblock);

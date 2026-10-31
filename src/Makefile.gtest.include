@@ -142,7 +142,8 @@ pirate_gtest_SOURCES += \
 if ENABLE_WALLET
 pirate_gtest_SOURCES += \
 	wallet/gtest/test_wallet.cpp \
-	wallet/gtest/test_wallet_spends.cpp
+	wallet/gtest/test_wallet_spends.cpp \
+	wallet/gtest/test_wallet_rescan.cpp
 endif
 
 if TARGET_WINDOWS

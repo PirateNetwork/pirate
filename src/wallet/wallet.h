@@ -1192,12 +1192,14 @@ public:
      */
 
     void ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock);
-    bool ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex);
+    // Validate only notes mined at or before pindex (the tree's current height).
+    // suppressProgress reuses an existing progress display without opening or closing it.
+    bool ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex, bool suppressProgress = false);
     void IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr, bool suppressProgress = false);
     void DecrementSaplingWallet(const CBlockIndex* pindex);
 
     void ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, const CBlock* pblock);
-    bool ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex);
+    bool ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex, bool suppressProgress = false);
     void IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr, bool suppressProgress = false);
     void DecrementIronwoodWallet(const CBlockIndex* pindex);
 
