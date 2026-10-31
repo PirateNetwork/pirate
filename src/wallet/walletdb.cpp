@@ -213,9 +213,7 @@ bool CWalletDB::WriteCryptedArcTx(uint256 txid, uint256 chash, const std::vector
         }
     }
 
-    Erase(std::make_pair(std::string("arctx"), txid));
-
-    return true;
+    return Erase(std::make_pair(std::string("arctx"), txid));
 }
 
 bool CWalletDB::EraseArcTx(uint256 hash)
@@ -258,8 +256,7 @@ bool CWalletDB::WriteCryptedArcSaplingOp(uint256 nullifier, uint256 chash, const
         }
     }
 
-    Erase(std::make_pair(std::string("arczsop"), nullifier));
-    return true;
+    return Erase(std::make_pair(std::string("arczsop"), nullifier));
 }
 
 bool CWalletDB::EraseArcSaplingOp(uint256 nullifier)
@@ -302,8 +299,7 @@ bool CWalletDB::WriteCryptedArcIronwoodOp(uint256 nullifier, uint256 chash, cons
         }
     }
 
-    Erase(std::make_pair(std::string("arcironop"), nullifier));
-    return true;
+    return Erase(std::make_pair(std::string("arcironop"), nullifier));
 }
 
 bool CWalletDB::EraseArcIronwoodOp(uint256 nullifier)
@@ -346,9 +342,7 @@ bool CWalletDB::WriteCryptedTx(
         }
     }
 
-    Erase(std::make_pair(std::string("tx"), txid));
-
-    return true;
+    return Erase(std::make_pair(std::string("tx"), txid));
 
 }
 
@@ -551,8 +545,7 @@ bool CWalletDB::WriteCryptedSaplingPaymentAddress(
         return false;
     }
 
-    Erase(std::make_pair(std::string("sapzaddr"), addr));
-    return true;
+    return Erase(std::make_pair(std::string("sapzaddr"), addr));
 }
 
 bool CWalletDB::WriteSaplingDiversifiedAddress(
@@ -668,9 +661,8 @@ bool CWalletDB::WriteCryptedSaplingWitnesses(const uint256 chash, const std::vec
 
     // Drop the plaintext form and any pre-upgrade encrypted record (keyed by the old
     // fixed-string IV) so only the verified record remains.
-    Erase(std::string("sapling_note_commitment_tree"));
-    Erase(std::make_pair(std::string("csaplingwitness"), legacyChash));
-    return true;
+    return Erase(std::string("sapling_note_commitment_tree")) &&
+        Erase(std::make_pair(std::string("csaplingwitness"), legacyChash));
 }
 
 //Ironwood
@@ -793,8 +785,7 @@ bool CWalletDB::WriteCryptedIronwoodPaymentAddress(
         return false;
     }
 
-    Erase(std::make_pair(std::string("ironzaddr"), addr));
-    return true;
+    return Erase(std::make_pair(std::string("ironzaddr"), addr));
 }
 
 bool CWalletDB::WriteIronwoodDiversifiedAddress(
@@ -904,9 +895,8 @@ bool CWalletDB::WriteCryptedIronwoodWitnesses(const uint256 chash, const std::ve
 
     // Drop the plaintext form and any pre-upgrade encrypted record (keyed by the old
     // fixed-string IV) so only the verified record remains.
-    Erase(std::string("ironwood_note_commitment_tree"));
-    Erase(std::make_pair(std::string("cironwoodwitness"), legacyChash));
-    return true;
+    return Erase(std::string("ironwood_note_commitment_tree")) &&
+        Erase(std::make_pair(std::string("cironwoodwitness"), legacyChash));
 }
 
 bool CWalletDB::WriteCScript(const uint160& hash, const CScript& redeemScript)

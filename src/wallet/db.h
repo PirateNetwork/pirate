@@ -318,8 +318,10 @@ public:
     {
         if (!pdb || !activeTxn)
             return false;
-        int ret = activeTxn->commit(0);
+        // Berkeley DB consumes the handle even when commit fails or throws.
+        DbTxn* transaction = activeTxn;
         activeTxn = NULL;
+        int ret = transaction->commit(0);
         return (ret == 0);
     }
 
@@ -327,8 +329,10 @@ public:
     {
         if (!pdb || !activeTxn)
             return false;
-        int ret = activeTxn->abort();
+        // Do not retain a consumed handle if Berkeley DB reports an error.
+        DbTxn* transaction = activeTxn;
         activeTxn = NULL;
+        int ret = transaction->abort();
         return (ret == 0);
     }
 
