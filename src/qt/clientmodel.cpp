@@ -247,7 +247,8 @@ void ClientModel::updateBanlist()
 // Handlers for core signals
 static void ShowProgress(ClientModel *clientmodel, const std::string &title, int nProgress, bool fResume)
 {
-    QMetaObject::invokeMethod(clientmodel, "updateProgressDialog", Qt::DirectConnection,
+    // Manual rescans run on the GUI thread; background updates must be queued.
+    QMetaObject::invokeMethod(clientmodel, "updateProgressDialog", Qt::AutoConnection,
                               Q_ARG(QString, QString::fromStdString(title)),
                               Q_ARG(int, nProgress));
 }
