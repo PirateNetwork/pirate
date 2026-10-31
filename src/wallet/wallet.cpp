@@ -3133,8 +3133,15 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
     LOCK2(cs_main, cs_wallet);
 
     if (added) {
-        IncrementSaplingWallet(pindex);
-        IncrementIronwoodWallet(pindex);
+        IncrementSaplingWallet(pindex, pblock);
+        // An interrupted rebuild must retain the previous wallet position.
+        if (ShutdownRequested()) {
+            return;
+        }
+        IncrementIronwoodWallet(pindex, pblock);
+        if (ShutdownRequested()) {
+            return;
+        }
         // Prevent consolidation & sweep transactions
         // from being created when node is syncing after launch,
         // and also when node wakes up from suspension/hibernation and incoming blocks are old.

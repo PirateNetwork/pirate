@@ -341,3 +341,75 @@ TEST_F(WalletScanTest, ShutdownBeforeFirstWalletUpdateKeepsSavedLocator)
     EXPECT_TRUE(ShutdownRequested());
     EXPECT_EQ(tipHash, SavedBestBlock());
 }
+
+TEST_F(WalletScanTest, ChainTipUsesTheProvidedBlockForBothPools)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+
+    CBlock previousBlock;
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(previousBlock, chainActive[4], 1));
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, chainActive[5], 1));
+    wallet->ProcessSaplingBlockTransactions(chainActive[4], &previousBlock);
+    wallet->ProcessIronwoodBlockTransactions(chainActive[4], &previousBlock);
+
+    // ConnectTip has already read and validated this block. Neither pool should
+    // need another disk read while handling the synchronous notification.
+    chainActive[5]->nStatus &= ~BLOCK_HAVE_DATA;
+    chainActive[5]->nFile = -1;
+    EXPECT_NO_THROW(wallet->ChainTip(chainActive[5], &connectedBlock, true));
+
+    EXPECT_EQ(5, wallet->SaplingCheckpoint());
+    EXPECT_EQ(5, wallet->IronwoodCheckpoint());
+    EXPECT_EQ(SaplingMerkleFrontier::empty_root(), wallet->SaplingAnchor());
+    EXPECT_EQ(IronwoodMerkleFrontier::empty_root(), wallet->IronwoodAnchor());
+}
+
+TEST_F(WalletScanTest, InterruptedChainTipRebuildKeepsThePreviousWalletPosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, connectedIndex, 1));
+
+    chainActive.SetTip(chainActive[4]);
+    wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true);
+    const uint256 previousHash = chainActive.Tip()->GetBlockHash();
+    ASSERT_EQ(previousHash, SavedBestBlock());
+    ASSERT_EQ(4, wallet->SaplingCheckpoint());
+    ASSERT_EQ(4, wallet->IronwoodCheckpoint());
+    chainActive.SetTip(connectedIndex);
+
+    // Force a real rebuild during the notification, then stop it before the
+    // target block is appended. The second pool and wallet locator must stay put.
+    ASSERT_TRUE(wallet->SaplingWalletReset());
+    bool interrupted = false;
+    progressHook = [&](const std::string& title, int percent) {
+        if (title.find("Rebuilding Sapling witnesses:") == 0 && percent > 0 && percent < 100) {
+            interrupted = true;
+            StartShutdown();
+        }
+    };
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+    ASSERT_TRUE(interrupted);
+    EXPECT_EQ(-1, wallet->SaplingCheckpoint());
+    EXPECT_EQ(4, wallet->IronwoodCheckpoint());
+    wallet->FlushBestChain();
+    EXPECT_EQ(previousHash, SavedBestBlock());
+    EXPECT_EQ(4, wallet->chainHeight);
+
+    progressHook = nullptr;
+    fRequestShutdown = false;
+    ScanTestWallet reopened(wallet->strWalletFile);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, reopened.LoadWallet(firstRun));
+    EXPECT_EQ(-1, reopened.SaplingCheckpoint());
+    EXPECT_EQ(4, reopened.IronwoodCheckpoint());
+    reopened.ChainTip(connectedIndex, &connectedBlock, true);
+    EXPECT_EQ(5, reopened.SaplingCheckpoint());
+    EXPECT_EQ(5, reopened.IronwoodCheckpoint());
+    EXPECT_EQ(SaplingMerkleFrontier::empty_root(), reopened.SaplingAnchor());
+    EXPECT_EQ(IronwoodMerkleFrontier::empty_root(), reopened.IronwoodAnchor());
+}
