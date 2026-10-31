@@ -564,6 +564,29 @@ protected:
     bool corruptProofChecked = false;
 };
 
+TEST_P(WalletWitnessTest, CleanupFailureRetainsMarkedNotesAndTheirPaths)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    DiscoverAll(*wallet);
+    wallet->Increment(GetParam(), chainActive[3], blocks[2]);
+    const auto expected = NoteOracle();
+    ASSERT_EQ(2u, expected.size());
+    CheckNotes(*wallet, expected, 3);
+    const auto originalTree = wallet->SaveTree(GetParam());
+    const std::string filename = wallet->strWalletFile;
+    std::vector<uint256> transactions{expected.front().txid}, archives;
+
+    // The real DB erase returns false for an unavailable handle. Do not discard
+    // witness marks or in-memory transactions before that erase succeeds.
+    wallet->strWalletFile.clear();
+    EXPECT_THROW(wallet->DeleteTransactions(transactions, archives, true), std::runtime_error);
+    wallet->strWalletFile = filename;
+
+    ASSERT_EQ(1u, wallet->mapWallet.count(expected.front().txid));
+    EXPECT_EQ(originalTree, wallet->SaveTree(GetParam()));
+    CheckNotes(*wallet, expected, 3);
+}
+
 TEST_P(WalletWitnessTest, MarkedNotesSurviveRebuildSerializationAndRewind)
 {
     LOCK2(cs_main, wallet->cs_wallet);

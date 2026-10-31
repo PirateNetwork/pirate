@@ -32,6 +32,23 @@ public:
     int aborts = 0;
     std::function<void()> beforeCommit;
 
+    bool HasTransaction(const uint256& hash, bool encrypted)
+    {
+        return Exists(std::make_pair(std::string(encrypted ? "ctx" : "tx"), hash));
+    }
+    bool HasArchive(const uint256& hash, bool encrypted)
+    {
+        return Exists(std::make_pair(std::string(encrypted ? "carctx" : "arctx"), hash));
+    }
+    bool ReadOrderCounter(int64_t& next)
+    {
+        return Read(std::string("orderposnext"), next);
+    }
+    bool ReadTransaction(const uint256& hash, CWalletTx& transaction)
+    {
+        return Read(std::make_pair(std::string("tx"), hash), transaction);
+    }
+
     bool TxnBegin() { return Step("begin") && CWalletDB::TxnBegin(); }
     bool TxnAbort() { ++aborts; return CWalletDB::TxnAbort(); }
     bool TxnCommit()
@@ -59,6 +76,7 @@ public:
     PERSISTENCE_WRITE(WriteSaplingPaymentAddress, "sapling-address", true)
     PERSISTENCE_WRITE(WriteIronwoodPaymentAddress, "ironwood-address", true)
     PERSISTENCE_WRITE(WriteBestBlock, "locator", false)
+    PERSISTENCE_WRITE(WriteOrderPosNext, "order-counter", false)
     PERSISTENCE_WRITE(WriteSaplingWitnesses, "sapling-witnesses", true)
     PERSISTENCE_WRITE(WriteIronwoodWitnesses, "ironwood-witnesses", true)
     PERSISTENCE_WRITE(WriteCryptedTx, "transaction", false)
@@ -100,7 +118,7 @@ private:
 class PersistenceTestWallet : public CWallet
 {
 public:
-    PersistenceTestWallet() : CWallet("persistence-test.dat") {}
+    explicit PersistenceTestWallet(const std::string& filename = "persistence-test.dat") : CWallet(filename) {}
     bool TryKeyStoreLock()
     {
         TRY_LOCK(cs_KeyStore, locked);
@@ -200,6 +218,18 @@ protected:
         wallet.reset();
         BitcoinTestingSetup::TearDown();
     }
+    bool PrepareCleanup(bool encrypted)
+    {
+        wallet = std::make_unique<PersistenceTestWallet>(encrypted ? "cleanup-encrypted.dat" : "cleanup-plain.dat");
+        LOCK2(cs_main, wallet->cs_wallet);
+        bool firstRun;
+        if (wallet->LoadWallet(firstRun) != DB_LOAD_OK || (encrypted && !wallet->EnableTestEncryption())) {
+            return false;
+        }
+        wallet->PreparePendingWork();
+        PersistenceFaultDB database(wallet->strWalletFile);
+        return wallet->Save(database, CBlockLocator(std::vector<uint256>{GetRandHash()}), 1);
+    }
     std::unique_ptr<PersistenceTestWallet> wallet;
 };
 
@@ -247,7 +277,7 @@ static std::vector<PersistenceFailure> PersistenceFailures()
     std::vector<PersistenceFailure> result;
     for (bool encrypted : {false, true}) {
         for (const char* stage : {"begin", "transaction", "archive", "sapling-outpoint", "ironwood-outpoint",
-                                 "sapling-address", "ironwood-address", "locator", "sapling-witnesses",
+                                 "sapling-address", "ironwood-address", "locator", "order-counter", "sapling-witnesses",
                                  "ironwood-witnesses", "commit"}) {
             result.push_back({encrypted, stage, false});
         }
@@ -297,4 +327,158 @@ TEST_F(WalletPersistenceTest, EncryptionStateRemainsLockedThroughCommit)
     };
     EXPECT_TRUE(wallet->Save(database, CBlockLocator(std::vector<uint256>{GetRandHash()}), 0));
     EXPECT_TRUE(observed);
+}
+
+TEST_F(WalletPersistenceTest, EraseFailureRetainsTransactionForRetry)
+{
+    for (bool encrypted : {false, true}) {
+        SCOPED_TRACE(encrypted);
+        ASSERT_TRUE(PrepareCleanup(encrypted));
+        LOCK2(cs_main, wallet->cs_wallet);
+        const uint256 txid = wallet->mapWallet.begin()->first;
+        const uint256 storageHash = encrypted ? wallet->HashWithFP(txid) : txid;
+        const std::string filename = wallet->strWalletFile;
+        PersistenceFaultDB database(filename);
+        const auto original = database.Snapshot();
+        ASSERT_TRUE(database.HasTransaction(storageHash, encrypted));
+
+        // An empty filename exercises CDB::Erase's unavailable-handle failure.
+        wallet->strWalletFile.clear();
+        EXPECT_FALSE(wallet->EraseFromWallet(txid));
+        wallet->strWalletFile = filename;
+        EXPECT_EQ(1u, wallet->mapWallet.count(txid));
+        EXPECT_EQ(original, database.Snapshot());
+
+        EXPECT_TRUE(wallet->EraseFromWallet(txid));
+        EXPECT_EQ(0u, wallet->mapWallet.count(txid));
+        EXPECT_FALSE(database.HasTransaction(storageHash, encrypted));
+    }
+}
+
+TEST_F(WalletPersistenceTest, CleanupFailurePreservesTransactionAndArchiveForRetry)
+{
+    for (bool encrypted : {false, true}) {
+        SCOPED_TRACE(encrypted);
+        ASSERT_TRUE(PrepareCleanup(encrypted));
+        LOCK2(cs_main, wallet->cs_wallet);
+        const uint256 txid = wallet->mapWallet.begin()->first;
+        const uint256 archive = wallet->mapArcTxs.begin()->first;
+        std::vector<uint256> transactions{txid}, archives{archive};
+        const std::string filename = wallet->strWalletFile;
+        PersistenceFaultDB database(filename);
+        const auto original = database.Snapshot();
+
+        wallet->strWalletFile.clear();
+        EXPECT_THROW(wallet->DeleteTransactions(transactions, archives, true), std::runtime_error);
+        wallet->strWalletFile = filename;
+        EXPECT_EQ(1u, wallet->mapWallet.count(txid));
+        EXPECT_EQ(1u, wallet->mapArcTxs.count(archive));
+        EXPECT_EQ(original, database.Snapshot());
+
+        EXPECT_TRUE(wallet->DeleteTransactions(transactions, archives, true));
+        EXPECT_EQ(0u, wallet->mapWallet.count(txid));
+        EXPECT_EQ(0u, wallet->mapArcTxs.count(archive));
+    }
+}
+
+TEST_F(WalletPersistenceTest, ArchiveOnlyCleanupRetriesAndErasesTheCorrectStorageKey)
+{
+    for (bool encrypted : {false, true}) {
+        SCOPED_TRACE(encrypted);
+        ASSERT_TRUE(PrepareCleanup(encrypted));
+        LOCK2(cs_main, wallet->cs_wallet);
+        const uint256 txid = wallet->mapArcTxs.begin()->first;
+        const uint256 storageHash = encrypted ? wallet->HashWithFP(txid) : txid;
+        std::vector<uint256> transactions, archives{txid};
+        const std::string filename = wallet->strWalletFile;
+        PersistenceFaultDB database(filename);
+        const auto original = database.Snapshot();
+        ASSERT_TRUE(database.HasArchive(storageHash, encrypted));
+
+        wallet->strWalletFile.clear();
+        EXPECT_THROW(wallet->DeleteTransactions(transactions, archives, true), std::runtime_error);
+        wallet->strWalletFile = filename;
+        EXPECT_EQ(1u, wallet->mapArcTxs.count(txid));
+        EXPECT_EQ(original, database.Snapshot());
+
+        EXPECT_TRUE(wallet->DeleteTransactions(transactions, archives, true));
+        EXPECT_EQ(0u, wallet->mapArcTxs.count(txid));
+        EXPECT_FALSE(database.HasArchive(storageHash, encrypted));
+        EXPECT_EQ(1u, wallet->mapWallet.size());
+    }
+}
+
+TEST_F(WalletPersistenceTest, NoOpAndLockedCleanupRetainPendingSaveRequests)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    wallet->fRunSetBestChain = true;
+    EXPECT_FALSE(wallet->DeleteWalletTransactions(nullptr, true));
+    EXPECT_TRUE(wallet->fRunSetBestChain);
+    ASSERT_TRUE(wallet->EnableTestEncryption());
+    ASSERT_TRUE(wallet->Lock());
+    EXPECT_FALSE(wallet->DeleteWalletTransactions(chainActive.Tip(), true));
+    EXPECT_TRUE(wallet->fRunSetBestChain);
+}
+
+TEST_F(WalletPersistenceTest, ReorderedTransactionsAndCounterCommitTogetherAfterRetry)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    wallet->PreparePendingWork();
+    const uint256 firstHash = wallet->mapWallet.begin()->first;
+    wallet->mapWallet.at(firstHash).nOrderPos = 10;
+    CMutableTransaction second(wallet->mapWallet.at(firstHash));
+    second.nLockTime = 1;
+    CWalletTx secondRecord(wallet.get(), CTransaction(second));
+    secondRecord.nOrderPos = 20;
+    const uint256 secondHash = secondRecord.GetHash();
+    ASSERT_TRUE(wallet->mapWallet.emplace(secondHash, secondRecord).second);
+    wallet->nOrderPosNext = 100;
+
+    PersistenceFaultDB database(wallet->strWalletFile);
+    const CBlockLocator locator(std::vector<uint256>{GetRandHash()});
+    ASSERT_TRUE(wallet->Save(database, locator, 1));
+    const auto original = database.Snapshot();
+    int64_t counter = 0;
+    ASSERT_TRUE(database.ReadOrderCounter(counter));
+    ASSERT_EQ(100, counter);
+
+    std::map<std::pair<int, int>, CWalletTx*> sorted{
+        {{1, 0}, &wallet->mapWallet.at(secondHash)},
+        {{1, 1}, &wallet->mapWallet.at(firstHash)},
+    };
+    wallet->UpdateWalletTransactionOrder(sorted);
+    EXPECT_EQ(1, wallet->mapWallet.at(secondHash).nOrderPos);
+    EXPECT_EQ(2, wallet->mapWallet.at(firstHash).nOrderPos);
+    EXPECT_EQ(3, wallet->nOrderPosNext);
+    EXPECT_TRUE(wallet->fRunSetBestChain);
+    EXPECT_EQ(original, database.Snapshot());
+
+    database.failure = "order-counter";
+    EXPECT_FALSE(wallet->Save(database, locator, 1));
+    EXPECT_TRUE(database.failureReached);
+    EXPECT_TRUE(wallet->fRunSetBestChain);
+    EXPECT_EQ(original, database.Snapshot());
+    ASSERT_TRUE(database.ReadOrderCounter(counter));
+    EXPECT_EQ(100, counter);
+    CWalletTx stored;
+    ASSERT_TRUE(database.ReadTransaction(firstHash, stored));
+    EXPECT_EQ(10, stored.nOrderPos);
+    ASSERT_TRUE(database.ReadTransaction(secondHash, stored));
+    EXPECT_EQ(20, stored.nOrderPos);
+
+    database.failure.clear();
+    ASSERT_TRUE(wallet->Save(database, locator, 1));
+    EXPECT_FALSE(wallet->fRunSetBestChain);
+    ASSERT_TRUE(database.ReadOrderCounter(counter));
+    EXPECT_EQ(3, counter);
+    ASSERT_TRUE(database.ReadTransaction(firstHash, stored));
+    EXPECT_EQ(2, stored.nOrderPos);
+    ASSERT_TRUE(database.ReadTransaction(secondHash, stored));
+    EXPECT_EQ(1, stored.nOrderPos);
+
+    // Applying an already compacted order must not request another snapshot.
+    const auto committed = database.Snapshot();
+    wallet->UpdateWalletTransactionOrder(sorted);
+    EXPECT_FALSE(wallet->fRunSetBestChain);
+    EXPECT_EQ(committed, database.Snapshot());
 }

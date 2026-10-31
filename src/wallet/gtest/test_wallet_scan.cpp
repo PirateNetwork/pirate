@@ -421,6 +421,26 @@ TEST_F(WalletScanTest, ChainTipUsesTheProvidedBlockForBothPools)
     EXPECT_EQ(IronwoodMerkleFrontier::empty_root(), wallet->IronwoodAnchor());
 }
 
+TEST_F(WalletScanTest, FailedChainTipProcessingKeepsThePreviousWalletPosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    const uint256 previousHash = chainActive.Tip()->GetBlockHash();
+    ASSERT_EQ(previousHash, SavedBestBlock());
+    chainActive.SetTip(connectedIndex);
+    connectedIndex->nStatus &= ~BLOCK_HAVE_DATA;
+    connectedIndex->nFile = -1;
+
+    EXPECT_NO_THROW(wallet->ChainTip(connectedIndex, nullptr, true));
+
+    EXPECT_TRUE(ShutdownRequested());
+    EXPECT_EQ(4, wallet->chainHeight);
+    EXPECT_EQ(previousHash, SavedBestBlock());
+}
+
 TEST_F(WalletScanTest, InterruptedChainTipRebuildKeepsThePreviousWalletPosition)
 {
     LOCK2(cs_main, wallet->cs_wallet);
