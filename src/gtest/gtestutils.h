@@ -6,6 +6,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <memory>
 
 #include "main.h"
 #include "txdb.h"
@@ -24,6 +25,9 @@
 // BitcoinTestingSetup fixture base classes used across the whole suite.
 
 class TestWallet;
+#ifdef ENABLE_WALLET
+class CDBEnv;
+#endif
 
 #define VCH(a,b) std::vector<unsigned char>(a, a + b)
 
@@ -184,6 +188,9 @@ protected:
     boost::thread_group threadGroup;
     bool fHadPreviousDatadir = false;
     std::string previousDatadir;
+#ifdef ENABLE_WALLET
+    std::shared_ptr<CDBEnv> previousWalletDbEnv;
+#endif
 };
 
 class TestWallet;

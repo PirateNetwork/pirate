@@ -403,6 +403,9 @@ void BitcoinTestingSetup::SetUp()
     pcoinsTip = new CCoinsViewCache(pcoinsdbviewTest);
     InitBlockIndex();
 #ifdef ENABLE_WALLET
+    // Own a fresh mock environment without closing one left by another test.
+    previousWalletDbEnv = bitdb;
+    bitdb = std::make_shared<CDBEnv>();
     bitdb->MakeMock();
     bool fFirstRun;
     pwalletMain = new CWallet("wallet.dat");
@@ -435,6 +438,7 @@ void BitcoinTestingSetup::TearDown()
 #ifdef ENABLE_WALLET
     bitdb->Flush(true);
     bitdb->Reset();
+    bitdb.swap(previousWalletDbEnv);
 #endif
     boost::filesystem::remove_all(pathTemp);
 
