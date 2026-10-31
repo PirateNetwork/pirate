@@ -4679,9 +4679,11 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
                     assert(saplingWallet.IsNoteTracked(txid, j, position));
                     pwtx->mapSaplingNoteData[op].setPosition(position);
 
-                    const uint256 treeRoot = saplingWallet.GetLatestAnchor();
-                    LogPrint("saplingwallet", "Sapling Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n",
-                        txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
+                    if (LogAcceptCategory("saplingwallet")) {
+                        const uint256 treeRoot = saplingWallet.GetLatestAnchor();
+                        LogPrint("saplingwallet", "Sapling Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n",
+                            txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
+                    }
                     
                     // Sanity check: position should be less than tree size
                     if (position == UINT64_MAX) {
@@ -4754,9 +4756,11 @@ void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, c
                     assert(ironwoodWallet.IsNoteTracked(txid, j, position));
                     pwtx->mapIronwoodNoteData[op].setPosition(position);
 
-                    const uint256 treeRoot = ironwoodWallet.GetLatestAnchor();
-                    LogPrint("ironwoodwallet", "Ironwood Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n",
-                        txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
+                    if (LogAcceptCategory("ironwoodwallet")) {
+                        const uint256 treeRoot = ironwoodWallet.GetLatestAnchor();
+                        LogPrint("ironwoodwallet", "Ironwood Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n",
+                            txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
+                    }
                     
                     // Sanity check: position should be less than tree size
                     if (position == UINT64_MAX) {
