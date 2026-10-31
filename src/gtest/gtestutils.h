@@ -267,6 +267,7 @@ public:
     MOCK_METHOD0(TxnAbort, bool());
 
     MOCK_METHOD1(WriteBestBlock, bool(const CBlockLocator& loc));
+    MOCK_METHOD1(WriteOrderPosNext, bool(int64_t nOrderPosNext));
 
     MOCK_METHOD3(WriteTx, bool(uint256 hash, const CWalletTx& wtx, bool txnProtected));
     MOCK_METHOD3(WriteArcTx, bool(uint256 hash, ArchiveTxPoint arcTxPoint, bool txnProtected));

@@ -1499,6 +1499,12 @@ protected:
                     return false;
                 }
             }
+            // Keep the ordering counter paired with the transaction positions.
+            if (!walletdb.WriteOrderPosNext(nOrderPosNext)) {
+                LogPrintf("SetBestChain(): Failed to write next transaction order, aborting atomic write\n");
+                return false;
+            }
+
             // Add persistence of Sapling incremental witness tree
             saplingWallet.GarbageCollect();
             if (IsCrypted() && !IsLocked()) {

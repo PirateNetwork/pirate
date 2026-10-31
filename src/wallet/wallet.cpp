@@ -3143,37 +3143,43 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
 {
     LOCK2(cs_main, cs_wallet);
 
-    if (added) {
-        IncrementSaplingWallet(pindex, pblock);
-        // An interrupted rebuild must retain the previous wallet position.
-        if (ShutdownRequested()) {
-            return;
-        }
-        IncrementIronwoodWallet(pindex, pblock);
-        if (ShutdownRequested()) {
-            return;
-        }
-        // Prevent consolidation & sweep transactions
-        // from being created when node is syncing after launch,
-        // and also when node wakes up from suspension/hibernation and incoming blocks are old.
-        bool initialDownloadCheck = IsInitialBlockDownload();
-        if (!initialDownloadCheck &&
-            pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
-        {
-            RunSaplingConsolidation(pindex->nHeight);
-            RunIronwoodConsolidation(pindex->nHeight);
-            RunSaplingSweep(pindex->nHeight);
-            while(DeleteWalletTransactions(pindex, false)) {}
-        } else {
-            if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
-                while(DeleteWalletTransactions(pindex, false)) {}
+    try {
+        if (added) {
+            IncrementSaplingWallet(pindex, pblock);
+            // An interrupted rebuild must retain the previous wallet position.
+            if (ShutdownRequested()) {
+                return;
             }
-        }
+            IncrementIronwoodWallet(pindex, pblock);
+            if (ShutdownRequested()) {
+                return;
+            }
+            // Prevent consolidation & sweep transactions
+            // from being created when node is syncing after launch,
+            // and also when node wakes up from suspension/hibernation and incoming blocks are old.
+            bool initialDownloadCheck = IsInitialBlockDownload();
+            if (!initialDownloadCheck &&
+                pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
+            {
+                RunSaplingConsolidation(pindex->nHeight);
+                RunIronwoodConsolidation(pindex->nHeight);
+                RunSaplingSweep(pindex->nHeight);
+                while(DeleteWalletTransactions(pindex, false)) {}
+            } else {
+                if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
+                    while(DeleteWalletTransactions(pindex, false)) {}
+                }
+            }
 
-    } else {
-        DecrementSaplingWallet(pindex);
-        DecrementIronwoodWallet(pindex);
-        UpdateNullifierNoteMapForBlock(pblock);
+        } else {
+            DecrementSaplingWallet(pindex);
+            DecrementIronwoodWallet(pindex);
+            UpdateNullifierNoteMapForBlock(pblock);
+        }
+    } catch (const std::exception& error) {
+        // Keep the previous locator if witness processing or cleanup failed.
+        ReportWalletSaveFailure(strprintf(_("Unable to update wallet state: %s. Check disk space and debug.log before restarting."), error.what()));
+        return;
     }
 
     // SetBestChain() can be expensive for large wallets, so do only
@@ -7178,22 +7184,20 @@ bool CWallet::EraseFromWallet(const uint256 &hash)
     if (!fFileBacked)
         return false;
 
-    LOCK(cs_wallet);
-
-    if (IsCrypted()) {
-        if (!IsLocked()) {
-          if (mapWallet.erase(hash)) {
-              uint256 chash = HashWithFP(hash);
-              return CWalletDB(strWalletFile).EraseCryptedTx(chash);
-          }
-        }
-    } else {
-        if (mapWallet.erase(hash)) {
-            return CWalletDB(strWalletFile).EraseTx(hash);
-        }
+    LOCK2(cs_wallet, cs_KeyStore);
+    const auto transaction = mapWallet.find(hash);
+    if (transaction == mapWallet.end() || IsLocked()) {
+        return false;
     }
 
-    return false;
+    CWalletDB walletdb(strWalletFile);
+    const bool erased = IsCrypted() ? walletdb.EraseCryptedTx(HashWithFP(hash)) : walletdb.EraseTx(hash);
+    if (!erased) {
+        return false;
+    }
+    // Keep the in-memory record available for retry if persistence fails.
+    mapWallet.erase(transaction);
+    return true;
 }
 
 /**
@@ -9429,17 +9433,22 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
     AssertLockHeld(cs_wallet);
 
    int64_t nOrderPos = 0;
+   bool changed = false;
 
    // Update transaction positions in single pass
    // Note: mapSorted contains pointers to transactions already in mapWallet,
    // so modifying pwtx->nOrderPos directly updates mapWallet
    for (const auto& [key, pwtx] : mapSorted) {
-       pwtx->nOrderPos = ++nOrderPos;
+       const int64_t position = ++nOrderPos;
+       changed |= pwtx->nOrderPos != position;
+       pwtx->nOrderPos = position;
    }
 
   //Update Next Wallet Tx Position
+  changed |= nOrderPosNext != nOrderPos + 1;
   nOrderPosNext = nOrderPos + 1;
-  CWalletDB(strWalletFile).WriteOrderPosNext(nOrderPosNext);
+  // Persist compacted positions and their counter together in the next snapshot.
+  fRunSetBestChain = fRunSetBestChain || changed;
   LogPrint("deletetx","Reorder Tx - Total Transactions Reordered %i, Next Position %i\n ", (int)mapSorted.size(), nOrderPosNext);
 }
 
@@ -9448,7 +9457,8 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
  * @param removeTxs Vector of transaction hashes to remove from main wallet
  * @param removeArcTxs Vector of transaction hashes to remove from archive  
  * @param fRescan If true, trigger a wallet rescan after deletion
- * @return true if transactions were successfully deleted, false otherwise
+ * @return true if deletion was requested and completed, false if no work was requested
+ * @throws std::exception if a requested deletion cannot be persisted
  * 
  * Removes specified transactions from both the wallet's main storage and
  * archived transaction storage. This function:
@@ -9464,46 +9474,45 @@ void CWallet::UpdateWalletTransactionOrder(std::map<std::pair<int,int>, CWalletT
  */
 bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<uint256> &removeArcTxs, bool fRescan) {
     AssertLockHeld(cs_wallet);
-
-    bool removingTransactions = false;
-    if (removeTxs.size() > 0) {
-        removingTransactions = true;
+    LOCK(cs_KeyStore);
+    if (removeTxs.empty() && removeArcTxs.empty()) {
+        return false;
     }
-
-
+    if (!fFileBacked || IsLocked()) {
+        throw std::runtime_error("Cannot delete transactions from an unavailable or locked wallet");
+    }
     CWalletDB walletdb(strWalletFile, "r+", false);
 
     for (int i = 0; i < removeTxs.size(); i++) {
         bool fRemoveFromSpends = !(mapWallet.at(removeTxs[i]).IsCoinBase());
 
-        //remove transaction tracking from the witness tree
-        saplingWallet.UnMarkNoteForTransaction(removeTxs[i]);
-        ironwoodWallet.UnMarkNoteForTransaction(removeTxs[i]);
-
-        //remove transaction from the wallet
+        // Persist deletion before discarding the transaction or its witnesses.
         if (EraseFromWallet(removeTxs[i])) {
+            saplingWallet.UnMarkNoteForTransaction(removeTxs[i]);
+            ironwoodWallet.UnMarkNoteForTransaction(removeTxs[i]);
             if (fRemoveFromSpends) {
                 RemoveFromSpends(removeTxs[i]);
             }
             LogPrint("deletetx","Delete Tx - Deleting tx %s, %i.\n", removeTxs[i].ToString(),i);
         } else {
-            LogPrint("deletetx","Delete Tx - Deleting tx %failed.\n", removeTxs[i].ToString());
-            return false;
+            throw std::runtime_error("Unable to delete a wallet transaction from the database");
         }
     }
 
     //Remove Conflicted ArcTx transactions from the wallet database
     for (int i = 0; i < removeArcTxs.size(); i++) {
+        const bool erased = IsCrypted() ?
+            walletdb.EraseCryptedArcTx(HashWithFP(removeArcTxs[i])) : walletdb.EraseArcTx(removeArcTxs[i]);
+        if (!erased) {
+            throw std::runtime_error("Unable to delete an archived wallet transaction from the database");
+        }
+        // A conflicted transaction may never have confirmed or been archived.
         if (mapArcTxs.erase(removeArcTxs[i])) {
-            walletdb.EraseArcTx(removeArcTxs[i]);
             //remove conflicted transactions from GUI
             if (!fRescan) {
                 NotifyTransactionChanged(this, removeArcTxs[i], CT_DELETED);
             }
             LogPrint("deletetx","Delete Tx - Deleting Arc tx %s, %i.\n", removeArcTxs[i].ToString(),i);
-        } else {
-            LogPrint("deletetx","Delete Tx - Deleting Arc tx %failed.\n", removeArcTxs[i].ToString());
-            return false;
         }
     }
 
@@ -9516,7 +9525,7 @@ bool CWallet::DeleteTransactions(std::vector<uint256> &removeTxs, std::vector<ui
     malloc_trim(0);
     #endif
 
-    return removingTransactions;
+    return true;
 }
 
 /**
@@ -9542,6 +9551,11 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
 
       AssertLockHeld(cs_main);
       AssertLockHeld(cs_wallet);
+      LOCK(cs_KeyStore);
+      // Encrypted cleanup waits until the wallet is unlocked.
+      if (IsLocked()) {
+          return false;
+      }
 
       int nDeleteAfter = (int)fDeleteTransactionsAfterNBlocks;
       bool runCompact = false;
@@ -9776,18 +9790,14 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
             }
           }
 
-          // Only now, having confirmed none of this transaction's notes are still
-          // unspent (or awaiting a parent still held in the wallet), queue this
-          // genuinely-conflicted tx's archive record (mapArcTxs) for removal
-          // alongside the wallet tx itself.
-          if (txIsConflicted) {
-            removeArcTxs.push_back(wtxid);
-            txConflictCount++;
-          }
-
           //Collect everything else for deletion
           if (deleteTx && int(removeTxs.size()) < MAX_DELETE_TX_SIZE) {
             removeTxs.push_back(wtxid);
+            // Remove an archive only when its wallet transaction fits this batch.
+            if (txIsConflicted) {
+              removeArcTxs.push_back(wtxid);
+              txConflictCount++;
+            }
             runCompact = true;
           } else {
             break; //no need to continue with the loop
@@ -9812,7 +9822,7 @@ bool CWallet::DeleteWalletTransactions(const CBlockIndex* pindex, bool fRescan) 
         LogPrint("deletetx","Delete Tx - Time to Run Total Function %s\n", DateTimeStrFormat("%H:%M:%S", totalTime - startTime));
       }
 
-      fRunSetBestChain = deletedTransactions;
+      fRunSetBestChain = fRunSetBestChain || deletedTransactions;
       return deletedTransactions;
 }
 
