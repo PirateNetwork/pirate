@@ -4647,8 +4647,17 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
+    const auto requireUpdate = [this, pblockindex](bool success) {
+        if (!success) {
+            saplingWalletValidated = false;
+            saplingWalletPositionsValidated = false;
+            fBuilingWitnessCache = true;
+            throw std::runtime_error(strprintf("Sapling witness update failed at block %d", pblockindex->nHeight));
+        }
+    };
+
     //Create Checkpoint before incrementing wallet
-    saplingWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight);
+    requireUpdate(saplingWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight));
 
     for (int i = 0; i < pblock->vtx.size(); i++) {
         uint256 txid = pblock->vtx[i].GetHash();
@@ -4656,7 +4665,7 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
 
         //Use single output appending for transaction that belong to the wallet so that they can be marked
         if (it != mapWallet.end()) {
-            saplingWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
+            requireUpdate(saplingWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid));
             CWalletTx *pwtx = &(*it).second;
             auto vOutputs = pblock->vtx[i].GetSaplingOutputs();
             for (int j = 0; j < vOutputs.size(); j++) {
@@ -4664,15 +4673,14 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
                 auto opit = pwtx->mapSaplingNoteData.find(op);
 
                 if (opit != pwtx->mapSaplingNoteData.end()) {
-                    saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vOutputs[j], true);
+                    requireUpdate(saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vOutputs[j], true));
                     //Get note position
                     uint64_t position = UINT64_MAX;
                     assert(saplingWallet.IsNoteTracked(txid, j, position));
                     pwtx->mapSaplingNoteData[op].setPosition(position);
 
-                    // Validate position and tree root
-                    uint256 treeRoot = saplingWallet.GetLatestAnchor();
-                    LogPrint("saplingwallet", "Sapling Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n", 
+                    const uint256 treeRoot = saplingWallet.GetLatestAnchor();
+                    LogPrint("saplingwallet", "Sapling Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n",
                         txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
                     
                     // Sanity check: position should be less than tree size
@@ -4683,19 +4691,19 @@ void CWallet::ProcessSaplingBlockTransactions(const CBlockIndex* pblockindex, co
 
 
                 } else {
-                    saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vOutputs[j], false);
+                    requireUpdate(saplingWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vOutputs[j], false));
                 }
             }                    
             // Only update nullifiers if we have Sapling notes for this transaction
             if (pwtx->mapSaplingNoteData.size() > 0) {
                 UpdateSaplingNullifierNoteMapWithTx(pwtx);
             } else {
-                saplingWallet.ClearPositionsForTxid(txid);
+                requireUpdate(saplingWallet.ClearPositionsForTxid(txid));
             }
         } else {
             //No transactions in this tx belong to the wallet, use full tx appending
-            saplingWallet.ClearPositionsForTxid(txid);
-            saplingWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i);
+            requireUpdate(saplingWallet.ClearPositionsForTxid(txid));
+            requireUpdate(saplingWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i));
         }
     }
 }
@@ -4714,8 +4722,17 @@ void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, c
     AssertLockHeld(cs_main);
     AssertLockHeld(cs_wallet);
 
+    const auto requireUpdate = [this, pblockindex](bool success) {
+        if (!success) {
+            ironwoodWalletValidated = false;
+            ironwoodWalletPositionsValidated = false;
+            fBuilingWitnessCache = true;
+            throw std::runtime_error(strprintf("Ironwood witness update failed at block %d", pblockindex->nHeight));
+        }
+    };
+
     //Create Checkpoint before incrementing wallet
-    ironwoodWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight);
+    requireUpdate(ironwoodWallet.CheckpointNoteCommitmentTree(pblockindex->nHeight));
 
     for (int i = 0; i < pblock->vtx.size(); i++) {
         uint256 txid = pblock->vtx[i].GetHash();
@@ -4723,7 +4740,7 @@ void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, c
 
         //Use single output appending for transaction that belong to the wallet so that they can be marked
         if (it != mapWallet.end()) {
-            ironwoodWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid);
+            requireUpdate(ironwoodWallet.CreateEmptyPositionsForTxid(pblockindex->nHeight, txid));
             CWalletTx *pwtx = &(*it).second;
             auto vActions = pblock->vtx[i].GetIronwoodActions();
             for (int j = 0; j < vActions.size(); j++) {
@@ -4731,15 +4748,14 @@ void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, c
                 auto opit = pwtx->mapIronwoodNoteData.find(op);
 
                 if (opit != pwtx->mapIronwoodNoteData.end()) {
-                    ironwoodWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], true);
+                    requireUpdate(ironwoodWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], true));
                     //Get note position
                     uint64_t position = UINT64_MAX;
                     assert(ironwoodWallet.IsNoteTracked(txid, j, position));
                     pwtx->mapIronwoodNoteData[op].setPosition(position);
 
-                    // Validate position and tree root
-                    uint256 treeRoot = ironwoodWallet.GetLatestAnchor();
-                    LogPrint("ironwoodwallet", "Ironwood Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n", 
+                    const uint256 treeRoot = ironwoodWallet.GetLatestAnchor();
+                    LogPrint("ironwoodwallet", "Ironwood Wallet - Note tracked: txid=%s outidx=%d position=%llu root=%s\n",
                         txid.ToString(), j, (unsigned long long)position, treeRoot.ToString());
                     
                     // Sanity check: position should be less than tree size
@@ -4750,19 +4766,19 @@ void CWallet::ProcessIronwoodBlockTransactions(const CBlockIndex* pblockindex, c
 
 
                 } else {
-                    ironwoodWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], false);
+                    requireUpdate(ironwoodWallet.AppendNoteCommitment(pblockindex->nHeight, txid, i, j, &vActions[j], false));
                 }
             }                   
             // Only update nullifiers if we have Ironwood notes for this transaction
             if (pwtx->mapIronwoodNoteData.size() > 0) {
                 UpdateIronwoodNullifierNoteMapWithTx(pwtx);
             } else {
-                ironwoodWallet.ClearPositionsForTxid(txid);
+                requireUpdate(ironwoodWallet.ClearPositionsForTxid(txid));
             }
         } else {
             //No transactions in this tx belong to the wallet, use full tx appending
-            ironwoodWallet.ClearPositionsForTxid(txid);
-            ironwoodWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i);
+            requireUpdate(ironwoodWallet.ClearPositionsForTxid(txid));
+            requireUpdate(ironwoodWallet.AppendNoteCommitments(pblockindex->nHeight,pblock->vtx[i],i));
         }
     }
 }
@@ -4855,76 +4871,63 @@ bool CWallet::ValidateSaplingWalletTrackedPositions(const CBlockIndex* pindex, b
             break;
         }
 
-        //Check if all notes are tracked correctly
-        for (mapSaplingNoteData_t::value_type& item : pwtx->mapSaplingNoteData) {
-
-            const SaplingOutPoint op = item.first;
+        // Reject missing tracked notes before reading or replaying their block.
+        for (const auto& item : pwtx->mapSaplingNoteData) {
             uint64_t position;
-
-            if(!saplingWallet.IsNoteTracked(op.hash, op.n, position)) {
+            if (!saplingWallet.IsNoteTracked(item.first.hash, item.first.n, position)) {
                 return finishValidation(false);
-            } else {
-                CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
+            }
+        }
 
-                //Create a new wallet to validate tracked merkle path
-                SaplingMerkleFrontier saplingCheckFrontierTree;
-                if (pCheckIndex->pprev && NetworkUpgradeActive(pCheckIndex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING) &&
-                    !pcoinsTip->GetSaplingFrontierAnchorAt(pCheckIndex->pprev->hashFinalSaplingRoot, saplingCheckFrontierTree)) {
+        CBlockIndex* pCheckIndex = mapBlockIndex.at(pwtx->hashBlock);
+        SaplingMerkleFrontier saplingCheckFrontierTree;
+        if (pCheckIndex->pprev && NetworkUpgradeActive(pCheckIndex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING) &&
+            !pcoinsTip->GetSaplingFrontierAnchorAt(pCheckIndex->pprev->hashFinalSaplingRoot, saplingCheckFrontierTree)) {
+            return finishValidation(false);
+        }
+        SaplingWallet saplingWalletCheck;
+        saplingWalletCheck.InitNoteCommitmentTree(saplingCheckFrontierTree);
+
+        CBlock checkBlock;
+        if (!ReadBlockFromDisk(checkBlock, pCheckIndex, 1)) {
+            return finishValidation(false);
+        }
+
+        // Replay once per wallet transaction, preserving the full block order.
+        // Mark all of its owned outputs so their positions can be checked together.
+        for (int i = 0; i < checkBlock.vtx.size(); i++) {
+            const uint256 txid = checkBlock.vtx[i].GetHash();
+            if (pwtx->GetHash() == txid) {
+                if (!saplingWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid)) {
                     return finishValidation(false);
                 }
-                SaplingWallet saplingWalletCheck;
-                saplingWalletCheck.InitNoteCommitmentTree(saplingCheckFrontierTree);
-
-                MerklePath saplingCheckMerklePath;
-                uint64_t positionCheck = UINT64_MAX;
-
-                //Retrieve the full block to get all of the transaction commitments
-                CBlock checkBlock;
-                if (!ReadBlockFromDisk(checkBlock, pCheckIndex, 1)) {
-                    return finishValidation(false);
-                }
-                CBlock *pCheckBlock = &checkBlock;
-
-                //Calculate Merkle Path
-                for (int i = 0; i < pCheckBlock->vtx.size(); i++) {
-                    uint256 txid = pCheckBlock->vtx[i].GetHash();
-
-                    //Use single output appending for transaction that belong to the wallet so that they can be marked
-                    if (pwtx->GetHash() == txid) {
-                        saplingWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
-
-                        auto vOutputs = pCheckBlock->vtx[i].GetSaplingOutputs();
-                        for (int j = 0; j < vOutputs.size(); j++) {
-                            auto opit = pwtx->mapSaplingNoteData.find(op);
-                            if (opit != pwtx->mapSaplingNoteData.end() && j == op.n) {
-                                saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vOutputs[j], true);
-                                assert(saplingWalletCheck.IsNoteTracked(txid, j, positionCheck));
-                                LogPrint("saplingwallet", "Sapling Wallet - Merkle Path position %i\n", positionCheck);
-
-
-                            } else {
-                                saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vOutputs[j], false);
-                            }
-                        }
-
-                    } else {
-                        //No transactions in this tx belong to the wallet, use full tx appending
-                        saplingWalletCheck.ClearPositionsForTxid(txid);
-                        saplingWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight,pCheckBlock->vtx[i],i);
+                auto vOutputs = checkBlock.vtx[i].GetSaplingOutputs();
+                for (int j = 0; j < vOutputs.size(); j++) {
+                    const bool isMine = pwtx->mapSaplingNoteData.count(SaplingOutPoint(txid, j)) != 0;
+                    if (!saplingWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vOutputs[j], isMine)) {
+                        return finishValidation(false);
                     }
                 }
-
-                LogPrint("saplingwallet", "Sapling Wallet - Merkle Path position %i\n", positionCheck);
-
-                if (positionCheck != position) {
-                    LogPrint("saplingwallet", "Sapling Wallet Validation failed, rebuilding witnesses\n");
+            } else {
+                if (!saplingWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight, checkBlock.vtx[i], i)) {
                     return finishValidation(false);
-                } else {
-                    pwtx->mapSaplingNoteData[op].setPosition(position);
-                    UpdateSaplingNullifierNoteMapWithTx(pwtx);
                 }
             }
         }
+
+        for (auto& item : pwtx->mapSaplingNoteData) {
+            const SaplingOutPoint& op = item.first;
+            uint64_t position;
+            uint64_t positionCheck;
+            if (!saplingWallet.IsNoteTracked(op.hash, op.n, position) ||
+                !saplingWalletCheck.IsNoteTracked(op.hash, op.n, positionCheck) ||
+                position != positionCheck) {
+                LogPrint("saplingwallet", "Sapling Wallet Validation failed, rebuilding witnesses\n");
+                return finishValidation(false);
+            }
+            item.second.setPosition(position);
+        }
+        UpdateSaplingNullifierNoteMapWithTx(pwtx);
     }
 
     return finishValidation(true);
@@ -5019,76 +5022,63 @@ bool CWallet::ValidateIronwoodWalletTrackedPositions(const CBlockIndex* pindex, 
             break;
         }
 
-        //Check if all notes are tracked correctly
-        for (mapIronwoodNoteData_t::value_type& item : pwtx->mapIronwoodNoteData) {
-
-            const IronwoodOutPoint op = item.first;
+        // Reject missing tracked notes before reading or replaying their block.
+        for (const auto& item : pwtx->mapIronwoodNoteData) {
             uint64_t position;
-
-            if(!ironwoodWallet.IsNoteTracked(op.hash, op.n, position)) {
+            if (!ironwoodWallet.IsNoteTracked(item.first.hash, item.first.n, position)) {
                 return finishValidation(false);
-            } else {
-                CBlockIndex* pCheckIndex = mapBlockIndex[pwtx->hashBlock];
+            }
+        }
 
-                //Create a new wallet to validate tracked merkle path
-                IronwoodMerkleFrontier ironwoodCheckFrontierTree;
-                if (pCheckIndex->pprev && NetworkUpgradeActive(pCheckIndex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) &&
-                    !pcoinsTip->GetIronwoodFrontierAnchorAt(pCheckIndex->pprev->hashFinalIronwoodRoot, ironwoodCheckFrontierTree)) {
+        CBlockIndex* pCheckIndex = mapBlockIndex.at(pwtx->hashBlock);
+        IronwoodMerkleFrontier ironwoodCheckFrontierTree;
+        if (pCheckIndex->pprev && NetworkUpgradeActive(pCheckIndex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD) &&
+            !pcoinsTip->GetIronwoodFrontierAnchorAt(pCheckIndex->pprev->hashFinalIronwoodRoot, ironwoodCheckFrontierTree)) {
+            return finishValidation(false);
+        }
+        IronwoodWallet ironwoodWalletCheck;
+        ironwoodWalletCheck.InitNoteCommitmentTree(ironwoodCheckFrontierTree);
+
+        CBlock checkBlock;
+        if (!ReadBlockFromDisk(checkBlock, pCheckIndex, 1)) {
+            return finishValidation(false);
+        }
+
+        // Replay once per wallet transaction, preserving the full block order.
+        // Mark all of its owned outputs so their positions can be checked together.
+        for (int i = 0; i < checkBlock.vtx.size(); i++) {
+            const uint256 txid = checkBlock.vtx[i].GetHash();
+            if (pwtx->GetHash() == txid) {
+                if (!ironwoodWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid)) {
                     return finishValidation(false);
                 }
-                IronwoodWallet ironwoodWalletCheck;
-                ironwoodWalletCheck.InitNoteCommitmentTree(ironwoodCheckFrontierTree);
-
-                MerklePath ironwoodCheckMerklePath;
-                uint64_t positionCheck = UINT64_MAX;
-
-                //Retrieve the full block to get all of the transaction commitments
-                CBlock checkBlock;
-                if (!ReadBlockFromDisk(checkBlock, pCheckIndex, 1)) {
-                    return finishValidation(false);
-                }
-                CBlock *pCheckBlock = &checkBlock;
-
-                //Calculate Merkle Path
-                for (int i = 0; i < pCheckBlock->vtx.size(); i++) {
-                    uint256 txid = pCheckBlock->vtx[i].GetHash();
-
-                    //Use single output appending for transaction that belong to the wallet so that they can be marked
-                    if (pwtx->GetHash() == txid) {
-                        ironwoodWalletCheck.CreateEmptyPositionsForTxid(pCheckIndex->nHeight, txid);
-
-                        auto vActions = pCheckBlock->vtx[i].GetIronwoodActions();
-                        for (int j = 0; j < vActions.size(); j++) {
-                            auto opit = pwtx->mapIronwoodNoteData.find(op);
-                            if (opit != pwtx->mapIronwoodNoteData.end() && j == op.n) {
-                                ironwoodWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], true);
-                                assert(ironwoodWalletCheck.IsNoteTracked(txid, j, positionCheck));
-                                LogPrint("ironwoodwallet", "Ironwood Wallet - Merkle Path position %i\n", positionCheck);
-
-
-                            } else {
-                                ironwoodWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], false);
-                            }
-                        }
-
-                    } else {
-                        //No transactions in this tx belong to the wallet, use full tx appending
-                        ironwoodWalletCheck.ClearPositionsForTxid(txid);
-                        ironwoodWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight,pCheckBlock->vtx[i],i);
+                auto vActions = checkBlock.vtx[i].GetIronwoodActions();
+                for (int j = 0; j < vActions.size(); j++) {
+                    const bool isMine = pwtx->mapIronwoodNoteData.count(IronwoodOutPoint(txid, j)) != 0;
+                    if (!ironwoodWalletCheck.AppendNoteCommitment(pCheckIndex->nHeight, txid, i, j, &vActions[j], isMine)) {
+                        return finishValidation(false);
                     }
                 }
-
-                LogPrint("ironwoodwallet", "Ironwood Wallet - Merkle Path position %i\n", positionCheck);
-
-                if (positionCheck != position) {
-                    LogPrint("ironwoodwallet", "Ironwood Wallet Validation failed, rebuilding witnesses\n");
+            } else {
+                if (!ironwoodWalletCheck.AppendNoteCommitments(pCheckIndex->nHeight, checkBlock.vtx[i], i)) {
                     return finishValidation(false);
-                } else {
-                    pwtx->mapIronwoodNoteData[op].setPosition(position);
-                    UpdateIronwoodNullifierNoteMapWithTx(pwtx);
                 }
             }
         }
+
+        for (auto& item : pwtx->mapIronwoodNoteData) {
+            const IronwoodOutPoint& op = item.first;
+            uint64_t position;
+            uint64_t positionCheck;
+            if (!ironwoodWallet.IsNoteTracked(op.hash, op.n, position) ||
+                !ironwoodWalletCheck.IsNoteTracked(op.hash, op.n, positionCheck) ||
+                position != positionCheck) {
+                LogPrint("ironwoodwallet", "Ironwood Wallet Validation failed, rebuilding witnesses\n");
+                return finishValidation(false);
+            }
+            item.second.setPosition(position);
+        }
+        UpdateIronwoodNullifierNoteMapWithTx(pwtx);
     }
 
     return finishValidation(true);
@@ -5124,10 +5114,23 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
 
     if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
 
-        if (lastCheckpoint > pindex->nHeight - 1 ) {
-            saplingWalletValidated = false;
-            LogPrint("saplingwallet","Sapling Wallet - Last Checkpoint is higher than wallet, skipping block\n");
-            return;
+        if (lastCheckpoint >= pindex->nHeight && lastCheckpoint <= chainActive.Height()) {
+            // Earlier rescan blocks are already covered. At the cached height,
+            // check the root once so a partial saved block cannot be skipped.
+            const uint256 expectedRoot = pindex->pprev ? pindex->hashFinalSaplingRoot : SaplingMerkleFrontier::empty_root();
+            if (lastCheckpoint != pindex->nHeight) {
+                saplingWalletValidated = false;
+                LogPrint("saplingwallet", "Sapling Wallet - Block already covered by witness cache, skipping block\n");
+                return;
+            }
+            // Matching roots do not establish that newly discovered wallet notes
+            // were marked. Validate them before treating this height as complete.
+            if (saplingWallet.GetLatestAnchor() == expectedRoot &&
+                ValidateSaplingWalletTrackedPositions(pindex, suppressProgress)) {
+                saplingWalletValidated = true;
+                saplingWalletPositionsValidated = true;
+                return;
+            }
         }
 
         //Rebuild if wallet does not exisit
@@ -5263,13 +5266,18 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
                 pblockindex = chainActive.Next(pblockindex);
             }
 
-            if (!suppressProgress) {
-                uiInterface.ShowProgress(_("Rebuilding Sapling witnesses..."), 100, false);
-            }
-
             if (saplingWallet.GetLastCheckpointHeight() == pindex->nHeight) {
+                // Genesis predates the shielded-root header fields.
+                const uint256 expectedRoot = pindex->pprev ? pindex->hashFinalSaplingRoot : SaplingMerkleFrontier::empty_root();
+                if (saplingWallet.GetLatestAnchor() != expectedRoot) {
+                    throw std::runtime_error("Cannot rebuild Sapling wallet: commitment root does not match the active chain");
+                }
                 saplingWalletValidated = true;
                 saplingWalletPositionsValidated = true;
+            }
+
+            if (!suppressProgress) {
+                uiInterface.ShowProgress(_("Rebuilding Sapling witnesses..."), 100, false);
             }
 
         } else {
@@ -5331,10 +5339,23 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
 
     if (NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
 
-        if (lastCheckpoint > pindex->nHeight - 1 ) {
-            ironwoodWalletValidated = false;
-            LogPrint("ironwoodwallet","Ironwood Wallet - Last Checkpoint is higher than wallet, skipping block\n");
-            return;
+        if (lastCheckpoint >= pindex->nHeight && lastCheckpoint <= chainActive.Height()) {
+            // Earlier rescan blocks are already covered. At the cached height,
+            // check the root once so a partial saved block cannot be skipped.
+            const uint256 expectedRoot = pindex->pprev ? pindex->hashFinalIronwoodRoot : IronwoodMerkleFrontier::empty_root();
+            if (lastCheckpoint != pindex->nHeight) {
+                ironwoodWalletValidated = false;
+                LogPrint("ironwoodwallet", "Ironwood Wallet - Block already covered by witness cache, skipping block\n");
+                return;
+            }
+            // Matching roots do not establish that newly discovered wallet notes
+            // were marked. Validate them before treating this height as complete.
+            if (ironwoodWallet.GetLatestAnchor() == expectedRoot &&
+                ValidateIronwoodWalletTrackedPositions(pindex, suppressProgress)) {
+                ironwoodWalletValidated = true;
+                ironwoodWalletPositionsValidated = true;
+                return;
+            }
         }
 
         //Rebuild if wallet does not exisit
@@ -5470,13 +5491,18 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
                 pblockindex = chainActive.Next(pblockindex);
             }
 
-            if (!suppressProgress) {
-                uiInterface.ShowProgress(_("Rebuilding Ironwood witnesses..."), 100, false);
-            }
-
             if (ironwoodWallet.GetLastCheckpointHeight() == pindex->nHeight) {
+                // Genesis predates the shielded-root header fields.
+                const uint256 expectedRoot = pindex->pprev ? pindex->hashFinalIronwoodRoot : IronwoodMerkleFrontier::empty_root();
+                if (ironwoodWallet.GetLatestAnchor() != expectedRoot) {
+                    throw std::runtime_error("Cannot rebuild Ironwood wallet: commitment root does not match the active chain");
+                }
                 ironwoodWalletValidated = true;
                 ironwoodWalletPositionsValidated = true;
+            }
+
+            if (!suppressProgress) {
+                uiInterface.ShowProgress(_("Rebuilding Ironwood witnesses..."), 100, false);
             }
 
         } else {

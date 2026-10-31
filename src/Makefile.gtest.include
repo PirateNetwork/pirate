@@ -144,7 +144,8 @@ pirate_gtest_SOURCES += \
 	wallet/gtest/test_wallet.cpp \
 	wallet/gtest/test_wallet_spends.cpp \
 	wallet/gtest/test_wallet_scan.cpp \
-	wallet/gtest/test_wallet_rescan.cpp
+	wallet/gtest/test_wallet_rescan.cpp \
+	wallet/gtest/test_wallet_witnesses.cpp
 endif
 
 if TARGET_WINDOWS

@@ -91,6 +91,8 @@ CheckTransationResults ContextualCheckTransactionShieldedBundles(
     const std::vector<const CTransaction*>& vtx, CCoinsViewCache* view,
     uint32_t consensusBranchId, bool isInitBlockDownload, bool isMined)
 {
+    // This helper checks shielded input context with authorization batches disabled.
+    // Proof checks must explicitly queue a real batch and call its validate().
     CheckTransationResults results;
     CValidationState state;
     const Consensus::Params& consensus = Params().GetConsensus();
