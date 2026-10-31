@@ -114,11 +114,14 @@ protected:
                 progress.push_back({title, percent});
                 if (progressHook) progressHook(title, percent);
             });
+        errorConnection = uiInterface.ThreadSafeMessageBox.connect(
+            [](const std::string&, const std::string&, unsigned int) { return false; });
     }
 
     void TearDown() override
     {
         progressConnection.disconnect();
+        errorConnection.disconnect();
         progressHook = nullptr;
         fRequestShutdown = false;
         UpdateNetworkUpgradeParameters(Consensus::UPGRADE_OVERWINTER, previousOverwinter);
@@ -206,6 +209,7 @@ protected:
 private:
     CCoinsViewCache* originalCoins = nullptr;
     boost::signals2::scoped_connection progressConnection;
+    boost::signals2::scoped_connection errorConnection;
     unsigned int nextFileOffset = 0;
     int previousMaxConnections = 0;
     bool previousDeleteEnabled = false;
@@ -340,6 +344,57 @@ TEST_F(WalletScanTest, ShutdownBeforeFirstWalletUpdateKeepsSavedLocator)
 
     EXPECT_TRUE(ShutdownRequested());
     EXPECT_EQ(tipHash, SavedBestBlock());
+}
+
+TEST_F(WalletScanTest, FailedRestartSaveDoesNotBeginScanning)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    auto* target = chainActive[5];
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive[4], true, true, false, true), 0);
+    const uint256 saved = SavedBestBlock();
+    chainActive.SetTip(target);
+    const std::string originalFile = wallet->strWalletFile;
+    wallet->strWalletFile = "uncreated-rescan-failure.dat";
+    progress.clear();
+
+    EXPECT_EQ(-1, wallet->ScanForWalletTransactions(chainActive[1], true, true, false, true));
+
+    wallet->strWalletFile = originalFile;
+    EXPECT_EQ(saved, SavedBestBlock());
+    EXPECT_EQ(4, wallet->chainHeight);
+    EXPECT_EQ(4, wallet->SaplingCheckpoint());
+    EXPECT_EQ(4, wallet->IronwoodCheckpoint());
+    EXPECT_TRUE(ShutdownRequested());
+    ASSERT_FALSE(progress.empty());
+    EXPECT_EQ("Wallet rescan failed", progress.back().title);
+}
+
+TEST_F(WalletScanTest, FailedCompletionSaveRetainsTheRestartPoint)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    const std::string originalFile = wallet->strWalletFile;
+    const uint256 restartHash = chainActive[1]->GetBlockHash();
+    progressHook = [&](const std::string& title, int) {
+        if (title == "Saving rescanned wallet...") {
+            wallet->strWalletFile = "uncreated-completion-failure.dat";
+        }
+    };
+
+    EXPECT_EQ(-1, wallet->ScanForWalletTransactions(chainActive[1], true, true, false, true));
+
+    wallet->strWalletFile = originalFile;
+    progressHook = nullptr;
+    EXPECT_EQ(restartHash, SavedBestBlock());
+    EXPECT_EQ(1, wallet->chainHeight);
+    EXPECT_TRUE(ShutdownRequested());
+    EXPECT_TRUE(wallet->fRunSetBestChain);
+    ASSERT_FALSE(progress.empty());
+    EXPECT_EQ("Wallet rescan failed", progress.back().title);
+    EXPECT_TRUE(wallet->FlushBestChain());
+    EXPECT_EQ(restartHash, SavedBestBlock());
 }
 
 TEST_F(WalletScanTest, ChainTipUsesTheProvidedBlockForBothPools)

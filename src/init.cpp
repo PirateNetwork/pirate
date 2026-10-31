@@ -255,7 +255,11 @@ void Shutdown()
         if (loadComplete) {
             // Workers have stopped. Persist the wallet's processed position,
             // which may precede the node tip after an interrupted rescan.
-            pwalletMain->FlushBestChain();
+            if (!pwalletMain->FlushBestChain()) {
+                LogPrintf("Failed to save wallet state during shutdown; retained the previous recovery point\n");
+                uiInterface.ThreadSafeMessageBox(_("Unable to save wallet state during shutdown. Check disk space and debug.log before restarting."),
+                    _("Wallet error"), CClientUIInterface::MSG_ERROR);
+            }
         }
         pwalletMain->Flush(false);
     }
@@ -2832,7 +2836,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
 
             if (chainActive.Tip()) {
                 LOCK(pwalletMain->cs_wallet);
-                pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->nHeight);
+                if (!pwalletMain->SetBestChain(chainActive.GetLocator(), chainActive.Tip()->nHeight)) {
+                    return InitError(_("Unable to save initial wallet state. Check disk space and debug.log."));
+                }
             }
         }
 
@@ -2906,7 +2912,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             uiInterface.InitMessage(_("Rescanning..."));
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
             nStart = GetTimeMillis();
-            pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
+            if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false) < 0) {
+                return InitError(_("Wallet rescan failed. Check disk space and debug.log."));
+            }
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
         } else {
             //Rescan at minimum last 1 block
@@ -2915,7 +2923,9 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
                 uiInterface.InitMessage(_("Rescanning..."));
                 LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
                 nStart = GetTimeMillis();
-                pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false);
+                if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false) < 0) {
+                    return InitError(_("Wallet rescan failed. Check disk space and debug.log."));
+                }
                 LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
             }
         }

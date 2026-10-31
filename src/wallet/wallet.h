@@ -2226,10 +2226,10 @@ public:
     void RunSaplingConsolidation(int blockHeight);
     void RunIronwoodConsolidation(int blockHeight);
     bool CommitAutomatedTx(const CTransaction& tx);
-    /** Saves witness caches and best block locator to disk. */
-    void SetBestChain(const CBlockLocator& loc, const int& height);
-    /** Persist the wallet's own position after workers stop during shutdown. */
-    void FlushBestChain();
+    /** Saves witness caches and locator atomically; false leaves pending data for retry. */
+    bool SetBestChain(const CBlockLocator& loc, const int& height);
+    /** Persist the wallet's position at shutdown; locked wallets defer until unlock. */
+    bool FlushBestChain();
     void SetWalletBirthday(int nHeight);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);

@@ -128,6 +128,13 @@ bool fWalletRbf = DEFAULT_WALLET_RBF;
 /** Whether transaction deletion is enabled for wallet cleanup */
 bool fTxDeleteEnabled = false;
 
+static void ReportWalletSaveFailure(const std::string& message)
+{
+    LogPrintf("Wallet persistence failure: %s\n", message);
+    StartShutdown();
+    uiInterface.ThreadSafeMessageBox(message, _("Wallet error"), CClientUIInterface::MSG_ERROR);
+}
+
 /** Whether conflicted transaction deletion is enabled */
 bool fTxConflictDeleteEnabled = false;
 
@@ -3002,7 +3009,11 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
             if (CCryptoKeyStore::Unlock(vMasterKey)) {
-                SetBestChain(currentBlock, chainHeight);
+                if (!currentBlock.vHave.empty() && !SetBestChain(currentBlock, chainHeight)) {
+                    Lock();
+                    ReportWalletSaveFailure(_("Unable to save the unlocked wallet. Check disk space and debug.log before restarting."));
+                    return false;
+                }
                 return true;
             }
         }
@@ -3186,7 +3197,10 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         nLastSetChain = nNow;
         nSetChainUpdates = 0;
 
-        SetBestChain(currentBlock, chainHeight);
+        // Locked wallets defer encrypted-state persistence until unlock.
+        if (!IsLocked() && !SetBestChain(currentBlock, chainHeight)) {
+            ReportWalletSaveFailure(_("Unable to save wallet state. The previous recovery point has been retained. Check disk space and debug.log before restarting."));
+        }
     }
 
 }
@@ -3396,23 +3410,31 @@ bool CWallet::CommitAutomatedTx(const CTransaction& tx) {
  * nMaxConnections > 0) and is ignored in cold storage offline mode.
  * Requires the wallet lock to be held.
  */
-void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
+bool CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
 {
     //Only execute in online mode, otherwise ignore this function
     //for cold storage offline mode
     if (nMaxConnections > 0 ) {
         AssertLockHeld(cs_wallet);
-        CWalletDB walletdb(strWalletFile);
-        SetBestChainINTERNAL(walletdb, loc, height);
+        fRunSetBestChain = true;
+        try {
+            CWalletDB walletdb(strWalletFile);
+            return SetBestChainINTERNAL(walletdb, loc, height);
+        } catch (const std::exception& error) {
+            LogPrintf("SetBestChain(): Cannot save wallet state: %s\n", error.what());
+            return false;
+        }
     }
+    return true;
 }
 
-void CWallet::FlushBestChain()
+bool CWallet::FlushBestChain()
 {
     LOCK2(cs_main, cs_wallet);
-    if (!currentBlock.vHave.empty()) {
-        SetBestChain(currentBlock, chainHeight);
+    if (!currentBlock.vHave.empty() && !IsLocked()) {
+        return SetBestChain(currentBlock, chainHeight);
     }
+    return true;
 }
 
 /**
@@ -7200,9 +7222,9 @@ void CWallet::RescanWallet()
     if (needsRescan)
     {
         CBlockIndex *start = chainActive.Height() > 0 ? chainActive[1] : NULL;
-        if (start)
-            ScanForWalletTransactions(start, true, true, true, true);
-        needsRescan = false;
+        if (start && ScanForWalletTransactions(start, true, true, true, true) >= 0 && !ShutdownRequested()) {
+            needsRescan = false;
+        }
     }
 }
 
@@ -9952,7 +9974,7 @@ bool CWallet::initalizeArcTx() {
  * @param fIgnoreBirthday If true, scan all blocks regardless of wallet birthday
  * @param LockOnFinish If true, lock the wallet after scanning completes (for encrypted wallets)
  * @param resetWallets If true, reset Sapling and Ironwood wallet states before scanning
- * @return Number of transactions found and added to the wallet
+ * @return Number of transactions found, or -1 when scanning or persistence fails
  * 
  * Performs a comprehensive blockchain scan to find transactions involving this wallet.
  * This is the primary function used for wallet synchronization and recovery operations.
@@ -9990,14 +10012,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     const CChainParams& chainParams = Params();
     bool scanComplete = false;
 
-    CBlockIndex* pindex = pindexStart;
-
-    //Reset the wallet location to the rescan start. This will force the rescan to start over
-    //if the wallet is killed part way through
-    currentBlock = chainActive.GetLocator(pindex);
-    chainHeight = pindex->nHeight;
-    SetBestChain(currentBlock, chainHeight);
-
     std::set<uint256> txList;
     std::set<uint256> txListOriginal;
 
@@ -10005,128 +10019,153 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     std::set<SaplingPaymentAddress> saplingAddressesFound;
     std::set<IronwoodPaymentAddress> ironwoodAddressesFound;
 
-    {
-        //Lock cs_keystore to prevent wallet from locking during rescan
-        LOCK(cs_KeyStore);
-
-        //Get List of current list of txids
-        for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
-        {
-            txListOriginal.insert((*it).first);
+    try {
+        CBlockIndex* pindex = pindexStart;
+        // Commit the restart point before changing witnesses or discovering notes.
+        const CBlockLocator restartBlock = chainActive.GetLocator(pindex);
+        if (!SetBestChain(restartBlock, pindex->nHeight)) {
+            throw std::runtime_error("Unable to save the wallet rescan restart point");
         }
-        for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+        currentBlock = restartBlock;
+        chainHeight = pindex->nHeight;
+
         {
-            txListOriginal.insert((*it).first);
-        }
+            //Lock cs_keystore to prevent wallet from locking during rescan
+            LOCK(cs_KeyStore);
 
-        // no need to read and scan block, if block was created before
-        // our wallet birthday (as adjusted for block time variability)
-        while (!fIgnoreBirthday && pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)) && (pindex->nHeight < pwalletMain->nBirthday))
-            pindex = chainActive.Next(pindex);
-
-        uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
-        const int progressStartHeight = pindex ? pindex->nHeight : chainActive.Height();
-        const int progressEndHeight = chainActive.Height();
-
-        //Reset the sapling Wallet
-        if (resetWallets) {
-          SaplingWalletReset();
-          IronwoodWalletReset();
-        }
-
-        while (pindex)
-        {
-            //exit loop if trying to shutdown
-            if (ShutdownRequested()) {
-                break;
-            }
-
-            if (pindex->nHeight == progressStartHeight || pindex->nHeight % 100 == 0 || GetTime() >= nLastProgress + 1)
+            //Get List of current list of txids
+            for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
             {
-                nLastProgress = GetTime();
-                const int progress = 100LL * (pindex->nHeight - progressStartHeight) /
-                    (int64_t(progressEndHeight) - progressStartHeight + 1);
-                uiInterface.ShowProgress(strprintf(_("Scanning wallet transactions and witnesses: block %d of %d..."),
-                    pindex->nHeight, progressEndHeight), std::max(1, std::min(99, progress)), false);
+                txListOriginal.insert((*it).first);
+            }
+            for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
+            {
+                txListOriginal.insert((*it).first);
             }
 
-            bool blockInvolvesMe = false;
-            CBlock block;
-            if (!ReadBlockFromDisk(block, pindex, 1)) {
-                throw std::runtime_error("Unable to read block during wallet rescan");
+            // no need to read and scan block, if block was created before
+            // our wallet birthday (as adjusted for block time variability)
+            while (!fIgnoreBirthday && pindex && nTimeFirstKey && (pindex->GetBlockTime() < (nTimeFirstKey - 7200)) && (pindex->nHeight < pwalletMain->nBirthday))
+                pindex = chainActive.Next(pindex);
+
+            uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
+            const int progressStartHeight = pindex ? pindex->nHeight : chainActive.Height();
+            const int progressEndHeight = chainActive.Height();
+
+            //Reset the sapling Wallet
+            if (resetWallets) {
+              SaplingWalletReset();
+              IronwoodWalletReset();
             }
 
-            std::vector<CTransaction> vOurs;
-            AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, saplingAddressesFound, ironwoodAddressesFound, true);
+            while (pindex)
+            {
+                //exit loop if trying to shutdown
+                if (ShutdownRequested()) {
+                    break;
+                }
 
-            for (int i = 0; i < vOurs.size(); i++) {
-                blockInvolvesMe = true;
-                txList.insert(vOurs[i].GetHash());
-                ret++;
+                if (pindex->nHeight == progressStartHeight || pindex->nHeight % 100 == 0 || GetTime() >= nLastProgress + 1)
+                {
+                    nLastProgress = GetTime();
+                    const int progress = 100LL * (pindex->nHeight - progressStartHeight) /
+                        (int64_t(progressEndHeight) - progressStartHeight + 1);
+                    uiInterface.ShowProgress(strprintf(_("Scanning wallet transactions and witnesses: block %d of %d..."),
+                        pindex->nHeight, progressEndHeight), std::max(1, std::min(99, progress)), false);
+                }
+
+                bool blockInvolvesMe = false;
+                CBlock block;
+                if (!ReadBlockFromDisk(block, pindex, 1)) {
+                    throw std::runtime_error("Unable to read block during wallet rescan");
+                }
+
+                std::vector<CTransaction> vOurs;
+                AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, saplingAddressesFound, ironwoodAddressesFound, true);
+
+                for (int i = 0; i < vOurs.size(); i++) {
+                    blockInvolvesMe = true;
+                    txList.insert(vOurs[i].GetHash());
+                    ret++;
+                }
+
+                if (GetTime() >= nNow + 60) {
+                    nNow = GetTime();
+                    LogPrintf("Still rescanning. At block %d. Progress=%f\n", pindex->nHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex));
+                }
+
+                if (pindex->nHeight == chainActive.Tip()->nHeight) {
+                    //Reset validation flags to force final validation of witness trees
+                    //on last loop
+                    saplingWalletValidated = false;
+                    saplingWalletPositionsValidated = false;
+                    ironwoodWalletValidated = false;
+                    ironwoodWalletPositionsValidated = false;
+                }
+
+                //Update the Sapling and Ironwood Wallet Merkle tree and set transaction nullifiers
+                //This needs to be done after processing the block to ensure
+                //that subsequent spends can be detected
+                // Nested rebuilds update this dialog without opening or closing their own.
+                IncrementSaplingWallet(pindex, &block, true);
+                IncrementIronwoodWallet(pindex, &block, true);
+
+                pindex = chainActive.Next(pindex);
+
             }
 
-            if (GetTime() >= nNow + 60) {
-                nNow = GetTime();
-                LogPrintf("Still rescanning. At block %d. Progress=%f\n", pindex->nHeight, Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex));
+            scanComplete = !pindex && !ShutdownRequested();
+            if (scanComplete) {
+                uiInterface.ShowProgress(_("Saving rescanned wallet..."), 99, false);
+
+                const CBlockLocator completedBlock = chainActive.GetLocator();
+                const int completedHeight = chainActive.Tip()->nHeight;
+                if (!SetBestChain(completedBlock, completedHeight)) {
+                    throw std::runtime_error("Unable to save the rescanned wallet before cleanup");
+                }
+
+                while (DeleteWalletTransactions(chainActive.Tip(), true)) {}
+
+                if (!SetBestChain(completedBlock, completedHeight)) {
+                    throw std::runtime_error("Unable to save the rescanned wallet after cleanup");
+                }
+                currentBlock = completedBlock;
+                chainHeight = completedHeight;
+            } else {
+                // Keep the starting locator written above. Restart must revisit blocks
+                // whose transactions or witnesses have not finished scanning.
+                LogPrintf("Wallet rescan interrupted; retaining its starting locator\n");
             }
 
-            if (pindex->nHeight == chainActive.Tip()->nHeight) {
-                //Reset validation flags to force final validation of witness trees
-                //on last loop
-                saplingWalletValidated = false;
-                saplingWalletPositionsValidated = false;
-                ironwoodWalletValidated = false;
-                ironwoodWalletPositionsValidated = false;
+            if (LockOnFinish && IsCrypted()) {
+                Lock();
             }
-
-            //Update the Sapling and Ironwood Wallet Merkle tree and set transaction nullifiers
-            //This needs to be done after processing the block to ensure
-            //that subsequent spends can be detected
-            // Nested rebuilds update this dialog without opening or closing their own.
-            IncrementSaplingWallet(pindex, &block, true);
-            IncrementIronwoodWallet(pindex, &block, true);
-
-            pindex = chainActive.Next(pindex);
-            
         }
-
-        scanComplete = !pindex && !ShutdownRequested();
-        if (scanComplete) {
-            uiInterface.ShowProgress(_("Saving rescanned wallet..."), 99, false);
-
-            currentBlock = chainActive.GetLocator();
-            chainHeight = chainActive.Tip()->nHeight;
-            SetBestChain(currentBlock, chainHeight);
-
-            while (DeleteWalletTransactions(chainActive.Tip(), true)) {}
-
-            SetBestChain(currentBlock, chainHeight);
-        } else {
-            // Keep the starting locator written above. Restart must revisit blocks
-            // whose transactions or witnesses have not finished scanning.
-            LogPrintf("Wallet rescan interrupted; retaining its starting locator\n");
-        }
-
+    } catch (const std::exception& error) {
+        scanComplete = false;
+        ret = -1;
         if (LockOnFinish && IsCrypted()) {
             Lock();
         }
+        ReportWalletSaveFailure(strprintf(_("Wallet rescan failed: %s. Check disk space and debug.log before restarting."), error.what()));
     }
 
-    //Notfiy GUI of all new addresses found
-    for (std::set<SaplingPaymentAddress>::iterator it = saplingAddressesFound.begin(); it != saplingAddressesFound.end(); it++) {
-        SetZAddressBook(*it, "Sapling", "", true);
-    }
-
-    for (std::set<IronwoodPaymentAddress>::iterator it = ironwoodAddressesFound.begin(); it != ironwoodAddressesFound.end(); it++) {
-        // Internal (change) Ironwood addresses are added so the UI can label them "Change".
-        SetZAddressBook(*it, "Ironwood", "", true);
+    // Notify the GUI of addresses after a successful or interrupted scan.
+    if (ret >= 0) {
+        for (const auto& address : saplingAddressesFound) {
+            SetZAddressBook(address, "Sapling", "", true);
+        }
+        for (const auto& address : ironwoodAddressesFound) {
+            SetZAddressBook(address, "Ironwood", "", true);
+        }
     }
 
     //Notify GUI of changes in balances
     NotifyBalanceChanged();
 
     //Notify GUI Rescan is complete
-    uiInterface.ShowProgress(scanComplete ? _("Wallet rescan complete") : _("Wallet rescan interrupted"), 100, false);
+    uiInterface.ShowProgress(ret < 0 ? _("Wallet rescan failed") :
+        (scanComplete ? _("Wallet rescan complete") : _("Wallet rescan interrupted")), 100, false);
     NotifyRescanComplete();
 
     return ret;
