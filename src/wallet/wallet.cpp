@@ -125,9 +125,6 @@ bool fWalletRbf = DEFAULT_WALLET_RBF;
  * Variables that track wallet scanning progress and transaction management settings.
  */
 
-/** Progress percentage for blockchain scanning operations */
-int scanperc;
-
 /** Whether transaction deletion is enabled for wallet cleanup */
 bool fTxDeleteEnabled = false;
 
@@ -3403,6 +3400,13 @@ void CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
     }
 }
 
+void CWallet::FlushBestChain()
+{
+    LOCK2(cs_main, cs_wallet);
+    if (!currentBlock.vHave.empty()) {
+        SetBestChain(currentBlock, chainHeight);
+    }
+}
 
 /**
  * @brief Set the wallet's birthday block height
@@ -9945,9 +9949,6 @@ bool CWallet::initalizeArcTx() {
  * @note In cold storage mode (nMaxConnections == 0), this function returns false immediately
  */
 
-// Global flag to suppress nested progress dialogs during rescan
-static bool fInRescan = false;
-
 int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish, bool resetWallets)
 {
     if (nMaxConnections == 0) {
@@ -9958,12 +9959,11 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     //Notify GUI of rescan
     NotifyRescanStarted();
     
-    // Set flag to suppress nested progress dialogs
-    fInRescan = true;
-
     int ret = 0;
     int64_t nNow = GetTime();
+    int64_t nLastProgress = nNow;
     const CChainParams& chainParams = Params();
+    bool scanComplete = false;
 
     CBlockIndex* pindex = pindexStart;
 
@@ -10000,8 +10000,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             pindex = chainActive.Next(pindex);
 
         uiInterface.ShowProgress(_("Rescanning..."), 0, false); // show rescan progress in GUI as dialog or on splashscreen, if -rescan on startup
-        double dProgressStart = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false);
-        double dProgressTip = Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), chainActive.Tip(), false);
+        const int progressStartHeight = pindex ? pindex->nHeight : chainActive.Height();
+        const int progressEndHeight = chainActive.Height();
 
         //Reset the sapling Wallet
         if (resetWallets) {
@@ -10016,15 +10016,20 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 break;
             }
 
-            if (pindex->nHeight % 100 == 0 && dProgressTip - dProgressStart > 0.0)
+            if (pindex->nHeight == progressStartHeight || pindex->nHeight % 100 == 0 || GetTime() >= nLastProgress + 1)
             {
-                scanperc = (int)((Checkpoints::GuessVerificationProgress(chainParams.Checkpoints(), pindex, false) - dProgressStart) / (dProgressTip - dProgressStart) * 100);
-                uiInterface.ShowProgress(_(("Rescanning - Currently on block " + std::to_string(pindex->nHeight) + "...").c_str()), std::max(1, std::min(99, scanperc)), false);
+                nLastProgress = GetTime();
+                const int progress = 100LL * (pindex->nHeight - progressStartHeight) /
+                    (int64_t(progressEndHeight) - progressStartHeight + 1);
+                uiInterface.ShowProgress(strprintf(_("Scanning wallet transactions and witnesses: block %d of %d..."),
+                    pindex->nHeight, progressEndHeight), std::max(1, std::min(99, progress)), false);
             }
 
             bool blockInvolvesMe = false;
             CBlock block;
-            ReadBlockFromDisk(block, pindex,1);
+            if (!ReadBlockFromDisk(block, pindex, 1)) {
+                throw std::runtime_error("Unable to read block during wallet rescan");
+            }
 
             std::vector<CTransaction> vOurs;
             AddToWalletIfInvolvingMe(block.vtx, vOurs, &block, pindex->nHeight, fUpdate, saplingAddressesFound, ironwoodAddressesFound, true);
@@ -10033,21 +10038,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
                 blockInvolvesMe = true;
                 txList.insert(vOurs[i].GetHash());
                 ret++;
-            }
-
-            SproutMerkleTree sproutTree;
-            SaplingMerkleFrontier saplingFrontierTree;
-            IronwoodMerkleFrontier ironwoodFrontierTree;
-            // This should never fail: we should always be able to get the tree
-            // state on the path to the tip of our chain
-            assert(pcoinsTip->GetSproutAnchorAt(pindex->hashSproutAnchor, sproutTree));
-            if (pindex->pprev) {
-                if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING)) {
-                    assert(pcoinsTip->GetSaplingFrontierAnchorAt(pindex->pprev->hashFinalSaplingRoot, saplingFrontierTree));
-                }
-                if (NetworkUpgradeActive(pindex->pprev->nHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD)) {
-                    assert(pcoinsTip->GetIronwoodFrontierAnchorAt(pindex->pprev->hashFinalIronwoodRoot, ironwoodFrontierTree));
-                }
             }
 
             if (GetTime() >= nNow + 60) {
@@ -10067,7 +10057,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             //Update the Sapling and Ironwood Wallet Merkle tree and set transaction nullifiers
             //This needs to be done after processing the block to ensure
             //that subsequent spends can be detected
-            // Pass true to suppress progress dialogs (rescan already shows its own progress)
+            // Nested rebuilds update this dialog without opening or closing their own.
             IncrementSaplingWallet(pindex, &block, true);
             IncrementIronwoodWallet(pindex, &block, true);
 
@@ -10075,18 +10065,22 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             
         }
 
-        uiInterface.ShowProgress(_("Rescanning..."), 100, false); // hide progress dialog in GUI
+        scanComplete = !pindex && !ShutdownRequested();
+        if (scanComplete) {
+            uiInterface.ShowProgress(_("Saving rescanned wallet..."), 99, false);
 
-        //Write all transactions ant block loacator to the wallet
-        currentBlock = chainActive.GetLocator();
-        chainHeight = chainActive.Tip()->nHeight;
-        SetBestChain(currentBlock, chainHeight);
+            currentBlock = chainActive.GetLocator();
+            chainHeight = chainActive.Tip()->nHeight;
+            SetBestChain(currentBlock, chainHeight);
 
-        //Delete transactions
-        while(DeleteWalletTransactions(chainActive.Tip(), true)) {}
+            while (DeleteWalletTransactions(chainActive.Tip(), true)) {}
 
-        //Write everything to the wallet
-        SetBestChain(currentBlock, chainHeight);
+            SetBestChain(currentBlock, chainHeight);
+        } else {
+            // Keep the starting locator written above. Restart must revisit blocks
+            // whose transactions or witnesses have not finished scanning.
+            LogPrintf("Wallet rescan interrupted; retaining its starting locator\n");
+        }
 
         if (LockOnFinish && IsCrypted()) {
             Lock();
@@ -10107,6 +10101,7 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     NotifyBalanceChanged();
 
     //Notify GUI Rescan is complete
+    uiInterface.ShowProgress(scanComplete ? _("Wallet rescan complete") : _("Wallet rescan interrupted"), 100, false);
     NotifyRescanComplete();
 
     return ret;

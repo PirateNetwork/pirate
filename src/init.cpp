@@ -187,19 +187,6 @@ bool loadComplete = false;
 
 void StartShutdown()
 {
-
-      //Flush wallet on exit
-      //Write all transactions and block locator to the wallet
-#ifdef ENABLE_WALLET
-    if ( pwalletMain && (loadComplete) && (nMaxConnections>0) ) {
-        LogPrintf("Flushing wallet to disk on shutdown.\n");
-        LOCK2(cs_main, pwalletMain->cs_wallet);
-        CBlockLocator currentBlock = chainActive.GetLocator();
-        int chainHeight = chainActive.Tip()->nHeight;
-        pwalletMain->SetBestChain(currentBlock, chainHeight);
-    }
-#endif
-
     fRequestShutdown = true;
 }
 bool ShutdownRequested()
@@ -264,8 +251,14 @@ void Shutdown()
     StopRPC();
     StopHTTPServer();
 #ifdef ENABLE_WALLET
-    if (pwalletMain)
+    if (pwalletMain) {
+        if (loadComplete) {
+            // Workers have stopped. Persist the wallet's processed position,
+            // which may precede the node tip after an interrupted rescan.
+            pwalletMain->FlushBestChain();
+        }
         pwalletMain->Flush(false);
+    }
 #endif
 #ifdef ENABLE_MINING
  #ifdef ENABLE_WALLET

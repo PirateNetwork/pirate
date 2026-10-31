@@ -1060,8 +1060,7 @@ private:
 
     CWalletDB *pwalletdbEncryption;
 
-    //In Memory Block Locator of corresponding to wallet transactions
-    //Set in setBestChain, used passed to SetBestChainINTERNAL as const
+    // Processed wallet position, or the conservative restart point during rescan.
     CBlockLocator currentBlock;
 
     //! the current wallet version: clients below this version are not able to load the wallet
@@ -2248,6 +2247,8 @@ public:
     bool CommitAutomatedTx(const CTransaction& tx);
     /** Saves witness caches and best block locator to disk. */
     void SetBestChain(const CBlockLocator& loc, const int& height);
+    /** Persist the wallet's own position after workers stop during shutdown. */
+    void FlushBestChain();
     void SetWalletBirthday(int nHeight);
     std::set<std::pair<libzcash::PaymentAddress, uint256>> GetNullifiersForAddresses(const std::set<libzcash::PaymentAddress> & addresses);
     bool IsNoteSproutChange(const std::set<std::pair<libzcash::PaymentAddress, uint256>> & nullifierSet, const libzcash::PaymentAddress & address, const JSOutPoint & entry);
