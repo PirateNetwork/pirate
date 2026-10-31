@@ -144,6 +144,7 @@ CCoinsViewCache::~CCoinsViewCache()
 size_t CCoinsViewCache::DynamicMemoryUsage() const {
     return memusage::DynamicUsage(cacheCoins) +
            memusage::DynamicUsage(cacheSproutAnchors) +
+           memusage::DynamicUsage(cacheSaplingAnchors) +
            memusage::DynamicUsage(cacheSaplingFrontierAnchors) +
            memusage::DynamicUsage(cacheIronwoodFrontierAnchors) +
            memusage::DynamicUsage(cacheSproutNullifiers) +

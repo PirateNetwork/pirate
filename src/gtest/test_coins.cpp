@@ -471,6 +471,20 @@ TEST(TestCoins, ReturnedIronwoodFrontierRootSurvivesFlushAndRewind)
     ReturnedAnchorRootSurvivesFlushAndRewind<IronwoodMerkleFrontier>(IRONWOODFRONTIER);
 }
 
+TEST(TestCoins, LegacySaplingAnchorsAreIncludedInCacheMemoryUsage)
+{
+    CCoinsViewTest base;
+    CCoinsViewCacheTest cache(&base);
+    cache.SelfTest();
+    SaplingMerkleTree tree;
+    for (int i = 0; i < 4; ++i) AppendRandomLeaf(tree);
+    ASSERT_GT(tree.DynamicMemoryUsage(), 0u);
+    cache.PushAnchor(tree);
+    cache.SelfTest();
+    ASSERT_TRUE(cache.Flush());
+    cache.SelfTest();
+}
+
 void checkNullifierCache(const CCoinsViewCacheTest& cache, const TxWithNullifiers& txWithNullifiers, bool shouldBeInCache)
 {
     // Make sure the nullifiers have not gotten mixed up between pools
