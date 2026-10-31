@@ -238,3 +238,87 @@ TEST_P(WalletSpendTrackingTest, SpentStateFollowsChainWithoutLosingCompetingAtte
 INSTANTIATE_TEST_CASE_P(AllPools, WalletSpendTrackingTest,
     ::testing::Values(WalletSpendPool::Transparent, WalletSpendPool::Sprout,
                       WalletSpendPool::Sapling, WalletSpendPool::Ironwood));
+
+class WalletSpendMetadataTest : public BitcoinTestingSetup
+{
+protected:
+    void SelectTestParams() override { SelectParams(CBaseChainParams::REGTEST); }
+
+    void TearDown() override
+    {
+        {
+            LOCK(cs_main);
+            if (confirmedBlock) {
+                chainActive.SetTip(previousTip);
+                mapBlockIndex.erase(blockHash);
+                confirmedBlock.reset();
+            }
+        }
+        BitcoinTestingSetup::TearDown();
+    }
+
+    CBlockIndex* previousTip = nullptr;
+    uint256 blockHash;
+    std::unique_ptr<CBlockIndex> confirmedBlock;
+};
+
+TEST_F(WalletSpendMetadataTest, NewCompetingSpendKeepsOlderMetadata)
+{
+    LOCK2(cs_main, pwalletMain->cs_wallet);
+    CMutableTransaction tx;
+    const COutPoint input(GetRandHash(), 0);
+    tx.vin.emplace_back(input);
+    tx.vout.emplace_back(1, CScript());
+    tx.nLockTime = 1;
+
+    CBlock block;
+    block.vtx.emplace_back(tx);
+    block.hashMerkleRoot = block.BuildMerkleTree();
+    previousTip = chainActive.Tip();
+    ASSERT_NE(nullptr, previousTip);
+    block.hashPrevBlock = previousTip->GetBlockHash();
+    blockHash = block.GetHash();
+    confirmedBlock.reset(new CBlockIndex(block));
+    confirmedBlock->pprev = previousTip;
+    confirmedBlock->nHeight = previousTip->nHeight + 1;
+    auto inserted = mapBlockIndex.emplace(blockHash, confirmedBlock.get());
+    ASSERT_TRUE(inserted.second);
+    confirmedBlock->phashBlock = &inserted.first->first;
+    chainActive.SetTip(confirmedBlock.get());
+
+    CWalletTx older(pwalletMain, CTransaction(tx));
+    older.SetMerkleBranch(block);
+    older.nOrderPos = pwalletMain->IncOrderPosNext();
+    older.mapValue["comment"] = "original transfer";
+    older.fFromMe = true;
+    older.nTimeSmart = 1234;
+    ASSERT_TRUE(pwalletMain->AddToWallet(older, true, nullptr, 0, true));
+    ASSERT_TRUE(pwalletMain->IsSpent(input.hash, input.n));
+
+    tx.nLockTime = 2;
+    CWalletTx newer(pwalletMain, CTransaction(tx));
+    newer.mapValue["comment"] = "replacement attempt";
+    newer.fFromMe = false;
+    ASSERT_EQ(-1, newer.nOrderPos);
+    ASSERT_TRUE(pwalletMain->AddToWallet(newer, false, nullptr, 0, true));
+
+    const auto& storedOlder = pwalletMain->mapWallet.at(older.GetHash());
+    const auto& storedNewer = pwalletMain->mapWallet.at(newer.GetHash());
+    EXPECT_GT(storedNewer.nOrderPos, storedOlder.nOrderPos);
+    EXPECT_EQ("original transfer", storedOlder.mapValue.at("comment"));
+    EXPECT_EQ("original transfer", storedNewer.mapValue.at("comment"));
+    EXPECT_TRUE(storedOlder.fFromMe);
+    EXPECT_TRUE(storedNewer.fFromMe);
+    EXPECT_EQ(1234, storedOlder.nTimeSmart);
+    EXPECT_EQ(1234, storedNewer.nTimeSmart);
+    EXPECT_TRUE(pwalletMain->IsSpent(input.hash, input.n));
+
+    ASSERT_TRUE(pwalletMain->AddToWallet(newer, false, nullptr, 0, true));
+    EXPECT_EQ("original transfer", storedOlder.mapValue.at("comment"));
+    EXPECT_EQ("original transfer", storedNewer.mapValue.at("comment"));
+    EXPECT_EQ(1234, storedOlder.nTimeSmart);
+    EXPECT_EQ(1234, storedNewer.nTimeSmart);
+    EXPECT_TRUE(pwalletMain->IsSpent(input.hash, input.n));
+    EXPECT_EQ((std::set<uint256>{older.GetHash(), newer.GetHash()}),
+              pwalletMain->GetConflicts(older.GetHash()));
+}

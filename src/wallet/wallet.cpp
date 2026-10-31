@@ -6668,7 +6668,6 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
         CWalletTx& wtx = (*ret.first).second;
         wtx.BindWallet(this);
         UpdateNullifierNoteMapWithTx(wtx);
-        AddToSpends(hash);
         bool fInsertedNew = ret.second;
         if (fInsertedNew) {
             wtx.nOrderPos = IncOrderPosNext(pwalletdb);
@@ -6716,6 +6715,10 @@ bool CWallet::AddToWallet(const CWalletTx& wtxIn, bool fFromLoadWallet, CWalletD
                 fUpdated = true;
             }
         }
+
+        // Initialize ordering and merge updates before synchronizing metadata
+        // with competing spends, so a new attempt cannot appear to be oldest.
+        AddToSpends(hash);
 
         //// debug print
         LogPrintf("AddToWallet %s  %s%s\n", wtxIn.GetHash().ToString(), (fInsertedNew ? "new" : ""), (fUpdated ? "update" : ""));
