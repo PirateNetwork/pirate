@@ -3904,7 +3904,6 @@ void CWallet::SyncMetaData(pair<typename TxSpendMap<T>::iterator, typename TxSpe
     // the oldest (smallest nOrderPos).
     // So: find smallest nOrderPos:
 
-    int nMinOrderPos = std::numeric_limits<int>::max();
     const CWalletTx* copyFrom = NULL;
     for (typename TxSpendMap<T>::iterator it = range.first; it != range.second; ++it)
     {
@@ -3912,10 +3911,8 @@ void CWallet::SyncMetaData(pair<typename TxSpendMap<T>::iterator, typename TxSpe
 
         const auto itmw = mapWallet.find(hash);
         if (itmw != mapWallet.end()) {
-            int n = itmw->second.nOrderPos;
-            if (n < nMinOrderPos)
+            if (!copyFrom || itmw->second.nOrderPos < copyFrom->nOrderPos)
             {
-                nMinOrderPos = n;
                 copyFrom = &(itmw->second);
             }
         }

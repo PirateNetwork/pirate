@@ -10,8 +10,10 @@
 #include "random.h"
 #include "wallet/wallet.h"
 
+#include <limits>
 #include <memory>
 #include <set>
+#include <utility>
 
 enum class WalletSpendPool { Transparent, Sprout, Sapling, Ironwood };
 
@@ -215,6 +217,38 @@ TEST_P(WalletSpendTrackingTest, RemovalPreservesOtherSpendersAndInputs)
 
     RemoveSpender(offChainTxid);
     EXPECT_TRUE(Spenders(sharedKey).empty());
+}
+
+TEST_P(WalletSpendTrackingTest, MetadataUsesFullWidthOrderPositions)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    const int64_t intMax = std::numeric_limits<int>::max();
+    const int64_t int64Max = std::numeric_limits<int64_t>::max();
+    const std::pair<int64_t, int64_t> orderPositions[] = {
+        {intMax, intMax + 1},
+        {intMax + 1, intMax + 2},
+        {int64Max - 1, int64Max},
+    };
+    auto& older = wallet->mapWallet.at(confirmedTxid);
+    auto& newer = wallet->mapWallet.at(offChainTxid);
+    for (const auto& positions : orderPositions) {
+        for (bool olderFirst : {false, true}) {
+            SCOPED_TRACE(::testing::Message() << positions.first << ", " << positions.second
+                                            << ", older first: " << olderFirst);
+            older.nOrderPos = positions.first;
+            newer.nOrderPos = positions.second;
+            older.mapValue["comment"] = "oldest transfer";
+            newer.mapValue["comment"] = "newer attempt";
+            const uint256 key = GetRandHash();
+            AddSpender(key, olderFirst ? confirmedTxid : offChainTxid);
+            AddSpender(key, olderFirst ? offChainTxid : confirmedTxid);
+
+            EXPECT_EQ("oldest transfer", older.mapValue.at("comment"));
+            EXPECT_EQ("oldest transfer", newer.mapValue.at("comment"));
+            EXPECT_EQ(positions.first, older.nOrderPos);
+            EXPECT_EQ(positions.second, newer.nOrderPos);
+        }
+    }
 }
 
 TEST_P(WalletSpendTrackingTest, SpentStateFollowsChainWithoutLosingCompetingAttempts)
