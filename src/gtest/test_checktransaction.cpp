@@ -29,6 +29,42 @@ class UNSAFE_CTransaction : public CTransaction {
         UNSAFE_CTransaction(const CMutableTransaction &tx) : CTransaction(tx, true) {}
 };
 
+TEST(SaplingHashReuseTests, MatchesIndependentMutableDigestsAndDeserialization)
+{
+    for (const auto counts : {std::make_pair(0u, 1u), std::make_pair(1u, 0u),
+                             std::make_pair(1u, 1u), std::make_pair(252u, 253u),
+                             std::make_pair(253u, 252u)}) {
+        SCOPED_TRACE(::testing::Message() << counts.first << " spends, " << counts.second << " outputs");
+        CMutableTransaction tx;
+        tx.fOverwintered = true;
+        tx.nVersion = SAPLING_TX_VERSION;
+        tx.nVersionGroupId = SAPLING_VERSION_GROUP_ID;
+        tx.vin.emplace_back(uint256S("01"), 0, CScript() << OP_TRUE, 1);
+        tx.vout.emplace_back(1234, CScript() << OP_TRUE);
+        tx.nLockTime = 7;
+        tx.nExpiryHeight = 123;
+        tx.saplingBundle = sapling::test_only_invalid_bundle(counts.first, counts.second, 0);
+
+        // Mutable digest methods retain the original independent Rust decoder.
+        const auto expectedHash = tx.GetHash();
+        const auto expectedAuth = tx.GetAuthDigest();
+        const CTransaction immutable(tx);
+        EXPECT_EQ(expectedHash, immutable.GetHash());
+        EXPECT_EQ(expectedAuth, immutable.GetAuthDigest());
+
+        CDataStream bytes(SER_NETWORK, PROTOCOL_VERSION);
+        bytes << tx << uint32_t(0x12345678);
+        CTransaction parsed;
+        bytes >> parsed;
+        EXPECT_EQ(expectedHash, parsed.GetHash());
+        EXPECT_EQ(expectedAuth, parsed.GetAuthDigest());
+        uint32_t sentinel;
+        bytes >> sentinel;
+        EXPECT_EQ(0x12345678u, sentinel);
+        EXPECT_TRUE(bytes.empty());
+    }
+}
+
 template <typename T>
 static void ExpectSerializedSizeMatchesBytes(const T& value)
 {

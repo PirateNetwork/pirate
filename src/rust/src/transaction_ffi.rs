@@ -62,6 +62,38 @@ pub extern "C" fn zcash_transaction_digests(
     true
 }
 
+/// Computes v4 digests using a borrowed, decoded Sapling bundle whose complete
+/// canonical encoding is checked against `tx_bytes` by the transaction reader.
+/// The bundle must remain alive and immutable throughout this call.
+#[no_mangle]
+pub unsafe extern "C" fn zcash_v4_transaction_digests_with_sapling(
+    tx_bytes: *const c_uchar,
+    tx_bytes_len: size_t,
+    bundle: *const sapling_crypto::Bundle<SaplingSigAuth, zcash_protocol::value::ZatBalance>,
+    txid_ret: *mut [u8; 32],
+    auth_digest_ret: *mut [u8; 32],
+) -> bool {
+    let bundle = match unsafe { bundle.as_ref() } {
+        Some(bundle) => bundle,
+        None => return false,
+    };
+    let bytes = unsafe { slice::from_raw_parts(tx_bytes, tx_bytes_len) };
+    let tx = match Transaction::temporary_zcashd_read_v4_with_sapling(bytes, BranchId::Canopy, bundle) {
+        Ok(tx) => tx,
+        Err(e) => {
+            error!("Failed to parse transaction using Sapling bundle: {}", e);
+            return false;
+        }
+    };
+    if let Some(txid_ret) = unsafe { txid_ret.as_mut() } {
+        *txid_ret = *tx.txid().as_ref();
+    }
+    if let Some(auth_digest_ret) = unsafe { auth_digest_ret.as_mut() } {
+        *auth_digest_ret = [0xff; 32];
+    }
+    true
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct TransparentAuth {
     all_prev_outputs: Vec<transparent::TxOut>,
@@ -301,4 +333,218 @@ pub extern "C" fn zcash_transaction_zip244_signature_digest(
     // `signature_hash` output is always 32 bytes.
     *unsafe { &mut *sighash_ret } = *sighash.as_ref();
     true
+}
+
+#[cfg(test)]
+mod reused_sapling_tests {
+    use super::*;
+    use std::convert::TryFrom;
+    use sapling_crypto::{
+        bundle::{Authorized, Bundle, OutputDescription, SpendDescription},
+        value::{NoteValue, ValueCommitment, ValueCommitTrapdoor},
+    };
+    use zcash_protocol::value::ZatBalance;
+
+    fn bundle(spends: usize, outputs: usize) -> Bundle<Authorized, ZatBalance> {
+        crate::test_harness_ffi::test_only_invalid_sapling_bundle(spends, outputs, 0)
+            .0.unwrap()
+    }
+
+    fn encoded(bundle: &Bundle<Authorized, ZatBalance>) -> Vec<u8> {
+        let transparent = transparent::Bundle {
+            vin: vec![],
+            vout: vec![transparent::TxOut::new(Zatoshis::from_u64(1234).unwrap(), Script::default())],
+            authorization: transparent::Authorized,
+        };
+        let tx = TransactionData::<zcash_primitives::transaction::Authorized>::from_parts(
+            TxVersion::V4, BranchId::Canopy, 0, 0u32.into(),
+            Some(transparent), None, Some(bundle.clone()), None,
+        ).freeze().unwrap();
+        let mut bytes = Vec::new();
+        tx.write(&mut bytes).unwrap();
+        bytes
+    }
+
+    fn reused(bytes: &[u8], bundle: &Bundle<Authorized, ZatBalance>) -> std::io::Result<Transaction> {
+        Transaction::temporary_zcashd_read_v4_with_sapling(bytes, BranchId::Canopy, bundle)
+    }
+
+    #[test]
+    fn matching_reader_preserves_hashes_and_fields_at_count_boundaries() {
+        for (spends, outputs) in [(0, 1), (1, 0), (1, 1), (252, 253), (253, 252)] {
+            let bundle = bundle(spends, outputs);
+            let bytes = encoded(&bundle);
+            // The original reader remains an independent decoder reference.
+            let reference = Transaction::read(&bytes[..], BranchId::Canopy).unwrap();
+            let actual = reused(&bytes, &bundle).unwrap();
+            assert_eq!(reference.txid(), actual.txid());
+            assert_eq!(reference.auth_commitment(), actual.auth_commitment());
+            let mut rewritten = Vec::new();
+            actual.write(&mut rewritten).unwrap();
+            assert_eq!(bytes, rewritten);
+        }
+    }
+
+    #[test]
+    fn mismatched_fields_cannot_reuse_a_different_bundle() {
+        let bundle = bundle(2, 2);
+        let bytes = encoded(&bundle);
+        // Header, empty input vector, one 9-byte output, lock time and expiry.
+        const START: usize = 8 + 1 + 1 + 9 + 4 + 4;
+        // Balance, spend count, all spend fields, output count and all output fields.
+        for offset in [0, 8, 9, 41, 73, 105, 137, 329,
+                       8 + 1 + 2 * 384,
+                       8 + 1 + 2 * 384 + 1,
+                       8 + 1 + 2 * 384 + 1 + 32,
+                       8 + 1 + 2 * 384 + 1 + 64,
+                       8 + 1 + 2 * 384 + 1 + 96,
+                       8 + 1 + 2 * 384 + 1 + 676,
+                       8 + 1 + 2 * 384 + 1 + 756] {
+            let mut changed = bytes.clone();
+            changed[START + offset] ^= 1;
+            assert!(reused(&changed, &bundle).is_err(), "offset {}", offset);
+        }
+        let mut changed = bytes.clone();
+        *changed.last_mut().unwrap() ^= 1; // Binding signature remains at its original position.
+        assert!(reused(&changed, &bundle).is_err());
+        let mut changed = bytes.clone();
+        for i in 0..384 { changed.swap(START + 9 + i, START + 9 + 384 + i); }
+        assert!(reused(&changed, &bundle).is_err());
+        let mut changed = bytes;
+        let outputs = START + 8 + 1 + 2 * 384 + 1;
+        for i in 0..948 { changed.swap(outputs + i, outputs + 948 + i); }
+        assert!(reused(&changed, &bundle).is_err());
+    }
+
+    #[test]
+    fn malformed_counts_truncations_and_non_sapling_amounts_still_fail() {
+        let bundle = bundle(1, 1);
+        let bytes = encoded(&bundle);
+        for length in 0..bytes.len() {
+            assert!(Transaction::read(&bytes[..length], BranchId::Canopy).is_err());
+            assert!(reused(&bytes[..length], &bundle).is_err());
+        }
+        // Non-canonical CompactSize for either count (one encoded in three bytes).
+        for offset in [27 + 8, 27 + 8 + 1 + 384] {
+            let mut changed = bytes.clone();
+            changed.splice(offset..offset + 1, [253, 1, 0]);
+            assert!(Transaction::read(&changed[..], BranchId::Canopy).is_err());
+            assert!(reused(&changed, &bundle).is_err());
+        }
+        // Rust's transparent output range is independently enforced by the original reader.
+        for amount in [u64::MAX, 2_100_000_000_000_001] {
+            let mut changed = bytes.clone();
+            changed[10..18].copy_from_slice(&amount.to_le_bytes());
+            assert!(Transaction::read(&changed[..], BranchId::Canopy).is_err());
+            assert!(reused(&changed, &bundle).is_err());
+        }
+        let mut changed = bytes;
+        changed[..4].copy_from_slice(&0x8000_0005u32.to_le_bytes());
+        assert!(reused(&changed, &bundle).is_err());
+    }
+
+    #[test]
+    fn typed_count_precheck_retains_the_wire_decoders_limit() {
+        // Exercise the count precheck without allocating enormous bundles.
+        for count in [zcash_encoding::MAX_COMPACT_SIZE as usize - 1,
+                      zcash_encoding::MAX_COMPACT_SIZE as usize,
+                      zcash_encoding::MAX_COMPACT_SIZE as usize + 1,
+                      usize::MAX] {
+            let mut encoded = [0; 9];
+            zcash_encoding::CompactSize::write(&mut encoded[..], count).unwrap();
+            assert_eq!(zcash_encoding::CompactSize::read(&encoded[..]).is_ok(),
+                count <= zcash_encoding::MAX_COMPACT_SIZE as usize);
+        }
+    }
+
+    #[test]
+    fn typed_small_order_value_commitments_do_not_bypass_the_decoder() {
+        let seed = bundle(1, 1);
+        let cv = || ValueCommitment::derive(NoteValue::from_raw(0),
+            ValueCommitTrapdoor::from_bytes([0; 32]).unwrap());
+        assert!(bool::from(cv().as_inner().is_small_order()));
+        let spend = &seed.shielded_spends()[0];
+        let output = &seed.shielded_outputs()[0];
+        for bad_spend in [false, true] {
+            let spends = if bad_spend {
+                vec![SpendDescription::from_parts(cv(), *spend.anchor(), *spend.nullifier(),
+                    *spend.rk(), *spend.zkproof(), *spend.spend_auth_sig())]
+            } else { seed.shielded_spends().to_vec() };
+            let outputs = if bad_spend { seed.shielded_outputs().to_vec() } else {
+                vec![OutputDescription::from_parts(cv(), *output.cmu(), output.ephemeral_key().clone(),
+                    *output.enc_ciphertext(), *output.out_ciphertext(), *output.zkproof())]
+            };
+            let invalid = Bundle::from_parts(spends, outputs, *seed.value_balance(), *seed.authorization()).unwrap();
+            let bytes = encoded(&invalid);
+            assert!(Transaction::read(&bytes[..], BranchId::Canopy).is_err());
+            assert!(reused(&bytes, &invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn verification_key_rules_are_not_strengthened_or_weakened() {
+        let seed = bundle(1, 1);
+        let spend = &seed.shielded_spends()[0];
+        let mut identity = [0; 32];
+        identity[0] = 1;
+        // The byte decoder accepts identity rk. Its small-order rejection is
+        // a later consensus check, and must not move into this reader.
+        let rk = redjubjub::VerificationKey::<redjubjub::SpendAuth>::try_from(identity).unwrap();
+        let typed = Bundle::from_parts(
+            vec![SpendDescription::from_parts(spend.cv().clone(), *spend.anchor(), *spend.nullifier(),
+                rk, *spend.zkproof(), *spend.spend_auth_sig())],
+            seed.shielded_outputs().to_vec(), *seed.value_balance(), *seed.authorization(),
+        ).unwrap();
+        let bytes = encoded(&typed);
+        let expected = Transaction::read(&bytes[..], BranchId::Canopy).unwrap();
+        assert_eq!(expected.txid(), reused(&bytes, &typed).unwrap().txid());
+
+        let mut invalid = bytes;
+        invalid[27 + 9 + 96..27 + 9 + 128].fill(0xff);
+        assert!(Transaction::read(&invalid[..], BranchId::Canopy).is_err());
+        assert!(reused(&invalid, &typed).is_err());
+    }
+
+    #[test]
+    fn joinsplit_fields_keep_the_original_reader_and_amount_bounds() {
+        use zcash_primitives::transaction::components::sprout;
+        let bundle = bundle(1, 1);
+        let seed = Transaction::read(&encoded(&bundle)[..], BranchId::Canopy).unwrap();
+        let joinsplit = sprout::JsDescription::read(&[0; 1698][..], true).unwrap();
+        let tx = TransactionData::<zcash_primitives::transaction::Authorized>::from_parts(
+            TxVersion::V4, BranchId::Canopy, 0, 0u32.into(), seed.transparent_bundle().cloned(),
+            Some(sprout::Bundle { joinsplits: vec![joinsplit], joinsplit_pubkey: [0; 32],
+                                 joinsplit_sig: [0; 64] }),
+            Some(bundle.clone()), None,
+        ).freeze().unwrap();
+        let mut bytes = Vec::new();
+        tx.write(&mut bytes).unwrap();
+        assert_eq!(tx.txid(), reused(&bytes, &bundle).unwrap().txid());
+        let joinsplit_start = 27 + 8 + 1 + 384 + 1 + 948 + 1;
+        for offset in [0, 8] {
+            let mut invalid = bytes.clone();
+            invalid[joinsplit_start + offset..joinsplit_start + offset + 8].fill(0xff);
+            assert!(Transaction::read(&invalid[..], BranchId::Canopy).is_err());
+            assert!(reused(&invalid, &bundle).is_err());
+        }
+    }
+
+    #[test]
+    fn ffi_matches_original_digests_and_does_not_write_on_mismatch() {
+        let bundle = bundle(1, 1);
+        let bytes = encoded(&bundle);
+        let mut expected = [[0; 32]; 2];
+        let mut actual = [[0; 32]; 2];
+        assert!(zcash_transaction_digests(bytes.as_ptr(), bytes.len(), &mut expected[0], &mut expected[1]));
+        assert!(unsafe { zcash_v4_transaction_digests_with_sapling(
+            bytes.as_ptr(), bytes.len(), &bundle, &mut actual[0], &mut actual[1]) });
+        assert_eq!(expected, actual);
+        let other = self::bundle(1, 1);
+        actual = [[42; 32]; 2];
+        assert!(!unsafe { zcash_v4_transaction_digests_with_sapling(
+            bytes.as_ptr(), bytes.len(), &other, &mut actual[0], &mut actual[1]) });
+        assert_eq!([[42; 32]; 2], actual);
+        assert!(!unsafe { zcash_v4_transaction_digests_with_sapling(
+            bytes.as_ptr(), bytes.len(), ptr::null(), ptr::null_mut(), ptr::null_mut()) });
+    }
 }

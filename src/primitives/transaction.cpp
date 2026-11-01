@@ -25,6 +25,7 @@
 #include "util/strencodings.h"
 
 #include "librustzcash.h"
+#include "rust/transaction.h"
 
 uint256 JSDescription::h_sig(ZCJoinSplit& params, const uint256& joinSplitPubKey) const
 {
@@ -189,11 +190,16 @@ void CTransaction::UpdateHash() const
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << *this;
-    if (!zcash_transaction_digests(
-        reinterpret_cast<const unsigned char*>(ss.data()),
-        ss.size(),
+    const auto bytes = reinterpret_cast<const unsigned char*>(ss.data());
+    const bool reuseSapling = fOverwintered && nVersion == SAPLING_TX_VERSION &&
+        nVersionGroupId == SAPLING_VERSION_GROUP_ID && saplingBundle.IsPresent();
+    const bool valid = reuseSapling ? zcash_v4_transaction_digests_with_sapling(
+        bytes, ss.size(), saplingBundle.GetDetails().as_ptr(),
         const_cast<uint256*>(&wtxid.hash)->begin(),
-        const_cast<uint256*>(&wtxid.authDigest)->begin()))
+        const_cast<uint256*>(&wtxid.authDigest)->begin()) : zcash_transaction_digests(
+        bytes, ss.size(), const_cast<uint256*>(&wtxid.hash)->begin(),
+        const_cast<uint256*>(&wtxid.authDigest)->begin());
+    if (!valid)
     {
         throw std::ios_base::failure("CTransaction::UpdateHash: Invalid transaction format");
     }

@@ -5,6 +5,8 @@
 #ifndef ZCASH_RUST_INCLUDE_RUST_TRANSACTION_H
 #define ZCASH_RUST_INCLUDE_RUST_TRANSACTION_H
 
+#include "rust/pointers.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -27,6 +29,17 @@ typedef struct PrecomputedTxParts PrecomputedTxParts;
 bool zcash_transaction_digests(
     const unsigned char* txBytes,
     size_t txBytes_len,
+    unsigned char* txid_ret,
+    unsigned char* authDigest_ret);
+
+/// Computes v4 digests after matching every serialized Sapling field against
+/// the supplied decoded bundle. Other transaction fields use the ordinary
+/// transaction reader. `bundle` must remain alive and immutable for this call.
+/// Pointer and output-buffer requirements are as above; `bundle` is non-null.
+bool zcash_v4_transaction_digests_with_sapling(
+    const unsigned char* txBytes,
+    size_t txBytes_len,
+    const SaplingBundlePtr* bundle,
     unsigned char* txid_ret,
     unsigned char* authDigest_ret);
 
