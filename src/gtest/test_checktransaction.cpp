@@ -6,6 +6,9 @@
 #include <gmock/gmock.h>
 #include <sodium.h>
 
+#include <limits>
+#include <utility>
+
 #include "main.h"
 #include "primitives/transaction.h"
 #include "consensus/validation.h"
@@ -25,6 +28,96 @@ class UNSAFE_CTransaction : public CTransaction {
     public:
         UNSAFE_CTransaction(const CMutableTransaction &tx) : CTransaction(tx, true) {}
 };
+
+template <typename T>
+static void ExpectSerializedSizeMatchesBytes(const T& value)
+{
+    for (const int type : {SER_NETWORK, SER_DISK, SER_GETHASH}) {
+        CDataStream bytes(type, PROTOCOL_VERSION);
+        bytes << value;
+        EXPECT_EQ(bytes.size(), ::GetSerializeSize(value, type, PROTOCOL_VERSION));
+
+        CSizeComputer size(type, PROTOCOL_VERSION);
+        size.seek(17);
+        size << value;
+        EXPECT_EQ(17 + bytes.size(), size.size());
+    }
+}
+
+TEST(SaplingV4SizeTests, ComponentSizesMatchWireBytesAtCompactSizeBoundary)
+{
+    for (const auto counts : {
+            std::make_pair(0u, 0u), std::make_pair(0u, 1u), std::make_pair(1u, 0u),
+            std::make_pair(1u, 1u), std::make_pair(0u, 252u), std::make_pair(0u, 253u),
+            std::make_pair(252u, 0u), std::make_pair(253u, 0u),
+            std::make_pair(252u, 253u), std::make_pair(253u, 252u)}) {
+        SCOPED_TRACE(::testing::Message() << counts.first << " spends, " << counts.second << " outputs");
+        SaplingBundle bundle(sapling::test_only_invalid_bundle(counts.first, counts.second, 0));
+        ExpectSerializedSizeMatchesBytes(SaplingV4Writer(bundle, true));
+    }
+
+    const SaplingBundle absent;
+    ExpectSerializedSizeMatchesBytes(SaplingV4Writer(absent, false));
+}
+
+TEST(SaplingV4SizeTests, FullTransactionSizesMatchWireBytes)
+{
+    for (const int version : {OVERWINTER_TX_VERSION, SAPLING_TX_VERSION, IRONWOOD_TX_VERSION}) {
+        // Ironwood v6 embeds the Sapling v5 component encoding. Pirate has no
+        // accepted full-transaction v5 format.
+        for (const auto counts : {std::make_pair(0u, 0u), std::make_pair(1u, 1u),
+                                 std::make_pair(252u, 253u), std::make_pair(253u, 252u)}) {
+            if (version == OVERWINTER_TX_VERSION && (counts.first || counts.second)) continue;
+            SCOPED_TRACE(::testing::Message() << "version " << version << ", " << counts.first
+                                             << " spends, " << counts.second << " outputs");
+            CMutableTransaction tx;
+            tx.fOverwintered = true;
+            tx.nVersion = version;
+            tx.nVersionGroupId = version == OVERWINTER_TX_VERSION ? OVERWINTER_VERSION_GROUP_ID :
+                version == SAPLING_TX_VERSION ? SAPLING_VERSION_GROUP_ID : IRONWOOD_VERSION_GROUP_ID;
+            if (version == IRONWOOD_TX_VERSION) {
+                tx.nConsensusBranchId = NetworkUpgradeInfo[Consensus::UPGRADE_IRONWOOD].nBranchId;
+            }
+            tx.vin.emplace_back(uint256S("01"), 0);
+            tx.vout.emplace_back(1, CScript());
+            tx.saplingBundle = sapling::test_only_invalid_bundle(counts.first, counts.second, 0);
+            ExpectSerializedSizeMatchesBytes(tx);
+            ExpectSerializedSizeMatchesBytes(CTransaction(tx));
+        }
+    }
+}
+
+TEST(SaplingV4SizeTests, RejectsPresentBundleWithoutSaplingFields)
+{
+    SaplingBundle bundle(sapling::test_only_invalid_bundle(0, 1, 0));
+    SaplingV4Writer writer(bundle, false);
+    CDataStream bytes(SER_NETWORK, PROTOCOL_VERSION);
+    CSizeComputer size(SER_NETWORK, PROTOCOL_VERSION);
+    EXPECT_THROW(bytes << writer, std::ios_base::failure);
+    EXPECT_THROW(size << writer, std::ios_base::failure);
+    EXPECT_EQ(0u, bytes.size());
+    EXPECT_EQ(0u, size.size());
+
+    CMutableTransaction tx;
+    tx.fOverwintered = true;
+    tx.nVersion = OVERWINTER_TX_VERSION;
+    tx.nVersionGroupId = OVERWINTER_VERSION_GROUP_ID;
+    tx.saplingBundle = bundle;
+    EXPECT_THROW(bytes << tx, std::ios_base::failure);
+    EXPECT_THROW(::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION), std::ios_base::failure);
+}
+
+TEST(SaplingV4SizeTests, RejectsSizeOverflowWithoutWrapping)
+{
+    const SaplingBundle absent;
+    const SaplingV4Writer writer(absent, true);
+    CSizeComputer size(SER_NETWORK, PROTOCOL_VERSION);
+    size.seek(std::numeric_limits<size_t>::max() - 10);
+    size << writer;
+    EXPECT_EQ(std::numeric_limits<size_t>::max(), size.size());
+    EXPECT_THROW(size << writer, std::ios_base::failure);
+    EXPECT_EQ(std::numeric_limits<size_t>::max(), size.size());
+}
 
 TEST(ChecktransactionTests, CheckVpubNotBothNonzero) {
     CMutableTransaction tx;

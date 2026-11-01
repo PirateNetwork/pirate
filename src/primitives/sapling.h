@@ -11,6 +11,8 @@
 
 #include <rust/bridge.h>
 
+#include <limits>
+
 /**
  * The Sapling component of an authorized transaction.
  */
@@ -192,6 +194,36 @@ public:
         } catch (const std::exception& e) {
             throw std::ios_base::failure(e.what());
         }
+    }
+
+    void Serialize(CSizeComputer& s) const {
+        if (!hasSapling) {
+            // Preserve the serializer's rejection of a bundle in a transaction
+            // format without Sapling fields, including its exception message.
+            if (bundle.IsPresent()) Serialize<CSizeComputer>(s);
+            return;
+        }
+
+        // These v4 records have fixed wire lengths. Counting them does not
+        // require compressing value commitments or writing their payloads.
+        constexpr size_t spendSize = 32 + 32 + 32 + 32 + 192 + 64;
+        constexpr size_t outputSize = 32 + 32 + 32 + 580 + 80 + 192;
+        const auto spends = bundle.GetSpendsCount();
+        const auto outputs = bundle.GetOutputsCount();
+        const size_t overhead = 8 + GetSizeOfCompactSize(spends) + GetSizeOfCompactSize(outputs);
+        const auto maximum = std::numeric_limits<size_t>::max();
+        if (spends > (maximum - overhead) / spendSize) {
+            throw std::ios_base::failure("Sapling v4 serialized size overflow");
+        }
+        const auto spendBytes = spends * spendSize;
+        if (outputs > (maximum - overhead - spendBytes) / outputSize) {
+            throw std::ios_base::failure("Sapling v4 serialized size overflow");
+        }
+        const auto size = overhead + spendBytes + outputs * outputSize;
+        if (size > maximum - s.size()) {
+            throw std::ios_base::failure("Sapling v4 serialized size overflow");
+        }
+        s.seek(size);
     }
 
     template<typename Stream>
