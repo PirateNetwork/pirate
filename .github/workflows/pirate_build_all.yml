@@ -139,11 +139,8 @@ jobs:
 
   cli-macos:
     name: CLI (macOS arm64)
-    # Earliest arm64 image GitHub still offers (macos-13 and older are
-    # retired) - same reasoning as pinning the Linux jobs to ubuntu:20.04:
-    # macos-latest is a rolling target that eventually moves to a newer
-    # macOS release without warning.
-    runs-on: macos-14
+    # Pin the arm64 build image to keep macOS major-version changes explicit.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
       - name: Ensure parent depends alias
@@ -303,11 +300,8 @@ jobs:
 
   qt-macos:
     name: QT (macOS arm64)
-    # Earliest arm64 image GitHub still offers (macos-13 and older are
-    # retired) - same reasoning as pinning the Linux jobs to ubuntu:20.04:
-    # macos-latest is a rolling target that eventually moves to a newer
-    # macOS release without warning.
-    runs-on: macos-14
+    # Pin the arm64 build image to keep macOS major-version changes explicit.
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
       - name: Ensure parent depends alias
