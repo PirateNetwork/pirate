@@ -430,7 +430,7 @@ protected:
         return SingleMarkReference<IronwoodWallet>(note, throughHeight, height, frontier);
     }
 
-    void SpendRebuiltNote(WitnessTestWallet& source, const ExpectedNote& expected)
+    void SpendRebuiltNote(WitnessTestWallet& source, const ExpectedNote& expected, CTransaction* built = nullptr)
     {
         libzcash::MerklePath path;
         ASSERT_TRUE(source.Path(GetParam(), expected.txid, expected.output, path));
@@ -488,6 +488,7 @@ protected:
         pcoinsTip->SetNullifiers(spend, true);
         EXPECT_FALSE(pcoinsTip->CheckShieldedRequirements(spend).has_value());
         pcoinsTip->SetNullifiers(spend, false);
+        if (built) *built = spend;
     }
 
     std::vector<ExpectedNote> NoteOracle()
@@ -887,6 +888,72 @@ TEST_P(WalletWitnessTest, MarkedNotesSurviveRebuildSerializationAndRewind)
     EXPECT_THROW(badRoot->Increment(GetParam(), tip, blocks[2]), std::runtime_error);
     EXPECT_FALSE(badRoot->Validated(GetParam()));
     root = correctRoot;
+}
+
+TEST_P(WalletWitnessTest, RescanRestartFindsSpendsOfNewNotesBehindCachedCheckpoint)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    for (int height = 1; height <= 3; ++height) {
+        Discover(*wallet, height);
+        wallet->Increment(GetParam(), chainActive[height], blocks.at(height - 1));
+    }
+    const auto expected = NoteOracle();
+    ASSERT_EQ(2u, expected.size());
+    CTransaction spend;
+    SpendRebuiltNote(*wallet, expected.front(), &spend);
+    ASSERT_TRUE(spend.vin.empty());
+    ASSERT_GT(GetParam() == WitnessPool::Sapling ? spend.GetSaplingSpends().size() : spend.GetIronwoodActions().size(), 0u);
+    AddBlock({spend});
+    AddBlock({Shield(false)});
+
+    // An imported key can own historical notes absent from an existing cache.
+    // The rescan's first atomic snapshot saves its restart locator before the
+    // requested reset. Simulate a crash at exactly that durable boundary.
+    const std::string filename = "witness-import-restart.dat";
+    auto importing = NewWallet(filename, 0);
+    for (int height = 1; height <= 5; ++height) {
+        importing->Increment(GetParam(), chainActive[height], blocks.at(height - 1));
+    }
+    ASSERT_TRUE(importing->mapWallet.empty());
+    ASSERT_EQ(5, importing->Checkpoint(GetParam()));
+    {
+        LOCK(importing->cs_wallet);
+        ASSERT_TRUE(importing->SetBestChain(chainActive.GetLocator(chainActive[1]), 1));
+    }
+    importing.reset();
+
+    auto restarted = std::make_unique<WitnessTestWallet>(filename);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, restarted->LoadWallet(firstRun));
+    ASSERT_EQ(5, restarted->Checkpoint(GetParam()));
+    CBlockLocator restart;
+    ASSERT_TRUE(CWalletDB(filename).ReadBestBlock(restart));
+    auto* start = FindForkInGlobalIndex(chainActive, restart);
+    ASSERT_EQ(chainActive[1], start);
+
+    struct WalletMainGuard {
+        CWallet* previous;
+        explicit WalletMainGuard(CWallet* target) : previous(pwalletMain) { pwalletMain = target; }
+        ~WalletMainGuard() { pwalletMain = previous; }
+    } walletMain(restarted.get());
+    ASSERT_GE(restarted->ScanForWalletTransactions(start, true, true, false, false), 0);
+    ASSERT_EQ(1u, restarted->mapWallet.count(expected.front().txid));
+    EXPECT_EQ(1u, restarted->mapWallet.count(spend.GetHash()));
+    const bool spent = GetParam() == WitnessPool::Sapling ?
+        restarted->IsSaplingSpent(expected.front().nullifier) :
+        restarted->IsIronwoodSpent(expected.front().nullifier);
+    EXPECT_TRUE(spent);
+
+    CBlockLocator completed;
+    ASSERT_TRUE(CWalletDB(filename).ReadBestBlock(completed));
+    ASSERT_FALSE(completed.vHave.empty());
+    EXPECT_EQ(chainActive.Tip()->GetBlockHash(), completed.vHave.front());
+    auto durable = std::make_unique<WitnessTestWallet>(filename);
+    ASSERT_EQ(DB_LOAD_OK, durable->LoadWallet(firstRun));
+    EXPECT_EQ(1u, durable->mapWallet.count(spend.GetHash()));
+    EXPECT_TRUE(GetParam() == WitnessPool::Sapling ?
+        durable->IsSaplingSpent(expected.front().nullifier) :
+        durable->IsIronwoodSpent(expected.front().nullifier));
 }
 
 TEST_P(WalletWitnessTest, TransactionValidationMatchesIndependentSingleNoteReplays)

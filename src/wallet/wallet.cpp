@@ -10032,10 +10032,20 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
             const int progressStartHeight = pindex ? pindex->nHeight : chainActive.Height();
             const int progressEndHeight = chainActive.Height();
 
-            //Reset the sapling Wallet
-            if (resetWallets) {
-              SaplingWalletReset();
-              IronwoodWalletReset();
+            // A restart locator may precede the saved witness checkpoint, for
+            // example after a crash between saving the rescan start and its
+            // requested reset. Rebuild from the scan position so newly found
+            // receipts get nullifiers before later spend-only transactions.
+            // Keep resets in memory; SetBestChain commits both trees together.
+            if (resetWallets || (pindex && saplingWallet.GetLastCheckpointHeight() > pindex->nHeight)) {
+                saplingWallet.Reset();
+                saplingWalletValidated = false;
+                saplingWalletPositionsValidated = false;
+            }
+            if (resetWallets || (pindex && ironwoodWallet.GetLastCheckpointHeight() > pindex->nHeight)) {
+                ironwoodWallet.Reset();
+                ironwoodWalletValidated = false;
+                ironwoodWalletPositionsValidated = false;
             }
 
             while (pindex)
