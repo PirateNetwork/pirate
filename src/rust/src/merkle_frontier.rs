@@ -1,4 +1,5 @@
 use core::mem::size_of_val;
+use std::sync::OnceLock;
 
 use incrementalmerkletree::{
     frontier::{CommitmentTree, Frontier},
@@ -24,8 +25,10 @@ pub const TRACKED_SUBTREE_HEIGHT: u8 = 16;
 type Inner<H> = Frontier<H, { NOTE_COMMITMENT_TREE_DEPTH }>;
 
 /// An incremental Merkle frontier.
+// The memo belongs to this value, is never serialized, and is cleared before
+// every mutation. OnceLock also permits concurrent immutable root queries.
 #[derive(Clone)]
-pub(crate) struct MerkleFrontier<H>(Inner<H>);
+pub(crate) struct MerkleFrontier<H>(Inner<H>, OnceLock<[u8; 32]>);
 
 impl<H: Copy + Hashable + HashSer> MerkleFrontier<H> {
     /// Returns a copy of the value.
@@ -36,7 +39,7 @@ impl<H: Copy + Hashable + HashSer> MerkleFrontier<H> {
     /// Attempts to parse a Merkle frontier from the given C++ stream.
     pub(crate) fn parse(reader: &mut CppStream<'_>) -> Result<Box<Self>, String> {
         match read_frontier_v1(reader) {
-            Ok(parsed) => Ok(Box::new(MerkleFrontier(parsed))),
+            Ok(parsed) => Ok(Box::new(MerkleFrontier(parsed, OnceLock::new()))),
             Err(e) => Err(format!("Failed to parse v5 Merkle frontier: {}", e)),
         }
     }
@@ -67,23 +70,117 @@ impl<H: Copy + Hashable + HashSer> MerkleFrontier<H> {
     ///
     /// Includes `self` because this type is stored on the heap when passed to C++.
     pub(crate) fn dynamic_memory_usage(&self) -> usize {
-        size_of_val(&self.0) + self.0.dynamic_memory_usage()
+        size_of_val(self) + self.0.dynamic_memory_usage()
     }
 
     /// Obtains the current root of this Merkle frontier by hashing against empty nodes up
     /// to the maximum height of the pruned tree that the frontier represents.
     pub(crate) fn root(&self) -> [u8; 32] {
-        let mut root = [0; 32];
-        self.0
-            .root()
-            .write(&mut root[..])
-            .expect("root is 32 bytes");
-        root
+        *self.1.get_or_init(|| {
+            let mut root = [0; 32];
+            self.0
+                .root()
+                .write(&mut root[..])
+                .expect("root is 32 bytes");
+            root
+        })
     }
 
     /// Returns the number of leaves in the Merkle tree for which this is the frontier.
     pub(crate) fn size(&self) -> u64 {
         self.0.value().map_or(0, |f| u64::from(f.position()) + 1)
+    }
+}
+
+#[cfg(test)]
+mod root_memo_tests {
+    use super::*;
+    use incrementalmerkletree::Position;
+
+    fn independent_root<H: Copy + Hashable + HashSer>(tree: &MerkleFrontier<H>) -> [u8; 32] {
+        let mut root = [0; 32];
+        tree.as_inner().root().write(&mut root[..]).unwrap();
+        root
+    }
+
+    fn check<H: Copy + Hashable + HashSer>(tree: &MerkleFrontier<H>) {
+        let expected = independent_root(tree);
+        assert_eq!(tree.root(), expected);
+        assert_eq!(tree.root(), expected);
+        assert_eq!(tree.1.get(), Some(&expected));
+    }
+
+    fn lifecycle<H: Copy + Hashable + HashSer + Send + Sync>(mut tree: Box<MerkleFrontier<H>>,
+        append: impl Fn(&mut MerkleFrontier<H>, [u8; 32]) -> bool) {
+        check(&tree);
+        for i in 0..8 {
+            let mut leaf = [0; 32];
+            leaf[0] = i;
+            assert!(append(&mut tree, leaf));
+            assert!(tree.1.get().is_none());
+            check(&tree);
+        }
+        let original_root = tree.root();
+        let mut copy = tree.clone();
+        assert_eq!(copy.1.get(), Some(&original_root));
+        assert!(append(&mut copy, [0; 32]));
+        check(&copy);
+        assert_eq!(tree.root(), original_root);
+        assert_ne!(copy.root(), original_root);
+
+        // Persist only the original frontier, then restore a fresh cold value.
+        let mut bytes = Vec::new();
+        write_frontier_v1(&mut bytes, tree.as_inner()).unwrap();
+        let restored: MerkleFrontier<H> = MerkleFrontier(read_frontier_v1(&bytes[..]).unwrap(), OnceLock::new());
+        assert!(restored.1.get().is_none());
+        check(&restored);
+        assert_eq!(restored.root(), original_root);
+        let mut after = Vec::new();
+        write_frontier_v1(&mut after, restored.as_inner()).unwrap();
+        assert_eq!(bytes, after);
+        assert_eq!(restored.dynamic_memory_usage(), size_of_val(&restored) + restored.0.dynamic_memory_usage());
+
+        // Freshly parsed value; all readers race only to compute derived data.
+        let cold: MerkleFrontier<H> = MerkleFrontier(read_frontier_v1(&bytes[..]).unwrap(), OnceLock::new());
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| { for _ in 0..20 { assert_eq!(cold.root(), original_root); } });
+            }
+        });
+
+        // A full frontier refuses an append. Invalidation must still leave a
+        // correct root after that error, and never retain another value's memo.
+        let full = Inner::from_parts(Position::from(u32::MAX as u64),
+            H::empty_leaf(), (0..32).map(|level| H::empty_root(Level::from(level))).collect()).unwrap();
+        let mut full = MerkleFrontier(full, OnceLock::new());
+        check(&full);
+        assert!(!append(&mut full, [0; 32]));
+        check(&full);
+    }
+
+    #[test]
+    fn sapling_roots_follow_mutation_clone_and_restore() {
+        lifecycle(new_sapling(), |tree, leaf| tree.append(leaf).is_ok());
+        let mut tree = new_sapling();
+        check(&tree);
+        let bundle = crate::test_harness_ffi::test_only_invalid_sapling_bundle(0, 7, 0);
+        tree.append_bundle(&bundle).unwrap();
+        assert!(tree.1.get().is_none());
+        check(&tree);
+        let previous = tree.root();
+        assert!(tree.append([0xff; 32]).is_err());
+        assert_eq!(tree.root(), previous);
+    }
+
+    #[test]
+    fn ironwood_roots_follow_mutation_clone_and_restore() {
+        lifecycle(new_ironwood(), |tree, leaf| tree.append(leaf).is_ok());
+        let mut tree = new_ironwood();
+        check(&tree);
+        let previous = tree.root();
+        assert!(tree.append_bundle(&ironwood_bundle::none_ironwood_bundle()).is_err());
+        assert!(tree.append([0xff; 32]).is_err());
+        assert_eq!(tree.root(), previous);
     }
 }
 
@@ -99,7 +196,7 @@ pub(crate) type IronwoodFrontier = MerkleFrontier<MerkleHashOrchard>;
 
 /// Constructs a new empty Ironwood Merkle frontier.
 pub(crate) fn new_ironwood() -> Box<IronwoodFrontier> {
-    Box::new(MerkleFrontier(Inner::empty()))
+    Box::new(MerkleFrontier(Inner::empty(), OnceLock::new()))
 }
 
 /// Attempts to parse an Ironwood Merkle frontier from the given C++ stream.
@@ -116,6 +213,7 @@ impl IronwoodFrontier {
         bundle: &ironwood_bundle::Bundle,
     ) -> Result<ffi::IronwoodAppendResult, &'static str> {
         if let Some(bundle) = bundle.inner() {
+            self.1.take();
             // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
             // more than one subtree boundary while processing that bundle. This means we only need
             // to find a single subtree root while processing an individual bundle, so `Option` is
@@ -170,6 +268,7 @@ impl IronwoodFrontier {
             };
 
             //Append the note commitment to the frontier.
+            self.1.take();
             if !self.0.append(MerkleHashOrchard::from_cmx(&cmx)) {
                 return Err("Ironwood note commitment tree is full.");
             }
@@ -223,7 +322,7 @@ pub(crate) type SaplingFrontier = MerkleFrontier<Node>;
 
 /// Constructs a new empty Sapling Merkle frontier.
 pub(crate) fn new_sapling() -> Box<SaplingFrontier> {
-    Box::new(MerkleFrontier(Inner::empty()))
+    Box::new(MerkleFrontier(Inner::empty(), OnceLock::new()))
 }
 
 /// Attempts to parse a Sapling Merkle frontier from the given C++ stream.
@@ -240,6 +339,7 @@ impl SaplingFrontier {
         sapling_bundle: &SaplingBundle,
     ) -> Result<ffi::SaplingAppendResult, &'static str> {
         if let Some(sapling_bundle) = sapling_bundle.inner() {
+            self.1.take();
             // A single bundle can't contain 2^TRACKED_SUBTREE_HEIGHT actions, so we'll never cross
             // more than one subtree boundary while processing that bundle. This means we only need
             // to find a single subtree root while processing an individual bundle, so `Option` is
@@ -298,6 +398,7 @@ impl SaplingFrontier {
         };
 
         //Append the note commitment to the frontier.
+        self.1.take();
         if !self.0.append(Node::from_cmu(&cmu)) {
             return Err("Sapling note commitment tree is full.");
         }
