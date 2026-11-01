@@ -2,8 +2,11 @@
 #define ZC_INCREMENTALMERKLETREE_H_
 
 #include <array>
+#include <atomic>
 #include <deque>
 #include <optional>
+#include <type_traits>
+#include <utility>
 #include <boost/static_assert.hpp>
 
 #include "uint256.h"
@@ -161,6 +164,49 @@ public:
 
     IncrementalMerkleTree() { }
 
+    IncrementalMerkleTree(const IncrementalMerkleTree& other) :
+        left(other.left), right(other.right), parents(other.parents) {
+        copyRoot(other);
+    }
+
+    IncrementalMerkleTree(IncrementalMerkleTree&& other) noexcept(
+        std::is_nothrow_default_constructible<Hash>::value &&
+        std::is_nothrow_move_assignable<std::optional<Hash>>::value &&
+        std::is_nothrow_copy_assignable<Hash>::value) {
+        *this = std::move(other);
+    }
+
+    IncrementalMerkleTree& operator=(const IncrementalMerkleTree& other) {
+        if (this != &other) {
+            // Invalidate before any assignment that could change the tree or throw.
+            invalidateRoot();
+            left = other.left;
+            right = other.right;
+            parents = other.parents;
+            copyRoot(other);
+        }
+        return *this;
+    }
+
+    IncrementalMerkleTree& operator=(IncrementalMerkleTree&& other) noexcept(
+        std::is_nothrow_move_assignable<std::optional<Hash>>::value &&
+        std::is_nothrow_copy_assignable<Hash>::value) {
+        if (this != &other) {
+            // Moving parents changes the source too; its old root must not survive.
+            invalidateRoot();
+            copyRoot(other);
+            other.invalidateRoot();
+            // A move that throws must not leave a cache for a partial value.
+            const bool hadRoot = rootState.load(std::memory_order_relaxed) == RootReady;
+            invalidateRoot();
+            left = std::move(other.left);
+            right = std::move(other.right);
+            parents = std::move(other.parents);
+            if (hadRoot) rootState.store(RootReady, std::memory_order_release);
+        }
+        return *this;
+    }
+
     size_t DynamicMemoryUsage() const {
         return 32 + // left
                32 + // right
@@ -186,7 +232,23 @@ public:
 
     void append(Hash obj);
     Hash root() const {
-        return root(Depth, std::deque<Hash>());
+        if (rootState.load(std::memory_order_acquire) == RootReady) {
+            return cachedRoot;
+        }
+        auto result = root(Depth, std::deque<Hash>());
+        // Only a root computed from this exact value is published. Concurrent
+        // const readers may compute twice, but never race on the cached hash.
+        unsigned char expected = RootEmpty;
+        if (rootState.compare_exchange_strong(expected, RootPublishing, std::memory_order_acquire)) {
+            try {
+                cachedRoot = result;
+                rootState.store(RootReady, std::memory_order_release);
+            } catch (...) {
+                rootState.store(RootEmpty, std::memory_order_release);
+                throw;
+            }
+        }
+        return result;
     }
     Hash last() const;
 
@@ -198,6 +260,9 @@ public:
 
     template <typename Stream, typename Operation>
     inline void SerializationOp(Stream& s, Operation ser_action) {
+        if (ser_action.ForRead()) {
+            invalidateRoot();
+        }
         READWRITE(left);
         READWRITE(right);
         READWRITE(parents);
@@ -215,6 +280,21 @@ public:
 
 private:
     static EmptyMerkleRoots<Depth, Hash> emptyroots;
+    // Derived data only: excluded from serialization and equality. Keep the
+    // memo inline so filling it cannot change accounted heap memory. Mutation
+    // still requires the same external synchronization as the tree itself.
+    enum : unsigned char { RootEmpty, RootPublishing, RootReady };
+    mutable std::atomic<unsigned char> rootState{RootEmpty};
+    mutable Hash cachedRoot;
+    void copyRoot(const IncrementalMerkleTree& other) {
+        if (other.rootState.load(std::memory_order_acquire) == RootReady) {
+            cachedRoot = other.cachedRoot;
+            rootState.store(RootReady, std::memory_order_release);
+        }
+    }
+    void invalidateRoot() {
+        rootState.store(RootEmpty, std::memory_order_release);
+    }
     std::optional<Hash> left;
     std::optional<Hash> right;
 

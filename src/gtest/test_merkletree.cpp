@@ -21,6 +21,7 @@
 #include <iostream>
 
 #include <stdexcept>
+#include <thread>
 
 #include "util/strencodings.h"
 #include "version.h"
@@ -293,4 +294,124 @@ TEST(merkletree, testZeroElements) {
 
         ASSERT_TRUE(newTree.root() == oldroot);
     }
+}
+
+template <typename Tree>
+static void CheckRootMemoization(const UniValue& commitments)
+{
+    auto append = [&](Tree& tree, size_t index) {
+        tree.append(uint256S(commitments[index].get_str()));
+    };
+    auto independentRoot = [](const Tree& tree) {
+        // Witness roots use the private depth/filler implementation directly,
+        // independently of the full-tree root cache.
+        return tree.witness().root();
+    };
+    auto encoded = [](const Tree& tree) {
+        CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+        stream << tree;
+        return stream.str();
+    };
+    auto checkRoot = [&](const Tree& tree) {
+        const auto expected = independentRoot(tree);
+        EXPECT_EQ(expected, tree.root());
+        EXPECT_EQ(expected, tree.root());
+    };
+
+    Tree tree;
+    checkRoot(tree);
+    for (size_t i = 0; i < 7; ++i) {
+        append(tree, i);
+        checkRoot(tree);
+    }
+    const auto originalRoot = independentRoot(tree);
+    const auto originalBytes = encoded(tree);
+
+    Tree copied(tree);
+    checkRoot(copied);
+    append(copied, 7);
+    checkRoot(copied);
+    EXPECT_EQ(originalRoot, tree.root());
+    EXPECT_EQ(originalBytes, encoded(tree));
+
+    Tree assigned;
+    checkRoot(assigned);
+    assigned = tree;
+    checkRoot(assigned);
+    assigned = assigned;
+    checkRoot(assigned);
+    append(assigned, 8);
+    checkRoot(assigned);
+    EXPECT_EQ(originalRoot, tree.root());
+
+    Tree moved(std::move(copied));
+    checkRoot(moved);
+    checkRoot(copied); // A moved-from tree must not retain its old cached root.
+    assigned = std::move(moved);
+    checkRoot(assigned);
+    checkRoot(moved);
+    assigned = std::move(assigned);
+    checkRoot(assigned);
+
+    // Deserialization replaces a warm destination, and never serializes a cache.
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    stream << tree;
+    stream >> assigned;
+    EXPECT_EQ(originalBytes, encoded(assigned));
+    EXPECT_TRUE(tree == assigned);
+    checkRoot(assigned);
+
+    // A failed read can already have replaced the first leaf. Invalidation must
+    // precede that first read, rather than waiting for successful deserialization.
+    Tree different;
+    append(different, 12);
+    CDataStream truncated(SER_NETWORK, PROTOCOL_VERSION);
+    truncated << different;
+    truncated.resize(33); // The present marker and complete first leaf only.
+    ASSERT_THROW(truncated >> assigned, std::ios_base::failure);
+    EXPECT_NE(originalRoot, independentRoot(assigned));
+    checkRoot(assigned);
+
+    // Concurrent const calls and copies may race to populate the same cold
+    // memo, while the underlying tree value remains immutable.
+    Tree shared;
+    for (size_t i = 0; i < 7; ++i) {
+        append(shared, i);
+    }
+    const auto expected = independentRoot(shared);
+    std::atomic<bool> start(false);
+    std::array<bool, 8> correct;
+    std::array<std::thread, 8> readers;
+    for (size_t i = 0; i < readers.size(); ++i) {
+        readers[i] = std::thread([&, i] {
+            while (!start.load(std::memory_order_acquire)) {
+                std::this_thread::yield();
+            }
+            bool same = true;
+            for (size_t j = 0; j < 50; ++j) {
+                Tree copy(shared);
+                same = same && shared.root() == expected && copy.root() == expected;
+            }
+            correct[i] = same;
+        });
+    }
+    start.store(true, std::memory_order_release);
+    for (auto& reader : readers) {
+        reader.join();
+    }
+    for (bool result : correct) {
+        EXPECT_TRUE(result);
+    }
+}
+
+TEST(merkletree, SproutRootMemoization)
+{
+    CheckRootMemoization<SproutTestingMerkleTree>(
+        read_json(MAKE_STRING(json_tests::merkle_commitments)));
+}
+
+TEST(merkletree, SaplingRootMemoization)
+{
+    CheckRootMemoization<SaplingTestingMerkleTree>(
+        read_json(MAKE_STRING(json_tests::merkle_commitments_sapling)));
 }

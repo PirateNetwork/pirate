@@ -167,6 +167,8 @@ void IncrementalMerkleTree<Depth, Hash>::append(Hash obj) {
         throw std::runtime_error("tree is full");
     }
 
+    invalidateRoot();
+
     if (!left) {
         // Set the left leaf
         left = obj;
