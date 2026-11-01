@@ -7295,11 +7295,25 @@ static void DecryptIronwoodNoteWorker(
     IronwoodIncomingViewingKeyMap *viewingKeysToAdd,
     int threadNumber)
 {
+    // This cache belongs to this worker only; borrowed keys stay alive under
+    // cs_wallet until every worker has joined.
+    std::map<const IronwoodIncomingViewingKey*, rust::Box<ironwood_bundle::PreparedIncomingViewingKey>> preparedKeys;
     for (int i = 0; i < vIvkWithScope.size(); i++) {
 
         IronwoodIncomingViewingKey ivk = *vIvkWithScope[i].first;
         KeyScope scope = vIvkWithScope[i].second;
-        auto result = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(vIronwoodEncryptedAction[i], ivk);
+        std::optional<IronwoodNotePlaintext> result;
+        if (vIvkWithScope.size() == 1) {
+            // No key can be reused in this bucket.
+            result = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(vIronwoodEncryptedAction[i], ivk);
+        } else {
+            auto prepared = preparedKeys.find(vIvkWithScope[i].first);
+            if (prepared == preparedKeys.end()) {
+                prepared = preparedKeys.emplace(vIvkWithScope[i].first,
+                    IronwoodNotePlaintext::PrepareIncomingViewingKey(ivk)).first;
+            }
+            result = IronwoodNotePlaintext::AttemptDecryptIronwoodAction(vIronwoodEncryptedAction[i], *prepared->second);
+        }
         if (result != std::nullopt) {
 
             // We don't cache the nullifier here as computing it requires knowledge of the note position
@@ -7469,12 +7483,23 @@ static void DecryptSaplingNoteWorker(
     SaplingIncomingViewingKeyMap *viewingKeysToAdd,
     int threadNumber)
 {
+    std::map<const SaplingIncomingViewingKey*, rust::Box<sapling::PreparedIncomingViewingKey>> preparedKeys;
     for (int i = 0; i < vIvkWithScope.size(); i++) {
 
         SaplingIncomingViewingKey ivk = *vIvkWithScope[i].first;
         KeyScope scope = vIvkWithScope[i].second;
         
-        auto result = SaplingNotePlaintext::AttemptDecryptSaplingOutput(*vSaplingOutput[i], ivk);
+        std::optional<SaplingNotePlaintext> result;
+        if (vIvkWithScope.size() == 1) {
+            result = SaplingNotePlaintext::AttemptDecryptSaplingOutput(*vSaplingOutput[i], ivk);
+        } else {
+            auto prepared = preparedKeys.find(vIvkWithScope[i].first);
+            if (prepared == preparedKeys.end()) {
+                prepared = preparedKeys.emplace(vIvkWithScope[i].first,
+                    SaplingNotePlaintext::PrepareIncomingViewingKey(ivk)).first;
+            }
+            result = SaplingNotePlaintext::AttemptDecryptSaplingOutput(*vSaplingOutput[i], *prepared->second);
+        }
         if (result) {
 
             SaplingPaymentAddress address;

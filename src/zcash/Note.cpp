@@ -350,6 +350,45 @@ std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingO
     return ret;
 }
 
+rust::Box<sapling::PreparedIncomingViewingKey> SaplingNotePlaintext::PrepareIncomingViewingKey(
+    const SaplingIncomingViewingKey& ivk)
+{
+    auto bytes = ivk.ivk.GetRawBytes();
+    auto prepared = sapling::prepare_incoming_viewing_key(bytes);
+    memory_cleanse(bytes.data(), bytes.size());
+    return prepared;
+}
+
+std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingOutput(
+    const sapling::Output& output,
+    const sapling::PreparedIncomingViewingKey& ivk)
+{
+    std::array<unsigned char, 11> diversifier;
+    uint256_t pk_d;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    uint256_t rseed;
+    unsigned char leadbyte;
+    uint256_t cmu;
+    uint256_t rcm;
+    SaplingNotePlaintext ret;
+    if (!output.try_decrypt_output_prepared_ivk(ivk, ret.value_, diversifier,
+            pk_d, memo, rseed, leadbyte, cmu, rcm)) {
+        return std::nullopt;
+    }
+    ret.d = diversifier;
+    ret.pk_d = uint256::FromRawBytes(pk_d);
+    ret.memo_ = memo;
+    ret.rseed = uint256::FromRawBytes(rseed);
+    ret.leadbyte = leadbyte;
+    ret.cmu_ = uint256::FromRawBytes(cmu);
+    ret.rcm_ = uint256::FromRawBytes(rcm);
+    memory_cleanse(pk_d.data(), pk_d.size());
+    memory_cleanse(rseed.data(), rseed.size());
+    memory_cleanse(cmu.data(), cmu.size());
+    memory_cleanse(rcm.data(), rcm.size());
+    return ret;
+}
+
 std::optional<SaplingNotePlaintext> SaplingNotePlaintext::AttemptDecryptSaplingOutput(
     const sapling::Output& output,
     const uint256& ovk
@@ -556,6 +595,39 @@ std::optional<IronwoodNotePlaintext> IronwoodNotePlaintext::AttemptDecryptIronwo
         std::nullopt, uint256::FromRawBytes(action->cmx()));
 
     return ret;
+}
+
+rust::Box<ironwood_bundle::PreparedIncomingViewingKey> IronwoodNotePlaintext::PrepareIncomingViewingKey(
+    const IronwoodIncomingViewingKey& ivk)
+{
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    IronwoodIncomingViewingKey_FFI_t bytes;
+    stream << ivk;
+    stream >> bytes;
+    auto prepared = ironwood_bundle::prepare_incoming_viewing_key(bytes);
+    memory_cleanse(bytes.data(), bytes.size());
+    memory_cleanse(stream.data(), stream.size());
+    return prepared;
+}
+
+std::optional<IronwoodNotePlaintext> IronwoodNotePlaintext::AttemptDecryptIronwoodAction(
+    const ironwood_bundle::Action* action,
+    const ironwood_bundle::PreparedIncomingViewingKey& ivk)
+{
+    IronwoodPaymentAddress_FFI_t addressBytes;
+    std::array<unsigned char, ZC_MEMO_SIZE> memo;
+    uint64_t value;
+    uint256_t rho;
+    uint256_t rseed;
+    if (!action->try_decrypt_action_prepared_ivk(ivk, value, addressBytes, memo, rho, rseed)) {
+        return std::nullopt;
+    }
+    CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+    IronwoodPaymentAddress address;
+    stream << addressBytes;
+    stream >> address;
+    return IronwoodNotePlaintext(value, address, memo, uint256::FromRawBytes(rho),
+        uint256::FromRawBytes(rseed), std::nullopt, uint256::FromRawBytes(action->cmx()));
 }
 
 /**

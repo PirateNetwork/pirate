@@ -12,6 +12,7 @@ use crate::{
         ironwood_actions::{
             compute_nullifier as compute_nullifier_ironwood,
             derive_ironwood_ock, try_ironwood_decrypt_action_ock,
+            prepare_ironwood_ivk, PreparedIronwoodIncomingViewingKey,
         },
         ironwood_validator::{
             ironwood_batch_validation_init, BatchValidator as IronwoodBatchValidator,
@@ -21,6 +22,7 @@ use crate::{
     sapling_protocol::{
         apply_sapling_bundle_signatures, build_sapling_bundle, compute_nullifier,
         derive_sapling_ock,
+        prepare_sapling_ivk, PreparedSaplingIncomingViewingKey,
         finish_bundle_assembly, new_bundle_assembler, new_sapling_builder, none_sapling_bundle,
         parse_v4_sapling_components, parse_v4_sapling_output, parse_v4_sapling_spend,
         parse_v5_sapling_bundle,
@@ -138,6 +140,23 @@ pub(crate) mod ffi {
             self: &Output,
             ivk_bytes: &[u8; 32],
 
+            value_out: &mut u64,
+            diversifier_out: &mut [u8; 11],
+            pk_d_out: &mut [u8; 32],
+            memo_out: &mut [u8; 512],
+            rseed_out: &mut [u8; 32],
+            leadbyte_out: &mut u8,
+            cmu_out: &mut [u8; 32],
+            rcm_out: &mut [u8; 32],
+        ) -> bool;
+
+        #[cxx_name = "PreparedIncomingViewingKey"]
+        type PreparedSaplingIncomingViewingKey;
+        #[cxx_name = "prepare_incoming_viewing_key"]
+        fn prepare_sapling_ivk(ivk_bytes: &[u8; 32]) -> Box<PreparedSaplingIncomingViewingKey>;
+        fn try_decrypt_output_prepared_ivk(
+            self: &Output,
+            ivk: &PreparedSaplingIncomingViewingKey,
             value_out: &mut u64,
             diversifier_out: &mut [u8; 11],
             pk_d_out: &mut [u8; 32],
@@ -370,6 +389,20 @@ pub(crate) mod ffi {
     extern "Rust" {
         type Action;
         type IronwoodBundle;
+
+        #[cxx_name = "PreparedIncomingViewingKey"]
+        type PreparedIronwoodIncomingViewingKey;
+        #[cxx_name = "prepare_incoming_viewing_key"]
+        fn prepare_ironwood_ivk(ivk_bytes: &[u8; 64]) -> Box<PreparedIronwoodIncomingViewingKey>;
+        fn try_decrypt_action_prepared_ivk(
+            self: &Action,
+            ivk: &PreparedIronwoodIncomingViewingKey,
+            value_out: &mut u64,
+            address_out: &mut [u8; 43],
+            memo_out: &mut [u8; 512],
+            rho_out: &mut [u8; 32],
+            rseed_out: &mut [u8; 32],
+        ) -> bool;
 
         fn cv(self: &Action) -> [u8; 32];
         fn nullifier(self: &Action) -> [u8; 32];

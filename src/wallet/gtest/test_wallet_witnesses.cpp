@@ -211,31 +211,48 @@ protected:
         return result;
     }
 
-    libzcash::SaplingPaymentAddress SaplingAddress(WitnessTestWallet& target)
+    libzcash::SaplingPaymentAddress SaplingAddress(WitnessTestWallet& target, KeyScope scope = KeyScope::External)
     {
         if (!target.testSaplingAddress) throw std::runtime_error("Missing Sapling test address");
-        return *target.testSaplingAddress;
+        auto address = *target.testSaplingAddress;
+        if (scope == KeyScope::Internal) {
+            libzcash::SaplingExtendedSpendingKey key;
+            if (!target.GetSaplingExtendedSpendingKey(address, key) || !key.ToXFVK().DefaultAddressInternal(&address)) {
+                throw std::runtime_error("Cannot derive internal Sapling test address");
+            }
+        }
+        return address;
     }
 
-    libzcash::IronwoodPaymentAddress IronwoodAddress(WitnessTestWallet& target)
+    libzcash::IronwoodPaymentAddress IronwoodAddress(WitnessTestWallet& target, KeyScope scope = KeyScope::External)
     {
         if (!target.testIronwoodAddress) throw std::runtime_error("Missing Ironwood test address");
-        return *target.testIronwoodAddress;
+        auto address = *target.testIronwoodAddress;
+        if (scope == KeyScope::Internal) {
+            libzcash::IronwoodExtendedSpendingKeyPirate key;
+            if (!target.GetIronwoodExtendedSpendingKey(address, key) || !key.sk.DeriveDefaultAddressInternal(&address)) {
+                throw std::runtime_error("Cannot derive internal Ironwood test address");
+            }
+        }
+        return address;
     }
 
-    CTransaction Shield(bool mine, int ownedOutputs = 2)
+    CTransaction Shield(bool mine, int ownedOutputs = 2, KeyScope scope = KeyScope::External)
     {
         const int outputs = mine ? ownedOutputs + 1 : 1;
+        libzcash::Memo::Bytes memoBytes;
+        memoBytes.fill(0x37);
+        const auto memo = scope == KeyScope::Internal ? libzcash::Memo::FromBytes(memoBytes) : std::nullopt;
         TransactionBuilder builder(Params().GetConsensus(), 2, &fundingKeys);
         builder.AddTransparentInput(COutPoint(GetRandHash(), 0), fundingScript, outputs * 20000 + 10000);
         if (GetParam() == WitnessPool::Sapling) {
             builder.InitializeSapling(uint256());
-            auto own = SaplingAddress(*wallet);
+            auto own = SaplingAddress(*wallet, scope);
             auto other = SaplingAddress(*foreign);
-            if (mine && !builder.AddSaplingOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add owned Sapling output");
+            if (mine && !builder.AddSaplingOutputRaw(own, 20000, memo)) throw std::runtime_error("Cannot add owned Sapling output");
             if (!builder.AddSaplingOutputRaw(other, 20000, {})) throw std::runtime_error("Cannot add foreign Sapling output");
             for (int i = 1; mine && i < ownedOutputs; ++i) {
-                if (!builder.AddSaplingOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add another owned Sapling output");
+                if (!builder.AddSaplingOutputRaw(own, 20000, memo)) throw std::runtime_error("Cannot add another owned Sapling output");
             }
             libzcash::SaplingExtendedSpendingKey key;
             if (!foreign->GetSaplingExtendedSpendingKey(other, key) || !builder.ConvertRawSaplingOutput(key.expsk.ovk)) {
@@ -243,12 +260,12 @@ protected:
             }
         } else {
             builder.InitializeIronwood(false, true, uint256());
-            auto own = IronwoodAddress(*wallet);
+            auto own = IronwoodAddress(*wallet, scope);
             auto other = IronwoodAddress(*foreign);
-            if (mine && !builder.AddIronwoodOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add owned Ironwood output");
+            if (mine && !builder.AddIronwoodOutputRaw(own, 20000, memo)) throw std::runtime_error("Cannot add owned Ironwood output");
             if (!builder.AddIronwoodOutputRaw(other, 20000, {})) throw std::runtime_error("Cannot add foreign Ironwood output");
             for (int i = 1; mine && i < ownedOutputs; ++i) {
-                if (!builder.AddIronwoodOutputRaw(own, 20000, {})) throw std::runtime_error("Cannot add another owned Ironwood output");
+                if (!builder.AddIronwoodOutputRaw(own, 20000, memo)) throw std::runtime_error("Cannot add another owned Ironwood output");
             }
             libzcash::IronwoodExtendedSpendingKeyPirate key;
             libzcash::IronwoodFullViewingKey viewing;
@@ -587,11 +604,99 @@ TEST_P(WalletWitnessTest, CleanupFailureRetainsMarkedNotesAndTheirPaths)
     CheckNotes(*wallet, expected, 3);
 }
 
+TEST_P(WalletWitnessTest, PreparedIncomingViewingKeysMatchOriginalPlaintexts)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    size_t accepted = 0;
+    size_t rejected = 0;
+    size_t internalAccepted = 0;
+    size_t externalAccepted = 0;
+    std::vector<CTransaction> transactions;
+    for (const auto& block : blocks) {
+        transactions.insert(transactions.end(), block.vtx.begin(), block.vtx.end());
+    }
+    transactions.push_back(Shield(true, 2, KeyScope::Internal));
+    auto encoded = [](const auto& plaintext) {
+        CDataStream stream(SER_NETWORK, PROTOCOL_VERSION);
+        stream << plaintext;
+        return stream.str();
+    };
+    if (GetParam() == WitnessPool::Sapling) {
+        SaplingIncomingViewingKeySet keys;
+        wallet->GetSaplingIncomingViewingKeySet(keys);
+        for (const auto& scoped : keys) {
+            const auto& ivk = scoped.first;
+            auto prepared = libzcash::SaplingNotePlaintext::PrepareIncomingViewingKey(ivk);
+            for (const auto& tx : transactions) {
+                const auto outputs = tx.GetSaplingOutputs();
+                for (const auto& output : outputs) {
+                    const auto original = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(output, ivk);
+                    const auto reused = libzcash::SaplingNotePlaintext::AttemptDecryptSaplingOutput(output, *prepared);
+                    ASSERT_EQ(original.has_value(), reused.has_value());
+                    if (!original) { ++rejected; continue; }
+                    ++accepted;
+                    if (scoped.second == KeyScope::Internal) ++internalAccepted;
+                    else ++externalAccepted;
+                    EXPECT_EQ(encoded(*original), encoded(*reused));
+                    if (scoped.second == KeyScope::Internal) {
+                        std::array<unsigned char, ZC_MEMO_SIZE> expectedMemo;
+                        expectedMemo.fill(0x37);
+                        EXPECT_EQ(expectedMemo, reused->memo());
+                    }
+                    const auto originalNote = original->note(ivk);
+                    const auto reusedNote = reused->note(ivk);
+                    ASSERT_TRUE(originalNote.has_value());
+                    ASSERT_TRUE(reusedNote.has_value());
+                    EXPECT_EQ(originalNote->pk_d, reusedNote->pk_d);
+                    EXPECT_EQ(originalNote->cmu(), reusedNote->cmu());
+                    EXPECT_EQ(originalNote->rcm(), reusedNote->rcm());
+                    EXPECT_EQ(originalNote->get_zip_212_enabled(), reusedNote->get_zip_212_enabled());
+                }
+            }
+        }
+    } else {
+        IronwoodIncomingViewingKeySet keys;
+        wallet->GetIronwoodIncomingViewingKeySet(keys);
+        for (const auto& scoped : keys) {
+            const auto& ivk = scoped.first;
+            auto prepared = libzcash::IronwoodNotePlaintext::PrepareIncomingViewingKey(ivk);
+            for (const auto& tx : transactions) {
+                const auto actions = tx.GetIronwoodActions();
+                for (const auto& action : actions) {
+                    const auto original = libzcash::IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&action, ivk);
+                    const auto reused = libzcash::IronwoodNotePlaintext::AttemptDecryptIronwoodAction(&action, *prepared);
+                    ASSERT_EQ(original.has_value(), reused.has_value());
+                    if (!original) { ++rejected; continue; }
+                    ++accepted;
+                    if (scoped.second == KeyScope::Internal) ++internalAccepted;
+                    else ++externalAccepted;
+                    EXPECT_EQ(encoded(*original), encoded(*reused));
+                    if (scoped.second == KeyScope::Internal) {
+                        std::array<unsigned char, ZC_MEMO_SIZE> expectedMemo;
+                        expectedMemo.fill(0x37);
+                        EXPECT_EQ(expectedMemo, reused->memo());
+                    }
+                    const auto originalNote = original->note();
+                    const auto reusedNote = reused->note();
+                    ASSERT_TRUE(originalNote.has_value());
+                    ASSERT_TRUE(reusedNote.has_value());
+                    EXPECT_EQ(originalNote->cmx(), reusedNote->cmx());
+                }
+            }
+        }
+    }
+    EXPECT_GT(accepted, 0u);
+    EXPECT_GT(rejected, 0u);
+    EXPECT_GT(internalAccepted, 0u);
+    EXPECT_GT(externalAccepted, 0u);
+}
+
 TEST_P(WalletWitnessTest, NoteDiscoveryMatchesSingleWorkerAcrossTransactions)
 {
     LOCK2(cs_main, wallet->cs_wallet);
     std::vector<CTransaction> transactions = blocks[1].vtx;
     transactions.push_back(Shield(true, 5));
+    transactions.push_back(Shield(true, 2, KeyScope::Internal));
     transactions.emplace_back();
 
     for (CAmount minimum : {CAmount(1), CAmount(20001)}) {
@@ -599,7 +704,8 @@ TEST_P(WalletWitnessTest, NoteDiscoveryMatchesSingleWorkerAcrossTransactions)
         maxProcessingThreads = 1;
         if (GetParam() == WitnessPool::Sapling) {
             const auto serial = wallet->FindMySaplingNotes(transactions, 2);
-            ASSERT_EQ(minimum == 1 ? 7u : 0u, serial.first.size());
+            ASSERT_EQ(minimum == 1 ? 9u : 0u, serial.first.size());
+            if (minimum == 1) EXPECT_EQ(KeyScope::Internal, serial.second.at(SaplingAddress(*wallet, KeyScope::Internal)).second);
             for (int threads : {2, 4}) {
                 maxProcessingThreads = threads;
                 const auto parallel = wallet->FindMySaplingNotes(transactions, 2);
@@ -618,7 +724,8 @@ TEST_P(WalletWitnessTest, NoteDiscoveryMatchesSingleWorkerAcrossTransactions)
             }
         } else {
             const auto serial = wallet->FindMyIronwoodNotes(transactions, 2);
-            ASSERT_EQ(minimum == 1 ? 7u : 0u, serial.first.size());
+            ASSERT_EQ(minimum == 1 ? 9u : 0u, serial.first.size());
+            if (minimum == 1) EXPECT_EQ(KeyScope::Internal, serial.second.at(IronwoodAddress(*wallet, KeyScope::Internal)).second);
             for (int threads : {2, 4}) {
                 maxProcessingThreads = threads;
                 const auto parallel = wallet->FindMyIronwoodNotes(transactions, 2);

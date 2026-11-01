@@ -281,6 +281,12 @@ public:
         const SaplingIncomingViewingKey& ivk
     );
 
+    static rust::Box<sapling::PreparedIncomingViewingKey> PrepareIncomingViewingKey(
+        const SaplingIncomingViewingKey& ivk);
+    static std::optional<SaplingNotePlaintext> AttemptDecryptSaplingOutput(
+        const sapling::Output& output,
+        const sapling::PreparedIncomingViewingKey& ivk);
+
     static std::optional<SaplingNotePlaintext> AttemptDecryptSaplingOutput(
         const sapling::Output& output,
         const uint256& ovk
@@ -419,6 +425,12 @@ public:
         const ironwood_bundle::Action* action,
         const libzcash::IronwoodIncomingViewingKey ivk
     );
+
+    static rust::Box<ironwood_bundle::PreparedIncomingViewingKey> PrepareIncomingViewingKey(
+        const IronwoodIncomingViewingKey& ivk);
+    static std::optional<IronwoodNotePlaintext> AttemptDecryptIronwoodAction(
+        const ironwood_bundle::Action* action,
+        const ironwood_bundle::PreparedIncomingViewingKey& ivk);
 
     static std::optional<IronwoodNotePlaintext> AttemptDecryptIronwoodAction(
         const ironwood_bundle::Action* action,

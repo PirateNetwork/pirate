@@ -21,6 +21,138 @@ fn de_ct<T>(ct: CtOption<T>) -> Option<T> {
     }
 }
 
+/// Prepared only for the incoming key supplied by the caller, including scope.
+pub(crate) struct PreparedIronwoodIncomingViewingKey(Option<PreparedIncomingViewingKey>);
+
+pub(crate) fn prepare_ironwood_ivk(ivk_bytes: &[u8; 64]) -> Box<PreparedIronwoodIncomingViewingKey> {
+    Box::new(PreparedIronwoodIncomingViewingKey(
+        de_ct(IncomingViewingKey::from_bytes(ivk_bytes))
+            .map(|ivk| PreparedIncomingViewingKey::new(&ivk)),
+    ))
+}
+
+impl Action {
+    pub(crate) fn try_decrypt_action_prepared_ivk(
+        &self,
+        ivk: &PreparedIronwoodIncomingViewingKey,
+        value_out: &mut u64,
+        address_out: &mut [u8; 43],
+        memo_out: &mut [u8; 512],
+        rho_out: &mut [u8; 32],
+        rseed_out: &mut [u8; 32],
+    ) -> bool {
+        let Some(prepared_ivk) = ivk.0.as_ref() else {
+            return false;
+        };
+        let action = &self.0;
+        let domain = IronwoodDomain::for_action(action);
+        let decrypted = match try_note_decryption(&domain, prepared_ivk, action) {
+            Some(r) => r,
+            None => return false,
+        };
+
+        *value_out = decrypted.0.value().inner();
+        *address_out = decrypted.1.to_raw_address_bytes();
+        *memo_out = decrypted.2;
+        *rho_out = decrypted.0.rho().to_bytes();
+        *rseed_out = *decrypted.0.rseed().as_bytes();
+        true
+    }
+}
+
+#[cfg(test)]
+mod prepared_ivk_tests {
+    use super::*;
+    use group::{ff::PrimeField, Group, GroupEncoding};
+    use orchard::{
+        keys::SpendingKey,
+        note::{ExtractedNoteCommitment, Nullifier, TransmittedNoteCiphertext},
+        note_encryption::IronwoodNoteEncryption,
+        primitives::redpallas::{SigningKey, SpendAuth, VerificationKey},
+        value::{ValueCommitTrapdoor, ValueCommitment},
+    };
+    use pasta_curves::pallas;
+    use std::convert::TryFrom;
+    use zcash_note_encryption::Domain;
+
+    type Plaintext = (u64, [u8; 43], [u8; 512], [u8; 32], [u8; 32]);
+
+    fn decrypt(action: &Action, key: &[u8; 64], prepared: Option<&PreparedIronwoodIncomingViewingKey>)
+        -> (bool, Plaintext)
+    {
+        let mut result: Plaintext = (0xaaaa, [0xaa; 43], [0xaa; 512], [0xaa; 32], [0xaa; 32]);
+        let accepted = if let Some(prepared) = prepared {
+            action.try_decrypt_action_prepared_ivk(prepared, &mut result.0, &mut result.1,
+                &mut result.2, &mut result.3, &mut result.4)
+        } else {
+            // Keep the original raw FFI's decode/prepare/decrypt path as oracle.
+            try_ironwood_decrypt_action_ivk(action as *const Action, key,
+                &mut result.0, &mut result.1, &mut result.2, &mut result.3, &mut result.4)
+        };
+        (accepted, result)
+    }
+
+    #[test]
+    fn prepared_ironwood_ivk_matches_original_for_both_scopes() {
+        let sk = SpendingKey::from_bytes([7; 32]).unwrap();
+        let fvk = FullViewingKey::from(&sk);
+        let foreign = FullViewingKey::from(&SpendingKey::from_bytes([8; 32]).unwrap());
+        for scope in [Scope::External, Scope::Internal] {
+            let key_bytes = fvk.to_ivk(scope).to_bytes();
+            let prepared = prepare_ironwood_ivk(&key_bytes);
+            let recipient = fvk.address_at(0u32, scope);
+            let nullifier = Nullifier::from_bytes(&pallas::Base::from(9).to_repr()).unwrap();
+            let rho = Rho::from_bytes(&nullifier.to_bytes()).unwrap();
+            let rseed = RandomSeed::from_bytes([5; 32], &rho).unwrap();
+            let note = Note::from_parts(recipient, NoteValue::from_raw(123456), rho, rseed, NoteVersion::V3).unwrap();
+            let cv = ValueCommitment::derive(NoteValue::from_raw(123456) - NoteValue::from_raw(0),
+                ValueCommitTrapdoor::from_bytes(pallas::Scalar::from(11).to_repr()).unwrap());
+            let cmx = ExtractedNoteCommitment::from(note.commitment());
+            let encryptor = IronwoodNoteEncryption::new(None, note.clone(), [0x37; 512]);
+            let encrypted = TransmittedNoteCiphertext {
+                epk_bytes: IronwoodDomain::epk_bytes(encryptor.epk()).0,
+                enc_ciphertext: encryptor.encrypt_note_plaintext(),
+                out_ciphertext: [0; 80],
+            };
+            let signing_key = SigningKey::<SpendAuth>::try_from(pallas::Scalar::from(3).to_repr()).unwrap();
+            let rk = VerificationKey::from(&signing_key);
+            let make_action = |commitment, ciphertext| Action(orchard::Action::from_parts(
+                nullifier, rk.clone(), commitment, ciphertext, cv.clone(), [0; 64].into()).unwrap());
+            let action = make_action(cmx, encrypted.clone());
+            let original = decrypt(&action, &key_bytes, None);
+            assert!(original.0);
+            assert_eq!(original.1, (123456, recipient.to_raw_address_bytes(), [0x37; 512],
+                rho.to_bytes(), *note.rseed().as_bytes()));
+            for _ in 0..8 {
+                assert_eq!(original, decrypt(&action, &key_bytes, Some(&prepared)));
+            }
+
+            let mut bad_ciphertext = encrypted.clone();
+            bad_ciphertext.enc_ciphertext[20] ^= 1;
+            let mut bad_epk = encrypted.clone();
+            bad_epk.epk_bytes = pallas::Point::generator().to_bytes();
+            let different_cmx = ExtractedNoteCommitment::from_bytes(&pallas::Base::from(10).to_repr()).unwrap();
+            for malformed in [make_action(cmx, bad_ciphertext), make_action(cmx, bad_epk),
+                make_action(different_cmx, encrypted.clone())] {
+                let reference = decrypt(&malformed, &key_bytes, None);
+                assert!(!reference.0);
+                assert_eq!(reference, decrypt(&malformed, &key_bytes, Some(&prepared)));
+                assert_eq!(reference.1, (0xaaaa, [0xaa; 43], [0xaa; 512], [0xaa; 32], [0xaa; 32]));
+            }
+
+            let other_scope = if scope == Scope::External { Scope::Internal } else { Scope::External };
+            for foreign_key in [[0xff; 64], [0; 64], foreign.to_ivk(scope).to_bytes(),
+                fvk.to_ivk(other_scope).to_bytes()] {
+                let foreign_prepared = prepare_ironwood_ivk(&foreign_key);
+                let reference = decrypt(&action, &foreign_key, None);
+                assert!(!reference.0);
+                assert_eq!(reference, decrypt(&action, &foreign_key, Some(&foreign_prepared)));
+                assert_eq!(reference.1, (0xaaaa, [0xaa; 43], [0xaa; 512], [0xaa; 32], [0xaa; 32]));
+            }
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn try_ironwood_decrypt_action_ovk(
     ironwood_action: *const Action,
