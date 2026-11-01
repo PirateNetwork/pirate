@@ -482,3 +482,76 @@ TEST_F(WalletPersistenceTest, ReorderedTransactionsAndCounterCommitTogetherAfter
     EXPECT_FALSE(wallet->fRunSetBestChain);
     EXPECT_EQ(committed, database.Snapshot());
 }
+
+// Inject a failed commit after rolling back a real Berkeley DB transaction.
+// Production and this adapter use the same retry helper without virtualizing
+// the database API or retaining the consumed transaction handle.
+class RetryCommitFaultDB : public PersistenceFaultDB
+{
+public:
+    explicit RetryCommitFaultDB(const std::string& filename) : PersistenceFaultDB(filename) {}
+    using CWalletDB::Write;
+    int failuresRemaining = 0;
+    int commitAttempts = 0;
+
+    bool TxnCommit()
+    {
+        ++commitAttempts;
+        if (failuresRemaining > 0) {
+            --failuresRemaining;
+            CWalletDB::TxnAbort();
+            return false;
+        }
+        return CWalletDB::TxnCommit();
+    }
+
+    bool ReplacePlaintext(const uint256& txid, const uint256& encryptedId)
+    {
+        const std::vector<unsigned char> encryptedRecord{1, 2, 3};
+        // Match the encrypted transaction writer's durability-before-erase rule.
+        if (!WriteTxnINTERNAL(*this, std::make_pair(std::string("ctx"), encryptedId),
+            encryptedRecord, "RetryCommitFaultDB")) {
+            return false;
+        }
+        return Erase(std::make_pair(std::string("tx"), txid));
+    }
+};
+
+TEST_F(WalletPersistenceTest, ProtectedWriteRetriesCommitFailureBeforeReplacingPlaintext)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    wallet->PreparePendingWork();
+    const auto& transaction = wallet->mapWallet.begin()->second;
+    const auto txid = transaction.GetHash();
+    const uint256 encryptedId = GetRandHash();
+    RetryCommitFaultDB database(wallet->strWalletFile);
+    ASSERT_TRUE(database.WriteTx(txid, transaction, false));
+    database.failuresRemaining = 1;
+    ASSERT_TRUE(database.ReplacePlaintext(txid, encryptedId));
+    EXPECT_EQ(2, database.commitAttempts);
+    EXPECT_FALSE(database.HasTransaction(txid, false));
+    EXPECT_TRUE(database.HasTransaction(encryptedId, true));
+}
+
+TEST_F(WalletPersistenceTest, ProtectedWriteRetainsPlaintextWhenEveryCommitFails)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    wallet->PreparePendingWork();
+    const auto& transaction = wallet->mapWallet.begin()->second;
+    const auto txid = transaction.GetHash();
+    const uint256 encryptedId = GetRandHash();
+    RetryCommitFaultDB database(wallet->strWalletFile);
+    ASSERT_TRUE(database.WriteTx(txid, transaction, false));
+    const auto original = database.Snapshot();
+    database.failuresRemaining = 4;
+    EXPECT_FALSE(database.ReplacePlaintext(txid, encryptedId));
+    EXPECT_EQ(4, database.commitAttempts);
+    EXPECT_EQ(original, database.Snapshot());
+    EXPECT_TRUE(database.HasTransaction(txid, false));
+    EXPECT_FALSE(database.HasTransaction(encryptedId, true));
+
+    ASSERT_TRUE(database.ReplacePlaintext(txid, encryptedId));
+    EXPECT_EQ(5, database.commitAttempts);
+    EXPECT_FALSE(database.HasTransaction(txid, false));
+    EXPECT_TRUE(database.HasTransaction(encryptedId, true));
+}

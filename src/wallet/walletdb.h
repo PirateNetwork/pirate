@@ -155,34 +155,38 @@ public:
     }
 
 
-    template <typename K, typename T>
-    bool WriteTxn(const K& key, const T& value, std::string calling, bool fOverwrite = true)
+protected:
+    // Keep transaction completion part of success; callers may erase the
+    // previous record immediately after this helper returns true.
+    template <typename DB, typename K, typename T>
+    static bool WriteTxnINTERNAL(DB& database, const K& key, const T& value,
+        const std::string& calling, bool fOverwrite = true)
     {
-
         LOCK(bitdb->cs_db);
         bool txnWrite = false;
         int retries = 0;
 
         while(!txnWrite) {
             //Writing transaction to the database
-            if(!TxnBegin()) {
+            if(!database.TxnBegin()) {
                 LogPrintf("%s: Failed to begin txn, will retry.\n", calling);
-                TxnAbort();
+                database.TxnAbort();
             } else {
-                TxnSetTimeout();
-                txnWrite = Write(key, value, fOverwrite);
+                database.TxnSetTimeout();
+                txnWrite = database.Write(key, value, fOverwrite);
                 if (!txnWrite) {
                     LogPrintf("%s: Failed to write txn, will retry.\n", calling);
-                    TxnAbort();
+                    database.TxnAbort();
                 } else {
-                    if(!TxnCommit()) {
-                      LogPrintf("%s: Failed to commit txn, warning.\n", calling);
+                    txnWrite = database.TxnCommit();
+                    if (!txnWrite) {
+                        LogPrintf("%s: Failed to commit txn, will retry.\n", calling);
                     }
                 }
             }
 
             if (!txnWrite) {
-              TxnAbort();
+              database.TxnAbort();
               MilliSleep(500);
               retries++;
             }
@@ -193,6 +197,13 @@ public:
             }
         }
         return true;
+    }
+
+public:
+    template <typename K, typename T>
+    bool WriteTxn(const K& key, const T& value, std::string calling, bool fOverwrite = true)
+    {
+        return WriteTxnINTERNAL(*this, key, value, calling, fOverwrite);
     }
 
     bool WriteName(const std::string& strAddress, const std::string& strName);
