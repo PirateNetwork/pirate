@@ -130,6 +130,7 @@ pirate_gtest_SOURCES += \
 	gtest/test_script_P2SH_bitcoin.cpp \
 	gtest/test_serialize_bitcoin.cpp \
 	gtest/test_net_bitcoin.cpp \
+	gtest/test_net_backpressure.cpp \
 	gtest/test_sha256compress_bitcoin.cpp
 
 # gtest/test_miner_bitcoin.cpp is intentionally NOT built yet: CreateNewBlock()

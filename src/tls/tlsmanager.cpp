@@ -614,7 +614,7 @@ int TLSManager::threadSocketHandler(CNode* pnode, fd_set& fdsetRecv, fd_set& fds
 
     if (recvSet || errorSet) {
         TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-        if (lockRecv) {
+        if (lockRecv && pnode->CanReceiveMessages()) {
             {
                 // typical socket buffer is 8K-64K
                 // maximum record size is 16kB for SSL/TLS (still valid as of 1.1.1 version)

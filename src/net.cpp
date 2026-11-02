@@ -2176,7 +2176,6 @@ void ThreadSocketHandler()
                 if (pnode->hSocket == INVALID_SOCKET)
                     continue;
 
-                FD_SET(pnode->hSocket, &fdsetError);
                 hSocketMax = max(hSocketMax, pnode->hSocket);
                 have_fds = true;
 
@@ -2195,20 +2194,7 @@ void ThreadSocketHandler()
                 // * We send some data.
                 // * We wait for data to be received (and disconnect after timeout).
                 // * We process a message in the buffer (message handler thread).
-                {
-                    TRY_LOCK(pnode->cs_vSend, lockSend);
-                    if (lockSend && !pnode->vSendMsg.empty()) {
-                        FD_SET(pnode->hSocket, &fdsetSend);
-                        continue;
-                    }
-                }
-                {
-                    TRY_LOCK(pnode->cs_vRecvMsg, lockRecv);
-                    if (lockRecv && (
-                        pnode->vRecvMsg.empty() || !pnode->vRecvMsg.front().complete() ||
-                        pnode->GetTotalRecvSize() <= ReceiveFloodSize()))
-                        FD_SET(pnode->hSocket, &fdsetRecv);
-                }
+                pnode->SetSocketSelectEvents(fdsetRecv, fdsetSend, fdsetError);
             }
         }
 
@@ -2222,12 +2208,14 @@ void ThreadSocketHandler()
             {
                 int nErr = WSAGetLastError();
                 LogPrintf("socket select error %s\n", NetworkErrorString(nErr));
-                for (unsigned int i = 0; i <= hSocketMax; i++)
-                    FD_SET(i, &fdsetRecv);
             }
+            // select() does not provide valid readiness sets on failure. In
+            // particular, do not invent read events for receive-paused peers.
+            FD_ZERO(&fdsetRecv);
             FD_ZERO(&fdsetSend);
             FD_ZERO(&fdsetError);
-            MilliSleep(timeout.tv_usec/1000);
+            // The timeout may have been modified by select(), even on failure.
+            MilliSleep(50);
         }
 
         //
@@ -4201,6 +4189,28 @@ bool CAddrDB::Read(CAddrMan& addr)
 
 unsigned int ReceiveFloodSize() { return 1000*GetArg("-maxreceivebuffer", 5*1000); }
 unsigned int SendBufferSize() { return 1000*GetArg("-maxsendbuffer", 1*1000); }
+
+void CNode::SetSocketSelectEvents(fd_set& recv, fd_set& send, fd_set& error)
+{
+    if (hSocket == INVALID_SOCKET)
+        return;
+
+    {
+        TRY_LOCK(cs_vSend, lockSend);
+        if (lockSend && !vSendMsg.empty()) {
+            FD_SET(hSocket, &send);
+            return;
+        }
+    }
+
+    TRY_LOCK(cs_vRecvMsg, lockRecv);
+    if (lockRecv && CanReceiveMessages()) {
+        FD_SET(hSocket, &recv);
+        // Exceptional readiness can cause a read too (e.g. TCP urgent data),
+        // so it must respect exactly the same receive backpressure.
+        FD_SET(hSocket, &error);
+    }
+}
 
 CNode::CNode(SOCKET hSocketIn, const CAddress& addrIn, const std::string& addrNameIn, bool fInboundIn, SSL *sslIn) :
     ssSend(SER_NETWORK, INIT_PROTO_VERSION),

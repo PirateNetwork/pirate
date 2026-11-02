@@ -903,13 +903,23 @@ public:
     }
 
     // requires LOCK(cs_vRecvMsg)
-    unsigned int GetTotalRecvSize()
+    uint64_t GetTotalRecvSize() const
     {
-        unsigned int total = 0;
+        uint64_t total = 0;
         BOOST_FOREACH(const CNetMessage &msg, vRecvMsg)
             total += msg.vRecv.size() + 24;
         return total;
     }
+
+    // Requires cs_vRecvMsg. An incomplete first message must be allowed to finish.
+    bool CanReceiveMessages() const
+    {
+        return vRecvMsg.empty() || !vRecvMsg.front().complete() ||
+            GetTotalRecvSize() <= ReceiveFloodSize();
+    }
+
+    // Requires cs_hSocket. Add this peer's eligible socket events to select().
+    void SetSocketSelectEvents(fd_set& recv, fd_set& send, fd_set& error);
 
     // requires LOCK(cs_vRecvMsg)
     bool ReceiveMsgBytes(const char *pch, unsigned int nBytes);
