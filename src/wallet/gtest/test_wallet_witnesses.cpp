@@ -894,6 +894,103 @@ TEST_P(WalletWitnessTest, MarkedNotesSurviveRebuildSerializationAndRewind)
     root = correctRoot;
 }
 
+TEST_P(WalletWitnessTest, SavedTipScanPreservesWitnessesAcrossRestart)
+{
+    LOCK(cs_main);
+    for (int height = 1; height <= chainActive.Height(); ++height) {
+        Discover(*wallet, height);
+        wallet->Increment(WitnessPool::Sapling, chainActive[height], blocks.at(height - 1));
+        wallet->Increment(WitnessPool::Ironwood, chainActive[height], blocks.at(height - 1));
+    }
+    const auto expected = NoteOracle();
+    ASSERT_EQ(2u, expected.size());
+    const std::string filename = wallet->strWalletFile;
+    {
+        LOCK(wallet->cs_wallet);
+        ASSERT_TRUE(wallet->SetBestChain(chainActive.GetLocator(), chainActive.Height()));
+    }
+
+    for (int restart = 0; restart < 2; ++restart) {
+        SCOPED_TRACE(restart);
+        wallet.reset();
+        wallet = std::make_unique<WitnessTestWallet>(filename);
+        bool firstRun;
+        ASSERT_EQ(DB_LOAD_OK, wallet->LoadWallet(firstRun));
+        LOCK(wallet->cs_wallet);
+        ASSERT_EQ(chainActive.Height(), wallet->Checkpoint(WitnessPool::Sapling));
+        ASSERT_EQ(chainActive.Height(), wallet->Checkpoint(WitnessPool::Ironwood));
+        const auto sapling = wallet->SaveTree(WitnessPool::Sapling);
+        const auto ironwood = wallet->SaveTree(WitnessPool::Ironwood);
+
+        CBlockLocator saved;
+        ASSERT_TRUE(CWalletDB(filename).ReadBestBlock(saved));
+        auto* start = FindForkInGlobalIndex(chainActive, saved);
+        ASSERT_EQ(chainActive.Tip(), start);
+
+        struct WalletMainGuard {
+            CWallet* previous;
+            explicit WalletMainGuard(CWallet* target) : previous(pwalletMain) { pwalletMain = target; }
+            ~WalletMainGuard() { pwalletMain = previous; }
+        } walletMain(wallet.get());
+        coins->frontierReads = 0;
+        ASSERT_GE(wallet->ScanForWalletTransactions(start, true, true, false, false), 0);
+
+        // Only the owned transaction's predecessor frontier is needed to
+        // validate its positions. A reset would require another frontier read.
+        EXPECT_EQ(1, coins->frontierReads);
+        EXPECT_EQ(sapling, wallet->SaveTree(WitnessPool::Sapling));
+        EXPECT_EQ(ironwood, wallet->SaveTree(WitnessPool::Ironwood));
+        CheckNotes(*wallet, expected, chainActive.Height());
+        ASSERT_TRUE(CWalletDB(filename).ReadBestBlock(saved));
+        ASSERT_FALSE(saved.vHave.empty());
+        EXPECT_EQ(chainActive.Tip()->GetBlockHash(), saved.vHave.front());
+    }
+}
+
+TEST_P(WalletWitnessTest, SavedTipScanDiscoversNotesMissingFromWitnessCache)
+{
+    LOCK(cs_main);
+    AddBlock({Shield(true)});
+    const uint256 tipReceipt = blocks.back().vtx.front().GetHash();
+    // Save a complete root without discovering the owned notes in the tip.
+    // Revisiting that block must discover them and repair the missing marks.
+    for (int height = 1; height <= chainActive.Height(); ++height) {
+        if (height < chainActive.Height()) Discover(*wallet, height);
+        wallet->Increment(WitnessPool::Sapling, chainActive[height], blocks.at(height - 1));
+        wallet->Increment(WitnessPool::Ironwood, chainActive[height], blocks.at(height - 1));
+    }
+    const auto expected = NoteOracle();
+    ASSERT_EQ(4u, expected.size());
+    ASSERT_EQ(0u, wallet->mapWallet.count(tipReceipt));
+    const std::string filename = wallet->strWalletFile;
+    {
+        LOCK(wallet->cs_wallet);
+        ASSERT_TRUE(wallet->Validate(GetParam(), chainActive.Tip()));
+        ASSERT_TRUE(wallet->SetBestChain(chainActive.GetLocator(), chainActive.Height()));
+    }
+    wallet.reset();
+    wallet = std::make_unique<WitnessTestWallet>(filename);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, wallet->LoadWallet(firstRun));
+    {
+        LOCK(wallet->cs_wallet);
+        EXPECT_EQ(ExpectedRoot(chainActive.Height()), wallet->Anchor(GetParam()));
+
+        CBlockLocator saved;
+        ASSERT_TRUE(CWalletDB(filename).ReadBestBlock(saved));
+        auto* start = FindForkInGlobalIndex(chainActive, saved);
+        ASSERT_EQ(chainActive.Tip(), start);
+        struct WalletMainGuard {
+            CWallet* previous;
+            explicit WalletMainGuard(CWallet* target) : previous(pwalletMain) { pwalletMain = target; }
+            ~WalletMainGuard() { pwalletMain = previous; }
+        } walletMain(wallet.get());
+        ASSERT_GE(wallet->ScanForWalletTransactions(start, true, true, false, false), 0);
+        EXPECT_EQ(1u, wallet->mapWallet.count(tipReceipt));
+        CheckNotes(*wallet, expected, chainActive.Height());
+    }
+}
+
 TEST_P(WalletWitnessTest, RescanRestartFindsSpendsOfNewNotesBehindCachedCheckpoint)
 {
     LOCK2(cs_main, wallet->cs_wallet);

@@ -2907,27 +2907,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             pindexRescan = chainActive.Genesis();
         }
 
-        if (chainActive.Tip() && chainActive.Tip() != pindexRescan)
+        // Revisit the saved block even when it is the tip. Moving a caught-up
+        // wallet back one block would make its witnesses appear ahead of the
+        // restart locator and unnecessarily trigger their recovery rebuild.
+        if (chainActive.Tip() && (chainActive.Tip() != pindexRescan || chainActive.Height() > 0))
         {
             uiInterface.InitMessage(_("Rescanning..."));
-            LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
+            LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight + 1, pindexRescan->nHeight);
             nStart = GetTimeMillis();
             if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false) < 0) {
                 return InitError(_("Wallet rescan failed. Check disk space and debug.log."));
             }
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
-        } else {
-            //Rescan at minimum last 1 block
-            if (chainActive.Tip() && chainActive.Height() > 0) {
-                pindexRescan = chainActive[chainActive.Tip()->nHeight - 1];
-                uiInterface.InitMessage(_("Rescanning..."));
-                LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight, pindexRescan->nHeight);
-                nStart = GetTimeMillis();
-                if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false) < 0) {
-                    return InitError(_("Wallet rescan failed. Check disk space and debug.log."));
-                }
-                LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
-            }
         }
 
         //Validate Rust Sapling Wallet, rebuild if needed
