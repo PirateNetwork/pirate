@@ -14,6 +14,7 @@
 #include "util/strencodings.h"
 
 #include <boost/filesystem/operations.hpp>
+#include <boost/signals2/connection.hpp>
 #include <fstream>
 
 // Tests for the node's deprecation-warning and forced-shutdown logic (version
@@ -53,18 +54,19 @@ static bool ThreadSafeMessageBox(MockUIInterface *mock,
 class DeprecationTest : public ::testing::Test {
 protected:
     virtual void SetUp() {
-        uiInterface.ThreadSafeMessageBox.disconnect_all_slots();
-        uiInterface.ThreadSafeMessageBox.connect(boost::bind(ThreadSafeMessageBox, &mock_, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        messageBoxConnection = uiInterface.ThreadSafeMessageBox.connect(boost::bind(ThreadSafeMessageBox, &mock_, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
         SelectParams(CBaseChainParams::MAIN);
 
     }
 
     virtual void TearDown() {
+        messageBoxConnection.disconnect();
         fRequestShutdown = false;
         mapArgs.clear();
     }
 
     StrictMock<MockUIInterface> mock_;
+    boost::signals2::scoped_connection messageBoxConnection;
 
     static std::vector<std::string> read_lines(boost::filesystem::path filepath) {
         std::vector<std::string> result;
