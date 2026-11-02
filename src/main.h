@@ -57,6 +57,7 @@
 #include <boost/unordered_map.hpp>
 
 class CBlockIndex;
+class CBlockUndo;
 class CBlockTreeDB;
 class CBloomFilter;
 class CInv;
@@ -930,6 +931,8 @@ bool GetAddressUnspent(uint160 addressHash, int type,
 /** Functions for disk access for blocks */
 bool WriteBlockToDisk(const CBlock& block, CDiskBlockPos& pos, const CMessageHeader::MessageStartChars& messageStart);
 bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos,bool checkPOW);
+bool UndoWriteToDisk(const CBlockUndo& blockundo, CDiskBlockPos& pos, const uint256& hashBlock, const CMessageHeader::MessageStartChars& messageStart);
+bool UndoReadFromDisk(CBlockUndo& blockundo, const CDiskBlockPos& pos, const uint256& hashBlock);
 bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex,bool checkPOW);
 bool PruneOneBlockFile(bool tempfile, const int fileNumber);
 bool AlignPersistedShieldedSubtrees(std::string& error);
@@ -990,8 +993,8 @@ class CBlockFileInfo
 {
 public:
     unsigned int nBlocks;      //! number of blocks stored in file
-    unsigned int nSize;        //! number of used bytes of block file
-    unsigned int nUndoSize;    //! number of used bytes in the undo file
+    uint64_t nSize;            //! number of used bytes of block file
+    uint64_t nUndoSize;        //! number of used bytes in the undo file
     unsigned int nHeightFirst; //! lowest height of block in file
     unsigned int nHeightLast;  //! highest height of block in file
     uint64_t nTimeFirst;         //! earliest time of block in file

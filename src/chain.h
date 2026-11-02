@@ -56,7 +56,7 @@ uint8_t is_STAKED(const std::string& symbol);*/
 struct CDiskBlockPos
 {
     int nFile;
-    unsigned int nPos;
+    uint64_t nPos;
 
     ADD_SERIALIZE_METHODS;
 
@@ -70,7 +70,7 @@ struct CDiskBlockPos
         SetNull();
     }
 
-    CDiskBlockPos(int nFileIn, unsigned int nPosIn) {
+    CDiskBlockPos(int nFileIn, uint64_t nPosIn) {
         nFile = nFileIn;
         nPos = nPosIn;
     }
@@ -165,10 +165,10 @@ public:
     int nFile;
 
     //! Byte offset within blk?????.dat where this block's data is stored
-    unsigned int nDataPos;
+    uint64_t nDataPos;
 
     //! Byte offset within rev?????.dat where this block's undo data is stored
-    unsigned int nUndoPos;
+    uint64_t nUndoPos;
 
     //! (memory only) Total amount of work (expected number of hashes) in the chain up to and including this block
     arith_uint256 nChainWork;

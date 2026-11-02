@@ -70,6 +70,7 @@
 #include <chrono>
 #include <sstream>
 #include <map>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 #include <random>
@@ -257,8 +258,8 @@ namespace {
     std::vector<CBlockFileInfo> vinfoBlockFile,tmpBlockFiles;
     int nLastBlockFile = 0;
     int nLastTmpFile = 0;
-    unsigned int maxTempFileSize0 = MAX_TEMPFILE_SIZE;
-    unsigned int maxTempFileSize1 = MAX_TEMPFILE_SIZE;
+    uint64_t maxTempFileSize0 = MAX_TEMPFILE_SIZE;
+    uint64_t maxTempFileSize1 = MAX_TEMPFILE_SIZE;
     /** Global flag to indicate we should check to see if there are
      *  block/undo files that should be deleted.  Set on startup
      *  or if we allocate more file space when we're in prune mode
@@ -2725,7 +2726,8 @@ bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlo
             CBlockHeader header;
             try {
                 file >> header;
-                fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+                if (!FileSeek(file.Get(), postx.nTxOffset, SEEK_CUR))
+                    return error("%s: file seek failed", __func__);
                 file >> txOut;
             } catch (const std::exception& e) {
                 return error("%s: Deserialize or I/O error - %s", __func__, e.what());
@@ -2785,7 +2787,8 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock
             CBlockHeader header;
             try {
                 file >> header;
-                fseek(file.Get(), postx.nTxOffset, SEEK_CUR);
+                if (!FileSeek(file.Get(), postx.nTxOffset, SEEK_CUR))
+                    return error("%s: file seek failed", __func__);
                 file >> txOut;
             } catch (const std::exception& e) {
                 return error("%s: Deserialize or I/O error - %s", __func__, e.what());
@@ -2839,20 +2842,23 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock
 
 bool WriteBlockToDisk(const CBlock& block, CDiskBlockPos& pos, const CMessageHeader::MessageStartChars& messageStart)
 {
+    const unsigned int nSize = ::GetSerializeSize(block, SER_DISK, CLIENT_VERSION);
+    const uint64_t maxOffset = std::numeric_limits<int64_t>::max();
+    if (pos.nPos > maxOffset || uint64_t(nSize) + sizeof(messageStart) + sizeof(nSize) > maxOffset - pos.nPos)
+        return error("WriteBlockToDisk: file position overflow");
     // Open history file to append
     CAutoFile fileout(OpenBlockFile(pos), SER_DISK, CLIENT_VERSION);
     if (fileout.IsNull())
         return error("WriteBlockToDisk: OpenBlockFile failed");
 
     // Write index header
-    unsigned int nSize = GetSerializeSize(fileout, block);
     fileout << FLATDATA(messageStart) << nSize;
 
     // Write block
-    long fileOutPos = ftell(fileout.Get());
+    int64_t fileOutPos = FileTell(fileout.Get());
     if (fileOutPos < 0)
-        return error("WriteBlockToDisk: ftell failed");
-    pos.nPos = (unsigned int)fileOutPos;
+        return error("WriteBlockToDisk: file position unavailable");
+    pos.nPos = static_cast<uint64_t>(fileOutPos);
     fileout << block;
 
     return true;
@@ -3393,61 +3399,61 @@ bool ContextualCheckInputs(
     return true;
 }
 
-namespace {
+bool UndoWriteToDisk(const CBlockUndo& blockundo, CDiskBlockPos& pos, const uint256& hashBlock, const CMessageHeader::MessageStartChars& messageStart)
+{
+    const unsigned int nSize = ::GetSerializeSize(blockundo, SER_DISK, CLIENT_VERSION);
+    const uint64_t maxOffset = std::numeric_limits<int64_t>::max();
+    if (pos.nPos > maxOffset || uint64_t(nSize) + sizeof(messageStart) + sizeof(nSize) + hashBlock.size() > maxOffset - pos.nPos)
+        return error("%s: file position overflow", __func__);
+    // Open history file to append
+    CAutoFile fileout(OpenUndoFile(pos), SER_DISK, CLIENT_VERSION);
+    if (fileout.IsNull())
+        return error("%s: OpenUndoFile failed", __func__);
 
-    bool UndoWriteToDisk(const CBlockUndo& blockundo, CDiskBlockPos& pos, const uint256& hashBlock, const CMessageHeader::MessageStartChars& messageStart)
-    {
-        // Open history file to append
-        CAutoFile fileout(OpenUndoFile(pos), SER_DISK, CLIENT_VERSION);
-        if (fileout.IsNull())
-            return error("%s: OpenUndoFile failed", __func__);
+    // Write index header
+    fileout << FLATDATA(messageStart) << nSize;
 
-        // Write index header
-        unsigned int nSize = GetSerializeSize(fileout, blockundo);
-        fileout << FLATDATA(messageStart) << nSize;
+    // Write undo data
+    int64_t fileOutPos = FileTell(fileout.Get());
+    if (fileOutPos < 0)
+        return error("%s: file position unavailable", __func__);
+    pos.nPos = static_cast<uint64_t>(fileOutPos);
+    fileout << blockundo;
 
-        // Write undo data
-        long fileOutPos = ftell(fileout.Get());
-        if (fileOutPos < 0)
-            return error("%s: ftell failed", __func__);
-        pos.nPos = (unsigned int)fileOutPos;
-        fileout << blockundo;
+    // calculate & write checksum
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+    hasher << hashBlock;
+    hasher << blockundo;
+    fileout << hasher.GetHash();
+    return true;
+}
 
-        // calculate & write checksum
-        CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
-        hasher << hashBlock;
-        hasher << blockundo;
-        fileout << hasher.GetHash();
-        return true;
+bool UndoReadFromDisk(CBlockUndo& blockundo, const CDiskBlockPos& pos, const uint256& hashBlock)
+{
+    // Open history file to read
+    CAutoFile filein(OpenUndoFile(pos, true), SER_DISK, CLIENT_VERSION);
+    if (filein.IsNull())
+        return error("%s: OpenBlockFile failed", __func__);
+
+    // Read block
+    uint256 hashChecksum;
+    try {
+        filein >> blockundo;
+        filein >> hashChecksum;
     }
-
-    bool UndoReadFromDisk(CBlockUndo& blockundo, const CDiskBlockPos& pos, const uint256& hashBlock)
-    {
-        // Open history file to read
-        CAutoFile filein(OpenUndoFile(pos, true), SER_DISK, CLIENT_VERSION);
-        if (filein.IsNull())
-            return error("%s: OpenBlockFile failed", __func__);
-
-        // Read block
-        uint256 hashChecksum;
-        try {
-            filein >> blockundo;
-            filein >> hashChecksum;
-        }
-        catch (const std::exception& e) {
-            return error("%s: Deserialize or I/O error - %s", __func__, e.what());
-        }
-        // Verify checksum
-        CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
-        hasher << hashBlock;
-        hasher << blockundo;
-        if (hashChecksum != hasher.GetHash())
-            return error("%s: %s Checksum mismatch %s vs %s", __func__,hashBlock.GetHex().c_str(),hashChecksum.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
-
-        return true;
+    catch (const std::exception& e) {
+        return error("%s: Deserialize or I/O error - %s", __func__, e.what());
     }
+    // Verify checksum
+    CHashWriter hasher(SER_GETHASH, PROTOCOL_VERSION);
+    hasher << hashBlock;
+    hasher << blockundo;
+    if (hashChecksum != hasher.GetHash())
+        return error("%s: %s Checksum mismatch %s vs %s", __func__,hashBlock.GetHex().c_str(),hashChecksum.GetHex().c_str(),hasher.GetHash().GetHex().c_str());
 
-} // anon namespace
+    return true;
+}
+
 
 /**
  * Apply the undo operation of a CTxInUndo to the given chain state.
@@ -5749,12 +5755,32 @@ bool ReceivedBlockTransactions(const CBlock &block, CValidationState& state, CBl
     return true;
 }
 
+// File APIs use signed 64-bit offsets. Validate the append and its rounded
+// preallocation range before publishing a new size in the block index.
+static bool GetFileAllocationRange(uint64_t position, unsigned int size, uint64_t chunkSize,
+                                   uint64_t& end, uint64_t& allocatedEnd)
+{
+    const uint64_t maxOffset = std::numeric_limits<int64_t>::max();
+    if (position > maxOffset || size > maxOffset - position)
+        return false;
+    end = position + size;
+    const uint64_t chunks = end / chunkSize + (end % chunkSize != 0);
+    if (chunks > maxOffset / chunkSize)
+        return false;
+    allocatedEnd = chunks * chunkSize;
+    return true;
+}
+
 bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, unsigned int nAddSize, unsigned int nHeight, uint64_t nTime, bool fKnown)
 {
     std::vector<CBlockFileInfo> *ptr; int *lastfilep;
     LOCK(cs_LastBlockFile);
 
-    unsigned int nFile,maxTempFileSize;
+    unsigned int nFile;
+    uint64_t maxTempFileSize = MAX_TEMPFILE_SIZE;
+
+    if (fKnown && (pos.nFile < 0 || pos.nPos > uint64_t(std::numeric_limits<int64_t>::max()) - nAddSize))
+        return state.Error("block file position overflow");
 
     if ( tmpflag != 0 )
     {
@@ -5781,7 +5807,10 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
 
     if (!fKnown) {
         bool tmpfileflag = false;
-        while ( (*ptr)[nFile].nSize + nAddSize >= ((tmpflag != 0) ? maxTempFileSize : MAX_BLOCKFILE_SIZE) ) {
+        const uint64_t fileLimit = tmpflag != 0 ? maxTempFileSize : MAX_BLOCKFILE_SIZE;
+        if (nAddSize >= fileLimit)
+            return state.Error("block record exceeds file size limit");
+        while ((*ptr)[nFile].nSize >= fileLimit - nAddSize) {
             if ( tmpflag != 0 && tmpfileflag )
                 break;
             nFile++;
@@ -5812,6 +5841,8 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
                     pos.nFile = TMPFILE_START;
                     pos.nPos = (*ptr)[0].nSize;
                     // Increase temp file one's max size by a chunk, so we wait a reasonable time to recheck the other file.
+                    if (maxTempFileSize0 > uint64_t(std::numeric_limits<int64_t>::max()) - BLOCKFILE_CHUNK_SIZE)
+                        return state.Error("temporary block file size overflow");
                     maxTempFileSize0 += BLOCKFILE_CHUNK_SIZE;
                 }
                 else
@@ -5827,7 +5858,7 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
                     LogPrintf("Prune: deleted temp blk (%05u)\n",nFile);
                 }
                 if ( 0 && tmpflag != 0 )
-                    fprintf(stderr,"pos.nFile %d nPos %u\n",pos.nFile,pos.nPos);
+                    fprintf(stderr,"pos.nFile %d nPos %llu\n",pos.nFile,(unsigned long long)pos.nPos);
             }
             else if ( nFile == 2 ) // Trying to get to third temp file.
             {
@@ -5839,6 +5870,8 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
                     pos.nFile = TMPFILE_START+1;
                     pos.nPos = (*ptr)[1].nSize;
                     // Increase temp file one's max size by a chunk, so we wait a reasonable time to recheck the other file.
+                    if (maxTempFileSize1 > uint64_t(std::numeric_limits<int64_t>::max()) - BLOCKFILE_CHUNK_SIZE)
+                        return state.Error("temporary block file size overflow");
                     maxTempFileSize1 += BLOCKFILE_CHUNK_SIZE;
                 }
                 else
@@ -5854,7 +5887,7 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
                     LogPrintf("Prune: deleted temp blk (%05u)\n",nFile);
                 }
                 if ( 0 && tmpflag != 0 )
-                    fprintf(stderr,"pos.nFile %d nPos %u\n",pos.nFile,pos.nPos);
+                    fprintf(stderr,"pos.nFile %d nPos %llu\n",pos.nFile,(unsigned long long)pos.nPos);
             }
             //sleep(30);
         }
@@ -5863,15 +5896,14 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
         //fprintf(stderr, "*lastfilep = %i\n",*lastfilep);
     }
 
-    (*ptr)[nFile].AddBlock(nHeight, nTime);
-    if (fKnown)
-        (*ptr)[nFile].nSize = std::max(pos.nPos + nAddSize, (*ptr)[nFile].nSize);
-    else
-        (*ptr)[nFile].nSize += nAddSize;
+    uint64_t newSize, allocatedEnd;
+    if (!GetFileAllocationRange(pos.nPos, nAddSize, BLOCKFILE_CHUNK_SIZE, newSize, allocatedEnd) ||
+        (*ptr)[nFile].nSize > uint64_t(std::numeric_limits<int64_t>::max()))
+        return state.Error("block file position overflow");
 
     if (!fKnown) {
-        unsigned int nOldChunks = (pos.nPos + BLOCKFILE_CHUNK_SIZE - 1) / BLOCKFILE_CHUNK_SIZE;
-        unsigned int nNewChunks = ((*ptr)[nFile].nSize + BLOCKFILE_CHUNK_SIZE - 1) / BLOCKFILE_CHUNK_SIZE;
+        const uint64_t nOldChunks = pos.nPos / BLOCKFILE_CHUNK_SIZE + (pos.nPos % BLOCKFILE_CHUNK_SIZE != 0);
+        const uint64_t nNewChunks = allocatedEnd / BLOCKFILE_CHUNK_SIZE;
         if (nNewChunks > nOldChunks) {
             if (fPruneMode)
                 fCheckForPruning = true;
@@ -5888,45 +5920,40 @@ bool FindBlockPos(int32_t tmpflag,CValidationState &state, CDiskBlockPos &pos, u
         }
     }
 
+    (*ptr)[nFile].AddBlock(nHeight, nTime);
+    (*ptr)[nFile].nSize = std::max(newSize, (*ptr)[nFile].nSize);
     setDirtyFileInfo.insert(nFile + tmpflag*TMPFILE_START);
     return true;
 }
 
 bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, unsigned int nAddSize)
 {
-    std::vector<CBlockFileInfo> *ptr; int *lastfilep;
     LOCK(cs_LastBlockFile);
-    pos.nFile = nFile;
-    if ( nFile >= TMPFILE_START )
-    {
-        fprintf(stderr,"skip tmp undo\n");
-        return(false);
-        nFile %= TMPFILE_START;
-        ptr = &tmpBlockFiles;
-    } else ptr = &vinfoBlockFile;
+    if (nFile < 0 || nFile >= TMPFILE_START || size_t(nFile) >= vinfoBlockFile.size())
+        return state.Error("invalid undo file number");
 
-    unsigned int nNewSize;
-    pos.nPos = (*ptr)[nFile].nUndoSize;
-    nNewSize = (*ptr)[nFile].nUndoSize += nAddSize;
-    setDirtyFileInfo.insert(nFile);
+    const uint64_t oldSize = vinfoBlockFile[nFile].nUndoSize;
+    uint64_t newSize, allocatedEnd;
+    if (!GetFileAllocationRange(oldSize, nAddSize, UNDOFILE_CHUNK_SIZE, newSize, allocatedEnd))
+        return state.Error("undo file position overflow");
 
-    unsigned int nOldChunks = (pos.nPos + UNDOFILE_CHUNK_SIZE - 1) / UNDOFILE_CHUNK_SIZE;
-    unsigned int nNewChunks = (nNewSize + UNDOFILE_CHUNK_SIZE - 1) / UNDOFILE_CHUNK_SIZE;
-    if (nNewChunks > nOldChunks) {
+    const uint64_t oldChunks = oldSize / UNDOFILE_CHUNK_SIZE + (oldSize % UNDOFILE_CHUNK_SIZE != 0);
+    if (allocatedEnd / UNDOFILE_CHUNK_SIZE > oldChunks) {
+        if (!CheckDiskSpace(allocatedEnd - oldSize))
+            return state.Error("out of disk space");
+        FILE* file = OpenUndoFile(CDiskBlockPos(nFile, oldSize));
+        if (!file)
+            return state.Error("unable to open undo file for allocation");
+        LogPrintf("Pre-allocating up to position 0x%x in rev%05u.dat\n", allocatedEnd, nFile);
+        AllocateFileRange(file, oldSize, allocatedEnd - oldSize);
+        fclose(file);
         if (fPruneMode)
             fCheckForPruning = true;
-        if (CheckDiskSpace(nNewChunks * UNDOFILE_CHUNK_SIZE - pos.nPos)) {
-            FILE *file = OpenUndoFile(pos);
-            if (file) {
-                LogPrintf("Pre-allocating up to position 0x%x in rev%05u.dat\n", nNewChunks * UNDOFILE_CHUNK_SIZE, pos.nFile);
-                AllocateFileRange(file, pos.nPos, nNewChunks * UNDOFILE_CHUNK_SIZE - pos.nPos);
-                fclose(file);
-            }
-        }
-        else
-            return state.Error("out of disk space");
     }
 
+    pos = CDiskBlockPos(nFile, oldSize);
+    vinfoBlockFile[nFile].nUndoSize = newSize;
+    setDirtyFileInfo.insert(nFile);
     return true;
 }
 
@@ -6955,7 +6982,8 @@ FILE* OpenDiskFile(const CDiskBlockPos &pos, const char *prefix, bool fReadOnly)
 
     if (pos.nPos) // it has been asked to move to a specific location within the file
     {
-        if (fseek(file, pos.nPos, SEEK_SET)) {
+        if (pos.nPos > uint64_t(std::numeric_limits<int64_t>::max()) ||
+            !FileSeek(file, static_cast<int64_t>(pos.nPos), SEEK_SET)) {
             LogPrintf("Unable to seek to position %u of %s\n", pos.nPos, path.string());
             fclose(file);
             return NULL;

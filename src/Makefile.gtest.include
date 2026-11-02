@@ -54,6 +54,7 @@ pirate_gtest_SOURCES += \
 	gtest/test_addrman.cpp \
 	gtest/test_alerts.cpp \
 	gtest/test_buffered_file.cpp \
+	gtest/test_undo_storage.cpp \
 	gtest/test_coins.cpp \
 	gtest/test_cryptoconditions.cpp \
 	gtest/test_equihash.cpp \
