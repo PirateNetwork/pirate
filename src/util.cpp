@@ -33,6 +33,7 @@
 #include "komodo_globals.h"
 
 #include <stdarg.h>
+#include <limits>
 #include <sstream>
 #include <vector>
 #include <stdio.h>
@@ -915,9 +916,29 @@ void FileCommit(FILE *fileout)
 #endif
 }
 
-bool TruncateFile(FILE *file, unsigned int length) {
+bool FileSeek(FILE* file, int64_t offset, int origin) {
 #if defined(WIN32)
-    return _chsize(_fileno(file), length) == 0;
+    return _fseeki64(file, offset, origin) == 0;
+#else
+    static_assert(sizeof(off_t) >= sizeof(int64_t), "64-bit file offsets required");
+    return fseeko(file, static_cast<off_t>(offset), origin) == 0;
+#endif
+}
+
+int64_t FileTell(FILE* file) {
+#if defined(WIN32)
+    return _ftelli64(file);
+#else
+    static_assert(sizeof(off_t) >= sizeof(int64_t), "64-bit file offsets required");
+    return ftello(file);
+#endif
+}
+
+bool TruncateFile(FILE *file, uint64_t length) {
+    if (length > uint64_t(std::numeric_limits<int64_t>::max()))
+        return false;
+#if defined(WIN32)
+    return _chsize_s(_fileno(file), length) == 0;
 #else
     return ftruncate(fileno(file), length) == 0;
 #endif
@@ -950,14 +971,15 @@ int RaiseFileDescriptorLimit(int nMinFD) {
  * this function tries to make a particular range of a file allocated (corresponding to disk space)
  * it is advisory, and the range specified in the arguments will never contain live data
  */
-void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length) {
+void AllocateFileRange(FILE *file, uint64_t offset, uint64_t length) {
+    const uint64_t maxOffset = std::numeric_limits<int64_t>::max();
+    if (offset > maxOffset || length > maxOffset - offset)
+        return;
 #if defined(WIN32)
     // Windows-specific version
     HANDLE hFile = (HANDLE)_get_osfhandle(_fileno(file));
     LARGE_INTEGER nFileSize;
-    int64_t nEndPos = (int64_t)offset + length;
-    nFileSize.u.LowPart = nEndPos & 0xFFFFFFFF;
-    nFileSize.u.HighPart = nEndPos >> 32;
+    nFileSize.QuadPart = offset + length;
     SetFilePointerEx(hFile, nFileSize, 0, FILE_BEGIN);
     SetEndOfFile(hFile);
 #elif defined(MAC_OSX)
@@ -966,26 +988,26 @@ void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length) {
     fst.fst_flags = F_ALLOCATECONTIG;
     fst.fst_posmode = F_PEOFPOSMODE;
     fst.fst_offset = 0;
-    fst.fst_length = (off_t)offset + length;
+    // F_PEOFPOSMODE allocates from the physical EOF, so request only the
+    // additional range rather than the total logical file size.
+    fst.fst_length = static_cast<off_t>(length);
     fst.fst_bytesalloc = 0;
     if (fcntl(fileno(file), F_PREALLOCATE, &fst) == -1) {
         fst.fst_flags = F_ALLOCATEALL;
         fcntl(fileno(file), F_PREALLOCATE, &fst);
     }
-    ftruncate(fileno(file), fst.fst_length);
+    ftruncate(fileno(file), static_cast<off_t>(offset + length));
 #elif defined(__linux__)
     // Version using posix_fallocate
-    off_t nEndPos = (off_t)offset + length;
-    posix_fallocate(fileno(file), 0, nEndPos);
+    posix_fallocate(fileno(file), static_cast<off_t>(offset), static_cast<off_t>(length));
 #else
     // Fallback version
     // TODO: just write one byte per block
     static const char buf[65536] = {};
-    fseek(file, offset, SEEK_SET);
+    if (!FileSeek(file, static_cast<int64_t>(offset), SEEK_SET))
+        return;
     while (length > 0) {
-        unsigned int now = 65536;
-        if (length < now)
-            now = length;
+        const size_t now = static_cast<size_t>(std::min<uint64_t>(sizeof(buf), length));
         fwrite(buf, 1, now, file); // allowed to fail; this function is advisory anyway
         length -= now;
     }

@@ -24,6 +24,7 @@
 #include "serialize.h"
 #include "support/allocators/secure.h"
 #include "support/allocators/zeroafterfree.h"
+#include "util.h"
 
 #include <algorithm>
 #include <assert.h>
@@ -804,14 +805,15 @@ public:
 
     bool Seek(uint64_t nPos)
     {
-        long nLongPos = nPos;
-        if (nPos != (uint64_t)nLongPos)
+        if (nPos > uint64_t(std::numeric_limits<int64_t>::max()))
             return false;
-        if (fseek(src, nLongPos, SEEK_SET))
+        if (!FileSeek(src, static_cast<int64_t>(nPos), SEEK_SET))
             return false;
-        nLongPos = ftell(src);
-        nSrcPos = nLongPos;
-        nReadPos = nLongPos;
+        const int64_t position = FileTell(src);
+        if (position < 0)
+            return false;
+        nSrcPos = position;
+        nReadPos = position;
         return true;
     }
 

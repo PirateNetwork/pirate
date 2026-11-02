@@ -34,6 +34,7 @@
 #include "utiltime.h"
 
 #include <atomic>
+#include <cstdio>
 #include <exception>
 #include <map>
 #include <stdint.h>
@@ -137,9 +138,12 @@ const boost::filesystem::path &ZC_GetParamsDir();
 void PrintExceptionContinue(const std::exception *pex, const char* pszThread);
 void ParseParameters(int argc, const char*const argv[]);
 void FileCommit(FILE *fileout);
-bool TruncateFile(FILE *file, unsigned int length);
+/** Seek/tell without narrowing file positions to a platform's long type. */
+bool FileSeek(FILE* file, int64_t offset, int origin);
+int64_t FileTell(FILE* file);
+bool TruncateFile(FILE *file, uint64_t length);
 int RaiseFileDescriptorLimit(int nMinFD);
-void AllocateFileRange(FILE *file, unsigned int offset, unsigned int length);
+void AllocateFileRange(FILE *file, uint64_t offset, uint64_t length);
 bool RenameOver(boost::filesystem::path src, boost::filesystem::path dest);
 bool TryCreateDirectory(const boost::filesystem::path& p);
 /**
