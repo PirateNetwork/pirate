@@ -746,9 +746,10 @@ TEST_P(WalletWitnessTest, NoteDiscoveryMatchesSingleWorkerAcrossTransactions)
     }
 }
 
-TEST_P(WalletWitnessTest, LargeSaplingBundleStillRequiresValidProofsAndBindingSignature)
+class SaplingWalletWitnessTest : public WalletWitnessTest {};
+
+TEST_P(SaplingWalletWitnessTest, LargeSaplingBundleStillRequiresValidProofsAndBindingSignature)
 {
-    if (GetParam() != WitnessPool::Sapling) GTEST_SKIP();
     const auto tx = Shield(true, 32);
     const auto outputs = tx.GetSaplingOutputs();
     ASSERT_GE(outputs.size(), 32u);
@@ -779,6 +780,9 @@ TEST_P(WalletWitnessTest, LargeSaplingBundleStillRequiresValidProofsAndBindingSi
         EXPECT_FALSE(check(CTransaction(malformed), false, false));
     }
 }
+
+INSTANTIATE_TEST_CASE_P(SaplingOnly, SaplingWalletWitnessTest,
+    ::testing::Values(WitnessPool::Sapling));
 
 TEST_P(WalletWitnessTest, MarkedNotesSurviveRebuildSerializationAndRewind)
 {
@@ -1015,5 +1019,5 @@ TEST_P(WalletWitnessTest, TransactionValidationMatchesIndependentSingleNoteRepla
     EXPECT_FALSE(shifted->Validate(GetParam(), chainActive[4]));
 }
 
-INSTANTIATE_TEST_SUITE_P(ShieldedPools, WalletWitnessTest,
+INSTANTIATE_TEST_CASE_P(ShieldedPools, WalletWitnessTest,
     ::testing::Values(WitnessPool::Sapling, WitnessPool::Ironwood));

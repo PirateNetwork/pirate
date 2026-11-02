@@ -341,5 +341,5 @@ TEST_P(WalletRescanTest, GenesisActivationDoesNotRequireAPredecessor)
     EXPECT_TRUE(wallet->IsValidated(GetParam()));
 }
 
-INSTANTIATE_TEST_SUITE_P(ShieldedPools, WalletRescanTest,
+INSTANTIATE_TEST_CASE_P(ShieldedPools, WalletRescanTest,
     ::testing::Values(RescanPool::Sapling, RescanPool::Ironwood));

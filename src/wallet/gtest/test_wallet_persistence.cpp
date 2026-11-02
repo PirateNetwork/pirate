@@ -288,7 +288,7 @@ static std::vector<PersistenceFailure> PersistenceFailures()
     return result;
 }
 
-INSTANTIATE_TEST_SUITE_P(AtomicWrites, WalletPersistenceTest, ::testing::ValuesIn(PersistenceFailures()));
+INSTANTIATE_TEST_CASE_P(AtomicWrites, WalletPersistenceTest, ::testing::ValuesIn(PersistenceFailures()));
 
 TEST_F(WalletPersistenceTest, LockedEncryptedWalletDefersWithoutPlaintextWritesOrLosingPendingRecords)
 {
