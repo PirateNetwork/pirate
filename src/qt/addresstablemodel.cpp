@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -482,14 +483,27 @@ bool AddressTableModel::removeRows(int row, int count, const QModelIndex &parent
  */
 QString AddressTableModel::labelForAddress(const QString &address) const
 {
-    {
-        LOCK(wallet->cs_wallet);
+    // Answer from this model's copy of the address book where possible. The
+    // transaction list calls this for every row it paints, and the GUI thread
+    // must never wait for cs_wallet: a core thread raising a modal dialog can
+    // hold it while it waits for this thread to show the dialog. The copy holds
+    // every address book entry under its canonical encoding, is kept sorted by
+    // it, and is kept current by updateEntry().
+    const QList<AddressTableEntry>& table = priv->cachedAddressTable;
+    QList<AddressTableEntry>::const_iterator entry = std::lower_bound(
+        table.begin(), table.end(), address, AddressTableEntryLessThan());
+    if (entry != table.end() && entry->address == address)
+        return entry->label;
+
+    // Not in the copy. The entry may be newer than it - changes made before the
+    // wallet model subscribes to notifications never reach it - or the address
+    // may not be in canonical form. Ask the wallet, but only if it is free.
+    TRY_LOCK(wallet->cs_wallet, lockWallet);
+    if (lockWallet) {
         CTxDestination destination = DecodeDestination(address.toStdString());
         std::map<CTxDestination, CAddressBookData>::iterator mi = wallet->mapAddressBook.find(destination);
         if (mi != wallet->mapAddressBook.end())
-        {
             return QString::fromStdString(mi->second.name);
-        }
     }
     return QString();
 }

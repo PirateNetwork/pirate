@@ -202,8 +202,14 @@ public:
         try {
             return CCoinsViewBacked::GetCoins(txid, coins);
         } catch(const std::runtime_error& e) {
-            uiInterface.ThreadSafeMessageBox(_("Error reading from database, shutting down."), "", CClientUIInterface::MSG_ERROR);
+            // Log before raising the dialog. It holds this thread until the
+            // operator answers, and debug.log is unbuffered, so the cause is on
+            // disk whatever happens on screen.
             LogPrintf("Error reading from database: %s\n", e.what());
+            // pcoinsTip is guarded by cs_main, so the dialog is raised with it
+            // held and the node stays frozen until it is acknowledged: nothing
+            // else runs against a database already known to be unreadable.
+            uiInterface.ThreadSafeMessageBox(_("Error reading from database, shutting down."), "", CClientUIInterface::MSG_ERROR);
             // Starting the shutdown sequence and returning false to the caller would be
             // interpreted as 'entry not found' (as opposed to unable to read data), and
             // could lead to invalid interpretation. Just exit immediately, as we can't
@@ -2217,10 +2223,25 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             {
                 if (!fReset) // suggest a reindex if we haven't already
                 {
-                    bool fRet = uiInterface.ThreadSafeMessageBox(
-                        strLoadError + ".\n\n" + _("error in HDD data, might just need to update to latest, if that doesnt work, then you need to resync"),
+                    // The answer is a button code, not a flag. BTN_ABORT is
+                    // non-zero just as BTN_OK is, so reading it as a bool made
+                    // Abort start the very rebuild it was meant to decline;
+                    // only dismissing the dialog outright ever reached the
+                    // exit branch.
+                    int nRet = uiInterface.ThreadSafeMessageBox(
+                        strLoadError + ".\n\n" +
+                        _("Pirate could not open its copy of the block chain. This is "
+                          "usually caused by damaged data, for example after a power cut, "
+                          "a full disk, or a crash.\n\n"
+                          "Press OK to rebuild the block chain data from the block files "
+                          "already on this computer. This can take several hours, and "
+                          "Pirate cannot be used until it has finished. Your wallet file, "
+                          "with your addresses and funds, is not erased by this.\n\n"
+                          "Press Abort to close Pirate now without changing anything, so "
+                          "you can back up your files or ask for help first. You can "
+                          "start Pirate again at any time."),
                         "", CClientUIInterface::MSG_ERROR | CClientUIInterface::BTN_ABORT);
-                    if (fRet)
+                    if (nRet == CClientUIInterface::BTN_OK)
                     {
                         // we should try again, but this time reindex
                         fReindex = true;

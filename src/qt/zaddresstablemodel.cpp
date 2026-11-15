@@ -138,11 +138,15 @@ public:
     int sortColumn;
     Qt::SortOrder sortOrder;
 
+    /** Retries refreshAddressTableWhenFree() while the core holds its locks */
+    QTimer *refreshRetryTimer;
+
     ZAddressTablePriv(CWallet *_wallet, ZAddressTableModel *_parent):
         wallet(_wallet),
         parent(_parent),
         sortColumn(-1),
-        sortOrder(Qt::AscendingOrder)
+        sortOrder(Qt::AscendingOrder),
+        refreshRetryTimer(nullptr)
     {
     }
 
@@ -225,6 +229,49 @@ public:
                 }
             }
         }
+    }
+
+    ~ZAddressTablePriv()
+    {
+        if (refreshRetryTimer) {
+            refreshRetryTimer->stop();
+            delete refreshRetryTimer;
+        }
+    }
+
+    /**
+     * Rebuild the whole table now if cs_main and cs_wallet are free, otherwise
+     * shortly. Address book notifications arrive on the GUI thread, which must
+     * never wait for those locks: a core thread raising a modal dialog holds
+     * them while it waits for this thread to show it. Each refresh rebuilds
+     * everything, so any number of deferred ones collapse into the next that
+     * succeeds.
+     */
+    void refreshAddressTableWhenFree()
+    {
+        {
+            TRY_LOCK(cs_main, lockMain);
+            if (lockMain) {
+                TRY_LOCK(wallet->cs_wallet, lockWallet);
+                if (lockWallet) {
+                    // refreshAddressTable() takes both again. They are
+                    // recursive, so it has them at once.
+                    parent->beginResetModel();
+                    refreshAddressTable();
+                    parent->endResetModel();
+                    return;
+                }
+            }
+        }
+        if (!refreshRetryTimer) {
+            refreshRetryTimer = new QTimer();
+            refreshRetryTimer->setSingleShot(true);
+            QObject::connect(refreshRetryTimer, &QTimer::timeout, [this]() {
+                refreshAddressTableWhenFree();
+            });
+        }
+        if (!refreshRetryTimer->isActive())
+            refreshRetryTimer->start(MODEL_UPDATE_DELAY);
     }
 
     void refreshAddressTable()
@@ -554,9 +601,7 @@ public:
                 
                 // For grouped entries, add after the group header or at end
                 // For now, just refresh the entire table to maintain grouping
-                parent->beginResetModel();
-                refreshAddressTable();
-                parent->endResetModel();
+                refreshAddressTableWhenFree();
                 break;
                 
             case CT_UPDATED:
@@ -598,9 +643,7 @@ public:
                     break;
                 }
                 // For grouped entries, refresh the entire table to maintain grouping
-                parent->beginResetModel();
-                refreshAddressTable();
-                parent->endResetModel();
+                refreshAddressTableWhenFree();
                 break;
             }
         }

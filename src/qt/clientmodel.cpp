@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -141,9 +142,25 @@ double ClientModel::getVerificationProgress(const CBlockIndex *tipIn) const
 
 void ClientModel::updateTimer()
 {
-    // no locking required at this point
-    // the following calls will acquire the required lock
-    Q_EMIT mempoolSizeChanged(getMempoolSize(), getMempoolDynamicUsage());
+    // Never wait for the mempool lock on the GUI thread. A core thread can raise
+    // a modal dialog while holding it - AcceptToMemoryPool reads coins under
+    // pool.cs, and an unreadable coins database reports from there - and that
+    // thread then waits for this one to show the dialog. Skip this tick instead;
+    // the next is MODEL_UPDATE_DELAY away. The getters take the lock again,
+    // which succeeds at once since it is recursive.
+    long mempoolCount = 0;
+    size_t mempoolBytes = 0;
+    bool fMempoolRead = false;
+    {
+        TRY_LOCK(mempool.cs, lockMempool);
+        if (lockMempool) {
+            mempoolCount = getMempoolSize();
+            mempoolBytes = getMempoolDynamicUsage();
+            fMempoolRead = true;
+        }
+    }
+    if (fMempoolRead)
+        Q_EMIT mempoolSizeChanged(mempoolCount, mempoolBytes);
     Q_EMIT bytesChanged(getTotalBytesRecv(), getTotalBytesSent());
 }
 

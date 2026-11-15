@@ -115,7 +115,10 @@ protected:
                 if (progressHook) progressHook(title, percent);
             });
         errorConnection = uiInterface.ThreadSafeMessageBox.connect(
-            [](const std::string&, const std::string&, unsigned int) { return false; });
+            [this](const std::string& message, const std::string& caption, unsigned int style) {
+                uiMessages.push_back({message, caption, style, ShutdownRequested()});
+                return false;
+            });
     }
 
     void TearDown() override
@@ -195,14 +198,41 @@ protected:
         });
     }
 
+    // A wallet persistence failure is reported with a modal dialog, raised
+    // while the caller still holds its locks so the node stays frozen until the
+    // operator has read it. It must be raised before shutdown is requested: the
+    // GUI's shutdown poll quits the application, which closes every event loop
+    // on the GUI thread, the dialog's included.
+    void ExpectModalWalletErrorBeforeShutdown() const
+    {
+        ASSERT_FALSE(uiMessages.empty());
+        const UiMessage& first = uiMessages.front();
+        EXPECT_EQ("Wallet error", first.caption);
+        EXPECT_TRUE(first.style & CClientUIInterface::MODAL) << first.message;
+        EXPECT_TRUE(first.style & CClientUIInterface::ICON_ERROR) << first.message;
+        EXPECT_FALSE(first.shutdownRequestedWhenRaised)
+            << "dialog raised after shutdown was requested; the shutdown poll would close it: "
+            << first.message;
+        EXPECT_NE(std::string::npos, first.message.find("Check disk space and debug.log"))
+            << first.message;
+        EXPECT_TRUE(ShutdownRequested());
+    }
+
     struct Progress {
         std::string title;
         int percent;
+    };
+    struct UiMessage {
+        std::string message;
+        std::string caption;
+        unsigned int style;
+        bool shutdownRequestedWhenRaised;
     };
     ScanTestWallet* wallet = nullptr;
     CScript receiptScript;
     std::vector<uint256> receiptTxids;
     std::vector<Progress> progress;
+    std::vector<UiMessage> uiMessages;
     std::function<void(const std::string&, int)> progressHook;
     std::unique_ptr<ScanCoinsView> coins;
 
@@ -369,6 +399,7 @@ TEST_F(WalletScanTest, FailedRestartSaveDoesNotBeginScanning)
     EXPECT_TRUE(ShutdownRequested());
     ASSERT_FALSE(progress.empty());
     EXPECT_EQ("Wallet rescan failed", progress.back().title);
+    ExpectModalWalletErrorBeforeShutdown();
 }
 
 TEST_F(WalletScanTest, FailedCompletionSaveRetainsTheRestartPoint)
@@ -393,6 +424,7 @@ TEST_F(WalletScanTest, FailedCompletionSaveRetainsTheRestartPoint)
     EXPECT_TRUE(wallet->fRunSetBestChain);
     ASSERT_FALSE(progress.empty());
     EXPECT_EQ("Wallet rescan failed", progress.back().title);
+    ExpectModalWalletErrorBeforeShutdown();
     EXPECT_TRUE(wallet->FlushBestChain());
     EXPECT_EQ(restartHash, SavedBestBlock());
 }
@@ -439,6 +471,39 @@ TEST_F(WalletScanTest, FailedChainTipProcessingKeepsThePreviousWalletPosition)
     EXPECT_TRUE(ShutdownRequested());
     EXPECT_EQ(4, wallet->chainHeight);
     EXPECT_EQ(previousHash, SavedBestBlock());
+    ExpectModalWalletErrorBeforeShutdown();
+}
+
+// cs_main and cs_wallet are held here exactly as validation holds them when it
+// drives ChainTip from ConnectTip. The report is a modal dialog raised from that
+// position, which is what freezes the node until the operator has read it. This
+// covers the wallet's side: the flags it asks for and the order relative to
+// shutdown. Whether the GUI thread can then service the dialog without blocking
+// on those same locks is not reachable from pirate-gtest, which has no GUI
+// thread, and is not covered anywhere.
+TEST_F(WalletScanTest, FatalWalletReportIsModalAndPrecedesShutdown)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, connectedIndex, 1));
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    ASSERT_TRUE(uiMessages.empty());
+    chainActive.SetTip(connectedIndex);
+
+    // Hand the block over intact and fail only the write, so the report comes
+    // from the save rather than from unreadable block data.
+    const std::string originalFile = wallet->strWalletFile;
+    wallet->strWalletFile = "uncreated-chaintip-failure.dat";
+    wallet->fRunSetBestChain = true;
+
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+
+    wallet->strWalletFile = originalFile;
+    ASSERT_EQ(1u, uiMessages.size());
+    ExpectModalWalletErrorBeforeShutdown();
 }
 
 TEST_F(WalletScanTest, InterruptedChainTipRebuildKeepsThePreviousWalletPosition)

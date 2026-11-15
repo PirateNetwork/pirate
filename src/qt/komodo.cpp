@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -98,6 +99,7 @@ Q_IMPORT_PLUGIN(QCocoaIntegrationPlugin);
 
 // Declare meta types used for QMetaObject::invokeMethod
 Q_DECLARE_METATYPE(bool*)
+Q_DECLARE_METATYPE(int*)
 Q_DECLARE_METATYPE(CAmount)
 
 static void InitMessage(const std::string &message)
@@ -662,6 +664,11 @@ int main(int argc, char *argv[])
 
     // Register meta types used for QMetaObject::invokeMethod
     qRegisterMetaType< bool* >();
+    // PirateOceanGUI::message() reports a button code through an int*. A queued
+    // delivery marshals its arguments by type name and drops the whole call for
+    // a name it does not know, which is why a non-modal message never reached
+    // the GUI at all before this was registered.
+    qRegisterMetaType< int* >();
     //   Need to pass name here as CAmount is a typedef (see http://qt-project.org/doc/qt-5/qmetatype.html#qRegisterMetaType)
     //   IMPORTANT if it is no longer a typedef use the normal variant above
     qRegisterMetaType< CAmount >("CAmount");

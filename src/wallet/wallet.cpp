@@ -129,11 +129,21 @@ bool fWalletRbf = DEFAULT_WALLET_RBF;
 /** Whether transaction deletion is enabled for wallet cleanup */
 bool fTxDeleteEnabled = false;
 
+/**
+ * @brief Report a fatal wallet persistence failure and begin shutdown
+ * @param message Operator-facing description of what could not be saved
+ *
+ * The dialog is raised before shutdown is requested. Callers hold cs_main,
+ * cs_wallet or both, so the modal freezes the node until the operator has read
+ * it. Requesting shutdown first would let the GUI's shutdown poll quit the
+ * application, which closes every event loop on that thread - the dialog's
+ * included - before anyone could read it.
+ */
 static void ReportWalletSaveFailure(const std::string& message)
 {
     LogPrintf("Wallet persistence failure: %s\n", message);
-    StartShutdown();
     uiInterface.ThreadSafeMessageBox(message, _("Wallet error"), CClientUIInterface::MSG_ERROR);
+    StartShutdown();
 }
 
 /** Whether conflicted transaction deletion is enabled */

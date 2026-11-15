@@ -140,7 +140,9 @@ public:
         lazyLoadTimer(nullptr),
         lastRebuildTime(0),
         rebuildPendingTimer(nullptr),
-        rebuildPending(false)
+        rebuildPending(false),
+        pendingWalletUpdateTimer(nullptr),
+        applyingWalletUpdate(false)
     {
     }
     
@@ -153,6 +155,10 @@ public:
         if (rebuildPendingTimer) {
             rebuildPendingTimer->stop();
             delete rebuildPendingTimer;
+        }
+        if (pendingWalletUpdateTimer) {
+            pendingWalletUpdateTimer->stop();
+            delete pendingWalletUpdateTimer;
         }
     }
 
@@ -189,6 +195,37 @@ public:
      */
     QTimer* rebuildPendingTimer;  ///< Timer for deferred rebuilds
     bool rebuildPending;          ///< True if rebuild was deferred during blackout
+    /**@}*/
+
+    /** @name Deferred wallet updates
+     * @{
+     */
+    /** A wallet notification waiting for the locks it needs. */
+    struct PendingWalletUpdate {
+        uint256 hash;
+        int status;
+        bool showTransaction;
+    };
+    /**
+     * Wallet notifications not yet applied, oldest first.
+     *
+     * The GUI thread never waits for cs_main or cs_wallet. A core thread that
+     * raises a modal dialog holds them while it waits for this thread to show
+     * the dialog, so waiting here would leave each thread waiting on the other.
+     * A notification that cannot take the locks is parked instead, and every
+     * later one queues behind it, so they are still applied in arrival order -
+     * a later update overtaking an earlier one could re-show a transaction that
+     * has since been hidden.
+     */
+    QList<PendingWalletUpdate> pendingWalletUpdates;
+    QTimer* pendingWalletUpdateTimer;  ///< Retries pendingWalletUpdates
+    /**
+     * Set while an update is being applied. Applying can reset the model, and
+     * the filter proxy pumps the event loop while it re-filters, so a queued
+     * notification or a retry can arrive part way through one. Those are
+     * parked rather than applied on top of it.
+     */
+    bool applyingWalletUpdate;
     /**@}*/
     
     /**
@@ -412,7 +449,18 @@ public:
         
         // Build sorted archive of all transactions (newest first)
         {
-            LOCK2(cs_main, wallet->cs_wallet);
+            // Never wait for these on the GUI thread: a core thread raising a
+            // modal dialog holds them while it waits for this one to show it.
+            TRY_LOCK(cs_main, lockMain);
+            if (!lockMain) {
+                retryStartLazyLoad();
+                return;
+            }
+            TRY_LOCK(wallet->cs_wallet, lockWallet);
+            if (!lockWallet) {
+                retryStartLazyLoad();
+                return;
+            }
             std::map<std::pair<int,int>, uint256> sortedArchive; // (height, index) -> txid
             std::set<uint256> addedTxids;
             
@@ -484,6 +532,19 @@ public:
             initialLoadComplete = true;
         }
     }
+
+    /**
+     * startLazyLoad() could not take its locks: give up its claim on the load,
+     * so the retry is not mistaken for a load already under way, and try again
+     * shortly. Tied to the model, so a pending retry dies with it.
+     */
+    void retryStartLazyLoad()
+    {
+        lazyLoadInProgress = false;
+        QTimer::singleShot(MODEL_UPDATE_DELAY, parent, [this]() {
+            this->startLazyLoad();
+        });
+    }
     
     /**
      * Process one batch of lazy-loaded transactions.
@@ -519,7 +580,16 @@ public:
         
         // Process transactions from pre-built sorted archive
         {
-            LOCK2(cs_main, wallet->cs_wallet);
+            // Never wait for these on the GUI thread: a core thread raising a
+            // modal dialog holds them while it waits for this one to show it.
+            // Nothing has changed yet, and the timer calls again in 100ms from
+            // the same position.
+            TRY_LOCK(cs_main, lockMain);
+            if (!lockMain)
+                return;
+            TRY_LOCK(wallet->cs_wallet, lockWallet);
+            if (!lockWallet)
+                return;
             
             for (int i = startPos; i < lazySortedArchive.size(); i++)
             {
@@ -1140,8 +1210,9 @@ public:
         
         // Start lazy loading remaining transactions in background for caching and indexing
         // Indexes will be built after lazy load completes
-        // Use QTimer::singleShot to start after returning to event loop
-        QTimer::singleShot(500, [this]() {
+        // Use QTimer::singleShot to start after returning to event loop. Tied to
+        // the model, so it cannot fire after the model is gone.
+        QTimer::singleShot(500, parent, [this]() {
             this->startLazyLoad();
         });
     }
@@ -1150,9 +1221,66 @@ public:
      * @brief Update wallet incrementally, to synchronize our model of the wallet
        with that of the core.
 
-       Call with transaction that was added, removed or changed.
+       Call with transaction that was added, removed or changed. Applied at once
+       when the locks it needs are free, otherwise queued behind any update
+       already waiting; see pendingWalletUpdates.
      */
     void updateWallet(const uint256 &hash, int status, bool showTransaction)
+    {
+        if (!applyingWalletUpdate && pendingWalletUpdates.isEmpty() &&
+            tryApplyWalletUpdate(hash, status, showTransaction))
+            return;
+        pendingWalletUpdates.append({hash, status, showTransaction});
+        schedulePendingWalletUpdates();
+    }
+
+    /** Retry pendingWalletUpdates shortly, unless a retry is already due. */
+    void schedulePendingWalletUpdates()
+    {
+        if (!pendingWalletUpdateTimer) {
+            pendingWalletUpdateTimer = new QTimer();
+            pendingWalletUpdateTimer->setSingleShot(true);
+            QObject::connect(pendingWalletUpdateTimer, &QTimer::timeout, [this]() {
+                applyPendingWalletUpdates();
+            });
+        }
+        if (!pendingWalletUpdateTimer->isActive())
+            pendingWalletUpdateTimer->start(MODEL_UPDATE_DELAY);
+    }
+
+    /** Apply parked updates in arrival order, stopping at the first that still cannot. */
+    void applyPendingWalletUpdates()
+    {
+        // A retry that lands inside an update being applied waits its turn; see
+        // applyingWalletUpdate. The outer drain picks up anything parked meanwhile.
+        if (applyingWalletUpdate) {
+            schedulePendingWalletUpdates();
+            return;
+        }
+        while (!pendingWalletUpdates.isEmpty()) {
+            const PendingWalletUpdate next = pendingWalletUpdates.first();
+            if (!tryApplyWalletUpdate(next.hash, next.status, next.showTransaction)) {
+                schedulePendingWalletUpdates();
+                return;
+            }
+            pendingWalletUpdates.removeFirst();
+        }
+    }
+
+    /** applyWalletUpdate(), marked as in progress; see applyingWalletUpdate. */
+    bool tryApplyWalletUpdate(const uint256 &hash, int status, bool showTransaction)
+    {
+        applyingWalletUpdate = true;
+        const bool applied = applyWalletUpdate(hash, status, showTransaction);
+        applyingWalletUpdate = false;
+        return applied;
+    }
+
+    /**
+     * Apply one wallet notification to the model.
+     * @returns false, having changed nothing, if the locks it needs were busy
+     */
+    bool applyWalletUpdate(const uint256 &hash, int status, bool showTransaction)
     {
 
         // Find bounds of this transaction in model using binary search
@@ -1191,7 +1319,14 @@ public:
                 bool fIncludeWatchonly = true;
 
                 {
-                    LOCK2(cs_main, wallet->cs_wallet);
+                    // Never wait for these on the GUI thread; the caller parks
+                    // the update and retries it. See pendingWalletUpdates.
+                    TRY_LOCK(cs_main, lockMain);
+                    if (!lockMain)
+                        return false;
+                    TRY_LOCK(wallet->cs_wallet, lockWallet);
+                    if (!lockWallet)
+                        return false;
                     
                     //Try mapWallet first
                     std::map<uint256, CWalletTx>::iterator mi = wallet->mapWallet.find(hash);
@@ -1216,9 +1351,10 @@ public:
                 } // Release both locks before GUI operations
 
                 if (!isActiveTx && !isArchiveTx) {
-                    parent->beginRemoveRows(QModelIndex(), lowerIndex, upperIndex-1);
-                    cachedWallet.erase(lower, upper);
-                    parent->endRemoveRows();
+                    // Gone from the wallet before it could be shown. It was
+                    // never in the model - an entry already there took the
+                    // branch above - so there is no row to remove, and asking
+                    // to remove the empty range lower..lower-1 is invalid.
                     break;
                 }
 
@@ -1378,6 +1514,7 @@ public:
             }
             break;
         }
+        return true;
     }
 
     /**

@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -1543,13 +1544,17 @@ static int ThreadSafeMessageBox(PirateOceanGUI *gui, const std::string& message,
     // bool secure = (style & CClientUIInterface::SECURE);
     style &= ~CClientUIInterface::SECURE;
     int ret = CClientUIInterface::BTN_CANCEL;
-    // In case of modal message, use blocking connection to wait for user to click a button
+    // In case of modal message, use blocking connection to wait for user to click a button.
+    //
+    // ret is only reachable from a connection that runs before this frame
+    // returns. A queued delivery arrives after it, so posting its address would
+    // hand the slot a pointer into a dead stack.
     QMetaObject::invokeMethod(gui, "message",
                                modal ? GUIUtil::blockingGUIThreadConnection() : Qt::QueuedConnection,
                                Q_ARG(QString, QString::fromStdString(caption)),
                                Q_ARG(QString, QString::fromStdString(message)),
                                Q_ARG(unsigned int, style),
-                               Q_ARG(int*, &ret));
+                               Q_ARG(int*, modal ? &ret : nullptr));
     return ret;
 }
 
