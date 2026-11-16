@@ -3128,8 +3128,19 @@ bool CWallet::NeedsKDFUpgrade() const
  */
 
 /**
+ * Whether a shielded pool's commitment tree has processed pindex, or had
+ * nothing to process there because its upgrade is not yet active.
+ */
+static bool ShieldedPoolReached(const CBlockIndex* pindex, Consensus::UpgradeIndex upgrade, int lastCheckpoint)
+{
+    return !NetworkUpgradeActive(pindex->nHeight, Params().GetConsensus(), upgrade) ||
+           lastCheckpoint >= pindex->nHeight;
+}
+
+/**
  * @brief Handle blockchain tip changes
- * @param pindex The new block index at the chain tip
+ * @param pindex The block connected at the chain tip, or the block just
+ *               disconnected from it (the tip is then its parent)
  * @param pblock The block data (if available)
  * @param added True if block was added, false if removed
  * 
@@ -3156,29 +3167,41 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
 
     try {
         if (added) {
+            // The position is saved together with both trees, and must never
+            // trail a tree saved with it: on the next start, a pool whose tree is
+            // ahead of the saved position is rebuilt from the wallet's oldest
+            // note. A pool behind it is harmless, because startup rescans from
+            // the saved position and the pool rebuilds itself on that block.
+            //
+            // Only a rebuild stops for shutdown, and it stops before the block
+            // it was rebuilding towards. If Sapling stops short, nothing has
+            // passed the previous position yet, so keep it. Once Sapling has
+            // reached pindex the position must follow it, whether or not
+            // Ironwood then stops short.
             IncrementSaplingWallet(pindex, pblock);
-            // An interrupted rebuild must retain the previous wallet position.
-            if (ShutdownRequested()) {
+            if (ShutdownRequested() &&
+                !ShieldedPoolReached(pindex, Consensus::UPGRADE_SAPLING, saplingWallet.GetLastCheckpointHeight())) {
                 return;
             }
             IncrementIronwoodWallet(pindex, pblock);
-            if (ShutdownRequested()) {
-                return;
-            }
-            // Prevent consolidation & sweep transactions
-            // from being created when node is syncing after launch,
-            // and also when node wakes up from suspension/hibernation and incoming blocks are old.
-            bool initialDownloadCheck = IsInitialBlockDownload();
-            if (!initialDownloadCheck &&
-                pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
-            {
-                RunSaplingConsolidation(pindex->nHeight);
-                RunIronwoodConsolidation(pindex->nHeight);
-                RunSaplingSweep(pindex->nHeight);
-                while(DeleteWalletTransactions(pindex, false)) {}
-            } else {
-                if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
+            // Skip consolidation, sweep and cleanup once shutdown has been
+            // requested. The position reached above is still recorded below.
+            if (!ShutdownRequested()) {
+                // Prevent consolidation & sweep transactions
+                // from being created when node is syncing after launch,
+                // and also when node wakes up from suspension/hibernation and incoming blocks are old.
+                bool initialDownloadCheck = IsInitialBlockDownload();
+                if (!initialDownloadCheck &&
+                    pblock->GetBlockTime() > GetTime() - 8640) //Last 144 blocks 2.4 * 60 * 60
+                {
+                    RunSaplingConsolidation(pindex->nHeight);
+                    RunIronwoodConsolidation(pindex->nHeight);
+                    RunSaplingSweep(pindex->nHeight);
                     while(DeleteWalletTransactions(pindex, false)) {}
+                } else {
+                    if (initialDownloadCheck && pindex->nHeight % fDeleteInterval == 0) {
+                        while(DeleteWalletTransactions(pindex, false)) {}
+                    }
                 }
             }
 
@@ -3197,12 +3220,20 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
     // this sometimes; the wallet state will be brought up to date
     // during rescanning on startup.
     {
-        // The locator must be derived from the pindex used to increment
-        // the witnesses above; pindex can be behind chainActive.Tip().
+        // The position is the block the wallet has processed through. When
+        // pindex was connected that is pindex (Sapling has reached it; see the
+        // guards above for Ironwood). When it was disconnected it is the
+        // parent: the decrements above rewound both trees to it, and the chain
+        // tip has already moved back there. Recording pindex itself would name
+        // a block that is no longer in the chain, one above the trees.
+        // Derive the locator from that block, not from chainActive.Tip().
         // set the currentBlock and chainHeight in memory even if the wallet is not flushed to Disk
         // Needed to report to the GUI on Locked wallets
-        currentBlock = chainActive.GetLocator(pindex);
-        chainHeight = pindex->nHeight;
+        const CBlockIndex* pindexWallet = added ? pindex : pindex->pprev;
+        if (pindexWallet) {
+            currentBlock = chainActive.GetLocator(pindexWallet);
+            chainHeight = pindexWallet->nHeight;
+        }
     }
     int64_t nNow = GetTimeMicros();
     if (nLastSetChain == 0) {

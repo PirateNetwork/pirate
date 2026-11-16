@@ -553,3 +553,175 @@ TEST_F(WalletScanTest, InterruptedChainTipRebuildKeepsThePreviousWalletPosition)
     EXPECT_EQ(SaplingMerkleFrontier::empty_root(), reopened.SaplingAnchor());
     EXPECT_EQ(IronwoodMerkleFrontier::empty_root(), reopened.IronwoodAnchor());
 }
+
+// Shutdown can be requested while any block is being connected. Here both pools
+// update by one block, which shutdown does not interrupt - only a rebuild stops
+// for it - so both reach the block, and the saved position has to follow them.
+// Left behind, it would be saved with trees already past it, and the next start
+// would find the trees ahead of its scan position and rebuild them from the
+// wallet's oldest note.
+TEST_F(WalletScanTest, ShutdownDuringCompletedChainTipRecordsTheNewPosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, connectedIndex, 1));
+
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    ASSERT_EQ(chainActive.Tip()->GetBlockHash(), SavedBestBlock());
+    ASSERT_EQ(4, wallet->SaplingCheckpoint());
+    ASSERT_EQ(4, wallet->IronwoodCheckpoint());
+    chainActive.SetTip(connectedIndex);
+
+    // The only shutdown in play is the one requested here.
+    ASSERT_FALSE(ShutdownRequested());
+    StartShutdown();
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+
+    // The second pool is still brought up to the block, and the position
+    // follows both.
+    EXPECT_EQ(5, wallet->SaplingCheckpoint());
+    EXPECT_EQ(5, wallet->IronwoodCheckpoint());
+    EXPECT_EQ(5, wallet->chainHeight);
+
+    // Shutdown saves the position and both trees in one write; they must agree.
+    ASSERT_TRUE(wallet->FlushBestChain());
+    EXPECT_EQ(connectedIndex->GetBlockHash(), SavedBestBlock());
+
+    fRequestShutdown = false;
+    ScanTestWallet reopened(wallet->strWalletFile);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, reopened.LoadWallet(firstRun));
+    EXPECT_EQ(5, reopened.SaplingCheckpoint());
+    EXPECT_EQ(5, reopened.IronwoodCheckpoint());
+}
+
+// Once Sapling has reached the block, the saved position must follow it even if
+// Ironwood's rebuild then stops for shutdown. Kept at the previous block, the
+// position would trail the saved Sapling tree, and the next start would rebuild
+// Sapling from the wallet's oldest note. Ironwood is left behind instead, which
+// is harmless: startup rescans from the saved position, and Ironwood rebuilds
+// itself on that block. Ironwood always rebuilds on its activation block, so
+// this is not only reached after a fault.
+TEST_F(WalletScanTest, ShutdownDuringIronwoodRebuildRecordsSaplingsPosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, connectedIndex, 1));
+
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    ASSERT_EQ(4, wallet->SaplingCheckpoint());
+    ASSERT_EQ(4, wallet->IronwoodCheckpoint());
+    chainActive.SetTip(connectedIndex);
+
+    // Ironwood must rebuild on this block; Sapling only advances by one. With
+    // shutdown already requested, Ironwood's rebuild stops before the block.
+    ASSERT_TRUE(wallet->IronwoodWalletReset());
+    ASSERT_FALSE(ShutdownRequested());
+    StartShutdown();
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+
+    EXPECT_EQ(5, wallet->SaplingCheckpoint());
+    EXPECT_LT(wallet->IronwoodCheckpoint(), 5);
+    EXPECT_EQ(5, wallet->chainHeight);
+    ASSERT_TRUE(wallet->FlushBestChain());
+    EXPECT_EQ(connectedIndex->GetBlockHash(), SavedBestBlock());
+
+    // Restart the way startup does: rescan from the saved position without
+    // resetting. Sapling is not ahead of it, so it keeps its tree, and Ironwood
+    // rebuilds itself on the saved block.
+    fRequestShutdown = false;
+    ScanTestWallet reopened(wallet->strWalletFile);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, reopened.LoadWallet(firstRun));
+    EXPECT_EQ(5, reopened.SaplingCheckpoint());
+    ASSERT_GE(reopened.ScanForWalletTransactions(connectedIndex, true, true, false, false), 0);
+    EXPECT_EQ(5, reopened.SaplingCheckpoint());
+    EXPECT_EQ(5, reopened.IronwoodCheckpoint());
+    EXPECT_EQ(chainActive[5]->hashFinalSaplingRoot, reopened.SaplingAnchor());
+}
+
+// Disconnecting a block rewinds both trees to its parent, and the chain tip has
+// already moved back there by the time the wallet is told. The recorded position
+// must be the parent as well, not the block that was just removed: that block is
+// no longer in the chain, and is one higher than the trees.
+TEST_F(WalletScanTest, DisconnectedChainTipRecordsTheParentPosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, connectedIndex, 1));
+
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    chainActive.SetTip(connectedIndex);
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+    ASSERT_EQ(5, wallet->SaplingCheckpoint());
+    ASSERT_EQ(5, wallet->IronwoodCheckpoint());
+    ASSERT_EQ(5, wallet->chainHeight);
+
+    // DisconnectTip moves the tip back to the parent before notifying the wallet.
+    CBlockIndex* parentIndex = chainActive[4];
+    chainActive.SetTip(parentIndex);
+    wallet->ChainTip(connectedIndex, &connectedBlock, false);
+
+    EXPECT_EQ(4, wallet->SaplingCheckpoint());
+    EXPECT_EQ(4, wallet->IronwoodCheckpoint());
+    EXPECT_EQ(4, wallet->chainHeight);
+    ASSERT_TRUE(wallet->FlushBestChain());
+    EXPECT_EQ(parentIndex->GetBlockHash(), SavedBestBlock());
+
+    // Restart the way startup does: resolve the saved locator against the chain
+    // and rescan from there without resetting. A saved tree ahead of that point
+    // would be reset and rebuilt from the wallet's oldest note; neither is.
+    CBlockLocator saved;
+    ASSERT_TRUE(CWalletDB(wallet->strWalletFile).ReadBestBlock(saved));
+    CBlockIndex* rescanFrom = FindForkInGlobalIndex(chainActive, saved);
+    ASSERT_EQ(parentIndex, rescanFrom);
+    ScanTestWallet reopened(wallet->strWalletFile);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, reopened.LoadWallet(firstRun));
+    EXPECT_LE(reopened.SaplingCheckpoint(), rescanFrom->nHeight);
+    EXPECT_LE(reopened.IronwoodCheckpoint(), rescanFrom->nHeight);
+    ASSERT_GE(reopened.ScanForWalletTransactions(rescanFrom, true, true, false, false), 0);
+    EXPECT_EQ(4, reopened.SaplingCheckpoint());
+    EXPECT_EQ(4, reopened.IronwoodCheckpoint());
+}
+
+// After a disconnect the rewound trees take the next block as usual, and the
+// position moves forward with them again.
+TEST_F(WalletScanTest, ReconnectAfterDisconnectRecordsTheNewPosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    CBlockIndex* connectedIndex = chainActive[5];
+    CBlock connectedBlock;
+    ASSERT_TRUE(ReadBlockFromDisk(connectedBlock, connectedIndex, 1));
+
+    chainActive.SetTip(chainActive[4]);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    chainActive.SetTip(connectedIndex);
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+    ASSERT_EQ(5, wallet->chainHeight);
+
+    chainActive.SetTip(chainActive[4]);
+    wallet->ChainTip(connectedIndex, &connectedBlock, false);
+    ASSERT_EQ(4, wallet->SaplingCheckpoint());
+    ASSERT_EQ(4, wallet->IronwoodCheckpoint());
+    ASSERT_EQ(4, wallet->chainHeight);
+
+    chainActive.SetTip(connectedIndex);
+    wallet->ChainTip(connectedIndex, &connectedBlock, true);
+
+    EXPECT_EQ(5, wallet->SaplingCheckpoint());
+    EXPECT_EQ(5, wallet->IronwoodCheckpoint());
+    EXPECT_EQ(5, wallet->chainHeight);
+    ASSERT_TRUE(wallet->FlushBestChain());
+    EXPECT_EQ(connectedIndex->GetBlockHash(), SavedBestBlock());
+}
