@@ -18,6 +18,8 @@
 #include "script/cc.h"
 #include <cryptoconditions.h>
 #include <boost/thread.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/system/error_code.hpp>
 
 // Declarations for the shared gtest test-harness infrastructure: this is not
 // a test file itself. It declares the TestWallet helper, block/transaction
@@ -608,4 +610,41 @@ public:
         fprintf(stderr, "GTestCCoinsViewCache created\n");
      }
 
+};
+
+/**
+ * EncryptWallet finishes by rewriting the wallet file, and under the fixture's
+ * in-memory database that rewrite works on real files in the current working
+ * directory - deleting and replacing any wallet.dat already there. Run it from
+ * the test's own temporary data directory, and put the working directory back
+ * even if an assertion ends the test early, since TearDown deletes that
+ * directory.
+ */
+class ScopedWorkingDirectory
+{
+public:
+    ScopedWorkingDirectory(const ScopedWorkingDirectory&) = delete;
+    ScopedWorkingDirectory& operator=(const ScopedWorkingDirectory&) = delete;
+
+    explicit ScopedWorkingDirectory(const boost::filesystem::path& dir)
+    {
+        boost::system::error_code ec;
+        previous = boost::filesystem::current_path(ec);
+        if (!ec) {
+            boost::filesystem::current_path(dir, ec);
+            ok = !ec;
+        }
+    }
+    ~ScopedWorkingDirectory()
+    {
+        if (ok) {
+            boost::system::error_code ec;
+            boost::filesystem::current_path(previous, ec);
+        }
+    }
+
+    bool ok = false;
+
+private:
+    boost::filesystem::path previous;
 };

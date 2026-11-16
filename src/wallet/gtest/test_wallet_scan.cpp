@@ -17,6 +17,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <thread>
 #include <vector>
 
 extern std::atomic<bool> fRequestShutdown;
@@ -724,4 +725,183 @@ TEST_F(WalletScanTest, ReconnectAfterDisconnectRecordsTheNewPosition)
     EXPECT_EQ(5, wallet->chainHeight);
     ASSERT_TRUE(wallet->FlushBestChain());
     EXPECT_EQ(connectedIndex->GetBlockHash(), SavedBestBlock());
+}
+
+// Unlocking saves the wallet's pending state, and a lock landing between the
+// unlock and the save made the save find the wallet locked and report a disk
+// failure, shutting the node down. CCryptoKeyStore::Unlock announces the change
+// after releasing its own hold on cs_KeyStore, which is exactly that window, so
+// lock the wallet from another thread there - as the GUI does, from its own
+// thread - and give the lock time to land. It must wait until the unlock and
+// its save are done.
+TEST_F(WalletScanTest, LockRacingUnlockIsNotReportedAsASaveFailure)
+{
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "lock race";
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        AddBlocks(4);
+        ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+        {
+            ScopedWorkingDirectory workingDirectory(pathTemp);
+            ASSERT_TRUE(workingDirectory.ok);
+            wallet->GenerateNewSeed();
+            ASSERT_TRUE(wallet->EncryptWallet(passphrase));
+        }
+        if (!wallet->IsLocked()) {
+            ASSERT_TRUE(wallet->Lock());
+        }
+    }
+    uiMessages.clear();
+    ASSERT_FALSE(ShutdownRequested());
+
+    // From here the test holds no wallet lock of its own, so the locking thread
+    // waits only on what Unlock itself holds - and the join cannot deadlock.
+
+    std::thread locker;
+    std::atomic<bool> lockerDone{false};
+    bool injected = false;
+    boost::signals2::scoped_connection hook = wallet->NotifyStatusChanged.connect(
+        [&](CCryptoKeyStore* keystore) {
+            if (injected || keystore->IsLocked()) {
+                return;
+            }
+            injected = true;
+            locker = std::thread([&] {
+                wallet->Lock();
+                lockerDone = true;
+            });
+            for (int i = 0; i < 50 && !lockerDone; i++) {
+                MilliSleep(10);
+            }
+        });
+
+    const bool unlocked = wallet->Unlock(passphrase);
+    if (locker.joinable()) {
+        locker.join();
+    }
+    hook.disconnect();
+
+    ASSERT_TRUE(injected);
+    EXPECT_TRUE(unlocked);
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "unlock reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+    // The lock still happens - after the save, once the unlock lets it in.
+    EXPECT_TRUE(lockerDone);
+    EXPECT_TRUE(wallet->IsLocked());
+}
+
+// A rescan cannot run on a locked encrypted wallet: it could save neither its
+// restart point nor anything it finds. That is not a disk failure, and must not
+// raise the disk failure dialog and shut the node down. The import RPCs check
+// the lock long before they scan, so the GUI can lock the wallet in between, and
+// -unlockforreporting lets the rescan RPC through on a locked wallet.
+TEST_F(WalletScanTest, RescanOfLockedWalletIsDeclinedWithoutASaveFailure)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(4);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "locked rescan";
+    {
+        ScopedWorkingDirectory workingDirectory(pathTemp);
+        ASSERT_TRUE(workingDirectory.ok);
+        wallet->GenerateNewSeed();
+        ASSERT_TRUE(wallet->EncryptWallet(passphrase));
+    }
+    if (!wallet->IsLocked()) {
+        ASSERT_TRUE(wallet->Lock());
+    }
+    const uint256 savedBefore = SavedBestBlock();
+    uiMessages.clear();
+    progress.clear();
+    ASSERT_FALSE(ShutdownRequested());
+
+    // Ask to lock on finish, as every RPC caller does, so the failure path also
+    // locks the already-locked wallet.
+    EXPECT_LT(wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, true, false), 0);
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "locked rescan reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+    EXPECT_TRUE(wallet->IsLocked());
+    // Declined before doing anything: nothing was written, and the progress the
+    // GUI sees ends on a failed rescan rather than being left open.
+    EXPECT_EQ(savedBefore, SavedBestBlock());
+    ASSERT_FALSE(progress.empty());
+    EXPECT_EQ("Wallet rescan failed", progress.back().title);
+    EXPECT_EQ(100, progress.back().percent);
+}
+
+// Adding a key to an encrypted wallet needs the master key more than once: to
+// encrypt it for memory, then again for disk. A lock landing between those steps
+// used to leave the key in memory but never written, so it vanished on restart
+// while a retry saw it as already present. CWallet::Lock() waits for cs_wallet,
+// which every key-adding operation holds, so a lock requested part way through
+// must wait for the key to be fully added. AddKeyPubKey first drops any
+// watch-only entry for the key, announcing the change before it encrypts
+// anything; lock the wallet from another thread there.
+TEST_F(WalletScanTest, LockDuringKeyAddWaitsForTheAddToFinish)
+{
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "key add race";
+    CKey key;
+    key.MakeNewKey(true);
+    const CPubKey pubkey = key.GetPubKey();
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        {
+            ScopedWorkingDirectory workingDirectory(pathTemp);
+            ASSERT_TRUE(workingDirectory.ok);
+            wallet->GenerateNewSeed();
+            ASSERT_TRUE(wallet->EncryptWallet(passphrase));
+        }
+        if (wallet->IsLocked()) {
+            ASSERT_TRUE(wallet->Unlock(passphrase));
+        }
+        // The wallet's only watch-only entry, so dropping it announces the change.
+        ASSERT_TRUE(wallet->AddWatchOnly(GetScriptForDestination(pubkey.GetID())));
+    }
+
+    std::thread locker;
+    std::atomic<bool> lockerDone{false};
+    bool injected = false;
+    boost::signals2::scoped_connection hook = wallet->NotifyWatchonlyChanged.connect(
+        [&](bool fHaveWatchOnly) {
+            if (injected || fHaveWatchOnly) {
+                return;
+            }
+            injected = true;
+            locker = std::thread([&] {
+                wallet->Lock();
+                lockerDone = true;
+            });
+            for (int i = 0; i < 50 && !lockerDone; i++) {
+                MilliSleep(10);
+            }
+        });
+
+    bool added = false;
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        added = wallet->AddKeyPubKey(key, pubkey);
+    }
+    // The test holds no wallet lock here, so the join cannot deadlock.
+    if (locker.joinable()) {
+        locker.join();
+    }
+    hook.disconnect();
+
+    ASSERT_TRUE(injected);
+    EXPECT_TRUE(added);
+    EXPECT_TRUE(wallet->HaveKey(pubkey.GetID()));
+    // The lock still lands - once the key has been added.
+    EXPECT_TRUE(lockerDone);
+    EXPECT_TRUE(wallet->IsLocked());
 }

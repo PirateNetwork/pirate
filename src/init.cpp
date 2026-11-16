@@ -2430,13 +2430,18 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         // wallet is encrypted and unlocked, re-persist them encrypted (each writer
         // erases the plaintext record). In-memory copies are unchanged. One-time:
         // once stored encrypted, the plaintext record no longer exists to migrate.
-        if ((nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) &&
-            pwalletMain->IsCrypted() && !pwalletMain->IsLocked()) {
-            if (!pwalletMain->WriteHDChainToDisk(pwalletMain->GetHDChain())) {
-                LogPrintf("Warning: could not migrate HD chain to encrypted storage.\n");
-            }
-            if (!pwalletMain->MigrateDestDataToEncrypted()) {
-                LogPrintf("Warning: could not migrate destination data to encrypted storage.\n");
+        // cs_wallet keeps CWallet::Lock() from clearing the master key between the
+        // unlocked check and the encrypted writes.
+        {
+            LOCK(pwalletMain->cs_wallet);
+            if ((nLoadWalletRet == DB_LOAD_OK || nLoadWalletRet == DB_NONCRITICAL_ERROR) &&
+                pwalletMain->IsCrypted() && !pwalletMain->IsLocked()) {
+                if (!pwalletMain->WriteHDChainToDisk(pwalletMain->GetHDChain())) {
+                    LogPrintf("Warning: could not migrate HD chain to encrypted storage.\n");
+                }
+                if (!pwalletMain->MigrateDestDataToEncrypted()) {
+                    LogPrintf("Warning: could not migrate destination data to encrypted storage.\n");
+                }
             }
         }
 

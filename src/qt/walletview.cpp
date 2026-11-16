@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -624,6 +625,13 @@ void WalletView::requestedSyncWarningInfo()
 
 void WalletView::openUnlockTimerDialog() {
     if (ShutdownRequested()) {
+        return;
+    }
+
+    // Wait for a running rescan; the countdown resumes once it finishes. This
+    // can run from inside a rescan on the GUI thread (its progress dialog
+    // processes events), where locking the wallet would interrupt the scan.
+    if (!walletModel || walletModel->startedRescan) {
         return;
     }
 

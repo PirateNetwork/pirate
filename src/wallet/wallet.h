@@ -1869,6 +1869,21 @@ public:
     bool LoadIronwoodWatchOnly(const libzcash::IronwoodExtendedFullViewingKeyPirate &extfvk);
 
     bool OpenWallet(const SecureString& strWalletPassphrase);
+    /**
+     * Lock the wallet, taking cs_wallet first.
+     *
+     * CCryptoKeyStore::Lock() takes only cs_KeyStore. Every wallet operation that
+     * needs the master key part way through - adding or importing keys, dumping
+     * the wallet, saving encrypted state, rescanning - runs with cs_wallet held,
+     * so taking it here means the wallet can only be locked between such
+     * operations, never in the middle of one. Without it, a lock landing mid
+     * operation could leave a key in memory but not on disk, an import or a
+     * backup incomplete, or a save failing as if the disk were bad.
+     *
+     * This waits for cs_wallet, so the GUI thread must not call it while the
+     * core may hold cs_wallet; see WalletModel::lockWallet().
+     */
+    bool Lock();
     bool Unlock(const SecureString& strWalletPassphrase);
     bool ChangeWalletPassphrase(const SecureString& strOldWalletPassphrase, const SecureString& strNewWalletPassphrase);
 

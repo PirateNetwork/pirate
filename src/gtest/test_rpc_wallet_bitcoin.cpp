@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <atomic>
 #include <thread>
 
 #include <fstream>
@@ -612,6 +613,86 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
 
     // Verify the spending key is the same as the test data
     EXPECT_EQ(testKey, EncodeSpendingKey(k.value()));
+}
+
+// importwallet adds the dump's keys one by one, and a lock landing part way
+// through used to leave every key after that point unimported. The import
+// reports progress for each line it reads, so lock the wallet from another
+// thread at the first of those - as the GUI does, from its own thread - and give
+// the lock time to land: every key must still be imported.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet_survives_a_concurrent_lock)
+{
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "import lock race";
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        {
+            ScopedWorkingDirectory workingDirectory(pathTemp);
+            ASSERT_TRUE(workingDirectory.ok);
+            HDSeed existingSeed;
+            if (!pwalletMain->GetHDSeed(existingSeed)) {
+                pwalletMain->GenerateNewSeed();
+            }
+            ASSERT_TRUE(pwalletMain->EncryptWallet(passphrase));
+        }
+        if (pwalletMain->IsLocked()) {
+            ASSERT_TRUE(pwalletMain->Unlock(passphrase));
+        }
+    }
+    // From here the test holds no wallet lock of its own, so the locking thread
+    // waits only on what the import holds - and the join cannot deadlock.
+
+    std::vector<libzcash::SaplingExtendedSpendingKey> keys;
+    std::string dump = "# Wallet dump\n\n# Zkeys\n\n";
+    for (int i = 0; i < 4; i++) {
+        auto sk = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+        dump += EncodeSpendingKey(sk) + " 2016-08-12T21:55:36Z # zaddr= " +
+                EncodePaymentAddress(sk.DefaultAddress()) + " label= lockrace\n";
+        keys.push_back(sk);
+    }
+    dump += "\n# End of dump\n";
+    const boost::filesystem::path dumpPath = pathTemp / "lockrace-dump.txt";
+    {
+        std::ofstream out(dumpPath.string());
+        out << dump;
+    }
+
+    std::thread locker;
+    std::atomic<bool> lockerDone{false};
+    bool injected = false;
+    boost::signals2::scoped_connection hook = pwalletMain->ShowProgress.connect(
+        [&](const std::string&, int percent) {
+            if (injected || percent <= 0 || percent >= 100) {
+                return;
+            }
+            injected = true;
+            locker = std::thread([&] {
+                pwalletMain->Lock();
+                lockerDone = true;
+            });
+            for (int i = 0; i < 50 && !lockerDone; i++) {
+                MilliSleep(10);
+            }
+        });
+
+    // The import holds cs_wallet through its rescan as well, so the waiting lock
+    // only lands once the RPC returns and the whole import succeeds.
+    EXPECT_NO_THROW(CallRPC("z_importwallet " + dumpPath.string()));
+    if (locker.joinable()) {
+        locker.join();
+    }
+    hook.disconnect();
+
+    ASSERT_TRUE(injected);
+    for (const auto& sk : keys) {
+        EXPECT_TRUE(pwalletMain->HaveSaplingSpendingKey(sk.ToXFVK())) << EncodeSpendingKey(sk);
+    }
+    // The lock still lands once the import lets it in, and nothing along the
+    // way is treated as a save failure.
+    EXPECT_TRUE(lockerDone);
+    EXPECT_TRUE(pwalletMain->IsLocked());
+    EXPECT_FALSE(ShutdownRequested());
 }
 
 

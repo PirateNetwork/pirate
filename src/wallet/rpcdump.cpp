@@ -1,4 +1,5 @@
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -409,6 +410,14 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
+    // Keep the wallet unlocked from the unlock check until every key in the file
+    // has been added, or a lock part way through would leave the keys after that
+    // point unimported. CWallet::Lock() already waits for cs_wallet, held for
+    // this whole call; holding cs_KeyStore as well covers anything that locks
+    // the keystore directly. It is released before the rescan, so a dialog
+    // raised there for a real save failure holds no more locks than it must.
+    std::optional<CCriticalBlock> keyStoreLock;
+    keyStoreLock.emplace(pwalletMain->cs_KeyStore, "pwalletMain->cs_KeyStore", __FILE__, __LINE__);
     EnsureWalletIsUnlocked();
 
     ifstream file;
@@ -677,6 +686,7 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
 
     file.close();
     pwalletMain->ShowProgress("", 100); // hide progress dialog in GUI
+    keyStoreLock.reset();
 
     CBlockIndex *pindex = chainActive.Tip();
     while (pindex && pindex->pprev && pindex->GetBlockTime() > nTimeBegin - 7200)

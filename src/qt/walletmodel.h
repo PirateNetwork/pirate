@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -273,6 +274,16 @@ public:
     int64_t relockTime = 0;
     bool startedRescan = false;
 private:
+    /**
+     * Lock the wallet now if it is free, otherwise as soon as it is; see the
+     * definition. Returns false only if locking now was attempted and failed.
+     */
+    bool lockWalletWhenFree();
+
+    // Set when a lock request had to wait. setLockedLater locks whenever it is
+    // set, so activity that pushes relockTime forward cannot cancel the request.
+    bool fLockRequested = false;
+
     CWallet *wallet;
     bool fHaveWatchOnly;
     bool fForceCheckBalanceChanged;

@@ -2993,6 +2993,12 @@ bool CWallet::OpenWallet(const SecureString& strWalletPassphrase)
     return false;
 }
 
+bool CWallet::Lock()
+{
+    LOCK(cs_wallet);
+    return CCryptoKeyStore::Lock();
+}
+
 /**
  * @brief Unlock an encrypted wallet using the provided passphrase
  * @param strWalletPassphrase The wallet encryption passphrase
@@ -3019,12 +3025,29 @@ bool CWallet::Unlock(const SecureString& strWalletPassphrase)
                 return false;
             if (!crypter.Decrypt(pMasterKey.second.vchCryptedKey, vMasterKey))
                 continue; // try another master key
-            if (CCryptoKeyStore::Unlock(vMasterKey)) {
-                if (!currentBlock.vHave.empty() && !SetBestChain(currentBlock, chainHeight)) {
-                    Lock();
-                    ReportWalletSaveFailure(_("Unable to save the unlocked wallet. Check disk space and debug.log before restarting."));
-                    return false;
+            // Keep the wallet unlocked from the unlock through the save of
+            // pending state, or the save could find it locked and be reported
+            // as a disk failure. CWallet::Lock() already waits for cs_wallet,
+            // held here; holding cs_KeyStore as well covers anything that locks
+            // the keystore directly. The report itself is raised after
+            // releasing it.
+            bool fUnlocked = false;
+            bool fSaved = true;
+            {
+                LOCK(cs_KeyStore);
+                fUnlocked = CCryptoKeyStore::Unlock(vMasterKey);
+                if (fUnlocked && !currentBlock.vHave.empty()) {
+                    fSaved = SetBestChain(currentBlock, chainHeight);
+                    if (!fSaved) {
+                        Lock();
+                    }
                 }
+            }
+            if (!fSaved) {
+                ReportWalletSaveFailure(_("Unable to save the unlocked wallet. Check disk space and debug.log before restarting."));
+                return false;
+            }
+            if (fUnlocked) {
                 return true;
             }
         }
@@ -3245,8 +3268,20 @@ void CWallet::ChainTip(const CBlockIndex *pindex,
         nLastSetChain = nNow;
         nSetChainUpdates = 0;
 
-        // Locked wallets defer encrypted-state persistence until unlock.
-        if (!IsLocked() && !SetBestChain(currentBlock, chainHeight)) {
+        // Locked wallets defer encrypted-state persistence until unlock. Keep
+        // the check and the save together, or the save could find the wallet
+        // locked and be reported as a disk failure. CWallet::Lock() already
+        // waits for cs_wallet, held here; holding cs_KeyStore as well covers
+        // anything that locks the keystore directly. The report itself is
+        // raised after releasing it.
+        bool fSaved = true;
+        {
+            LOCK(cs_KeyStore);
+            if (!IsLocked()) {
+                fSaved = SetBestChain(currentBlock, chainHeight);
+            }
+        }
+        if (!fSaved) {
             ReportWalletSaveFailure(_("Unable to save wallet state. The previous recovery point has been retained. Check disk space and debug.log before restarting."));
         }
     }
@@ -3479,6 +3514,10 @@ bool CWallet::SetBestChain(const CBlockLocator& loc, const int& height)
 bool CWallet::FlushBestChain()
 {
     LOCK2(cs_main, cs_wallet);
+    // Keep the check and the save together. CWallet::Lock() already waits for
+    // cs_wallet, held here; cs_KeyStore also covers anything that locks the
+    // keystore directly.
+    LOCK(cs_KeyStore);
     if (!currentBlock.vHave.empty() && !IsLocked()) {
         return SetBestChain(currentBlock, chainHeight);
     }
@@ -9995,7 +10034,8 @@ bool CWallet::initalizeArcTx() {
  * @param fIgnoreBirthday If true, scan all blocks regardless of wallet birthday
  * @param LockOnFinish If true, lock the wallet after scanning completes (for encrypted wallets)
  * @param resetWallets If true, reset Sapling and Ironwood wallet states before scanning
- * @return Number of transactions found, or -1 when scanning or persistence fails
+ * @return Number of transactions found, or -1 when scanning or persistence fails,
+ *         or when the wallet is encrypted and locked
  * 
  * Performs a comprehensive blockchain scan to find transactions involving this wallet.
  * This is the primary function used for wallet synchronization and recovery operations.
@@ -10011,8 +10051,10 @@ bool CWallet::initalizeArcTx() {
  * - Automatically locks encrypted wallets after completion if requested
  * 
  * This function is used during wallet initialization, recovery from backup,
- * and manual rescans. It requires both cs_main and cs_wallet locks and
- * temporarily locks cs_KeyStore to prevent wallet locking during operation.
+ * and manual rescans. It requires both cs_main and cs_wallet locks, and holds
+ * cs_KeyStore for the whole scan so the wallet cannot be locked part way
+ * through. A locked encrypted wallet can save nothing the scan would produce,
+ * so the scan is declined without being reported as a save failure.
  * 
  * @note In cold storage mode (nMaxConnections == 0), this function returns false immediately
  */
@@ -10040,7 +10082,25 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
     std::set<SaplingPaymentAddress> saplingAddressesFound;
     std::set<IronwoodPaymentAddress> ironwoodAddressesFound;
 
+    bool fWalletLocked = false;
     try {
+        // Keep the wallet from being locked for the whole rescan, starting with
+        // the restart point, so no save can find it locked part way through and
+        // be reported as a disk failure. CWallet::Lock() already waits for
+        // cs_wallet, held here; holding cs_KeyStore as well covers anything that
+        // locks the keystore directly.
+        LOCK(cs_KeyStore);
+
+        // A locked encrypted wallet can save neither the restart point nor
+        // anything the scan finds, so decline the scan. That is not a disk
+        // failure: -unlockforreporting lets the rescan RPC through on a locked
+        // wallet, and a caller that checked the lock before taking cs_wallet can
+        // find it locked by the time the scan starts.
+        if (IsCrypted() && IsLocked()) {
+            fWalletLocked = true;
+            throw std::runtime_error("the wallet is locked");
+        }
+
         CBlockIndex* pindex = pindexStart;
         // Commit the restart point before changing witnesses or discovering notes.
         const CBlockLocator restartBlock = chainActive.GetLocator(pindex);
@@ -10051,9 +10111,6 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         chainHeight = pindex->nHeight;
 
         {
-            //Lock cs_keystore to prevent wallet from locking during rescan
-            LOCK(cs_KeyStore);
-
             //Get List of current list of txids
             for (map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.begin(); it != pwalletMain->mapArcTxs.end(); ++it)
             {
@@ -10178,7 +10235,11 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
         if (LockOnFinish && IsCrypted()) {
             Lock();
         }
-        ReportWalletSaveFailure(strprintf(_("Wallet rescan failed: %s. Check disk space and debug.log before restarting."), error.what()));
+        if (fWalletLocked) {
+            LogPrintf("Wallet rescan declined: %s\n", error.what());
+        } else {
+            ReportWalletSaveFailure(strprintf(_("Wallet rescan failed: %s. Check disk space and debug.log before restarting."), error.what()));
+        }
     }
 
     // Notify the GUI of addresses after a successful or interrupted scan.

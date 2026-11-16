@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -255,6 +256,9 @@ void WalletModel::importSpendingKey(QString strKey) {
 
     // We want to scan for transactions and notes
     wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, false, true);
+    // The scan ran on this thread and is over; cold storage mode never sends
+    // the core's completion signal that would otherwise clear the flag.
+    startedRescan = false;
 }
 
 QString WalletModel::getViewingKey(QString strAddress) {
@@ -349,6 +353,9 @@ void WalletModel::importViewingKey (QString strKey) {
 
     // We want to scan for transactions and notes
     wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, false, true);
+    // The scan ran on this thread and is over; cold storage mode never sends
+    // the core's completion signal that would otherwise clear the flag.
+    startedRescan = false;
 }
 
 void WalletModel::pollBalanceChanged()
@@ -1093,8 +1100,40 @@ void WalletModel::getWalletChainHeights(int &walletHeight, int &chainHeight) {
 }
 
 void WalletModel::lockWallet() {
-    wallet->Lock();
+    lockWalletWhenFree();
+}
+
+/**
+ * Locking takes cs_wallet (CWallet::Lock()), so it can never interrupt a wallet
+ * operation part way through. The GUI thread must not wait for it: the core can
+ * hold cs_wallet while waiting on this thread to show a dialog, and waiting here
+ * would leave both stuck. So try now, and if the wallet is busy hand the lock to
+ * setLockedLater, which retries until it is free and the request is kept until
+ * then.
+ *
+ * A rescan the GUI thread started itself keeps processing events through its
+ * progress dialog while it holds cs_wallet and cs_KeyStore. Those locks are
+ * recursive, so the attempts below would succeed from inside that scan and lock
+ * the wallet part way through it. While a rescan is running the request waits
+ * for it to finish instead.
+ */
+bool WalletModel::lockWalletWhenFree()
+{
+    if (!startedRescan) {
+        TRY_LOCK(wallet->cs_wallet, lockWalletMutex);
+        if (lockWalletMutex) {
+            TRY_LOCK(wallet->cs_KeyStore, lockKeyStoreMutex);
+            if (lockKeyStoreMutex) {
+                relockTime = 0;
+                fLockRequested = false;
+                return wallet->Lock();
+            }
+        }
+    }
     relockTime = 0;
+    fLockRequested = true;
+    QTimer::singleShot(MODEL_UPDATE_DELAY, this, SLOT(setLockedLater()));
+    return true;
 }
 
 void WalletModel::setLockedLater() {
@@ -1118,6 +1157,7 @@ void WalletModel::setLockedLater() {
     if (wallet->IsLocked()) {
         relockTime = 0;
         startedRescan = false;
+        fLockRequested = false;
         return;
     }
 
@@ -1126,10 +1166,11 @@ void WalletModel::setLockedLater() {
         relockTime = 0;
     }
 
-    //Relock if time is expired
-    if (relockTime <= GetTime() && !startedRescan) {
+    //Relock if requested or time is expired
+    if ((fLockRequested || relockTime <= GetTime()) && !startedRescan) {
         wallet->Lock();
         relockTime = 0;
+        fLockRequested = false;
         return;
     }
 
@@ -1141,11 +1182,12 @@ bool WalletModel::setWalletLocked(bool locked, const SecureString &passPhrase)
     if(locked)
     {
         // Lock
-        return wallet->Lock();
+        return lockWalletWhenFree();
     }
     else
     {
         // Unlock
+        fLockRequested = false;
         relockTime = GetTime() + 300; //relock after 5 minutes
         QTimer::singleShot(250, this, SLOT(setLockedLater()));
         return wallet->Unlock(passPhrase);
@@ -1335,7 +1377,10 @@ void WalletModel::rescan()
 {
     startedRescan = true;
     relockTime = 0;
-    return wallet->ForceRescanWallet();
+    wallet->ForceRescanWallet();
+    // The scan ran on this thread and is over. Clear the flag here as well as on
+    // the core's completion signal, which cold storage mode never sends.
+    startedRescan = false;
 }
 // returns a list of COutputs from COutPoints
 void WalletModel::getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs)
