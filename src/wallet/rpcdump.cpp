@@ -23,6 +23,7 @@
 #include "rpc/server.h"
 #include "init.h"
 #include "main.h"
+#include "net.h"
 #include "script/script.h"
 #include "script/standard.h"
 #include "sync.h"
@@ -41,11 +42,32 @@
 using namespace std;
 
 void EnsureWalletIsUnlocked();
-void EnsureWalletIsUnlockedForReporting();
 bool EnsureWalletIsAvailable(bool avoidException);
 
 UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys);
 UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys);
+
+// Cold storage (offline) mode, -maxconnections=0, loads no blockchain: there is
+// no chain tip to read and nothing to rescan.
+static bool IsOfflineMode()
+{
+    return nMaxConnections == 0;
+}
+
+// An import in offline mode adds its keys without a rescan, and nothing rescans
+// for them later on its own: the transactions they received before the wallet's
+// saved position are found only by running rescan once the wallet is online.
+// Returns whether the import can rescan, logging when it cannot.
+static bool ImportCanRescan(const std::string& strMethod)
+{
+    if (!IsOfflineMode())
+        return true;
+    LogPrintf("%s: offline mode has no blockchain to rescan; run rescan once the wallet is online to find the imported keys' transactions\n", strMethod);
+    return false;
+}
+
+static const std::string strOfflineImportHelp =
+    "\nIn offline (cold storage) mode the keys are imported without a rescan; run rescan once the wallet is online.\n";
 
 
 std::string static EncodeDumpTime(int64_t nTime) {
@@ -166,6 +188,7 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "4. height               (integer, optional, default=0) start at block height?\n"
             "5. secret_key           (integer, optional, default=188) used to import WIFs of other coins\n"
             "\nNote: This call can take minutes to complete if rescan is true.\n"
+            + strOfflineImportHelp +
             "\nExamples:\n"
             "\nDump a private key\n"
             + HelpExampleCli("dumpprivkey", "\"myaddress\"") +
@@ -203,6 +226,8 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
         fRescan = params[2].get_bool();
     if ( fRescan && params.size() == 4 )
         height = params[3].get_int();
+    if (fRescan && !ImportCanRescan("importprivkey"))
+        fRescan = false;
 
 
     if (params.size() > 4)
@@ -213,7 +238,7 @@ UniValue importprivkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
         key = DecodeSecret(strSecret);
     }
 
-    if ( height < 0 || height > chainActive.Height() )
+    if ( height < 0 || (fRescan && height > chainActive.Height()) )
         throw JSONRPCError(RPC_WALLET_ERROR, "Rescan height is out of range.");
 
     if (!key.IsValid()) throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid private key encoding");
@@ -297,6 +322,7 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "2. \"label\"            (string, optional, default=\"\") An optional label\n"
             "3. rescan               (boolean, optional, default=true) Rescan the wallet for transactions\n"
             "\nNote: This call can take minutes to complete if rescan is true.\n"
+            + strOfflineImportHelp +
             "\nExamples:\n"
             "\nImport an address with rescan\n"
             + HelpExampleCli("importaddress", "\"myaddress\"") +
@@ -330,6 +356,8 @@ UniValue importaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
     bool fRescan = true;
     if (params.size() > 2)
         fRescan = params[2].get_bool();
+    if (fRescan && !ImportCanRescan("importaddress"))
+        fRescan = false;
 
     {
         if (::IsMine(*pwalletMain, script) == ISMINE_SPENDABLE)
@@ -369,8 +397,11 @@ UniValue z_importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error(
             "z_importwallet \"filename\"\n"
             "\nImports taddr and zaddr keys from a wallet export file (see z_exportwallet).\n"
+            "If the file adds a shielded key the wallet does not have, the whole chain is rescanned,\n"
+            "which can take hours.\n"
             "\nArguments:\n"
             "1. \"filename\"    (string, required) The wallet file\n"
+            + strOfflineImportHelp +
             "\nExamples:\n"
             "\nDump the wallet\n"
             + HelpExampleCli("z_exportwallet", "\"nameofbackup\"") +
@@ -394,6 +425,7 @@ UniValue importwallet(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "\nImports taddr keys from a wallet dump file (see dumpwallet).\n"
             "\nArguments:\n"
             "1. \"filename\"    (string, required) The wallet file\n"
+            + strOfflineImportHelp +
             "\nExamples:\n"
             "\nDump the wallet\n"
             + HelpExampleCli("dumpwallet", "\"nameofbackup\"") +
@@ -425,9 +457,18 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
     if (!file.is_open())
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Cannot open wallet dump file");
 
-    int64_t nTimeBegin = chainActive.Tip()->GetBlockTime();
+    // Offline mode has no chain tip, so start from the current time; keys dated
+    // earlier in the file still move it back.
+    int64_t nTimeBegin = chainActive.Tip() ? chainActive.Tip()->GetBlockTime() : GetTime();
 
     bool fGood = true;
+    // Set when the file adds a shielded key the wallet did not have. The dump's
+    // times for shielded keys do not say when they started receiving: viewing and
+    // diversified keys carry the time of the dump, and a spending key carries the
+    // time it was derived, which for a wallet restored from its seed is the time
+    // of the restore. So a new shielded key is rescanned from the start of the
+    // chain, as z_importkey does by default.
+    bool fNewShieldedKey = false;
     int64_t lineNumber = 0;
     int64_t nFilesize = std::max((int64_t)1, (int64_t)file.tellg());
     file.seekg(0, file.beg);
@@ -471,6 +512,10 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                         AddSpendingKeyToWallet(pwalletMain, Params().GetConsensus(), nTime, hdKeypath, seedFpStr, true), spendingKey);
                     if (addResult == KeyAlreadyExists){
                         LogPrint("zrpc", "Skipping import of zaddr (key already present)\n");
+                    }
+
+                    if (addResult == KeyAdded) {
+                        fNewShieldedKey = true;
                     }
 
                     if (addResult == KeyNotAdded) {
@@ -518,6 +563,8 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                         LogPrint("zrpc", "Skipping import of zaddr (spending key already present)\n");
                     } else if (addResult == KeyAlreadyExists) {
                         LogPrint("zrpc", "Skipping import of zaddr (viewing key already present)\n");
+                    } else if (addResult == KeyAdded) {
+                        fNewShieldedKey = true;
                     }
 
                     if (addResult == KeyNotAdded) {
@@ -560,6 +607,9 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     std::string addrName = vstr[6];
                     LogPrint("zrpc", "Importing diversified spending key for zaddr %s\n", addr);
                     auto addResult = std::visit(AddDiversifiedSpendingKeyToWallet(pwalletMain), diversifiedSpendingKey);
+                    if (addResult == KeyAddedAddressAdded || addResult == KeyAddedAddressNotAdded) {
+                        fNewShieldedKey = true;
+                    }
                     if (addResult == KeyNotAdded || addResult == KeyAddedAddressNotAdded || addResult == KeyExistsAddressNotAdded) {
                         // Something went wrong
                         fGood = false;
@@ -608,6 +658,9 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
                     std::string addrName = vstr[6];
                     LogPrint("zrpc", "Importing diversified viewing key for zaddr %s\n", addr);
                     auto addResult = std::visit(AddDiversifiedViewingKeyToWallet(pwalletMain), diversifiedViewingKey);
+                    if (addResult == KeyAddedAddressAdded || addResult == KeyAddedAddressNotAdded) {
+                        fNewShieldedKey = true;
+                    }
                     if (addResult == KeyNotAdded || addResult == KeyAddedAddressNotAdded || addResult == KeyExistsAddressNotAdded) {
                         // Something went wrong
                         fGood = false;
@@ -688,6 +741,9 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
     pwalletMain->ShowProgress("", 100); // hide progress dialog in GUI
     keyStoreLock.reset();
 
+    if (fNewShieldedKey)
+        nTimeBegin = 1; // the start of the chain; 0 would be considered 'no value'
+
     CBlockIndex *pindex = chainActive.Tip();
     while (pindex && pindex->pprev && pindex->GetBlockTime() > nTimeBegin - 7200)
         pindex = pindex->pprev;
@@ -695,9 +751,11 @@ UniValue importwallet_impl(const UniValue& params, bool fHelp, bool fImportZKeys
     if (!pwalletMain->nTimeFirstKey || nTimeBegin < pwalletMain->nTimeFirstKey)
         pwalletMain->nTimeFirstKey = nTimeBegin;
 
-    LogPrintf("Rescanning last %i blocks\n", chainActive.Height() - pindex->nHeight + 1);
-    if (pwalletMain->ScanForWalletTransactions(pindex, true, true, true, true) < 0) {
-        throw JSONRPCError(RPC_WALLET_ERROR, "Wallet rescan failed; see debug.log. Imported keys remain in the wallet.");
+    if (ImportCanRescan(fImportZKeys ? "z_importwallet" : "importwallet")) {
+        LogPrintf("Rescanning last %i blocks\n", chainActive.Height() - pindex->nHeight + 1);
+        if (pwalletMain->ScanForWalletTransactions(pindex, true, true, true, true) < 0) {
+            throw JSONRPCError(RPC_WALLET_ERROR, "Wallet rescan failed; see debug.log. Imported keys remain in the wallet.");
+        }
     }
     pwalletMain->MarkDirty();
 
@@ -839,8 +897,12 @@ UniValue dumpwallet_impl(const UniValue& params, bool fHelp, bool fDumpZKeys)
     // produce output
     file << strprintf("# Wallet dump created by Komodo %s (%s)\n", CLIENT_BUILD, CLIENT_DATE);
     file << strprintf("# * Created on %s\n", dumpTime);
-    file << strprintf("# * Best block at time of backup was %i (%s),\n", chainActive.Height(), chainActive.Tip()->GetBlockHash().ToString());
-    file << strprintf("#   mined on %s\n", EncodeDumpTime(chainActive.Tip()->GetBlockTime()));
+    if (chainActive.Tip()) {
+        file << strprintf("# * Best block at time of backup was %i (%s),\n", chainActive.Height(), chainActive.Tip()->GetBlockHash().ToString());
+        file << strprintf("#   mined on %s\n", EncodeDumpTime(chainActive.Tip()->GetBlockTime()));
+    } else {
+        file << "# * Created in offline mode, with no blockchain loaded\n";
+    }
     {
         HDSeed hdSeed;
         pwalletMain->GetHDSeed(hdSeed);
@@ -1095,6 +1157,8 @@ UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk)
         throw runtime_error(
             "rescan the blockchain for transactions starting at the genesis block.\n"
             "\nNote: This call will take several minutes to severals days complete depending on the number of keys and transactions in the wallet.\n"
+            "\nAn encrypted wallet must be unlocked, even with -unlockforreporting.\n"
+            "\nNot available in offline (cold storage) mode, which loads no blockchain.\n"
             "\nExamples:\n"
             + HelpExampleCli("rescan", "")
             + HelpExampleRpc("rescan", "")
@@ -1102,7 +1166,11 @@ UniValue rescan(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
     LOCK2(cs_main, pwalletMain->cs_wallet);
 
-    EnsureWalletIsUnlockedForReporting();
+    EnsureBlockchainLoaded("rescan");
+
+    // A rescan saves its progress to the wallet, which an encrypted wallet can
+    // only do while unlocked, so -unlockforreporting does not cover it.
+    EnsureWalletIsUnlocked();
 
     if (pwalletMain->ScanForWalletTransactions(chainActive[0], true, true, true, true) < 0) {
         throw JSONRPCError(RPC_WALLET_ERROR, "Wallet rescan failed; see debug.log.");
@@ -1125,6 +1193,7 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "2. rescan             (string, optional, default=\"whenkeyisnew\") Rescan the wallet for transactions - can be \"yes\", \"no\" or \"whenkeyisnew\"\n"
             "3. startHeight        (numeric, optional, default=0) Block height to start rescan from\n"
             "\nNote: This call can take minutes to complete if rescan is true.\n"
+            + strOfflineImportHelp +
             "\nExamples:\n"
             "\nExport a zkey\n"
             + HelpExampleCli("z_exportkey", "\"myaddress\"") +
@@ -1171,7 +1240,9 @@ UniValue z_importkey(const UniValue& params, bool fHelp, const CPubKey& mypk)
     int nRescanHeight = 0;
     if (params.size() > 2)
         nRescanHeight = params[2].get_int();
-    if (nRescanHeight < 0 || nRescanHeight > chainActive.Height()) {
+    if (fRescan && !ImportCanRescan("z_importkey"))
+        fRescan = false;
+    if (nRescanHeight < 0 || (fRescan && nRescanHeight > chainActive.Height())) {
         throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
     }
 
@@ -1228,6 +1299,7 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
           "2. rescan             (string, optional, default=\"whenkeyisnew\") Rescan the wallet for transactions - can be \"yes\", \"no\" or \"whenkeyisnew\"\n"
           "3. startHeight        (numeric, optional, default=0) Block height to start rescan from\n"
           "\nNote: This call can take minutes to complete if rescan is true.\n"
+          + strOfflineImportHelp +
           "\nResult:\n"
           "{\n"
           "  \"type\" : \"xxxx\",                         (string) \"sprout\" or \"sapling\"\n"
@@ -1272,7 +1344,9 @@ UniValue z_importviewingkey(const UniValue& params, bool fHelp, const CPubKey& m
   if (params.size() > 2) {
       nRescanHeight = params[2].get_int();
   }
-  if (nRescanHeight < 0 || nRescanHeight > chainActive.Height()) {
+  if (fRescan && !ImportCanRescan("z_importviewingkey"))
+      fRescan = false;
+  if (nRescanHeight < 0 || (fRescan && nRescanHeight > chainActive.Height())) {
       throw JSONRPCError(RPC_INVALID_PARAMETER, "Block height out of range");
   }
 

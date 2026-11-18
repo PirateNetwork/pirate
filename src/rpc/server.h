@@ -211,6 +211,13 @@ extern std::string HelpExampleRpc(const std::string& methodname, const std::stri
 
 extern void EnsureWalletIsUnlocked();
 extern void EnsureWalletIsUnlockedForReporting();
+/**
+ * Throws RPC_CLIENT_NOT_CONNECTED when the node runs in offline (cold storage)
+ * mode (-maxconnections=0), which loads no blockchain or coins database. For
+ * commands that report on the chain or need it to act. Callers skip it when
+ * fHelp is set, so help still works offline.
+ */
+extern void EnsureBlockchainLoaded(const std::string& strMethod);
 
 bool StartRPC();
 void InterruptRPC();

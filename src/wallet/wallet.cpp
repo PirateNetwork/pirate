@@ -10056,13 +10056,20 @@ bool CWallet::initalizeArcTx() {
  * through. A locked encrypted wallet can save nothing the scan would produce,
  * so the scan is declined without being reported as a save failure.
  * 
- * @note In cold storage mode (nMaxConnections == 0), this function returns false immediately
+ * @note In cold storage mode (nMaxConnections == 0) no scan runs and this returns
+ *       false immediately, still locking an encrypted wallet if LockOnFinish is set.
  */
 
 int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, bool fIgnoreBirthday, bool LockOnFinish, bool resetWallets)
 {
     if (nMaxConnections == 0) {
         //Ignore function for cold storage offline mode
+        // The caller unlocked the wallet for this rescan and asked for it to be
+        // locked when the rescan is over. Nothing is scanned here, but the rescan
+        // is still over, so lock it.
+        if (LockOnFinish && IsCrypted()) {
+            Lock();
+        }
         return false;
     }
     LOCK2(cs_main, cs_wallet);
@@ -10093,9 +10100,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate, b
 
         // A locked encrypted wallet can save neither the restart point nor
         // anything the scan finds, so decline the scan. That is not a disk
-        // failure: -unlockforreporting lets the rescan RPC through on a locked
-        // wallet, and a caller that checked the lock before taking cs_wallet can
-        // find it locked by the time the scan starts.
+        // failure: a caller that checked the lock before taking cs_wallet, such
+        // as the GUI's rescan, can find it locked by the time the scan starts.
         if (IsCrypted() && IsLocked()) {
             fWalletLocked = true;
             throw std::runtime_error("the wallet is locked");
@@ -13241,6 +13247,17 @@ void CWallet::GetKeyBirthTimes(std::map<CKeyID, int64_t> &mapKeyBirth) const {
     std::map<CKeyID, CBlockIndex*> mapKeyFirstBlock;
     std::set<CKeyID> setKeys;
     GetKeys(setKeys);
+    if (!pindexMax) {
+        // No blockchain is loaded (offline mode), so there is no block to date
+        // the remaining keys from. Give them the earliest time instead of
+        // leaving them out, so a backup still includes them and a rescan from
+        // that time covers the whole chain.
+        BOOST_FOREACH(const CKeyID &keyid, setKeys) {
+            if (mapKeyBirth.count(keyid) == 0)
+                mapKeyBirth[keyid] = 1;
+        }
+        return;
+    }
     BOOST_FOREACH(const CKeyID &keyid, setKeys) {
         if (mapKeyBirth.count(keyid) == 0)
             mapKeyFirstBlock[keyid] = pindexMax;
@@ -14706,19 +14723,17 @@ KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::Saplin
 KeyAddResult AddDiversifiedViewingKeyToWallet::operator()(const libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate &extdfvk) const {
     auto extfvk = extdfvk.extfvk;
 
-    // Attempt to derive the diversified viewing key's IVK
-    // This will throw if the diversified key is invalid or cannot derive an IVK
+    // A key that cannot derive its IVK or the diversified address is not added,
+    // as for the other adders, so a wallet import carries on with its other keys.
     IronwoodIncomingViewingKey ivk;
     if (!extfvk.fvk.DeriveIVK(&ivk)) {
-        throw std::invalid_argument("Cannot derive default address from invalid diversified viewing key");
+        return KeyNotAdded;
     }
     KeyAddResult result = KeyNotAdded;
 
-    // Attempt to derive the default address from the diversified viewing key
-    // This will throw if the diversified key is invalid or cannot derive an address
     IronwoodPaymentAddress addr;
     if (!extfvk.fvk.DeriveAddress(&addr, extdfvk.d)) {
-        throw std::invalid_argument("Cannot derive default address from invalid diversified viewing key");
+        return KeyNotAdded;
     }
 
     if (m_wallet->HaveIronwoodSpendingKey(extfvk)) {

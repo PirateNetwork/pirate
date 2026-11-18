@@ -411,7 +411,7 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, 
             in.push_back(Pair("vout", (int64_t)txin.prevout.n));
             {
                 uint256 hash; CTransaction tx; CTxDestination address;
-                if (GetTransaction(txin.prevout.hash,tx,hash,false))
+                if (GetTransaction(txin.prevout.hash,tx,hash,false) && txin.prevout.n < tx.vout.size())
                 {
                     if (ExtractDestination(tx.vout[txin.prevout.n].scriptPubKey, address))
                         in.push_back(Pair("address", CBitcoinAddress(address).ToString()));
@@ -440,8 +440,14 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, 
         vin.push_back(in);
     }
     entry.push_back(Pair("vin", vin));
-    BlockMap::iterator it = mapBlockIndex.find(pcoinsTip->GetBestBlock());
-    CBlockIndex *tipindex,*pindex = it->second;
+    // Only the KMD interest below uses these. Offline (cold storage) mode loads no
+    // coins database, and a best block missing from the index has no entry.
+    CBlockIndex *tipindex, *pindex = nullptr;
+    if (pcoinsTip != nullptr) {
+        BlockMap::iterator it = mapBlockIndex.find(pcoinsTip->GetBestBlock());
+        if (it != mapBlockIndex.end())
+            pindex = it->second;
+    }
     uint64_t interest;
     UniValue vout(UniValue::VARR);
     for (unsigned int i = 0; i < tx.vout.size(); i++)
@@ -550,6 +556,8 @@ void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& entry, 
  */
 UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("getrawtransaction");
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "getrawtransaction \"txid\" ( verbose )\n"
@@ -756,6 +764,8 @@ UniValue getrawtransaction(const UniValue& params, bool fHelp, const CPubKey& my
  */
 UniValue gettxoutproof(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("gettxoutproof");
     if (fHelp || (params.size() != 1 && params.size() != 2))
         throw runtime_error(
             "gettxoutproof [\"txid\",...] ( blockhash )\n"
@@ -902,6 +912,9 @@ UniValue verifytxoutproof(const UniValue& params, bool fHelp, const CPubKey& myp
 UniValue createrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
     string examplescriptPubKey = "21021ce1eac70455c3e6c52d67c133549b8aed4a588fba594372e8048e65c4f0fcb6ac";
+
+    if (!fHelp)
+        EnsureBlockchainLoaded("createrawtransaction");
 
     if (fHelp || params.size() < 2 || params.size() > 4)
         throw runtime_error(
@@ -1357,7 +1370,8 @@ UniValue decoderawtransaction(const UniValue& params, bool fHelp, const CPubKey&
 
 #ifdef ENABLE_WALLET
         RpcArcTransaction dtx;
-        int nHeight = chainActive.Tip()->nHeight;
+        // -1 in offline (cold storage) mode, which loads no chain.
+        int nHeight = chainActive.Height();
         decrypttransaction(tx, dtx, nHeight);
 
         UniValue spends(UniValue::VARR);
@@ -1469,6 +1483,9 @@ static void TxInErrorToJSON(const CTxIn& txin, UniValue& vErrorsRet, const std::
  */
 UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("signrawtransaction");
+
     if (fHelp || params.size() < 1 || params.size() > 5)
         throw runtime_error(
             "signrawtransaction \"hexstring\" ( [{\"txid\":\"id\",\"vout\":n,\"scriptPubKey\":\"hex\",\"redeemScript\":\"hex\"},...] [\"privatekey1\",...] sighashtype )\n"
@@ -1509,6 +1526,8 @@ UniValue signrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
             "       \"SINGLE|ANYONECANPAY\"\n"
             "5.  \"branchid\"       (string, optional) The hex representation of the consensus branch id to sign with."
             " This can be used to force signing with consensus rules that are ahead of the node's current height.\n"
+            "\nSigns transparent inputs only. Not available in offline (cold storage) mode, which loads no\n"
+            "blockchain; offline signing of shielded spends is done with z_buildrawtransaction.\n"
 
             "\nResult:\n"
             "{\n"
@@ -1793,6 +1812,8 @@ extern UniValue NSPV_broadcast(char *hex);
  */
 UniValue sendrawtransaction(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("sendrawtransaction");
     if (fHelp || params.size() < 1 || params.size() > 2)
     {
         throw runtime_error(
@@ -1918,7 +1939,7 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
   TransactionBuilder tb;
 
   if (DecodeHexTx(tx, strHexTb)) {
-      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "TX does not require building. If transaction is unsigned use signrawtransaction.");
+      throw JSONRPCError(RPC_DESERIALIZATION_ERROR, "This is a raw transaction, not transaction builder instructions; there is nothing to build.");
   }
 
   //Deserialize hex encoded transaction builder
@@ -2177,6 +2198,8 @@ UniValue z_buildrawtransaction(const UniValue& params, bool fHelp, const CPubKey
  * @return UniValue Hex-encoded transaction builder instructions
  */
 UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPubKey& mypk) {
+    if (!fHelp)
+        EnsureBlockchainLoaded("z_createbuildinstructions");
   if (fHelp || params.size() < 2 || params.size() > 4)
       throw runtime_error(
           "z_createbuildinstructions \"fromaddress\" [{\"address\":... ,\"amount\":...},...] ( minconf ) ( fee )\n"
@@ -2521,6 +2544,8 @@ UniValue z_createbuildinstructions(const UniValue& params, bool fHelp, const CPu
  */
 UniValue z_createbuildinstructionscoincontrol(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("z_createbuildinstructionscoincontrol");
   if (fHelp)
       throw runtime_error(
           "z_createbuildinstructionscoincontrol inputs outputs ( fee ) ( expiryBlocks )\n"

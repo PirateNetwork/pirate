@@ -1,6 +1,7 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
 // Copyright (c) 2019-2022 The Zcash developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -516,6 +517,8 @@ UniValue getblockcount(const UniValue& params, bool fHelp, const CPubKey& mypk)
  */
 UniValue getbestblockhash(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("getbestblockhash");
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getbestblockhash\n"
@@ -1316,6 +1319,8 @@ UniValue getblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
  */
 UniValue gettxoutsetinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("gettxoutsetinfo");
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "gettxoutsetinfo\n"
@@ -1365,6 +1370,8 @@ UniValue gettxoutsetinfo(const UniValue& params, bool fHelp, const CPubKey& mypk
  */
 UniValue kvsearch(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("kvsearch");
     UniValue ret(UniValue::VOBJ); uint32_t flags; uint8_t value[IGUANA_MAXSCRIPTSIZE*8],key[IGUANA_MAXSCRIPTSIZE*8]; int32_t duration,j,height,valuesize,keylen; uint256 refpubkey; static uint256 zeroes;
     if (fHelp || params.size() != 1 )
         throw runtime_error(
@@ -1431,6 +1438,8 @@ UniValue kvsearch(const UniValue& params, bool fHelp, const CPubKey& mypk)
  */
 UniValue minerids(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("minerids");
     uint32_t timestamp = 0; UniValue ret(UniValue::VOBJ); UniValue a(UniValue::VARR); uint8_t minerids[2000],pubkeys[65][33]; int32_t i,j,n,numnotaries,tally[129];
     if ( fHelp || params.size() != 1 )
         throw runtime_error(
@@ -1522,6 +1531,8 @@ UniValue minerids(const UniValue& params, bool fHelp, const CPubKey& mypk)
  */
 UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("notaries");
     UniValue a(UniValue::VARR); uint32_t timestamp=0; UniValue ret(UniValue::VOBJ); int32_t i,j,n,m; char *hexstr;  uint8_t pubkeys[64][33]; char btcaddr[64],kmdaddr[64],*ptr;
     if ( fHelp || (params.size() != 1 && params.size() != 2) )
         throw runtime_error(
@@ -1613,6 +1624,8 @@ UniValue notaries(const UniValue& params, bool fHelp, const CPubKey& mypk)
  */
 UniValue gettxout(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("gettxout");
     if (fHelp || params.size() < 2 || params.size() > 3)
         throw runtime_error(
             "gettxout \"txid\" n ( includemempool )\n"
@@ -1851,6 +1864,8 @@ void NetworkUpgradeDescPushBack(
  */
 UniValue getblockchaininfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("getblockchaininfo");
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getblockchaininfo\n"
@@ -2014,6 +2029,8 @@ struct CompareBlocksByHeight
  */
 UniValue getchaintips(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("getchaintips");
     if (fHelp || params.size() != 0)
         throw runtime_error(
             "getchaintips\n"
@@ -2550,6 +2567,8 @@ inline CBlockIndex* LookupBlockIndex(const uint256& hash)
  */
 UniValue getchaintxstats(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("getchaintxstats");
     if (fHelp || params.size() > 2)
         throw runtime_error(
                 "getchaintxstats\n"

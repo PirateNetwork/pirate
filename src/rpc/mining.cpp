@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -987,6 +988,8 @@ protected:
 
 UniValue submitblock(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("submitblock");
     if (fHelp || params.size() < 1 || params.size() > 2)
         throw runtime_error(
             "submitblock \"hexdata\" ( \"jsonparametersobject\" )\n"

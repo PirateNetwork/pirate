@@ -1,5 +1,6 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -2703,7 +2704,9 @@ DBErrors CWalletDB::LoadWallet(CWallet* pwallet)
         fNoncriticalErrors = false; // treat as recoverable; rescan will rebuild
     }
 
-    if ( !deadTxns.empty() )
+    // Offline (cold storage) mode loads no block database to re-add the real
+    // transactions from, so leave them all until the node runs online.
+    if ( !deadTxns.empty() && pblocktree != nullptr )
     {
         // staking chains with vin-empty error is a failed staking tx.
         // we remove then re add the tx here to stop needing a full rescan, which does not actually fix the problem.

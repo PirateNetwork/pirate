@@ -2607,7 +2607,7 @@ bool CCTxFixAcceptToMemPoolUnchecked(CTxMemPool& pool, const CTransaction &tx)
 
 bool GetTimestampIndex(const unsigned int &high, const unsigned int &low, const bool fActiveOnly, std::vector<std::pair<uint256, unsigned int> > &hashes)
 {
-    if (!fTimestampIndex)
+    if (!fTimestampIndex || pblocktree == nullptr)
         return error("Timestamp index not enabled");
 
     if (!pblocktree->ReadTimestampIndex(high, low, fActiveOnly, hashes))
@@ -2618,7 +2618,7 @@ bool GetTimestampIndex(const unsigned int &high, const unsigned int &low, const 
 
 bool GetSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value)
 {
-    if (!fSpentIndex)
+    if (!fSpentIndex || pblocktree == nullptr)
         return false;
 
     if (mempool.getSpentIndex(key, value))
@@ -2633,7 +2633,7 @@ bool GetSpentIndex(CSpentIndexKey &key, CSpentIndexValue &value)
 bool GetAddressIndex(uint160 addressHash, int type,
                      std::vector<std::pair<CAddressIndexKey, CAmount> > &addressIndex, int start, int end)
 {
-    if (!fAddressIndex)
+    if (!fAddressIndex || pblocktree == nullptr)
         return error("address index not enabled");
 
     if (!pblocktree->ReadAddressIndex(addressHash, type, addressIndex, start, end))
@@ -2645,7 +2645,7 @@ bool GetAddressIndex(uint160 addressHash, int type,
 bool GetAddressUnspent(uint160 addressHash, int type,
                        std::vector<std::pair<CAddressUnspentKey, CAddressUnspentValue> > &unspentOutputs)
 {
-    if (!fAddressIndex)
+    if (!fAddressIndex || pblocktree == nullptr)
         return error("address index not enabled");
 
     if (!pblocktree->ReadAddressUnspentIndex(addressHash, type, unspentOutputs))
@@ -2713,7 +2713,8 @@ bool myGetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlo
         }
     }
 
-    if (fTxIndex) // if we have a transaction index
+    // Offline (cold storage) mode loads no block database.
+    if (fTxIndex && pblocktree != nullptr) // if we have a transaction index
     {
         // transaction was not in mempool. Look through the blocks
         CDiskTxPos postx;
@@ -2778,7 +2779,8 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock
         return true;
     }
 
-    if (fTxIndex) {
+    // Offline (cold storage) mode loads no block database or coins database.
+    if (fTxIndex && pblocktree != nullptr) {
         CDiskTxPos postx;
         if (pblocktree->ReadTxIndex(hash, postx)) {
             CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
@@ -2801,7 +2803,7 @@ bool GetTransaction(const uint256 &hash, CTransaction &txOut, uint256 &hashBlock
     }
 
     CBlockIndex *pindexSlow = nullptr;
-    if (fAllowSlow) { // use coin database to locate block that contains transaction, and scan it
+    if (fAllowSlow && pcoinsTip != nullptr) { // use coin database to locate block that contains transaction, and scan it
         int nHeight = -1;
         {
             const CCoins* coins = pcoinsTip->AccessCoins(hash);

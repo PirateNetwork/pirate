@@ -494,12 +494,12 @@ public:
                 
                 // Add unconfirmed transactions to top (after chain tip)
                 if (wtx.GetDepthInMainChain() == 0) {
-                    sortedArchive[make_pair(chainActive.Tip()->nHeight + 1, nPosUnconfirmed)] = txid;
+                    sortedArchive[make_pair(chainActive.Height() + 1, nPosUnconfirmed)] = txid;
                     nPosUnconfirmed++;
                 } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
                     sortedArchive[make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex)] = txid;
                 } else {
-                    sortedArchive[make_pair(chainActive.Tip()->nHeight + 1, nPosUnconfirmed)] = txid;
+                    sortedArchive[make_pair(chainActive.Height() + 1, nPosUnconfirmed)] = txid;
                     nPosUnconfirmed++;
                 }
             }
@@ -1049,14 +1049,14 @@ public:
 
                 if (wtx.GetDepthInMainChain() == 0) {
                     ut = wtx.GetHash();
-                    key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
+                    key = make_pair(chainActive.Height() + 1,  nPosUnconfirmed);
                     sortedArchive[key] = wtx.GetHash();
                     nPosUnconfirmed++;
                 } else if (!wtx.hashBlock.IsNull() && mapBlockIndex.count(wtx.hashBlock) > 0) {
                     key = make_pair(mapBlockIndex[wtx.hashBlock]->nHeight, wtx.nIndex);
                     sortedArchive[key] = wtx.GetHash();
                 } else {
-                    key = make_pair(chainActive.Tip()->nHeight + 1,  nPosUnconfirmed);
+                    key = make_pair(chainActive.Height() + 1,  nPosUnconfirmed);
                     sortedArchive[key] = wtx.GetHash();
                     nPosUnconfirmed++;
                 }

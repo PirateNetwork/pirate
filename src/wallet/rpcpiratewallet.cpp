@@ -1,5 +1,6 @@
 // Copyright (c) 2019 Cryptoforge
 // Copyright (c) 2019 The Zero developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -32,7 +33,8 @@ void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount&
         CTxOut parentOut = CTxOut();
         const CWalletTx* parentwtx = pwalletMain->GetWalletTx(txin.prevout.hash);
         if (parentwtx != NULL) {
-            parentOut = parentwtx->vout[txin.prevout.n];
+            if (txin.prevout.n < parentwtx->vout.size())
+                parentOut = parentwtx->vout[txin.prevout.n];
         } else {
             map<uint256, ArchiveTxPoint>::iterator it = pwalletMain->mapArcTxs.find(txin.prevout.hash);
             if (it != pwalletMain->mapArcTxs.end()) {
@@ -55,7 +57,7 @@ void getTransparentSpends(RpcTx& tx, vector<TransactionSpendT>& vSpend, CAmount&
 
                 // Get Tx
                 for (int j = 0; j < block.vtx.size(); j++) {
-                    if (txin.prevout.hash == block.vtx[j].GetHash()) {
+                    if (txin.prevout.hash == block.vtx[j].GetHash() && txin.prevout.n < block.vtx[j].vout.size()) {
                         parentctx = block.vtx[j];
                         parentOut = parentctx.vout[txin.prevout.n];
                     }
@@ -960,7 +962,7 @@ void getRpcArcTx(uint256& txid, RpcArcTransaction& arcTx, bool fIncludeWatchonly
 
     arcTx.blockHash = hashBlock;
 
-    int nHeight = chainActive.Tip()->nHeight;
+    int nHeight = chainActive.Height();
     int txHeight = mapBlockIndex[hashBlock]->nHeight;
     arcTx.blockHeight = txHeight;
     arcTx.rawconfirmations = nHeight - txHeight + 1;
@@ -1088,7 +1090,8 @@ void getRpcArcTx(CWalletTx& tx, RpcArcTransaction& arcTx, bool fIncludeWatchonly
     arcTx.blockIndex = tx.nIndex;
     arcTx.blockHash = tx.hashBlock;
     arcTx.rawconfirmations = tx.GetDepthInMainChain();
-    int txHeight = chainActive.Tip()->nHeight + 1;
+    // -1 + 1 in offline (cold storage) mode, which loads no chain.
+    int txHeight = chainActive.Height() + 1;
 
     if (!tx.hashBlock.IsNull() && mapBlockIndex.count(tx.hashBlock) > 0) {
         arcTx.nBlockTime = mapBlockIndex[tx.hashBlock]->GetBlockTime();
@@ -1365,6 +1368,8 @@ void getRpcArcTxJSONReceives(RpcArcTransaction& arcTx, UniValue& ArcTxJSON, bool
 
 UniValue zs_listtransactions(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("zs_listtransactions");
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
@@ -1743,6 +1748,8 @@ UniValue zs_gettransaction(const UniValue& params, bool fHelp, const CPubKey& my
 
 UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("zs_listspentbyaddress");
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
@@ -2031,6 +2038,8 @@ UniValue zs_listspentbyaddress(const UniValue& params, bool fHelp, const CPubKey
 
 UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("zs_listreceivedbyaddress");
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
@@ -2319,6 +2328,8 @@ UniValue zs_listreceivedbyaddress(const UniValue& params, bool fHelp, const CPub
 
 UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("zs_listsentbyaddress");
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
@@ -2614,6 +2625,8 @@ UniValue zs_listsentbyaddress(const UniValue& params, bool fHelp, const CPubKey&
  **/
 UniValue getalldata(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("getalldata");
     if (fHelp || params.size() > 4)
         throw runtime_error(
             "getalldata \"datatype transactiontype \"\n"

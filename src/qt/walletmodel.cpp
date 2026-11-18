@@ -1279,7 +1279,7 @@ void WalletModel::subscribeToCoreSignals()
 {
     // Connect signals to wallet
     wallet->NotifyRescanStarted.connect(boost::bind(NotifyRescanStarted, this));
-    wallet->NotifyRescanComplete.connect(boost::bind(NotifyRescanStarted, this));
+    wallet->NotifyRescanComplete.connect(boost::bind(NotifyRescanComplete, this));
     wallet->NotifyStatusChanged.connect(boost::bind(&NotifyKeyStoreStatusChanged, this, std::placeholders::_1));
     wallet->NotifyAddressBookChanged.connect(boost::bind(NotifyAddressBookChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
     wallet->NotifyZAddressBookChanged.connect(boost::bind(NotifyZAddressBookChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
@@ -1291,7 +1291,7 @@ void WalletModel::unsubscribeFromCoreSignals()
 {
     // Disconnect signals from wallet
     wallet->NotifyRescanStarted.disconnect(boost::bind(NotifyRescanStarted, this));
-    wallet->NotifyRescanComplete.disconnect(boost::bind(NotifyRescanStarted, this));
+    wallet->NotifyRescanComplete.disconnect(boost::bind(NotifyRescanComplete, this));
     wallet->NotifyStatusChanged.disconnect(boost::bind(&NotifyKeyStoreStatusChanged, this, std::placeholders::_1));
     wallet->NotifyAddressBookChanged.disconnect(boost::bind(NotifyAddressBookChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));
     wallet->NotifyZAddressBookChanged.disconnect(boost::bind(NotifyZAddressBookChanged, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, std::placeholders::_5, std::placeholders::_6));

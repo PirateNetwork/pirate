@@ -1,4 +1,5 @@
 // Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,9 +8,6 @@
 
 #include "zaddresstablemodel.h"
 #include "guiutil.h"
-#include "consensus/upgrades.h"
-#include "main.h"
-#include "chainparams.h"
 
 #include <QDataWidgetMapper>
 #include <QMessageBox>
@@ -41,37 +39,12 @@ EditZAddressDialog::EditZAddressDialog(Mode _mode, QWidget *parent) :
         ui->addressTypeCombo->setVisible(true);
         ui->labelEdit->setText("Shielded");
 
-        // Populate address type combo based on network upgrades
-        {
-            LOCK(cs_main);
-            if (chainActive.Tip() != nullptr) {
-                int nHeight = chainActive.Height();
-                const Consensus::Params& consensusParams = Params().GetConsensus();
-
-                bool saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-                bool ironwoodActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
-
-                ui->addressTypeCombo->clear();
-
-                if (ironwoodActive) {
-                    // Ironwood is active - show Ironwood as default (and recommended)
-                    ui->addressTypeCombo->addItem("Ironwood (Recommended)", "ironwood");
-                    // Also offer Sapling as an option if active
-                    if (saplingActive) {
-                        ui->addressTypeCombo->addItem("Sapling", "sapling");
-                    }
-                    ui->labelEdit->setText("Ironwood");
-                } else if (saplingActive) {
-                    // Only Sapling is active - show only Sapling
-                    ui->addressTypeCombo->addItem("Sapling", "sapling");
-                    ui->labelEdit->setText("Sapling");
-                } else {
-                    // Neither is active, disable the dialog
-                    ui->addressTypeCombo->addItem("No shielded protocols active", "");
-                    ui->addressTypeCombo->setEnabled(false);
-                }
-            }
-        }
+        // Both types are always offered, whatever the chain height (or with no blockchain
+        // loaded, offline), with Ironwood the default.
+        ui->addressTypeCombo->clear();
+        ui->addressTypeCombo->addItem("Ironwood (Recommended)", "ironwood");
+        ui->addressTypeCombo->addItem("Sapling", "sapling");
+        ui->labelEdit->setText("Ironwood");
 
         connect(ui->addressTypeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
                 this, &EditZAddressDialog::updateLabelForAddressType);

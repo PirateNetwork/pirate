@@ -18,6 +18,7 @@
 
 #include "support/allocators/secure.h"
 
+#include <atomic>
 #include <map>
 #include <vector>
 
@@ -272,7 +273,8 @@ public:
 
     ZAddressTableModel *zaddressTableModel;
     int64_t relockTime = 0;
-    bool startedRescan = false;
+    // Set from the core thread's rescan signals and read on the GUI thread.
+    std::atomic<bool> startedRescan{false};
 private:
     /**
      * Lock the wallet now if it is free, otherwise as soon as it is; see the

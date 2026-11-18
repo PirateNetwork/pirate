@@ -1,5 +1,6 @@
 // Copyright (c) 2010 Satoshi Nakamoto
 // Copyright (c) 2009-2014 The Bitcoin Core developers
+// Copyright (c) 2026 The Pirate Chain developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -171,6 +172,8 @@ UniValue getnotarysendmany(const UniValue& params, bool fHelp, const CPubKey& my
 
 UniValue geterablockheights(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("geterablockheights");
     if (fHelp || params.size() != 0)
       throw runtime_error(
           "geterablockheights\n"
@@ -299,8 +302,10 @@ UniValue getinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
             obj.push_back(Pair("keypoololdest", pwalletMain->GetOldestKeyPoolTime()));
             obj.push_back(Pair("keypoolsize",   (int)pwalletMain->GetKeyPoolSize()));
         }
+        // The unlock time is only cleared when walletpassphrase's timer or
+        // walletlock locks the wallet; a rescan or the GUI can lock it sooner.
         if (pwalletMain && pwalletMain->IsCrypted())
-            obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
+            obj.push_back(Pair("unlocked_until", pwalletMain->IsLocked() ? 0 : nWalletUnlockTime));
         obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
 #endif
         obj.push_back(Pair("sapling", Params().GetConsensus().vUpgrades[Consensus::UPGRADE_SAPLING].nActivationHeight));

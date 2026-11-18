@@ -207,34 +207,43 @@ std::string CRPCTable::help(const std::string& strCommand) const
             continue;
         if ((strCommand != "" || pcmd->category == "hidden") && strMethod != strCommand)
             continue;
+        // Help text is returned in a std::exception. A command that instead throws an RPC error
+        // before reaching its help text is listed by name with that error, so one broken command
+        // can't take the whole list down with it.
+        string strHelp;
         try
         {
             UniValue params;
             rpcfn_type pfn = pcmd->actor;
-            if (setDone.insert(pfn).second)
-                (*pfn)(params, true, CPubKey());
+            if (!setDone.insert(pfn).second)
+                continue;
+            (*pfn)(params, true, CPubKey());
+            continue;
         }
         catch (const std::exception& e)
         {
-            // Help text is returned in an exception
-            string strHelp = string(e.what());
-            if (strCommand == "")
-            {
-                if (strHelp.find('\n') != string::npos)
-                    strHelp = strHelp.substr(0, strHelp.find('\n'));
-
-                if (category != pcmd->category)
-                {
-                    if (!category.empty())
-                        strRet += "\n";
-                    category = pcmd->category;
-                    string firstLetter = category.substr(0,1);
-                    boost::to_upper(firstLetter);
-                    strRet += "== " + firstLetter + category.substr(1) + " ==\n";
-                }
-            }
-            strRet += strHelp + "\n";
+            strHelp = string(e.what());
         }
+        catch (const UniValue& objError)
+        {
+            strHelp = strMethod + " (help unavailable: " + find_value(objError, "message").getValStr() + ")";
+        }
+        if (strCommand == "")
+        {
+            if (strHelp.find('\n') != string::npos)
+                strHelp = strHelp.substr(0, strHelp.find('\n'));
+
+            if (category != pcmd->category)
+            {
+                if (!category.empty())
+                    strRet += "\n";
+                category = pcmd->category;
+                string firstLetter = category.substr(0,1);
+                boost::to_upper(firstLetter);
+                strRet += "== " + firstLetter + category.substr(1) + " ==\n";
+            }
+        }
+        strRet += strHelp + "\n";
     }
     if (strRet == "")
         strRet = strprintf("help: unknown command: %s\n", strCommand);
@@ -985,6 +994,15 @@ void RPCUnregisterTimerInterface(RPCTimerInterface *iface)
     std::vector<RPCTimerInterface*>::iterator i = std::find(timerInterfaces.begin(), timerInterfaces.end(), iface);
     assert(i != timerInterfaces.end());
     timerInterfaces.erase(i);
+}
+
+// Defined in net.cpp; "net.h" from this directory resolves to rpc/net.h.
+extern int nMaxConnections;
+
+void EnsureBlockchainLoaded(const std::string& strMethod)
+{
+    if (nMaxConnections == 0)
+        throw JSONRPCError(RPC_CLIENT_NOT_CONNECTED, strMethod + " is not available in offline (cold storage) mode: no blockchain is loaded");
 }
 
 void RPCRunLater(const std::string& name, boost::function<void(void)> func, int64_t nSeconds)

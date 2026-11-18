@@ -1003,71 +1003,38 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
     }
     else if(type == Receive)
     {
-        // Generate a new address to associate with given label
-        // Check which shielded address type to generate based on network upgrade activation
-        bool saplingActive = false;
-        bool ironwoodActive = false;
-        
-        {
-            LOCK(cs_main);
-            if (chainActive.Tip() != nullptr) {
-                int nHeight = chainActive.Height();
-                const Consensus::Params& consensusParams = Params().GetConsensus();
-                
-                saplingActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_SAPLING);
-                ironwoodActive = NetworkUpgradeActive(nHeight, consensusParams, Consensus::UPGRADE_IRONWOOD);
-            }
-        }
-        
-        // Use user-specified address type if provided, otherwise use default behavior
-        bool useIronwood = false;
-        bool useSapling = false;
-        
-        if (!addressType.isEmpty()) {
-            // User explicitly chose a type
-            if (addressType == "ironwood" && ironwoodActive) {
-                useIronwood = true;
-            } else if (addressType == "sapling" && saplingActive) {
-                useSapling = true;
-            } else {
-                // Invalid or inactive selection
-                editStatus = KEY_GENERATION_FAILURE;
-                return QString();
-            }
-        } else {
-            // Auto-select: prefer Ironwood if active, otherwise Sapling
-            if (ironwoodActive) {
-                useIronwood = true;
-            } else if (saplingActive) {
-                useSapling = true;
-            } else {
-                // Pre-Sapling - Sprout addresses are no longer supported
-                editStatus = KEY_GENERATION_FAILURE;
-                return QString();
-            }
-        }
-        
-        if (useIronwood) {
-            // Generate Ironwood address
-            if (useDiversified) {
-                strAddress = EncodePaymentAddress(wallet->GenerateNewIronwoodDiversifiedAddress());
-            } else {
-                strAddress = EncodePaymentAddress(wallet->GenerateNewIronwoodZKey());
-            }
-        }
-        else if (useSapling) {
-            // Generate Sapling address
-            if (useDiversified) {
-                strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingDiversifiedAddress());
-            } else {
-                strAddress = EncodePaymentAddress(wallet->GenerateNewSaplingZKey());
-            }
-        }
-        else {
-            // Should not reach here
+        // Generate a new address to associate with given label. The type is not gated on
+        // chain height; with no type given, Ironwood is the default.
+        const bool useIronwood = addressType.isEmpty() || addressType == "ironwood";
+        if (!useIronwood && addressType != "sapling") {
             editStatus = KEY_GENERATION_FAILURE;
             return QString();
         }
+
+        // Key generation needs the wallet unlocked; ask before taking cs_wallet, since the
+        // unlock dialog is modal.
+        WalletModel::UnlockContext ctx(walletModel->requestUnlock());
+        if (!ctx.isValid()) {
+            editStatus = WALLET_UNLOCK_FAILURE;
+            return QString();
+        }
+
+        try {
+            LOCK(wallet->cs_wallet);
+            if (useIronwood) {
+                strAddress = EncodePaymentAddress(useDiversified ? wallet->GenerateNewIronwoodDiversifiedAddress()
+                                                                 : wallet->GenerateNewIronwoodZKey());
+            } else {
+                strAddress = EncodePaymentAddress(useDiversified ? wallet->GenerateNewSaplingDiversifiedAddress()
+                                                                 : wallet->GenerateNewSaplingZKey());
+            }
+            wallet->SetZAddressBook(DecodePaymentAddress(strAddress), strLabel, "receive");
+        } catch (const std::exception& e) {
+            LogPrintf("ZAddressTableModel::addRow: new %s address failed: %s\n", useIronwood ? "Ironwood" : "Sapling", e.what());
+            editStatus = KEY_GENERATION_FAILURE;
+            return QString();
+        }
+        return QString::fromStdString(strAddress);
     }
     else
     {
@@ -1077,8 +1044,7 @@ QString ZAddressTableModel::addRow(const QString &type, const QString &label, co
     // Add entry
     {
         LOCK(wallet->cs_wallet);
-        wallet->SetZAddressBook(DecodePaymentAddress(strAddress), strLabel,
-                               (type == Send ? "send" : "receive"));
+        wallet->SetZAddressBook(DecodePaymentAddress(strAddress), strLabel, "send");
     }
     return QString::fromStdString(strAddress);
 }

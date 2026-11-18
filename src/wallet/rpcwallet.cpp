@@ -525,6 +525,8 @@ static void SendMoney(const CTxDestination &address, CAmount nValue, bool fSubtr
 
 UniValue sendtoaddress(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("sendtoaddress");
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
@@ -612,6 +614,8 @@ int32_t komodo_kvsigverify(uint8_t *buf,int32_t len,uint256 _pubkey,uint256 sig)
 
 UniValue kvupdate(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("kvupdate");
     static uint256 zeroes;
     CWalletTx wtx; UniValue ret(UniValue::VOBJ);
     uint8_t keyvalue[IGUANA_MAXSCRIPTSIZE*8],opretbuf[IGUANA_MAXSCRIPTSIZE*8];
@@ -2918,8 +2922,10 @@ UniValue getwalletinfo(const UniValue& params, bool fHelp, const CPubKey& mypk)
     obj.push_back(Pair("saplingfullviewingkeys",  (int)saplingExtFullViewingKeys.size()));
     obj.push_back(Pair("keypoololdest",           pwalletMain->GetOldestKeyPoolTime()));
     obj.push_back(Pair("keypoolsize",             (int)pwalletMain->GetKeyPoolSize()));
+    // The unlock time is only cleared when walletpassphrase's timer or walletlock
+    // locks the wallet; a rescan or the GUI can lock it sooner.
     if (pwalletMain->IsCrypted())
-        obj.push_back(Pair("unlocked_until", nWalletUnlockTime));
+        obj.push_back(Pair("unlocked_until", pwalletMain->IsLocked() ? 0 : nWalletUnlockTime));
     obj.push_back(Pair("paytxfee",      ValueFromAmount(payTxFee.GetFeePerK())));
     uint256 seedFp = pwalletMain->GetHDChain().seedFp;
     if (!seedFp.IsNull())
@@ -3012,11 +3018,16 @@ UniValue listunspent(const UniValue& params, bool fHelp, const CPubKey& mypk)
             "  ,...\n"
             "]\n"
 
+            "\nNot available in offline (cold storage) mode, which loads no blockchain.\n"
             "\nExamples\n"
             + HelpExampleCli("listunspent", "")
             + HelpExampleCli("listunspent", "6 9999999 \"[\\\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\\\",\\\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\\\"]\"")
             + HelpExampleRpc("listunspent", "6, 9999999 \"[\\\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\\\",\\\"RD6GgnrMpPaTSMn8vai6yiGA7mN4QGPV\\\"]\"")
         );
+
+    // Offline there are no confirmations to report, and the coins database it
+    // reads is absent.
+    EnsureBlockchainLoaded("listunspent");
 
     RPCTypeCheck(params, boost::assign::list_of(UniValue::VNUM)(UniValue::VNUM)(UniValue::VARR));
 
@@ -3421,6 +3432,8 @@ UniValue fundrawtransaction(const UniValue& params, bool fHelp, const CPubKey& m
 {
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
+    if (!fHelp)
+        EnsureBlockchainLoaded("fundrawtransaction");
 
     if (fHelp || params.size() != 1)
         throw runtime_error(
@@ -3605,26 +3618,16 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    // Check protocol activation status
-    int nextBlockHeight = chainActive.Height() + 1;
-    bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool ironwoodActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
-
-    std::string defaultType;
-    if (!saplingActive) {
-        throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet. Cannot create shielded addresses.");
-    } else if (!ironwoodActive) {
-        defaultType = ADDR_TYPE_SAPLING;
-    } else {
-        defaultType = ADDR_TYPE_IRONWOOD;
-    }
+    // Not gated on chain height: keys are derived locally, Ironwood is live on mainnet, and a
+    // wallet must be able to hand out addresses while syncing or offline with no blockchain.
+    const std::string defaultType = ADDR_TYPE_IRONWOOD;
 
     if (fHelp || params.size() > 2)
         throw runtime_error(
             "z_getnewaddresskey ( type legacy )\n"
             "This creates a new extended spending key and\n"
             "returns a new shielded address for receiving payments.\n"
-            "\nWith no arguments, returns a Sapling address.\n"
+            "\nWith no arguments, returns an Ironwood address.\n"
             "\nArguments:\n"
             "1. \"type\"         (string, optional, default=\"" + defaultType + "\") The type of address. One of [\""
             + ADDR_TYPE_SAPLING + "\", \"" + ADDR_TYPE_IRONWOOD + "\"].\n"
@@ -3664,16 +3667,10 @@ UniValue z_getnewaddresskey(const UniValue& params, bool fHelp, const CPubKey& m
     }
 
     if (addrType == ADDR_TYPE_SAPLING) {
-        if (!saplingActive) {
-            throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet.");
-        }
         auto zAddress = pwalletMain->GenerateNewSaplingZKey();
         pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
         return EncodePaymentAddress(zAddress);
     } else if (addrType == ADDR_TYPE_IRONWOOD) {
-        if (!ironwoodActive) {
-            throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
-        }
         auto zAddress = pwalletMain->GenerateNewIronwoodZKey(fLegacy);
         pwalletMain->SetZAddressBook(zAddress, "Ironwood", "");
         return EncodePaymentAddress(zAddress);
@@ -3687,19 +3684,9 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 
-    // Check protocol activation status
-    int nextBlockHeight = chainActive.Height() + 1;
-    bool saplingActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_SAPLING);
-    bool ironwoodActive = NetworkUpgradeActive(nextBlockHeight, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD);
-
-    std::string defaultType;
-    if (!saplingActive) {
-        throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet. Cannot create shielded addresses.");
-    } else if (!ironwoodActive) {
-        defaultType = ADDR_TYPE_SAPLING;
-    } else {
-        defaultType = ADDR_TYPE_IRONWOOD;
-    }
+    // Not gated on chain height: keys are derived locally, Ironwood is live on mainnet, and a
+    // wallet must be able to hand out addresses while syncing or offline with no blockchain.
+    const std::string defaultType = ADDR_TYPE_IRONWOOD;
 
     if (fHelp || params.size() > 2)
         throw runtime_error(
@@ -3743,16 +3730,10 @@ UniValue z_getnewaddress(const UniValue& params, bool fHelp, const CPubKey& mypk
     }
 
     if (addrType == ADDR_TYPE_SAPLING) {
-        if (!saplingActive) {
-            throw JSONRPCError(RPC_INVALID_REQUEST, "Sapling is not activated yet.");
-        }
         auto zAddress = pwalletMain->GenerateNewSaplingDiversifiedAddress();
         pwalletMain->SetZAddressBook(zAddress, "Sapling", "");
         return EncodePaymentAddress(zAddress);
     } else if (addrType == ADDR_TYPE_IRONWOOD) {
-        if (!ironwoodActive) {
-            throw JSONRPCError(RPC_INVALID_REQUEST, "Ironwood is not activated yet. Use Sapling addresses instead.");
-        }
         auto zAddress = pwalletMain->GenerateNewIronwoodDiversifiedAddress(fLegacy);
         pwalletMain->SetZAddressBook(zAddress, "Ironwood", "");
         return EncodePaymentAddress(zAddress);
@@ -6599,6 +6580,8 @@ UniValue enableconsolidation(const UniValue& params, bool fHelp, const CPubKey& 
 
 UniValue consolidationstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("consolidationstatus");
 
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
@@ -6944,6 +6927,8 @@ UniValue enablesweep(const UniValue& params, bool fHelp, const CPubKey& mypk)
 
 UniValue sweepstatus(const UniValue& params, bool fHelp, const CPubKey& mypk)
 {
+    if (!fHelp)
+        EnsureBlockchainLoaded("sweepstatus");
     if (!EnsureWalletIsAvailable(fHelp))
         return NullUniValue;
 

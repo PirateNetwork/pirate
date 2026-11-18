@@ -5,7 +5,11 @@
 #include <gtest/gtest.h>
 
 #include "gtest/gtestutils.h"
+#include "consensus/upgrades.h"
+#include "core_io.h"
 #include "init.h"
+#include "key_io.h"
+#include "main.h"
 #include "net.h"
 #include "random.h"
 #include "rpc/server.h"
@@ -15,13 +19,16 @@
 
 #include <algorithm>
 #include <atomic>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <thread>
 #include <vector>
 
 extern std::atomic<bool> fRequestShutdown;
 extern bool loadComplete;
+extern UniValue CallRPC(std::string args);
 
 class ScanTestWallet : public CWallet
 {
@@ -143,7 +150,7 @@ protected:
         fInitWitnessesBuilt = previousBuilt;
     }
 
-    void AddBlocks(int count)
+    void AddBlocks(int count, int spacing = 60)
     {
         LOCK(cs_main);
         ASSERT_EQ(0, chainActive.Height());
@@ -151,7 +158,7 @@ protected:
             CBlock block;
             block.nVersion = 4;
             block.hashPrevBlock = chainActive.Tip()->GetBlockHash();
-            block.nTime = chainActive.Tip()->nTime + 60;
+            block.nTime = chainActive.Tip()->nTime + spacing;
             if (height == 1 || height == count) {
                 CMutableTransaction receipt;
                 receipt.nVersion = 1;
@@ -251,6 +258,38 @@ private:
     int previousOverwinter = 0;
     int previousSapling = 0;
     int previousIronwood = 0;
+};
+
+// Puts the node in offline (cold storage) mode as -maxconnections=0 does: no
+// blockchain, block index, block database or coins database loaded. Restores
+// them all on the way out.
+struct ScopedOfflineMode {
+    CBlockIndex* tip;
+    CCoinsViewCache* coinsTip;
+    CBlockTreeDB* blockTree;
+    BlockMap blockIndex;
+    int maxConnections = nMaxConnections;
+    ScopedOfflineMode()
+    {
+        LOCK(cs_main);
+        tip = chainActive.Tip();
+        chainActive.SetTip(nullptr);
+        mapBlockIndex.swap(blockIndex);
+        coinsTip = pcoinsTip;
+        pcoinsTip = nullptr;
+        blockTree = pblocktree;
+        pblocktree = nullptr;
+        nMaxConnections = 0;
+    }
+    ~ScopedOfflineMode()
+    {
+        LOCK(cs_main);
+        mapBlockIndex.swap(blockIndex);
+        chainActive.SetTip(tip);
+        pcoinsTip = coinsTip;
+        pblocktree = blockTree;
+        nMaxConnections = maxConnections;
+    }
 };
 
 TEST_F(WalletScanTest, ScansBothPoolsAndKeepsProgressOpenUntilWalletIsSaved)
@@ -796,9 +835,9 @@ TEST_F(WalletScanTest, LockRacingUnlockIsNotReportedAsASaveFailure)
 
 // A rescan cannot run on a locked encrypted wallet: it could save neither its
 // restart point nor anything it finds. That is not a disk failure, and must not
-// raise the disk failure dialog and shut the node down. The import RPCs check
-// the lock long before they scan, so the GUI can lock the wallet in between, and
-// -unlockforreporting lets the rescan RPC through on a locked wallet.
+// raise the disk failure dialog and shut the node down. A caller that checks the
+// lock before taking cs_wallet, such as the GUI's rescan, can have the wallet
+// locked in between.
 TEST_F(WalletScanTest, RescanOfLockedWalletIsDeclinedWithoutASaveFailure)
 {
     LOCK2(cs_main, wallet->cs_wallet);
@@ -905,3 +944,499 @@ TEST_F(WalletScanTest, LockDuringKeyAddWaitsForTheAddToFinish)
     EXPECT_TRUE(lockerDone);
     EXPECT_TRUE(wallet->IsLocked());
 }
+
+// The rescan RPC needs an unlocked wallet and locks it again when it finishes.
+// Any RPC sent while it runs waits for cs_main and cs_wallet; when it gets them
+// the wallet must already be locked, or that RPC would be served by an unlock
+// the user only gave the rescan. Queue dumpprivkey behind a running rescan: it
+// must still be waiting while the scan runs, and then be refused.
+TEST_F(WalletScanTest, RpcQueuedBehindARescanFindsTheWalletLocked)
+{
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "queued behind rescan";
+    CTxDestination destination;
+    ASSERT_TRUE(ExtractDestination(receiptScript, destination));
+    const std::string address = EncodeDestination(destination);
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        AddBlocks(4);
+        {
+            ScopedWorkingDirectory workingDirectory(pathTemp);
+            ASSERT_TRUE(workingDirectory.ok);
+            wallet->GenerateNewSeed();
+            ASSERT_TRUE(wallet->EncryptWallet(passphrase));
+        }
+        if (wallet->IsLocked()) {
+            ASSERT_TRUE(wallet->Unlock(passphrase));
+        }
+    }
+    // While unlocked the RPC does hand out the key, so a refusal below can only
+    // come from the wallet being locked.
+    ASSERT_NO_THROW(CallRPC("dumpprivkey " + address));
+    uiMessages.clear();
+
+    // From here the test holds no wallet lock of its own, so the queued RPC waits
+    // only on what the rescan holds - and the join cannot deadlock.
+    std::thread queued;
+    std::atomic<bool> queuedDone{false};
+    bool injected = false;
+    bool queuedWaitedForTheScan = false;
+    std::string queuedResult;
+    progressHook = [&](const std::string& title, int percent) {
+        if (injected || percent != 0 || title != _("Rescanning...")) {
+            return;
+        }
+        injected = true;
+        queued = std::thread([&] {
+            try {
+                CallRPC("dumpprivkey " + address);
+                queuedResult = "returned the private key";
+            } catch (const std::exception& e) {
+                queuedResult = e.what();
+            }
+            queuedDone = true;
+        });
+        for (int i = 0; i < 50 && !queuedDone; i++) {
+            MilliSleep(10);
+        }
+        queuedWaitedForTheScan = !queuedDone;
+    };
+
+    EXPECT_NO_THROW(CallRPC("rescan"));
+    if (queued.joinable()) {
+        queued.join();
+    }
+    progressHook = nullptr;
+
+    ASSERT_TRUE(injected);
+    EXPECT_TRUE(queuedWaitedForTheScan);
+    EXPECT_TRUE(queuedDone);
+    EXPECT_NE(queuedResult.find("walletpassphrase"), std::string::npos) << queuedResult;
+    EXPECT_TRUE(wallet->IsLocked());
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "rescan reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+}
+
+// In cold storage mode no rescan runs, but a caller that asked for the wallet to
+// be locked when the rescan is over (the GUI's Rescan does) must still get it
+// locked; otherwise the unlock given for the rescan lasts until the
+// walletpassphrase timeout. A caller that did not ask keeps the wallet unlocked.
+TEST_F(WalletScanTest, ColdStorageRescanStillLocksTheWalletWhenAsked)
+{
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "cold storage relock";
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(4);
+    {
+        ScopedWorkingDirectory workingDirectory(pathTemp);
+        ASSERT_TRUE(workingDirectory.ok);
+        wallet->GenerateNewSeed();
+        ASSERT_TRUE(wallet->EncryptWallet(passphrase));
+    }
+    if (wallet->IsLocked()) {
+        ASSERT_TRUE(wallet->Unlock(passphrase));
+    }
+    progress.clear();
+    nMaxConnections = 0;
+
+    EXPECT_EQ(0, wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, false, true));
+    EXPECT_FALSE(wallet->IsLocked());
+
+    EXPECT_EQ(0, wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, true, true));
+    EXPECT_TRUE(wallet->IsLocked());
+    // Nothing was scanned.
+    EXPECT_TRUE(progress.empty());
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "rescan reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+}
+
+// Cold storage (offline) mode loads no blockchain, so the key RPCs must work
+// without a chain tip. Importing a key there used to be refused (or crashed the
+// node, for importwallet), backing up the wallet crashed the node, and rescan
+// reported success without scanning anything. Imports now skip the rescan,
+// backups say no chain was loaded, and rescan is refused.
+TEST_F(WalletScanTest, OfflineModeKeyRpcsWorkWithoutABlockchain)
+{
+    struct RestoreExportDir {
+        bool hadExportDir = mapArgs.count("-exportdir") > 0;
+        std::string exportDir = hadExportDir ? mapArgs["-exportdir"] : std::string();
+        ~RestoreExportDir()
+        {
+            if (hadExportDir) {
+                mapArgs["-exportdir"] = exportDir;
+            } else {
+                mapArgs.erase("-exportdir");
+            }
+        }
+    } restoreExportDir;
+    ScopedOfflineMode offline;
+    ASSERT_EQ(-1, chainActive.Height());
+    mapArgs["-exportdir"] = pathTemp.string();
+
+    try {
+        CallRPC("rescan");
+        ADD_FAILURE() << "rescan succeeded with no blockchain loaded";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("offline"), std::string::npos) << e.what();
+    }
+
+    // Transparent and shielded keys import with the default rescan, and with an
+    // explicit rescan height that only an online node could honor.
+    CKey transparentKey;
+    transparentKey.MakeNewKey(true);
+    EXPECT_NO_THROW(CallRPC("importprivkey " + EncodeSecret(transparentKey)));
+    CKey transparentKeyWithHeight;
+    transparentKeyWithHeight.MakeNewKey(true);
+    EXPECT_NO_THROW(CallRPC("importprivkey " + EncodeSecret(transparentKeyWithHeight) + " \"\" true 5"));
+    CKey watchedKey;
+    watchedKey.MakeNewKey(true);
+    EXPECT_NO_THROW(CallRPC("importaddress " + EncodeDestination(watchedKey.GetPubKey().GetID())));
+    auto spendingKey = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+    EXPECT_NO_THROW(CallRPC("z_importkey " + EncodeSpendingKey(spendingKey)));
+    auto spendingKeyWithHeight = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+    EXPECT_NO_THROW(CallRPC("z_importkey " + EncodeSpendingKey(spendingKeyWithHeight) + " yes 10"));
+    auto viewingKey = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false).ToXFVK();
+    libzcash::SaplingIncomingViewingKey viewingKeyIvk;
+    ASSERT_TRUE(viewingKey.fvk.DeriveIVK(&viewingKeyIvk));
+    EXPECT_NO_THROW(CallRPC("z_importviewingkey " + EncodeViewingKey(viewingKey) + " yes 10"));
+    // A negative height is still invalid.
+    auto rejectedKey = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+    EXPECT_THROW(CallRPC("z_importkey " + EncodeSpendingKey(rejectedKey) + " yes -1"), std::runtime_error);
+    {
+        LOCK(wallet->cs_wallet);
+        EXPECT_TRUE(wallet->HaveKey(transparentKey.GetPubKey().GetID()));
+        EXPECT_TRUE(wallet->HaveKey(transparentKeyWithHeight.GetPubKey().GetID()));
+        EXPECT_TRUE(wallet->HaveWatchOnly(GetScriptForDestination(watchedKey.GetPubKey().GetID())));
+        EXPECT_TRUE(wallet->HaveSaplingSpendingKey(spendingKey.ToXFVK()));
+        EXPECT_TRUE(wallet->HaveSaplingSpendingKey(spendingKeyWithHeight.ToXFVK()));
+        EXPECT_TRUE(wallet->HaveSaplingFullViewingKey(viewingKeyIvk));
+        EXPECT_FALSE(wallet->HaveSaplingSpendingKey(rejectedKey.ToXFVK()));
+    }
+
+    // The backup includes every key, even the fixture's key that has no creation
+    // time and so would otherwise be dated from a block.
+    CTxDestination receiptDestination;
+    ASSERT_TRUE(ExtractDestination(receiptScript, receiptDestination));
+    CKey receiptKey;
+    {
+        LOCK(wallet->cs_wallet);
+        ASSERT_TRUE(wallet->GetKey(std::get<CKeyID>(receiptDestination), receiptKey));
+    }
+    EXPECT_NO_THROW(CallRPC("z_exportwallet offlinebackup"));
+    std::string backup;
+    {
+        std::ifstream in((pathTemp / "offlinebackup").string());
+        backup.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+    }
+    EXPECT_NE(backup.find("offline mode"), std::string::npos);
+    EXPECT_NE(backup.find(EncodeSecret(receiptKey)), std::string::npos);
+    EXPECT_NE(backup.find(EncodeSecret(transparentKey)), std::string::npos);
+    EXPECT_NE(backup.find(EncodeSpendingKey(spendingKey)), std::string::npos);
+
+    // Restoring a backup works offline too.
+    CKey restoredTransparentKey;
+    restoredTransparentKey.MakeNewKey(true);
+    auto restoredSpendingKey = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+    const boost::filesystem::path restorePath = pathTemp / "offlinerestore.txt";
+    {
+        std::ofstream out(restorePath.string());
+        out << "# Wallet dump\n\n"
+            << EncodeSecret(restoredTransparentKey) << " 2016-08-12T21:55:36Z label=restored\n"
+            << EncodeSpendingKey(restoredSpendingKey) << " 2016-08-12T21:55:36Z # zaddr= "
+            << EncodePaymentAddress(restoredSpendingKey.DefaultAddress()) << " label= restored\n"
+            << "\n# End of dump\n";
+    }
+    EXPECT_NO_THROW(CallRPC("z_importwallet " + restorePath.string()));
+    {
+        LOCK(wallet->cs_wallet);
+        EXPECT_TRUE(wallet->HaveKey(restoredTransparentKey.GetPubKey().GetID()));
+        EXPECT_TRUE(wallet->HaveSaplingSpendingKey(restoredSpendingKey.ToXFVK()));
+    }
+
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+}
+
+// A wallet backup gives shielded keys times that do not say when they started
+// receiving (a spending key carries the time it was derived, which for a wallet
+// restored from its seed is the time of the restore). Restoring a backup that
+// adds a shielded key must therefore rescan from the start of the chain: it used
+// to start about two hours before the tip whenever the backup held no
+// transparent keys, missing the key's older notes. A shielded key the wallet
+// already has does not need that.
+TEST_F(WalletScanTest, ImportWalletRescansFromTheStartForANewShieldedKey)
+{
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        // An hour apart, so the import's two-hour margin before the tip does not
+        // reach back to the start on its own.
+        AddBlocks(10, 3600);
+    }
+    auto spendingKey = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+    const boost::filesystem::path dumpPath = pathTemp / "shieldedonly.txt";
+    {
+        std::ofstream out(dumpPath.string());
+        out << "# Wallet dump\n\n"
+            << EncodeSpendingKey(spendingKey) << " 2016-08-12T21:55:36Z # zaddr= "
+            << EncodePaymentAddress(spendingKey.DefaultAddress()) << " label= shielded\n"
+            << "\n# End of dump\n";
+    }
+    const std::string scanTitle = "Scanning wallet transactions and witnesses: block ";
+    auto firstScannedBlock = [&]() -> std::string {
+        for (const auto& item : progress) {
+            if (item.title.compare(0, scanTitle.size(), scanTitle) == 0) {
+                return item.title.substr(scanTitle.size());
+            }
+        }
+        return "no scan";
+    };
+
+    progress.clear();
+    EXPECT_NO_THROW(CallRPC("z_importwallet " + dumpPath.string()));
+    {
+        LOCK(wallet->cs_wallet);
+        EXPECT_TRUE(wallet->HaveSaplingSpendingKey(spendingKey.ToXFVK()));
+    }
+    EXPECT_EQ("0 of 10...", firstScannedBlock());
+
+    // The same backup again adds nothing new, so the rescan keeps the margin.
+    progress.clear();
+    EXPECT_NO_THROW(CallRPC("z_importwallet " + dumpPath.string()));
+    EXPECT_EQ("8 of 10...", firstScannedBlock());
+
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "import reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+}
+
+// The decoder accepts any bytes for an Ironwood diversified viewing key, so a
+// backup line can hold one that cannot derive its keys. Adding it used to throw
+// out of the import part way through: the keys before it stayed in the wallet,
+// nothing was rescanned, and the progress dialog was left open. It must now fail
+// like any other key the import cannot add, and the import carry on.
+TEST_F(WalletScanTest, ImportWalletCarriesOnPastAnUnusableIronwoodViewingKey)
+{
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        AddBlocks(4);
+    }
+    auto ironwoodKey = libzcash::IronwoodExtendedSpendingKeyPirate::Master(HDSeed::Random(), false);
+    auto ironwoodViewingKey = ironwoodKey.GetXFVK();
+    ASSERT_TRUE(ironwoodViewingKey.has_value());
+    libzcash::IronwoodDiversifiedExtendedFullViewingKeyPirate unusable;
+    unusable.extfvk = ironwoodViewingKey.value();
+    unusable.d.fill(0);
+    unusable.extfvk.fvk.ak = uint256S("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+    libzcash::IronwoodIncomingViewingKey ivk;
+    ASSERT_FALSE(unusable.extfvk.fvk.DeriveIVK(&ivk));
+
+    auto spendingKey = libzcash::SaplingExtendedSpendingKey::Master(HDSeed::Random(), false);
+    const boost::filesystem::path dumpPath = pathTemp / "unusablekey.txt";
+    {
+        std::ofstream out(dumpPath.string());
+        out << "# Wallet dump\n\n"
+            << EncodeDiversifiedViewingKey(unusable) << " 2016-08-12T21:55:36Z # zaddr= unusable label= unusable\n"
+            << EncodeSpendingKey(spendingKey) << " 2016-08-12T21:55:36Z # zaddr= "
+            << EncodePaymentAddress(spendingKey.DefaultAddress()) << " label= after\n"
+            << "\n# End of dump\n";
+    }
+
+    // The import's own progress dialog is driven by the wallet's signal.
+    bool importDialogClosed = false;
+    boost::signals2::scoped_connection importProgress = wallet->ShowProgress.connect(
+        [&](const std::string& title, int percent) {
+            if (title.empty() && percent == 100) importDialogClosed = true;
+        });
+
+    progress.clear();
+    try {
+        CallRPC("z_importwallet " + dumpPath.string());
+        ADD_FAILURE() << "the unusable key was reported as imported";
+    } catch (const std::exception& e) {
+        EXPECT_NE(std::string(e.what()).find("Error adding some keys"), std::string::npos) << e.what();
+    }
+    {
+        LOCK(wallet->cs_wallet);
+        EXPECT_TRUE(wallet->HaveSaplingSpendingKey(spendingKey.ToXFVK()));
+    }
+    importProgress.disconnect();
+    // The import closed its progress dialog and went on to rescan.
+    EXPECT_TRUE(importDialogClosed);
+    EXPECT_TRUE(std::any_of(progress.begin(), progress.end(), [](const Progress& item) {
+        return item.title == "Wallet rescan complete" && item.percent == 100;
+    }));
+    for (const auto& item : uiMessages) {
+        ADD_FAILURE() << "import reported a failure: " << item.caption << ": " << item.message;
+    }
+    EXPECT_FALSE(ShutdownRequested());
+}
+
+// Offline (cold storage) mode loads no blockchain or coins database. Each of
+// these commands reports on the chain or needs it to act, and all of them used
+// to crash the node offline (most by dereferencing the missing chain tip or
+// coins database). Offline they must be refused with a clear error, while their
+// help text still answers.
+TEST_F(WalletScanTest, ChainRpcsAreRefusedInOfflineModeButKeepTheirHelp)
+{
+    const std::vector<std::string> chainRpcs = {
+        "getbestblockhash", "getblockchaininfo", "getchaintips", "getchaintxstats", "gettxoutsetinfo",
+        "gettxout", "geterablockheights", "getrawtransaction", "gettxoutproof", "sendrawtransaction",
+        "z_createbuildinstructions", "z_createbuildinstructionscoincontrol", "consolidationstatus",
+        "sweepstatus", "sendtoaddress", "zs_listtransactions", "zs_listspentbyaddress",
+        "zs_listreceivedbyaddress", "zs_listsentbyaddress", "getalldata", "listunspent", "rescan",
+        "kvsearch", "minerids", "notaries", "kvupdate", "submitblock", "createrawtransaction",
+        "fundrawtransaction", "signrawtransaction"};
+    const std::string offlineError = "is not available in offline (cold storage) mode: no blockchain is loaded";
+
+    ScopedOfflineMode offline;
+    for (const auto& method : chainRpcs) {
+        try {
+            CallRPC(method);
+            ADD_FAILURE() << method << " answered in offline mode";
+        } catch (const std::runtime_error& e) {
+            EXPECT_NE(std::string(e.what()).find(method + " " + offlineError), std::string::npos)
+                << method << ": " << e.what();
+        }
+
+        const CRPCCommand* command = tableRPC[method];
+        ASSERT_NE(nullptr, command) << method;
+        try {
+            command->actor(UniValue(UniValue::VARR), true, CPubKey());
+            ADD_FAILURE() << method << " gave no help";
+        } catch (const std::runtime_error& e) {
+            EXPECT_EQ(std::string(e.what()).find(offlineError), std::string::npos) << method << ": " << e.what();
+            EXPECT_NE(std::string(e.what()).find(method), std::string::npos) << method << ": " << e.what();
+        }
+    }
+}
+
+// No command may answer a help request with an RPC error: "help" lists every command
+// by calling it for its help text (a std::exception), and an RPC error used to abort
+// the whole list. (A few legacy commands give no help text at all; "help" skips those.)
+static void ExpectNoCommandThrowsAnRpcErrorForHelp(const std::string& mode)
+{
+    for (const std::string& method : tableRPC.listCommands()) {
+        const CRPCCommand* command = tableRPC[method];
+        ASSERT_NE(nullptr, command) << method;
+        try {
+            command->actor(UniValue(UniValue::VARR), true, CPubKey());
+        } catch (const std::exception& e) {
+        } catch (const UniValue& objError) {
+            ADD_FAILURE() << method << " threw an RPC error instead of its help " << mode << ": "
+                          << find_value(objError, "message").getValStr();
+        }
+    }
+}
+
+// Address creation is not gated on chain height. Offline (no blockchain, so not even
+// Sapling counts as active) both address RPCs give an Ironwood address by default
+// and either type on request, and "help" lists every command; the height check
+// made both address RPCs, and with them the whole "help" list, fail offline.
+TEST_F(WalletScanTest, AddressCreationAndHelpWorkInOfflineMode)
+{
+    ExpectNoCommandThrowsAnRpcErrorForHelp("online");
+    {
+        LOCK(wallet->cs_wallet);
+        if (!wallet->HaveHDSeed()) {
+            wallet->GenerateNewSeed();
+        }
+    }
+
+    ScopedOfflineMode offline;
+    ASSERT_FALSE(NetworkUpgradeActive(chainActive.Height() + 1, Params().GetConsensus(), Consensus::UPGRADE_SAPLING));
+    ExpectNoCommandThrowsAnRpcErrorForHelp("offline");
+
+    for (const std::string method : {"z_getnewaddress", "z_getnewaddresskey"}) {
+        for (const std::string args : {"", " ironwood", " sapling"}) {
+            UniValue result;
+            ASSERT_NO_THROW(result = CallRPC(method + args)) << method + args;
+            auto address = DecodePaymentAddress(result.get_str());
+            if (args == " sapling") {
+                EXPECT_NE(nullptr, std::get_if<libzcash::SaplingPaymentAddress>(&address)) << method + args;
+            } else {
+                EXPECT_NE(nullptr, std::get_if<libzcash::IronwoodPaymentAddress>(&address)) << method + args;
+            }
+            LOCK(wallet->cs_wallet);
+            EXPECT_EQ(1u, wallet->mapZAddressBook.count(address)) << method + args;
+            EXPECT_TRUE(std::visit(GetSpendingKeyForPaymentAddress(wallet), address).has_value()) << method + args;
+        }
+        EXPECT_THROW(CallRPC(method + " sprout"), std::runtime_error) << method;
+    }
+
+    std::string help = CallRPC("help").get_str();
+    EXPECT_NE(help.find("z_getnewaddress ( type legacy )"), std::string::npos);
+    EXPECT_NE(help.find("z_getnewaddresskey ( type legacy )"), std::string::npos);
+    EXPECT_NE(help.find("getwalletinfo"), std::string::npos);
+    EXPECT_EQ(help.find("help unavailable"), std::string::npos) << help;
+}
+
+// A command that throws an RPC error before reaching its help text is listed by
+// name with that error; "help" itself still answers, and lists the other commands.
+// Uses its own table, so the global one is left as it was.
+static UniValue rpcerrorbeforehelp(const UniValue& params, bool fHelp, const CPubKey& mypk)
+{
+    throw JSONRPCError(RPC_INVALID_REQUEST, "not ready");
+}
+static const CRPCCommand rpcErrorBeforeHelpCommand =
+    { "control", "rpcerrorbeforehelp", &rpcerrorbeforehelp, true };
+
+TEST_F(WalletScanTest, HelpSurvivesACommandThatThrowsAnRpcError)
+{
+    CRPCTable table;
+    ASSERT_TRUE(table.appendCommand("rpcerrorbeforehelp", &rpcErrorBeforeHelpCommand));
+
+    std::string help;
+    ASSERT_NO_THROW(help = table.help("rpcerrorbeforehelp"));
+    EXPECT_EQ("rpcerrorbeforehelp (help unavailable: not ready)", help);
+    ASSERT_NO_THROW(help = table.help(""));
+    EXPECT_NE(help.find("\nrpcerrorbeforehelp (help unavailable: not ready)\n"), std::string::npos) << help;
+    EXPECT_NE(help.find("\nstop\n"), std::string::npos) << help;
+}
+
+// An offline signer reviews a transaction with decoderawtransaction, which used to
+// crash the node offline on any transaction with a transparent input.
+TEST_F(WalletScanTest, DecodeRawTransactionWorksInOfflineMode)
+{
+    CMutableTransaction mtx = CreateNewContextualCMutableTransaction(Params().GetConsensus(), 10);
+    mtx.vin.emplace_back(COutPoint(GetRandHash(), 0));
+    mtx.vout.emplace_back(1 * COIN, receiptScript);
+    const CTransaction tx(mtx);
+
+    ScopedOfflineMode offline;
+    UniValue decoded;
+    ASSERT_NO_THROW(decoded = CallRPC("decoderawtransaction " + EncodeHexTx(tx)));
+    EXPECT_EQ(tx.GetHash().GetHex(), find_value(decoded.get_obj(), "txid").get_str());
+    EXPECT_EQ(1u, find_value(decoded.get_obj(), "vin").size());
+}
+
+// An offline signer can look at its wallet's transactions; zs_gettransaction
+// placed an unconfirmed one (every one, offline) above the missing chain tip.
+TEST_F(WalletScanTest, ZsGetTransactionWorksInOfflineMode)
+{
+    {
+        LOCK2(cs_main, wallet->cs_wallet);
+        AddBlocks(4);
+        ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Genesis(), true, true, false, true), 0);
+    }
+    ASSERT_FALSE(receiptTxids.empty());
+    const std::string txid = receiptTxids.front().GetHex();
+    {
+        LOCK(wallet->cs_wallet);
+        ASSERT_TRUE(wallet->mapWallet.count(receiptTxids.front()));
+    }
+
+    ScopedOfflineMode offline;
+    UniValue result;
+    ASSERT_NO_THROW(result = CallRPC("zs_gettransaction " + txid));
+    EXPECT_EQ(txid, find_value(result.get_obj(), "txid").get_str());
+}
+

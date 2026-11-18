@@ -615,6 +615,100 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importwallet)
     EXPECT_EQ(testKey, EncodeSpendingKey(k.value()));
 }
 
+// -unlockforreporting lets read-only RPCs run on a locked wallet, but a rescan
+// has to save its progress, which a locked encrypted wallet refuses. Asked for
+// under that flag, rescan must turn the request down with the usual
+// unlock-needed error and leave the node running.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_rescan_of_locked_wallet_needs_unlock_even_for_reporting)
+{
+    struct RestoreUnlockedForReporting {
+        bool previous = fUnlockedForReporting;
+        ~RestoreUnlockedForReporting() { fUnlockedForReporting = previous; }
+    } restoreUnlockedForReporting;
+    fUnlockedForReporting = true;
+
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "rescan while locked";
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        {
+            ScopedWorkingDirectory workingDirectory(pathTemp);
+            ASSERT_TRUE(workingDirectory.ok);
+            HDSeed existingSeed;
+            if (!pwalletMain->GetHDSeed(existingSeed)) {
+                pwalletMain->GenerateNewSeed();
+            }
+            ASSERT_TRUE(pwalletMain->EncryptWallet(passphrase));
+        }
+        pwalletMain->Lock();
+        ASSERT_TRUE(pwalletMain->IsLocked());
+    }
+
+    try {
+        CallRPC("rescan");
+        ADD_FAILURE() << "rescan of a locked wallet succeeded";
+    } catch (const std::runtime_error& e) {
+        EXPECT_NE(std::string(e.what()).find("walletpassphrase"), std::string::npos) << e.what();
+    }
+    EXPECT_TRUE(pwalletMain->IsLocked());
+    EXPECT_FALSE(ShutdownRequested());
+}
+
+// walletpassphrase records when its timer will lock the wallet, and only that
+// timer or walletlock clears the record. The wallet can be locked sooner - a
+// rescan locks it when it finishes, and so can the GUI - and getwalletinfo and
+// getinfo must then report it locked (unlocked_until 0), not the old expiry.
+// getwalletinfo answers on a locked wallet only with -unlockforreporting.
+TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_unlocked_until_is_zero_once_the_wallet_is_locked)
+{
+    struct RestoreGlobals {
+        int64_t previousUnlockTime = nWalletUnlockTime;
+        bool previousUnlockedForReporting = fUnlockedForReporting;
+        ~RestoreGlobals()
+        {
+            nWalletUnlockTime = previousUnlockTime;
+            fUnlockedForReporting = previousUnlockedForReporting;
+        }
+    } restoreGlobals;
+    fUnlockedForReporting = true;
+
+    SecureString passphrase;
+    passphrase.reserve(100);
+    passphrase = "unlocked until";
+    {
+        LOCK2(cs_main, pwalletMain->cs_wallet);
+        {
+            ScopedWorkingDirectory workingDirectory(pathTemp);
+            ASSERT_TRUE(workingDirectory.ok);
+            HDSeed existingSeed;
+            if (!pwalletMain->GetHDSeed(existingSeed)) {
+                pwalletMain->GenerateNewSeed();
+            }
+            ASSERT_TRUE(pwalletMain->EncryptWallet(passphrase));
+        }
+        if (pwalletMain->IsLocked()) {
+            ASSERT_TRUE(pwalletMain->Unlock(passphrase));
+        }
+    }
+    // As walletpassphrase leaves it (its timer cannot run in these tests).
+    const int64_t unlockedUntil = GetTime() + 600;
+    nWalletUnlockTime = unlockedUntil;
+
+    UniValue walletInfo, info;
+    ASSERT_NO_THROW(walletInfo = CallRPC("getwalletinfo"));
+    ASSERT_NO_THROW(info = CallRPC("getinfo"));
+    EXPECT_EQ(unlockedUntil, find_value(walletInfo.get_obj(), "unlocked_until").get_int64());
+    EXPECT_EQ(unlockedUntil, find_value(info.get_obj(), "unlocked_until").get_int64());
+
+    // Locked by something other than the timer, as a finished rescan does.
+    ASSERT_TRUE(pwalletMain->Lock());
+    ASSERT_NO_THROW(walletInfo = CallRPC("getwalletinfo"));
+    ASSERT_NO_THROW(info = CallRPC("getinfo"));
+    EXPECT_EQ(0, find_value(walletInfo.get_obj(), "unlocked_until").get_int64());
+    EXPECT_EQ(0, find_value(info.get_obj(), "unlocked_until").get_int64());
+}
+
 // importwallet adds the dump's keys one by one, and a lock landing part way
 // through used to leave every key after that point unimported. The import
 // reports progress for each line it reads, so lock the wallet from another
@@ -797,23 +891,17 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_z_importexport)
     EXPECT_TRUE(listaddrs.size() == numAddrs);
     EXPECT_TRUE(myaddrs == listaddrs);
 
-    // Add one more address. z_getnewaddress always creates a Sapling address
-    // now (Sprout is no longer an option - see z_validateaddress above).
-    // UpdateNetworkUpgradeParameters() always mutates the REGTEST params
-    // singleton specifically, regardless of which network is currently
-    // selected (chainparams.cpp:670) - switch to it explicitly, since this
-    // fixture otherwise defaults to MAIN, where Sapling never auto-activates.
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
+    // Add one more address. With no type given, z_getnewaddress creates an Ironwood
+    // address, whatever the chain height: this fixture runs on mainnet params with
+    // no blockchain, where neither Sapling nor Ironwood is active.
+    ASSERT_FALSE(NetworkUpgradeActive(chainActive.Height() + 1, Params().GetConsensus(), Consensus::UPGRADE_IRONWOOD));
     EXPECT_NO_THROW(retValue = CallRPC("z_getnewaddress"));
     std::string newaddress = retValue.get_str();
     auto address = DecodePaymentAddress(newaddress);
     EXPECT_TRUE(IsValidPaymentAddress(address));
-    ASSERT_TRUE(std::get_if<libzcash::SaplingPaymentAddress>(&address) != nullptr);
+    ASSERT_TRUE(std::get_if<libzcash::IronwoodPaymentAddress>(&address) != nullptr);
     auto k = std::visit(GetSpendingKeyForPaymentAddress(pwalletMain), address);
     EXPECT_TRUE(k.has_value());
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    SelectParams(CBaseChainParams::MAIN);
 
     // Check if too many args
     EXPECT_THROW(CallRPC("z_getnewaddress toomanyargs"), runtime_error);
@@ -1814,22 +1902,16 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_sendmany_parameters)
  */
 // rpc_wallet_encrypted_wallet_zkeys is deleted: it tested wallet
 // encryption using z_getnewaddress's original default (Sprout) key type.
-// z_getnewaddress now always creates a Sapling address (Sprout is no
-// longer an option anywhere in this fork - see z_validateaddress above),
-// making this test byte-for-byte identical to rpc_wallet_encrypted_wallet_sapzkeys
-// below once adapted, not a distinct scenario worth keeping separately.
+// Sprout is no longer an option anywhere in this fork (see z_validateaddress
+// above), so once adapted it would be byte-for-byte identical to
+// rpc_wallet_encrypted_wallet_sapzkeys below, not a distinct scenario worth
+// keeping separately.
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
 {
     LOCK2(cs_main, pwalletMain->cs_wallet);
     UniValue retValue;
     int n = 100;
-
-    // z_getnewaddress requires Sapling active; UpdateNetworkUpgradeParameters()
-    // always mutates the REGTEST params singleton regardless of what's
-    // currently selected (chainparams.cpp:670), so switch to it explicitly.
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
 
     // z_listaddresses now requires the wallet unlocked by default even for
     // read-only reporting (EnsureWalletIsUnlockedForReporting), unless this
@@ -1902,8 +1984,6 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_wallet_encrypted_wallet_sapzkeys)
     // We can't simulate over RPC the wallet closing and being reloaded
     // but there are tests for this in gtest.
 
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
-    SelectParams(CBaseChainParams::MAIN);
     fUnlockedForReporting = previousUnlockedForReporting;
     boost::filesystem::current_path(previousCwd);
 }
@@ -2140,13 +2220,8 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_z_listunspent_parameters)
     // wrong network, mainnet instead of testnet
     EXPECT_THROW(CallRPC("z_listunspent 1 999 true [\"zcMuhvq8sEkHALuSU2i4NbNQxshSAYrpCExec45ZjtivYPbuiFPwk6WHy4SvsbeZ4siy1WheuRGjtaJmoD1J8bFqNXhsG6U\"]"), runtime_error);
 
-    // create shielded address so we have the spending key. Using the RPC
-    // (z_getnewaddress) here would require Sapling activation, which can
-    // only be forced on REGTEST (UpdateNetworkUpgradeParameters always
-    // mutates the REGTEST params singleton - chainparams.cpp:670), but this
-    // test needs to stay on TESTNET throughout for its address-encoding
-    // checks. GenerateNewSaplingZKey() is the same underlying wallet method
-    // z_getnewaddress calls, minus the RPC-level activation gate.
+    // create shielded address so we have the spending key. GenerateNewSaplingZKey()
+    // is the wallet method z_getnewaddresskey sapling calls.
     if (!pwalletMain->HaveHDSeed()) {
         pwalletMain->GenerateNewSeed();
     }
@@ -2427,10 +2502,6 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_enableconsolidation_both_pools_roundtrips)
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesweep_roundtrips)
 {
-    // z_getnewaddress (needed below) requires Sapling active;
-    // UpdateNetworkUpgradeParameters() only ever mutates REGTEST's params.
-    SelectParams(CBaseChainParams::REGTEST);
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::ALWAYS_ACTIVE);
     LOCK(pwalletMain->cs_wallet);
 
     if (!pwalletMain->HaveHDSeed()) {
@@ -2458,8 +2529,6 @@ TEST_F(rpc_wallet_tests_bitcoin, rpc_enablesweep_roundtrips)
 
     EXPECT_THROW(CallRPC("enablesweep"), runtime_error);
     EXPECT_THROW(CallRPC("enablesweep notaboolean"), runtime_error);
-
-    UpdateNetworkUpgradeParameters(Consensus::UPGRADE_SAPLING, Consensus::NetworkUpgrade::NO_ACTIVATION_HEIGHT);
 }
 
 TEST_F(rpc_wallet_tests_bitcoin, rpc_consolidateaddress_parameters)
