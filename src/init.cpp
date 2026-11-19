@@ -2942,7 +2942,7 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
             LogPrintf("Rescanning last %i blocks (from block %i)...\n", chainActive.Height() - pindexRescan->nHeight + 1, pindexRescan->nHeight);
             nStart = GetTimeMillis();
             if (pwalletMain->ScanForWalletTransactions(pindexRescan, true, false, false, false) < 0) {
-                return InitError(_("Wallet rescan failed. Check disk space and debug.log."));
+                return InitError(_("Wallet rescan failed. Check disk space and debug.log. If the block or chain state files are damaged, restart with -reindex."));
             }
             LogPrintf(" rescan      %15dms\n", GetTimeMillis() - nStart);
         }
@@ -2950,20 +2950,10 @@ bool AppInit2(boost::thread_group& threadGroup, CScheduler& scheduler)
         //Validate Rust Sapling Wallet, rebuild if needed
         if (chainActive.Tip() && chainActive.Height() > 0) {
             LOCK2(cs_main, pwalletMain->cs_wallet);
-
-            LogPrintf("Validating Sapling Note Positions from height %i\n", chainActive.Height());
-            if (!pwalletMain->ValidateSaplingWalletTrackedPositions(chainActive.Tip())) {
-                pwalletMain->SaplingWalletReset();
-                pwalletMain->IncrementSaplingWallet(chainActive.Tip());
+            std::string strError;
+            if (!pwalletMain->ValidateWitnessTreesOnLoad(chainActive.Tip(), strError)) {
+                return InitError(strError);
             }
-            pwalletMain->saplingWalletPositionsValidated=true;
-
-            LogPrintf("Validating Ironwood Note Positions from height %i\n", chainActive.Height());
-            if (!pwalletMain->ValidateIronwoodWalletTrackedPositions(chainActive.Tip())) {
-                pwalletMain->IronwoodWalletReset();
-                pwalletMain->IncrementIronwoodWallet(chainActive.Tip());
-            }
-            pwalletMain->ironwoodWalletPositionsValidated=true;
         }
 
         pwalletMain->SetBroadcastTransactions(GetBoolArg("-walletbroadcast", true));

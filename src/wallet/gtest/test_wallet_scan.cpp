@@ -766,6 +766,110 @@ TEST_F(WalletScanTest, ReconnectAfterDisconnectRecordsTheNewPosition)
     EXPECT_EQ(connectedIndex->GetBlockHash(), SavedBestBlock());
 }
 
+// The wallet is loaded with both trees saved at block 5, and the receipt mined in
+// block 5 is given a note in the named pool that the tree does not track, so the
+// load-time check fails for that pool and it is rebuilt from block 5.
+static void GiveTipReceiptAnUntrackedNote(ScanTestWallet* wallet, const uint256& txid, const std::string& pool)
+{
+    AssertLockHeld(cs_main);
+    CWalletTx& wtx = wallet->mapWallet.at(txid);
+    ASSERT_EQ(chainActive.Tip()->GetBlockHash(), wtx.hashBlock);
+    if (pool == "Sapling") {
+        wtx.mapSaplingNoteData[SaplingOutPoint(txid, 0)] = SaplingNoteData();
+    } else {
+        wtx.mapIronwoodNoteData[IronwoodOutPoint(txid, 0)] = IronwoodNoteData();
+    }
+}
+
+// Trees that pass the check are left alone. Trees that fail it are rebuilt in
+// memory, and the rebuilt trees are saved at the next block with the wallet's
+// position; the reset is never written on its own.
+TEST_F(WalletScanTest, LoadTimeRebuildIsSavedOnlyWithThePosition)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    ASSERT_EQ(5, wallet->SaplingCheckpoint());
+    ASSERT_EQ(5, wallet->IronwoodCheckpoint());
+    ASSERT_FALSE(wallet->fRunSetBestChain);
+
+    const auto rebuilt = [this](const std::string& pool) {
+        return std::any_of(progress.begin(), progress.end(), [&pool](const Progress& item) {
+            return item.title.find("Rebuilding " + pool + " witnesses") == 0;
+        });
+    };
+
+    std::string strError;
+    progress.clear();
+    ASSERT_TRUE(wallet->ValidateWitnessTreesOnLoad(chainActive.Tip(), strError)) << strError;
+    EXPECT_FALSE(rebuilt("Sapling"));
+    EXPECT_FALSE(rebuilt("Ironwood"));
+    EXPECT_FALSE(wallet->fRunSetBestChain);
+
+    // Both pools fail the check and are rebuilt from the readable block 5.
+    GiveTipReceiptAnUntrackedNote(wallet, receiptTxids.back(), "Sapling");
+    GiveTipReceiptAnUntrackedNote(wallet, receiptTxids.back(), "Ironwood");
+    progress.clear();
+    EXPECT_TRUE(wallet->ValidateWitnessTreesOnLoad(chainActive.Tip(), strError)) << strError;
+    EXPECT_TRUE(strError.empty()) << strError;
+    EXPECT_TRUE(rebuilt("Sapling"));
+    EXPECT_TRUE(rebuilt("Ironwood"));
+    EXPECT_EQ(5, wallet->SaplingCheckpoint());
+    EXPECT_EQ(5, wallet->IronwoodCheckpoint());
+    EXPECT_TRUE(wallet->saplingWalletPositionsValidated);
+    EXPECT_TRUE(wallet->ironwoodWalletPositionsValidated);
+    EXPECT_TRUE(wallet->fRunSetBestChain);
+
+    // Until then, the saved trees are still the ones saved with the position.
+    ScanTestWallet reopened(wallet->strWalletFile);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, reopened.LoadWallet(firstRun));
+    EXPECT_EQ(5, reopened.SaplingCheckpoint());
+    EXPECT_EQ(5, reopened.IronwoodCheckpoint());
+}
+
+// A rebuild at load that cannot read a block fails startup with an error naming
+// the pool and the cause. The saved trees, saved with the wallet's position,
+// are kept rather than replaced by the reset tree, so they can still be used
+// once the block files are repaired.
+static void ExpectFailedLoadTimeRebuildKeepsTheSavedTrees(ScanTestWallet* wallet, const uint256& txid, const std::string& pool)
+{
+    AssertLockHeld(cs_main);
+    ASSERT_GE(wallet->ScanForWalletTransactions(chainActive.Tip(), true, true, false, true), 0);
+    ASSERT_EQ(5, wallet->SaplingCheckpoint());
+    ASSERT_EQ(5, wallet->IronwoodCheckpoint());
+
+    GiveTipReceiptAnUntrackedNote(wallet, txid, pool);
+    chainActive.Tip()->nStatus &= ~BLOCK_HAVE_DATA;
+    chainActive.Tip()->nFile = -1;
+
+    std::string strError;
+    EXPECT_FALSE(wallet->ValidateWitnessTreesOnLoad(chainActive.Tip(), strError));
+    EXPECT_NE(std::string::npos, strError.find("Unable to rebuild the wallet's " + pool + " witnesses")) << strError;
+    EXPECT_NE(std::string::npos, strError.find("block data is unavailable")) << strError;
+    EXPECT_NE(std::string::npos, strError.find("restart with -reindex")) << strError;
+
+    ScanTestWallet reopened(wallet->strWalletFile);
+    bool firstRun;
+    ASSERT_EQ(DB_LOAD_OK, reopened.LoadWallet(firstRun));
+    EXPECT_EQ(5, reopened.SaplingCheckpoint());
+    EXPECT_EQ(5, reopened.IronwoodCheckpoint());
+}
+
+TEST_F(WalletScanTest, FailedLoadTimeSaplingRebuildReportsTheCauseAndKeepsTheSavedTrees)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    ExpectFailedLoadTimeRebuildKeepsTheSavedTrees(wallet, receiptTxids.back(), "Sapling");
+}
+
+TEST_F(WalletScanTest, FailedLoadTimeIronwoodRebuildReportsTheCauseAndKeepsTheSavedTrees)
+{
+    LOCK2(cs_main, wallet->cs_wallet);
+    AddBlocks(5);
+    ExpectFailedLoadTimeRebuildKeepsTheSavedTrees(wallet, receiptTxids.back(), "Ironwood");
+}
+
 // Unlocking saves the wallet's pending state, and a lock landing between the
 // unlock and the save made the save find the wallet locked and report a disk
 // failure, shutting the node down. CCryptoKeyStore::Unlock announces the change

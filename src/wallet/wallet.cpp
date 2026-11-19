@@ -5309,7 +5309,7 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
             //No transactions exists to begin wallet at this hieght
             if (nMinimumHeight > pindex->nHeight) {
                 LogPrint("\n\nsaplingwallet", "Sapling Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
-                SaplingWalletReset();
+                saplingWallet.Reset();
                 return;
             }
 
@@ -5322,7 +5322,10 @@ void CWallet::IncrementSaplingWallet(const CBlockIndex* pindex, const CBlock* pb
                 !pcoinsTip->GetSaplingFrontierAnchorAt(pblockindex->pprev->hashFinalSaplingRoot, saplingFrontierTree)) {
                 throw std::runtime_error("Cannot rebuild Sapling wallet: preceding commitment frontier is unavailable");
             }
-            SaplingWalletReset();
+            // Reset in memory only. The rebuilt tree is saved by SetBestChain
+            // together with the wallet's position, so a rebuild that fails part
+            // way leaves the saved tree as it was.
+            saplingWallet.Reset();
             saplingWallet.InitNoteCommitmentTree(saplingFrontierTree);
 
             //Show in UI
@@ -5534,7 +5537,7 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
             //No transactions exists to begin wallet at this hieght
             if (nMinimumHeight > pindex->nHeight) {
                 LogPrint("\n\nironwoodwallet", "Ironwood Wallet - no transactions exist at height %i to rebuild wallet\n\n", nMinimumHeight);
-                IronwoodWalletReset();
+                ironwoodWallet.Reset();
                 return;
             }
 
@@ -5547,7 +5550,8 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
                 !pcoinsTip->GetIronwoodFrontierAnchorAt(pblockindex->pprev->hashFinalIronwoodRoot, ironwoodFrontierTree)) {
                 throw std::runtime_error("Cannot rebuild Ironwood wallet: preceding commitment frontier is unavailable");
             }
-            IronwoodWalletReset();
+            // Reset in memory only, as for Sapling above.
+            ironwoodWallet.Reset();
             ironwoodWallet.InitNoteCommitmentTree(ironwoodFrontierTree);
 
             //Show in UI
@@ -5646,6 +5650,51 @@ void CWallet::IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* p
     // LogPrintf("Sapling Wallet Root - %s\n\n", saplingWallet.GetLatestAnchor().ToString());
     // LogPrintf("New Checkpoint %i\n", saplingWallet.GetLastCheckpointHeight());
 
+}
+
+/**
+ * @brief Check both witness trees when the wallet is loaded, rebuilding any that do not match
+ * @param pindex The chain tip the trees must match
+ * @param strError[out] Why a rebuild failed, naming the pool, for the startup error
+ * @return false if a rebuild failed
+ *
+ * The trees are reset in memory only. Rebuilt trees are saved by the next
+ * SetBestChain, together with the wallet's position, so a rebuild that fails
+ * here - on damaged block files, for example - leaves the saved trees as they
+ * were, and the startup error says what failed.
+ */
+bool CWallet::ValidateWitnessTreesOnLoad(const CBlockIndex* pindex, std::string& strError)
+{
+    AssertLockHeld(cs_main);
+    AssertLockHeld(cs_wallet);
+
+    std::string pool = "Sapling";
+    try {
+        LogPrintf("Validating Sapling Note Positions from height %i\n", pindex->nHeight);
+        if (!ValidateSaplingWalletTrackedPositions(pindex)) {
+            saplingWallet.Reset();
+            IncrementSaplingWallet(pindex);
+            // Save the rebuilt tree at the next block rather than after the
+            // usual interval, so a crash does not repeat the rebuild.
+            fRunSetBestChain = true;
+        }
+        saplingWalletPositionsValidated = true;
+
+        pool = "Ironwood";
+        LogPrintf("Validating Ironwood Note Positions from height %i\n", pindex->nHeight);
+        if (!ValidateIronwoodWalletTrackedPositions(pindex)) {
+            ironwoodWallet.Reset();
+            IncrementIronwoodWallet(pindex);
+            fRunSetBestChain = true;
+        }
+        ironwoodWalletPositionsValidated = true;
+    } catch (const std::exception& error) {
+        LogPrintf("%s: %s witness rebuild failed: %s\n", __func__, pool, error.what());
+        strError = strprintf(_("Unable to rebuild the wallet's %s witnesses (%s). The saved witnesses have been kept. If the block or chain state files are damaged, restart with -reindex."),
+            pool, error.what());
+        return false;
+    }
+    return true;
 }
 
 /**

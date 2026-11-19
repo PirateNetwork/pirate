@@ -1204,6 +1204,11 @@ public:
     void IncrementIronwoodWallet(const CBlockIndex* pindex, const CBlock* pblock = nullptr, bool suppressProgress = false);
     void DecrementIronwoodWallet(const CBlockIndex* pindex);
 
+    // Check both witness trees against pindex when the wallet is loaded, and
+    // rebuild any that do not match. On failure, strError names the pool and the
+    // cause, and the saved trees are left as they were.
+    bool ValidateWitnessTreesOnLoad(const CBlockIndex* pindex, std::string& strError);
+
 
 protected:
 
